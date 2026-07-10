@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, Sun, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -7,6 +7,7 @@ import {
   Search, Printer, FileText, PencilLine, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays
 } from 'lucide-react';
+import { clearToken, createClient, createFinance, deleteClient, deleteFinance, flushOfflineQueue, getClients, getFinances, getMe, getToken, login, register, setToken } from './lib/api';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
 
@@ -50,6 +51,34 @@ const ROLE_DEFINITIONS = {
   },
 };
 
+function mapUiRoleToBackend(role) {
+  switch (role) {
+    case 'comptable':
+      return 'comptable';
+    case 'ouvrier':
+      return 'worker';
+    case 'gestionnaire':
+      return 'manager';
+    case 'admin':
+    default:
+      return 'admin';
+  }
+}
+
+function mapBackendRoleToUi(role) {
+  switch (role) {
+    case 'comptable':
+      return 'comptable';
+    case 'worker':
+      return 'ouvrier';
+    case 'manager':
+      return 'gestionnaire';
+    case 'admin':
+    default:
+      return 'admin';
+  }
+}
+
 function useLiveClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -85,15 +114,17 @@ async function storageSet(key, value) {
 }
 
 async function syncPendingChanges() {
-  if (typeof window === 'undefined' || !navigator.onLine) return { pending: 0, synced: false };
-  const queue = JSON.parse(localStorage.getItem('agri-sync-queue') || '[]');
-  if (queue.length === 0) {
-    localStorage.setItem('agri-last-sync', new Date().toISOString());
-    return { pending: 0, synced: true };
+  if (typeof window === 'undefined' || !navigator.onLine) {
+    const raw = localStorage.getItem('agri-offline-queue') || '[]';
+    const queue = JSON.parse(raw);
+    return { pending: queue.length, synced: false };
   }
-  localStorage.removeItem('agri-sync-queue');
-  localStorage.setItem('agri-last-sync', new Date().toISOString());
-  return { pending: 0, synced: true };
+  try {
+    const result = await flushOfflineQueue();
+    return { pending: 0, synced: true, flushed: result.flushed };
+  } catch {
+    return { pending: 0, synced: false };
+  }
 }
 
 function GaugeDial({ value, max = 100, label, unit, colorMain, colorTrack, icon }) {
@@ -1186,11 +1217,20 @@ function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('admin');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
+    if (busy) return;
+    setError('');
     setBusy(true);
-    setTimeout(() => { onLogin(email || 'demo@exploitation.africa', role); setBusy(false); }, 500);
+    try {
+      await onLogin(email, role, password);
+    } catch (err) {
+      setError(err.message || 'Erreur de connexion.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -1206,20 +1246,25 @@ function LoginScreen({ onLogin }) {
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>Connexion</div>
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>Accédez à vos outils de suivi d'exploitation.</div>
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Field label="Adresse e-mail" type="email" placeholder="nom@exploitation.africa" value={email} onChange={e => setEmail(e.target.value)} />
-            <Field label="Mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+            <Field label="Adresse e-mail" type="email" placeholder="nom@exploitation.africa" value={email} onChange={e => setEmail(e.target.value)} required />
+            <Field label="Mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
             <Select label="Rôle" value={role} onChange={e => setRole(e.target.value)}>
               <option value="admin">Administrateur</option>
               <option value="comptable">Comptable</option>
               <option value="ouvrier">Ouvrier</option>
               <option value="gestionnaire">Gestionnaire</option>
             </Select>
+            {error && (
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <AlertTriangle size={14} /> {error}
+              </div>
+            )}
             <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
               {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} Se connecter
             </Button>
           </form>
           <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 14, textAlign: 'center' }}>
-            Prototype de démonstration — toute adresse fonctionne.
+            Authentification via API backend — connexion sécurisée.
           </div>
         </Card>
       </div>
@@ -1845,6 +1890,26 @@ function ReportsModule({ farmId, activated }) {
     setTimeout(() => printWindow.print(), 300);
   };
 
+  const exportToExcel = () => {
+    const rows = [
+      ['Type', 'Date', 'Partenaire', 'Produit', 'Quantité', 'Montant'],
+      ...filtered.ventes.map(r => ['Vente', r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
+      ...filtered.achats.map(r => ['Achat', r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
+      ...filtered.recoltes.map(r => ['Récolte', r.date, r.parcelle, r.culture, Number(r.quantite) || 0, '']),
+    ];
+
+    const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rapport-${REPORT_PERIOD_LABELS[period].toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
@@ -1881,7 +1946,10 @@ function ReportsModule({ farmId, activated }) {
         </Card>
       </div>
 
-      <Button variant="green" onClick={generatePdf}><Download size={15} /> Télécharger le rapport {REPORT_PERIOD_LABELS[period].toLowerCase()} (PDF)</Button>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <Button variant="green" onClick={generatePdf}><Download size={15} /> Télécharger le rapport {REPORT_PERIOD_LABELS[period].toLowerCase()} (PDF)</Button>
+        <Button variant="blue" onClick={exportToExcel}><Download size={15} /> Exporter en CSV</Button>
+      </div>
     </div>
   );
 }
@@ -2127,119 +2195,163 @@ function NotificationsModule({ farmId }) {
   );
 }
 
-function FinancesModule({ farmId }) {
-  const [entries, setEntries] = useTable(farmId, 'finances', []);
-  const [form, setForm] = useState({ categorie: 'Caisse', montant: '', description: '' });
-  const [caisse, setCaisse] = useState(0);
-  const [banque, setBanque] = useState(0);
+function FinancesModule() {
+  const [entries, setEntries]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [form, setForm]         = useState({ categorie: 'Caisse', montant: '', description: '', date: new Date().toISOString().slice(0, 10) });
+
+  const CATEGORIES_REVENUS  = ['Caisse', 'Banque'];
+  const CATEGORIES_DEPENSES = ['Depenses diverses', 'Carburant', 'Salaire', 'Entretien'];
+  const ALL_CATEGORIES      = [...CATEGORIES_REVENUS, ...CATEGORIES_DEPENSES];
 
   useEffect(() => {
-    const totalCaisse = entries.filter(e => e.categorie === 'Caisse').reduce((sum, e) => sum + e.montant, 0);
-    const totalBanque = entries.filter(e => e.categorie === 'Banque').reduce((sum, e) => sum + e.montant, 0);
-    const depenses = entries.filter(e => ['Dépenses diverses', 'Carburant', 'Salaire', 'Entretien'].includes(e.categorie)).reduce((sum, e) => sum + e.montant, 0);
-    const revenus = entries.filter(e => e.categorie === 'Caisse' || e.categorie === 'Banque').reduce((sum, e) => sum + e.montant, 0);
-    setCaisse(totalCaisse);
-    setBanque(totalBanque);
-  }, [entries]);
+    (async () => {
+      setLoading(true);
+      try {
+        const { finances } = await getFinances();
+        setEntries(finances || []);
+      } catch (err) {
+        setApiError(err.message || 'Impossible de charger les finances.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  const addEntry = (e) => {
+  const addEntry = async (e) => {
     e.preventDefault();
     if (!form.categorie || form.montant === '' || !form.description) return;
-    const montant = Number(form.montant);
-    setEntries(prev => [{ id: Date.now(), categorie: form.categorie, montant, description: form.description, date: new Date().toLocaleDateString('fr-FR') }, ...prev]);
-    setForm({ categorie: 'Caisse', montant: '', description: '' });
+    setSaving(true);
+    setApiError('');
+    try {
+      const { entry } = await createFinance({
+        categorie:   form.categorie,
+        montant:     Number(form.montant),
+        description: form.description,
+        date:        form.date,
+      });
+      setEntries(prev => [entry, ...prev]);
+      setForm({ categorie: 'Caisse', montant: '', description: '', date: new Date().toISOString().slice(0, 10) });
+    } catch (err) {
+      setApiError(err.message || "Erreur lors de l'enregistrement.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const categories = ['Caisse', 'Banque', 'Dépenses diverses', 'Carburant', 'Salaire', 'Entretien'];
-  const totalDepenses = entries.filter(e => ['Dépenses diverses', 'Carburant', 'Salaire', 'Entretien'].includes(e.categorie)).reduce((sum, e) => sum + e.montant, 0);
-  const totalRevenus = entries.filter(e => e.categorie === 'Caisse' || e.categorie === 'Banque').reduce((sum, e) => sum + e.montant, 0);
-  const beneficeNet = totalRevenus - totalDepenses;
+  const removeEntry = async (id) => {
+    setApiError('');
+    try {
+      await deleteFinance(id);
+      setEntries(prev => prev.filter(e => e.id !== id));
+    } catch (err) {
+      setApiError(err.message || 'Erreur lors de la suppression.');
+    }
+  };
+
+  const totalCaisse   = entries.filter(e => e.categorie === 'Caisse').reduce((s, e) => s + Number(e.montant), 0);
+  const totalBanque   = entries.filter(e => e.categorie === 'Banque').reduce((s, e) => s + Number(e.montant), 0);
+  const totalDepenses = entries.filter(e => CATEGORIES_DEPENSES.includes(e.categorie)).reduce((s, e) => s + Number(e.montant), 0);
+  const totalRevenus  = entries.filter(e => CATEGORIES_REVENUS.includes(e.categorie)).reduce((s, e) => s + Number(e.montant), 0);
+  const beneficeNet   = totalRevenus - totalDepenses;
+  const chartRevenus  = entries.filter(e => CATEGORIES_REVENUS.includes(e.categorie)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Number(e.montant) })).reverse();
+  const chartDepenses = entries.filter(e => CATEGORIES_DEPENSES.includes(e.categorie)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Number(e.montant) })).reverse();
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
+      <Loader2 size={18} className="spin" /> Chargement des finances...
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {apiError && (
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={15} /> {apiError}
+          <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
           <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Caisse</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{caisse.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{totalCaisse.toLocaleString('fr-FR')} FCFA</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
           <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>Banque</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{banque.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{totalBanque.toLocaleString('fr-FR')} FCFA</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>Dépenses</div>
+          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>Depenses</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{totalDepenses.toLocaleString('fr-FR')} FCFA</div>
         </Card>
         <Card style={{ background: beneficeNet >= 0 ? COLORS.greenSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: beneficeNet >= 0 ? COLORS.green : COLORS.red, fontWeight: 600, marginBottom: 4 }}>Bénéfice net</div>
+          <div style={{ fontSize: 12, color: beneficeNet >= 0 ? COLORS.green : COLORS.red, fontWeight: 600, marginBottom: 4 }}>Benefice net</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: beneficeNet >= 0 ? COLORS.green : COLORS.red }}>{beneficeNet.toLocaleString('fr-FR')} FCFA</div>
         </Card>
       </div>
-
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Nouvelle opération</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Nouvelle operation</div>
         <form onSubmit={addEntry} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Select label="Catégorie" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
-            {categories.map(cat => <option key={cat}>{cat}</option>)}
+          <Select label="Categorie" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
+            {ALL_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
           </Select>
-          <Field label="Montant" type="number" placeholder="0" value={form.montant} onChange={e => setForm({ ...form, montant: e.target.value })} />
-          <Field label="Description" placeholder="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <Button variant="green" type="submit"><Plus size={15} /> Ajouter</Button>
+          <Field label="Montant (FCFA)" type="number" placeholder="0" value={form.montant} onChange={e => setForm({ ...form, montant: e.target.value })} />
+          <Field label="Description" placeholder="Ex : Vente d oeufs" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+          <Button variant="green" type="submit" disabled={saving}>
+            {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
+          </Button>
         </form>
       </Card>
-
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Graphiques financiers</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Ventes mensuelles</div>
-            <MiniChart data={[
-              { label: 'Jan', value: 250000 },
-              { label: 'Fév', value: 320000 },
-              { label: 'Mar', value: 280000 },
-              { label: 'Avr', value: 390000 },
-            ]} color={COLORS.green} />
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Revenus recents</div>
+            <MiniChart data={chartRevenus.length ? chartRevenus : [{ label: '-', value: 0 }]} color={COLORS.green} />
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Achats</div>
-            <MiniChart data={[
-              { label: 'Jan', value: 140000 },
-              { label: 'Fév', value: 160000 },
-              { label: 'Mar', value: 150000 },
-              { label: 'Avr', value: 180000 },
-            ]} color={COLORS.red} />
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Bénéfices</div>
-            <MiniChart data={[
-              { label: 'Jan', value: 110000 },
-              { label: 'Fév', value: 160000 },
-              { label: 'Mar', value: 130000 },
-              { label: 'Avr', value: 210000 },
-            ]} color={COLORS.blue} />
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Depenses recentes</div>
+            <MiniChart data={chartDepenses.length ? chartDepenses : [{ label: '-', value: 0 }]} color={COLORS.red} />
           </div>
         </div>
       </Card>
-
       <Card style={{ padding: 0 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
               <th style={{ padding: '12px 16px' }}>Date</th>
-              <th>Catégorie</th>
+              <th>Categorie</th>
               <th>Description</th>
               <th>Montant</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {entries.map(entry => (
-              <tr key={entry.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{entry.date}</td>
-                <td>{entry.categorie}</td>
-                <td>{entry.description}</td>
-                <td style={{ fontWeight: 600, color: ['Dépenses diverses', 'Carburant', 'Salaire', 'Entretien'].includes(entry.categorie) ? COLORS.red : COLORS.green }}>{entry.montant.toLocaleString('fr-FR')} FCFA</td>
-              </tr>
-            ))}
+            {entries.length === 0 && (
+              <tr><td colSpan={5} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>Aucune operation enregistree.</td></tr>
+            )}
+            {entries.map(entry => {
+              const isDepense = CATEGORIES_DEPENSES.includes(entry.categorie);
+              const dateLabel = entry.date ? String(entry.date).slice(0, 10) : '-';
+              return (
+                <tr key={entry.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{dateLabel}</td>
+                  <td><Badge tone={isDepense ? 'red' : 'green'}>{entry.categorie}</Badge></td>
+                  <td style={{ color: COLORS.inkSoft }}>{entry.description}</td>
+                  <td style={{ fontWeight: 600, color: isDepense ? COLORS.red : COLORS.green }}>
+                    {isDepense ? '-' : '+'}{Number(entry.montant).toLocaleString('fr-FR')} FCFA
+                  </td>
+                  <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                    <button onClick={() => removeEntry(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -2247,156 +2359,136 @@ function FinancesModule({ farmId }) {
   );
 }
 
-function ClientsModule({ farmId }) {
-  const [clients, setClients] = useTable(farmId, 'clients', []);
+function ClientsModule() {
+  const [clients, setClients]   = useState([]);
   const [selectedId, setSelectedId] = useState(null);
-  const [form, setForm] = useState({ nom: '', prenom: '', telephone: '', email: '', adresse: '' });
-  const [purchaseForm, setPurchaseForm] = useState({ produit: '', montant: '', date: new Date().toLocaleDateString('fr-FR') });
-  const [paymentForm, setPaymentForm] = useState({ montant: '', date: new Date().toLocaleDateString('fr-FR') });
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [form, setForm]         = useState({ nom: '', telephone: '', adresse: '' });
+  const [query, setQuery]       = useState('');
 
   const selectedClient = clients.find(c => c.id === selectedId) || null;
 
   useEffect(() => {
-    if (clients.length > 0 && !selectedClient) {
-      setSelectedId(clients[0].id);
+    (async () => {
+      setLoading(true);
+      try {
+        const { clients: loaded } = await getClients();
+        setClients(loaded || []);
+        if (loaded && loaded.length > 0) setSelectedId(loaded[0].id);
+      } catch (err) {
+        setApiError(err.message || 'Impossible de charger les clients.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const addClient = async (e) => {
+    e.preventDefault();
+    if (!form.nom) return;
+    setSaving(true);
+    setApiError('');
+    try {
+      const { client } = await createClient({ nom: form.nom, telephone: form.telephone, adresse: form.adresse });
+      setClients(prev => [client, ...prev]);
+      setSelectedId(client.id);
+      setForm({ nom: '', telephone: '', adresse: '' });
+    } catch (err) {
+      setApiError(err.message || "Erreur lors de l'ajout du client.");
+    } finally {
+      setSaving(false);
     }
-  }, [clients, selectedClient]);
-
-  const addClient = (e) => {
-    e.preventDefault();
-    if (!form.nom || !form.prenom || !form.telephone) return;
-    const client = {
-      id: Date.now(),
-      nom: form.nom,
-      prenom: form.prenom,
-      telephone: form.telephone,
-      email: form.email,
-      adresse: form.adresse,
-      historique: [],
-      paiements: [],
-      detteRestante: 0,
-    };
-    setClients(prev => [client, ...prev]);
-    setSelectedId(client.id);
-    setForm({ nom: '', prenom: '', telephone: '', email: '', adresse: '' });
   };
 
-  const addPurchase = (e) => {
-    e.preventDefault();
-    if (!selectedClient || !purchaseForm.produit || purchaseForm.montant === '') return;
-    const montant = Number(purchaseForm.montant);
-    const entry = { id: Date.now(), produit: purchaseForm.produit, montant, date: purchaseForm.date || new Date().toLocaleDateString('fr-FR') };
-    setClients(prev => prev.map(client => client.id === selectedClient.id ? {
-      ...client,
-      historique: [entry, ...client.historique],
-      detteRestante: client.detteRestante + montant,
-    } : client));
-    setPurchaseForm({ produit: '', montant: '', date: new Date().toLocaleDateString('fr-FR') });
+  const removeClient = async (id) => {
+    setApiError('');
+    try {
+      await deleteClient(id);
+      setClients(prev => prev.filter(c => c.id !== id));
+      if (selectedId === id) setSelectedId(null);
+    } catch (err) {
+      setApiError(err.message || 'Erreur lors de la suppression.');
+    }
   };
 
-  const addPayment = (e) => {
-    e.preventDefault();
-    if (!selectedClient || paymentForm.montant === '') return;
-    const montant = Number(paymentForm.montant);
-    const entry = { id: Date.now(), montant, date: paymentForm.date || new Date().toLocaleDateString('fr-FR') };
-    setClients(prev => prev.map(client => client.id === selectedClient.id ? {
-      ...client,
-      paiements: [entry, ...client.paiements],
-      detteRestante: Math.max(0, client.detteRestante - montant),
-    } : client));
-    setPaymentForm({ montant: '', date: new Date().toLocaleDateString('fr-FR') });
-  };
+  const filtered = clients.filter(c =>
+    `${c.nom} ${c.telephone || ''} ${c.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
+  );
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
+      <Loader2 size={18} className="spin" /> Chargement des clients...
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {apiError && (
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={15} /> {apiError}
+          <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
+        </div>
+      )}
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Ajouter un client</div>
         <form onSubmit={addClient} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom" placeholder="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
-          <Field label="Prénom" placeholder="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} />
-          <Field label="Téléphone" placeholder="Téléphone" value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
-          <Field label="Email" type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <Field label="Adresse" placeholder="Adresse" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
-          <Button type="submit" variant="green"><Plus size={15} /> Ajouter</Button>
+          <Field label="Nom complet" placeholder="Ex: Amadou Diallo" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
+          <Field label="Telephone" placeholder="+223..." value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
+          <Field label="Adresse" placeholder="Ville / quartier" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
+          <Button type="submit" variant="green" disabled={saving}>
+            {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
+          </Button>
         </form>
       </Card>
-
-      {clients.length === 0 ? (
-        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun client enregistré pour le moment.</div></Card>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
+        <Search size={14} color={COLORS.inkSoft} />
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un client..." style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
+      </label>
+      {filtered.length === 0 ? (
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun client trouve.</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {clients.map(client => (
-              <Card key={client.id} style={{ border: selectedClient && selectedClient.id === client.id ? `2px solid ${COLORS.green}` : `1px solid ${COLORS.border}`, cursor: 'pointer', padding: '14px 16px' }} onClick={() => setSelectedId(client.id)}>
+            {filtered.map(client => (
+              <Card
+                key={client.id}
+                style={{ border: selectedClient && selectedClient.id === client.id ? `2px solid ${COLORS.green}` : `1px solid ${COLORS.border}`, cursor: 'pointer', padding: '14px 16px' }}
+                onClick={() => setSelectedId(client.id)}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 700 }}>{client.prenom} {client.nom}</div>
-                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{client.telephone}</div>
+                    <div style={{ fontWeight: 700 }}>{client.nom}</div>
+                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{client.telephone || 'Pas de telephone'}</div>
                   </div>
-                  <Badge tone={client.detteRestante > 0 ? 'red' : 'green'}>{client.detteRestante.toLocaleString('fr-FR')} FCFA</Badge>
+                  <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
-                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 8 }}>{client.adresse || 'Aucune adresse renseignée'}</div>
+                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{client.adresse || 'Aucune adresse renseignee'}</div>
               </Card>
             ))}
           </div>
-
           {selectedClient && (
-            <Card style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedClient.prenom} {selectedClient.nom}</div>
+            <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedClient.nom}</div>
               <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>📞 {selectedClient.telephone}</span>
-                <span>✉️ {selectedClient.email || 'Aucun e-mail renseigné'}</span>
-                <span>📍 {selectedClient.adresse || 'Aucune adresse renseignée'}</span>
+                <span>Tel : {selectedClient.telephone || 'Non renseigne'}</span>
+                <span>Adresse : {selectedClient.adresse || 'Non renseignee'}</span>
+                <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedClient.id}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                 <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>Dette restante</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.green }}>{selectedClient.detteRestante.toLocaleString('fr-FR')} FCFA</div>
+                  <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>Enregistre le</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: COLORS.green }}>
+                    {selectedClient.created_at ? new Date(selectedClient.created_at).toLocaleDateString('fr-FR') : '-'}
+                  </div>
                 </Card>
                 <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>Achats</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{selectedClient.historique.length}</div>
+                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>Total clients</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{clients.length}</div>
                 </Card>
-              </div>
-
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Ajouter un achat</div>
-                <form onSubmit={addPurchase} style={{ display: 'grid', gap: 8 }}>
-                  <Field label="Produit" placeholder="Produit" value={purchaseForm.produit} onChange={e => setPurchaseForm({ ...purchaseForm, produit: e.target.value })} />
-                  <Field label="Montant" type="number" placeholder="Montant" value={purchaseForm.montant} onChange={e => setPurchaseForm({ ...purchaseForm, montant: e.target.value })} />
-                  <Field label="Date" type="date" value={purchaseForm.date ? purchaseForm.date.split('/').reverse().join('-') : ''} onChange={e => setPurchaseForm({ ...purchaseForm, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
-                  <Button type="submit" variant="green"><Plus size={15} /> Enregistrer l’achat</Button>
-                </form>
-              </div>
-
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Ajouter un paiement</div>
-                <form onSubmit={addPayment} style={{ display: 'grid', gap: 8 }}>
-                  <Field label="Montant" type="number" placeholder="Montant" value={paymentForm.montant} onChange={e => setPaymentForm({ ...paymentForm, montant: e.target.value })} />
-                  <Field label="Date" type="date" value={paymentForm.date ? paymentForm.date.split('/').reverse().join('-') : ''} onChange={e => setPaymentForm({ ...paymentForm, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
-                  <Button type="submit" variant="outline"><Plus size={15} /> Enregistrer le paiement</Button>
-                </form>
-              </div>
-
-              <div style={{ display: 'grid', gap: 10 }}>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Historique des achats</div>
-                  {selectedClient.historique.length === 0 ? <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun achat enregistré.</div> : selectedClient.historique.map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 6, marginBottom: 6 }}>
-                      <span>{item.produit}</span>
-                      <span style={{ color: COLORS.inkSoft }}>{item.date} • {item.montant.toLocaleString('fr-FR')} FCFA</span>
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Paiements</div>
-                  {selectedClient.paiements.length === 0 ? <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun paiement enregistré.</div> : selectedClient.paiements.map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 6, marginBottom: 6 }}>
-                      <span>Paiement</span>
-                      <span style={{ color: COLORS.green }}>{item.date} • {item.montant.toLocaleString('fr-FR')} FCFA</span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </Card>
           )}
@@ -2405,7 +2497,6 @@ function ClientsModule({ farmId }) {
     </div>
   );
 }
-
 function ModulesScreen({ activated, onToggle, onContinue }) {
   const anyActive = activated.cultures || activated.poulailler || activated.clients;
   return (
@@ -2496,34 +2587,62 @@ export default function App() {
     const updateStatus = async () => {
       const online = typeof window !== 'undefined' ? navigator.onLine : true;
       setIsOnline(online);
-      const queue = JSON.parse(localStorage.getItem('agri-sync-queue') || '[]');
+      const queue = JSON.parse(localStorage.getItem('agri-offline-queue') || '[]');
       setPendingSyncCount(queue.length);
       setLastSync(localStorage.getItem('agri-last-sync'));
-      if (online) {
+      if (online && queue.length > 0) {
         const result = await syncPendingChanges();
-        setPendingSyncCount(result.pending);
+        setPendingSyncCount(result.pending ?? 0);
         setLastSync(localStorage.getItem('agri-last-sync'));
       }
+    };
+
+    const handleAuthExpired = () => {
+      clearToken();
+      setScreen('login');
+      setUser(null);
     };
 
     updateStatus();
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
     window.addEventListener('agri-sync-status-changed', updateStatus);
+    window.addEventListener('agri-auth-expired', handleAuthExpired);
     return () => {
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
       window.removeEventListener('agri-sync-status-changed', updateStatus);
+      window.removeEventListener('agri-auth-expired', handleAuthExpired);
     };
   }, []);
 
-  const handleLogin = (email, selectedRole) => {
-    const selectedConfig = ROLE_DEFINITIONS[selectedRole || 'admin'] || ROLE_DEFINITIONS.admin;
-    setUser(email);
-    setRole(selectedRole || 'admin');
-    setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-    if (!selectedConfig.permissions.includes('modules')) {
-      setTab('accueil');
+  const handleLogin = async (email, selectedRole, password) => {
+    try {
+      const authResult = await login(email, password);
+      setToken(authResult.token);
+      const uiRole = mapBackendRoleToUi(authResult.user.role);
+      const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
+      setUser(authResult.user.email);
+      setRole(uiRole);
+      setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
+      if (!selectedConfig.permissions.includes('modules')) {
+        setTab('accueil');
+      }
+    } catch (error) {
+      try {
+        const registerResult = await register(email, password, mapUiRoleToBackend(selectedRole));
+        setToken(registerResult.token);
+        const uiRole = mapBackendRoleToUi(registerResult.user.role);
+        const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
+        setUser(registerResult.user.email);
+        setRole(uiRole);
+        setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
+        if (!selectedConfig.permissions.includes('modules')) {
+          setTab('accueil');
+        }
+      } catch (registerError) {
+        window.alert(registerError.message || 'Connexion impossible.');
+      }
     }
   };
 
@@ -2562,12 +2681,37 @@ export default function App() {
     }
   }, [tab, availableTabs]);
 
+  useEffect(() => {
+    (async () => {
+      const token = getToken();
+      if (!token) return;
+      try {
+        const { user } = await getMe();
+        const uiRole = mapBackendRoleToUi(user.role);
+        const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
+        setUser(user.email);
+        setRole(uiRole);
+        setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
+        if (!selectedConfig.permissions.includes('modules')) {
+          setTab('accueil');
+        }
+      } catch {
+        clearToken();
+      }
+    })();
+  }, []);
+
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: 480, borderRadius: 16, color: COLORS.ink }}>
+    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: 480, borderRadius: 16, color: COLORS.ink }}>
       <style>{`
         ${FONT_IMPORT}
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .app-shell { max-width: 1500px; margin: 0 auto; }
+        .topbar { background: rgba(255,255,255,0.96); backdrop-filter: blur(10px); box-shadow: 0 6px 24px rgba(20,35,24,0.06); }
+        .dashboard-shell { max-width: 1500px; margin: 0 auto; }
+        .nav-chip { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .nav-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,24,0.08); }
         input:focus, select:focus { border-color: ${COLORS.green} !important; box-shadow: 0 0 0 3px ${COLORS.greenSoft}; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
@@ -2575,7 +2719,7 @@ export default function App() {
 
       {screen !== 'login' && (
         <div>
-          <div style={{
+          <div className="topbar" style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
             padding: '14px 22px', borderBottom: `1px solid ${COLORS.border}`
           }}>
@@ -2595,7 +2739,7 @@ export default function App() {
               <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {roleConfig.label}
               </span>
-              <button onClick={() => { setScreen('login'); setUser(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+              <button onClick={() => { clearToken(); setScreen('login'); setUser(null); setRole('admin'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                 <LogOut size={17} />
               </button>
             </div>
@@ -2618,18 +2762,19 @@ export default function App() {
       )}
 
       {screen === 'dashboard' && (
-        <div style={{ padding: '20px 22px 34px' }}>
+        <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
           {availableTabs.length > 1 && (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center', rowGap: 8, maxWidth: '100%' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center', rowGap: 8, maxWidth: '100%', overflowX: 'auto', paddingBottom: 2 }}>
               {availableTabs.map(t => {
                 const Icon = t.icon;
                 const active = tab === t.id;
                 return (
-                  <button key={t.id} onClick={() => setTab(t.id)} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 14.5, fontWeight: 600,
-                    padding: '10px 20px', borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap',
+                  <button key={t.id} onClick={() => setTab(t.id)} className="nav-chip" style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 15.5, fontWeight: 700,
+                    padding: '12px 24px', minHeight: 46, borderRadius: 12, cursor: 'pointer', whiteSpace: 'nowrap',
                     border: `1px solid ${active ? COLORS.ink : COLORS.border}`,
-                    background: active ? COLORS.ink : COLORS.surface, color: active ? '#fff' : COLORS.ink
+                    background: active ? COLORS.ink : COLORS.surface, color: active ? '#fff' : COLORS.ink,
+                    boxShadow: active ? '0 4px 10px rgba(20,35,24,0.08)' : 'none'
                   }}>
                     <Icon size={15} /> {t.label}
                   </button>

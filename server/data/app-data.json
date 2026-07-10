@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "id": "7430aa66-ca97-4a31-8e93-32710074dce8",
+      "email": "admin@agriapp.com",
+      "role": "admin",
+      "passwordHash": "$2a$10$PQak5ybBe4SwoAK6XWtUguNlBsKi5ftMXkU3BqbIfejX5JAKBCVeG",
+      "createdAt": "2026-07-09T20:03:05.057Z"
+    }
+  ],
+  "modules": []
+}

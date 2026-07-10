@@ -1,0 +1,160 @@
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+// ─────────────────────────────────────────────────────────────────────
+// Requête HTTP de base avec gestion d'erreur centralisée
+// ─────────────────────────────────────────────────────────────────────
+async function request(path, options = {}) {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch {
+    throw new Error('Impossible de contacter le serveur. Vérifiez votre connexion.');
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    // Token expiré ou invalide : on force la déconnexion
+    clearToken();
+    window.dispatchEvent(new Event('agri-auth-expired'));
+    throw new Error(data.error || 'Session expirée. Veuillez vous reconnecter.');
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || `Erreur ${response.status}`);
+  }
+
+  return data;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Token
+// ─────────────────────────────────────────────────────────────────────
+export function getToken() {
+  return localStorage.getItem('agri-token');
+}
+
+export function setToken(token) {
+  localStorage.setItem('agri-token', token);
+}
+
+export function clearToken() {
+  localStorage.removeItem('agri-token');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────────────────
+export async function login(email, password) {
+  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+
+export async function register(email, password, role) {
+  return request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, role }) });
+}
+
+export async function getMe() {
+  return request('/auth/me');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Clients
+// ─────────────────────────────────────────────────────────────────────
+export async function getClients() {
+  return request('/business/clients');
+}
+
+export async function createClient(payload) {
+  return request('/business/clients', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteClient(id) {
+  return request(`/business/clients/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Finances
+// ─────────────────────────────────────────────────────────────────────
+export async function getFinances() {
+  return request('/business/finances');
+}
+
+export async function createFinance(payload) {
+  return request('/business/finances', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteFinance(id) {
+  return request(`/business/finances/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Sync offline — rejoue les opérations en attente vers le backend
+// ─────────────────────────────────────────────────────────────────────
+export async function flushOfflineQueue() {
+  if (!navigator.onLine) return { flushed: 0 };
+
+  const raw = localStorage.getItem('agri-offline-queue');
+  if (!raw) return { flushed: 0 };
+
+  let queue;
+  try {
+    queue = JSON.parse(raw);
+  } catch {
+    localStorage.removeItem('agri-offline-queue');
+    return { flushed: 0 };
+  }
+
+  if (!Array.isArray(queue) || queue.length === 0) return { flushed: 0 };
+
+  const remaining = [];
+  let flushed = 0;
+
+  for (const op of queue) {
+    try {
+      await request(op.path, { method: op.method, body: op.body ? JSON.stringify(op.body) : undefined });
+      flushed++;
+    } catch {
+      remaining.push(op); // garde pour la prochaine tentative
+    }
+  }
+
+  if (remaining.length === 0) {
+    localStorage.removeItem('agri-offline-queue');
+  } else {
+    localStorage.setItem('agri-offline-queue', JSON.stringify(remaining));
+  }
+
+  localStorage.setItem('agri-last-sync', new Date().toISOString());
+  return { flushed };
+}
+
+/**
+ * Enregistre une opération dans la queue offline si hors ligne,
+ * sinon l'exécute directement.
+ */
+export async function safeRequest(path, options = {}) {
+  if (navigator.onLine) {
+    return request(path, options);
+  }
+
+  const op = {
+    path,
+    method: options.method || 'GET',
+    body: options.body ? JSON.parse(options.body) : undefined,
+    queuedAt: new Date().toISOString(),
+  };
+
+  const raw = localStorage.getItem('agri-offline-queue') || '[]';
+  const queue = JSON.parse(raw);
+  queue.push(op);
+  localStorage.setItem('agri-offline-queue', JSON.stringify(queue));
+  window.dispatchEvent(new Event('agri-sync-status-changed'));
+  return null; // signal écrit hors-ligne
+}
