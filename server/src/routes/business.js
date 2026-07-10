@@ -8,6 +8,55 @@ const router = express.Router();
 //  CLIENTS
 // ═══════════════════════════════════════════════════════════
 
+// GET /api/business/parcelles
+router.get('/parcelles', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM parcelles ORDER BY id DESC'
+    );
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('[GET /parcelles]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des parcelles.' });
+  }
+});
+
+// POST /api/business/parcelles
+router.post('/parcelles', authRequired, async (req, res) => {
+  try {
+    const { nom, superficie, localisation } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO parcelles (nom, superficie, localisation)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [nom, superficie || null, localisation || null]
+    );
+
+    return res.status(201).json({
+      parcelle: result.rows[0]
+    });
+  } catch (err) {
+    console.error('[POST /parcelles]', err);
+    return res.status(500).json({ error: 'Erreur lors de la création de la parcelle.' });
+  }
+});
+
+// DELETE /api/business/parcelles/:id
+router.delete('/parcelles/:id', authRequired, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM parcelles WHERE id = $1',
+      [req.params.id]
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /parcelles]', err);
+    return res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
 // GET /api/business/clients
 router.get('/clients', authRequired, async (req, res) => {
   try {
