@@ -26,7 +26,7 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      `INSERT INTO users (email, role, password_hash)
+      `INSERT INTO users (email, role, password)
        VALUES ($1, $2, $3)
        RETURNING id, email, role, created_at`,
       [email.toLowerCase(), role, passwordHash]
@@ -68,7 +68,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
+    const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       return res.status(401).json({ error: 'Identifiants invalides.' });
     }

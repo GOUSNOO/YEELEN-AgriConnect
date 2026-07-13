@@ -1,6 +1,12 @@
 /**
- * Migration initiale — YEELEN AgriConnect
- * Crée les tables users, clients et finances dans PostgreSQL.
+ * Migration — YEELEN AgriConnect
+ * Étend la table `parcelles` existante avec les données de capteurs
+ * (humidité, température, vanne...) et ajoute l'historique des vannes
+ * ainsi que les ventes/achats du module Cultures.
+ *
+ * Ne touche PAS aux tables users / clients / finances / cultures / recoltes /
+ * poulaillers / lots_volailles / production_oeufs déjà existantes.
+ *
  * Lancer avec : node src/db/migrate.js (depuis le dossier server/)
  */
 
@@ -23,39 +29,39 @@ const client = new Client({
 });
 
 const SQL = `
--- Table des utilisateurs
-CREATE TABLE IF NOT EXISTS users (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       TEXT NOT NULL UNIQUE,
-  role        TEXT NOT NULL DEFAULT 'worker',
-  password_hash TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Étend la table parcelles existante (nom, superficie, localisation)
+-- avec les colonnes nécessaires au suivi capteurs / irrigation.
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS culture       TEXT;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS humidite      NUMERIC(5, 2) NOT NULL DEFAULT 50;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS temperature   NUMERIC(5, 2) NOT NULL DEFAULT 25;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS mode          TEXT NOT NULL DEFAULT 'auto';
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS vanne_ouverte BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS seuil         NUMERIC(5, 2) NOT NULL DEFAULT 35;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS pos_x         NUMERIC(5, 2) NOT NULL DEFAULT 50;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS pos_y         NUMERIC(5, 2) NOT NULL DEFAULT 50;
+
+-- Historique des vannes, lié aux parcelles existantes par id entier
+CREATE TABLE IF NOT EXISTS parcelles_historique (
+  id           SERIAL PRIMARY KEY,
+  parcelle_id  INTEGER REFERENCES parcelles(id) ON DELETE CASCADE,
+  action       TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Table des clients
-CREATE TABLE IF NOT EXISTS clients (
-  id          SERIAL PRIMARY KEY,
-  nom         TEXT NOT NULL,
-  telephone   TEXT,
-  adresse     TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Ventes et achats du module Cultures (mutualisés dans une seule table)
+CREATE TABLE IF NOT EXISTS cultures_mouvements (
+  id            SERIAL PRIMARY KEY,
+  type          TEXT NOT NULL CHECK (type IN ('vente', 'achat')),
+  date          DATE NOT NULL DEFAULT CURRENT_DATE,
+  partenaire    TEXT NOT NULL,
+  produit       TEXT NOT NULL,
+  quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  prix_unitaire NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Table des finances
-CREATE TABLE IF NOT EXISTS finances (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
-  categorie   TEXT NOT NULL DEFAULT 'Caisse',
-  montant     NUMERIC(14, 2) NOT NULL DEFAULT 0,
-  description TEXT,
-  date        DATE NOT NULL DEFAULT CURRENT_DATE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Index utiles
-CREATE INDEX IF NOT EXISTS idx_finances_user_id ON finances(user_id);
-CREATE INDEX IF NOT EXISTS idx_finances_date    ON finances(date);
-CREATE INDEX IF NOT EXISTS idx_clients_nom      ON clients(nom);
+CREATE INDEX IF NOT EXISTS idx_parcelles_historique_parcelle_id ON parcelles_historique(parcelle_id);
+CREATE INDEX IF NOT EXISTS idx_cultures_mouvements_type ON cultures_mouvements(type);
 `;
 
 async function migrate() {
@@ -63,7 +69,7 @@ async function migrate() {
     await client.connect();
     console.log('✅ Connecté à PostgreSQL');
     await client.query(SQL);
-    console.log('✅ Tables créées (ou déjà existantes) : users, clients, finances');
+    console.log('✅ parcelles étendue + tables créées (ou déjà existantes) : parcelles_historique, cultures_mouvements');
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);

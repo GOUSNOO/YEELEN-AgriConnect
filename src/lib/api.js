@@ -95,6 +95,51 @@ export async function deleteFinance(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Cultures — Parcelles
+// ─────────────────────────────────────────────────────────────────────
+export async function getParcelles() {
+  return request('/cultures/parcelles');
+}
+
+export async function createParcelle(payload) {
+  return safeRequest('/cultures/parcelles', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateParcelle(id, payload) {
+  return safeRequest(`/cultures/parcelles/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteParcelle(id) {
+  return safeRequest(`/cultures/parcelles/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Cultures — Historique des vannes
+// ─────────────────────────────────────────────────────────────────────
+export async function getParcellesHistorique() {
+  return request('/cultures/historique');
+}
+
+export async function createParcelleHistorique(payload) {
+  return safeRequest('/cultures/historique', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Cultures — Ventes / Achats
+// ─────────────────────────────────────────────────────────────────────
+export async function getCulturesMouvements(type) {
+  return request(`/cultures/mouvements${type ? `?type=${type}` : ''}`);
+}
+
+export async function createCulturesMouvement(payload) {
+  return safeRequest('/cultures/mouvements', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteCulturesMouvement(id) {
+  return safeRequest(`/cultures/mouvements/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Sync offline — rejoue les opérations en attente vers le backend
 // ─────────────────────────────────────────────────────────────────────
 export async function flushOfflineQueue() {

@@ -7,7 +7,13 @@ import {
   Search, Printer, FileText, PencilLine, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays
 } from 'lucide-react';
-import { clearToken, createClient, createFinance, deleteClient, deleteFinance, flushOfflineQueue, getClients, getFinances, getMe, getToken, login, register, setToken } from './lib/api';
+import {
+  clearToken, createClient, createFinance, deleteClient, deleteFinance, flushOfflineQueue,
+  getClients, getFinances, getMe, getToken, login, register, setToken,
+  getParcelles, createParcelle, updateParcelle, deleteParcelle,
+  getParcellesHistorique, createParcelleHistorique,
+  getCulturesMouvements, createCulturesMouvement, deleteCulturesMouvement,
+} from './lib/api';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
 
@@ -346,29 +352,60 @@ function CulturesModule({ farmId }) {
   const [loaded, setLoaded] = useState(false);
   const loadedRef = useRef(false);
 
+  const normalizeParcelle = useCallback((p) => ({
+    ...p,
+    humidite: Number(p.humidite),
+    temperature: Number(p.temperature),
+    seuil: Number(p.seuil),
+    x: Number(p.x),
+    y: Number(p.y),
+  }), []);
+
+  const seedDefaultParcelles = useCallback(async () => {
+    const created = [];
+    for (const p of DEFAULT_PARCELLES) {
+      try {
+        const { parcelle } = await createParcelle({
+          nom: p.nom, culture: p.culture, humidite: p.humidite, temperature: p.temperature,
+          mode: p.mode, vanneOuverte: p.vanneOuverte, seuil: p.seuil, x: p.x, y: p.y,
+        });
+        if (parcelle) created.push(normalizeParcelle(parcelle));
+      } catch (err) {
+        console.error('[seedDefaultParcelles]', err);
+      }
+    }
+    return created;
+  }, [normalizeParcelle]);
+
   useEffect(() => {
     (async () => {
-      const p = await storageGet(`cultures-parcelles-${farmId}`, DEFAULT_PARCELLES);
-      const h = await storageGet(`cultures-historique-${farmId}`, []);
-      setParcelles(p);
-      setHistorique(h);
-      setLoaded(true);
-      loadedRef.current = true;
+      try {
+        const { parcelles: fetched } = await getParcelles();
+        if (fetched.length === 0) {
+          const seeded = await seedDefaultParcelles();
+          setParcelles(seeded);
+        } else {
+          setParcelles(fetched.map(normalizeParcelle));
+        }
+        const { historique: fetchedHistorique } = await getParcellesHistorique();
+        setHistorique(fetchedHistorique);
+      } catch (err) {
+        console.error('[CulturesModule load]', err);
+      } finally {
+        setLoaded(true);
+        loadedRef.current = true;
+      }
     })();
-  }, [farmId]);
+  }, [farmId, seedDefaultParcelles]);
 
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    storageSet(`cultures-parcelles-${farmId}`, parcelles);
-  }, [parcelles, farmId]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    storageSet(`cultures-historique-${farmId}`, historique.slice(0, 40));
-  }, [historique, farmId]);
-
-  const pushHistorique = useCallback((entry) => {
-    setHistorique(h => [{ id: Date.now() + Math.random(), date: new Date().toLocaleString('fr-FR'), ...entry }, ...h].slice(0, 40));
+  const pushHistorique = useCallback(async (entry) => {
+    setHistorique(h => [{ id: `local-${Date.now()}`, date: new Date().toISOString(), parcelle: entry.parcelle, action: entry.action }, ...h].slice(0, 40));
+    try {
+      const { entry: saved } = await createParcelleHistorique({ parcelleId: entry.parcelleId, action: entry.action });
+      if (saved) setHistorique(h => [saved, ...h.filter(x => !String(x.id).startsWith('local-'))].slice(0, 40));
+    } catch (err) {
+      console.error('[pushHistorique]', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -381,12 +418,12 @@ function CulturesModule({ farmId }) {
           const shouldOpen = humidite < p.seuil;
           if (shouldOpen !== vanneOuverte) {
             vanneOuverte = shouldOpen;
-            pushHistorique({
-              parcelle: p.nom,
-              action: shouldOpen ? 'Vanne ouverte automatiquement' : 'Vanne fermée automatiquement',
-            });
+            pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: shouldOpen ? 'Vanne ouverte automatiquement' : 'Vanne fermée automatiquement' });
+            updateParcelle(p.id, { vanneOuverte }).catch(err => console.error('[auto vanne update]', err));
           }
         }
+        // Note : humidité/température simulées restent côté client (non persistées à chaque tick)
+        // pour éviter de saturer la base — seuls les changements d'état (mode, vanne) sont enregistrés.
         return { ...p, humidite, temperature, vanneOuverte };
       }));
     }, 6000);
@@ -394,16 +431,63 @@ function CulturesModule({ farmId }) {
   }, [pushHistorique]);
 
   const toggleMode = (id) => {
-    setParcelles(prev => prev.map(p => p.id === id ? { ...p, mode: p.mode === 'auto' ? 'manuel' : 'auto' } : p));
+    setParcelles(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const mode = p.mode === 'auto' ? 'manuel' : 'auto';
+      updateParcelle(id, { mode }).catch(err => console.error('[toggleMode]', err));
+      return { ...p, mode };
+    }));
   };
 
   const toggleVanne = (id) => {
     setParcelles(prev => prev.map(p => {
       if (p.id !== id) return p;
       const vanneOuverte = !p.vanneOuverte;
-      pushHistorique({ parcelle: p.nom, action: vanneOuverte ? 'Vanne ouverte manuellement' : 'Vanne fermée manuellement' });
+      pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: vanneOuverte ? 'Vanne ouverte manuellement' : 'Vanne fermée manuellement' });
+      updateParcelle(id, { vanneOuverte }).catch(err => console.error('[toggleVanne]', err));
       return { ...p, vanneOuverte };
     }));
+  };
+
+  const [newParcelleForm, setNewParcelleForm] = useState({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
+  const [addingParcelle, setAddingParcelle] = useState(false);
+
+  const addParcelle = async (e) => {
+    e.preventDefault();
+    if (!newParcelleForm.nom) return;
+    setAddingParcelle(true);
+    try {
+      const { parcelle } = await createParcelle({
+        nom: newParcelleForm.nom,
+        culture: newParcelleForm.culture || null,
+        humidite: 50,
+        temperature: 25,
+        mode: 'auto',
+        vanneOuverte: false,
+        seuil: Number(newParcelleForm.seuil) || 35,
+        x: Math.round(10 + Math.random() * 80),
+        y: Math.round(10 + Math.random() * 80),
+        superficie: newParcelleForm.superficie ? Number(newParcelleForm.superficie) : null,
+        localisation: newParcelleForm.localisation || null,
+      });
+      if (parcelle) {
+        setParcelles(prev => [...prev, normalizeParcelle(parcelle)]);
+        setNewParcelleForm({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
+      }
+    } catch (err) {
+      console.error('[addParcelle]', err);
+    } finally {
+      setAddingParcelle(false);
+    }
+  };
+
+  const removeParcelle = async (id) => {
+    try {
+      await deleteParcelle(id);
+      setParcelles(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('[removeParcelle]', err);
+    }
   };
 
   if (!loaded) {
@@ -438,6 +522,17 @@ function CulturesModule({ farmId }) {
 
       {tab === 'parcelles' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Ajouter une parcelle</div>
+        <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label="Nom" placeholder="Ex: Parcelle D" value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
+          <Field label="Culture" placeholder="Ex: Riz" value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
+          <Field label="Seuil d'humidité (%)" type="number" value={newParcelleForm.seuil} onChange={e => setNewParcelleForm({ ...newParcelleForm, seuil: e.target.value })} />
+          <Field label="Superficie (ha)" type="number" placeholder="Optionnel" value={newParcelleForm.superficie} onChange={e => setNewParcelleForm({ ...newParcelleForm, superficie: e.target.value })} />
+          <Field label="Localisation" placeholder="Optionnel" value={newParcelleForm.localisation} onChange={e => setNewParcelleForm({ ...newParcelleForm, localisation: e.target.value })} />
+          <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? 'Ajout…' : 'Ajouter'}</Button>
+        </form>
+      </Card>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         {parcelles.map(p => {
           const needsWater = p.humidite < p.seuil;
@@ -448,7 +543,12 @@ function CulturesModule({ farmId }) {
                   <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, color: COLORS.ink }}>{p.nom}</div>
                   <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{p.culture}</div>
                 </div>
-                <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? 'Arrosage recommandé' : 'Sol suffisamment humide'}</Badge>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? 'Arrosage recommandé' : 'Sol suffisamment humide'}</Badge>
+                  <button onClick={() => removeParcelle(p.id)} title="Supprimer la parcelle" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0 14px' }}>
                 <GaugeDial
@@ -495,7 +595,7 @@ function CulturesModule({ farmId }) {
             {historique.map(h => (
               <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
                 <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {h.action}</span>
-                <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{h.date}</span>
+                <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateTimeFr(h.date)}</span>
               </div>
             ))}
           </div>
@@ -505,9 +605,20 @@ function CulturesModule({ farmId }) {
       )}
 
       {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
-      {tab === 'ventes' && <MovementTab farmId={farmId} storageKey="ventes-cultures" partnerLabel="Client" accent="green" defaults={[]} />}
-      {tab === 'achats' && <MovementTab farmId={farmId} storageKey="achats-cultures" partnerLabel="Fournisseur" accent="green" defaults={[]} />}
-      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId} ventesKey="ventes-cultures" achatsKey="achats-cultures" />}
+      {tab === 'ventes' && <MovementTab farmId={farmId} storageKey="ventes-cultures" partnerLabel="Client" accent="green" defaults={[]} remote={{
+        list: async () => (await getCulturesMouvements('vente')).mouvements,
+        create: async (payload) => (await createCulturesMouvement({ ...payload, type: 'vente' })).mouvement,
+        remove: async (id) => deleteCulturesMouvement(id),
+      }} />}
+      {tab === 'achats' && <MovementTab farmId={farmId} storageKey="achats-cultures" partnerLabel="Fournisseur" accent="green" defaults={[]} remote={{
+        list: async () => (await getCulturesMouvements('achat')).mouvements,
+        create: async (payload) => (await createCulturesMouvement({ ...payload, type: 'achat' })).mouvement,
+        remove: async (id) => deleteCulturesMouvement(id),
+      }} />}
+      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
+        remoteVentes={async () => (await getCulturesMouvements('vente')).mouvements}
+        remoteAchats={async () => (await getCulturesMouvements('achat')).mouvements}
+      />}
     </div>
   );
 }
@@ -627,6 +738,19 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// Formate une date ou un timestamp venant du serveur (ISO) en JJ/MM/AAAA pour l'affichage
+function formatDateFr(value) {
+  const d = parseDate(value);
+  return d ? d.toLocaleDateString('fr-FR') : (value || '');
+}
+
+// Formate un timestamp serveur complet (date + heure) pour l'historique
+function formatDateTimeFr(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('fr-FR');
+}
+
 function matchesPeriod(rowDate, period) {
   const date = parseDate(rowDate);
   if (!date) return true;
@@ -684,14 +808,33 @@ function renderInvoiceHtml(row, partnerLabel) {
     </html>`;
 }
 
-function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults }) {
-  const [rows, setRows] = useTable(farmId, storageKey, defaults);
+function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults, remote }) {
+  const [localRows, setLocalRows] = useTable(farmId, remote ? `__unused-${storageKey}` : storageKey, defaults);
+  const [remoteRows, setRemoteRows] = useState([]);
+  const [remoteLoaded, setRemoteLoaded] = useState(false);
+  const rows = remote ? remoteRows : localRows;
+  const setRows = remote ? setRemoteRows : setLocalRows;
+
+  useEffect(() => {
+    if (!remote) return;
+    (async () => {
+      try {
+        const data = await remote.list();
+        setRemoteRows(data);
+      } catch (err) {
+        console.error('[MovementTab remote load]', err);
+      } finally {
+        setRemoteLoaded(true);
+      }
+    })();
+  }, [remote]);
+
   const [form, setForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', date: new Date().toLocaleDateString('fr-FR') });
   const [editingId, setEditingId] = useState(null);
   const [period, setPeriod] = useState('mois');
   const [query, setQuery] = useState('');
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     if (!form.partenaire || !form.produit || form.quantite === '' || form.prixUnitaire === '') return;
     const payload = {
@@ -701,7 +844,14 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults 
       quantite: Number(form.quantite),
       prixUnitaire: Number(form.prixUnitaire),
     };
-    if (editingId) {
+    if (remote) {
+      try {
+        const created = await remote.create(payload);
+        if (created) setRows(r => [created, ...r]);
+      } catch (err) {
+        console.error('[MovementTab remote create]', err);
+      }
+    } else if (editingId) {
       setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
       setEditingId(null);
     } else {
@@ -710,7 +860,17 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults 
     setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', date: new Date().toLocaleDateString('fr-FR') });
   };
 
-  const remove = (id) => setRows(r => r.filter(x => x.id !== id));
+  const remove = async (id) => {
+    if (remote) {
+      try {
+        await remote.remove(id);
+      } catch (err) {
+        console.error('[MovementTab remote delete]', err);
+        return;
+      }
+    }
+    setRows(r => r.filter(x => x.id !== id));
+  };
 
   const startEdit = (row) => {
     setEditingId(row.id);
@@ -827,7 +987,7 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults 
           <tbody>
             {filteredRows.map(r => (
               <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{r.date}</td>
+                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(r.date)}</td>
                 <td>{r.partenaire}</td>
                 <td>{r.produit}</td>
                 <td>{r.quantite}</td>
@@ -835,7 +995,7 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults 
                 <td style={{ fontWeight: 600 }}>{(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')}</td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                    {!remote && <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>}
                     <button onClick={() => printInvoice(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green }}><Printer size={15} /></button>
                     <button onClick={() => remove(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
                   </div>
@@ -860,7 +1020,7 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults 
           {rows.length === 0 ? <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun historique enregistré.</div> : rows.map(r => (
             <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
               <span><strong>{r.partenaire}</strong> — {r.produit} ({r.quantite})</span>
-              <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{r.date} • {(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA</span>
+              <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateFr(r.date)} • {(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA</span>
             </div>
           ))}
         </div>
@@ -907,7 +1067,7 @@ function LivraisonsTab({ farmId }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{r.date}</td>
+                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(r.date)}</td>
                 <td>{r.client}</td>
                 <td>{r.produit}</td>
                 <td>{r.quantite}</td>
@@ -933,9 +1093,21 @@ function LivraisonsTab({ farmId }) {
   );
 }
 
-function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats' }) {
-  const [ventes] = useTable(farmId, ventesKey, []);
-  const [achats] = useTable(farmId, achatsKey, []);
+function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', remoteVentes, remoteAchats }) {
+  const [localVentes] = useTable(farmId, remoteVentes ? '__unused-ventes' : ventesKey, []);
+  const [localAchats] = useTable(farmId, remoteAchats ? '__unused-achats' : achatsKey, []);
+  const [fetchedVentes, setFetchedVentes] = useState([]);
+  const [fetchedAchats, setFetchedAchats] = useState([]);
+
+  useEffect(() => {
+    if (remoteVentes) remoteVentes().then(setFetchedVentes).catch(err => console.error('[ComptabiliteTab ventes]', err));
+  }, [remoteVentes]);
+  useEffect(() => {
+    if (remoteAchats) remoteAchats().then(setFetchedAchats).catch(err => console.error('[ComptabiliteTab achats]', err));
+  }, [remoteAchats]);
+
+  const ventes = remoteVentes ? fetchedVentes : localVentes;
+  const achats = remoteAchats ? fetchedAchats : localAchats;
 
   const totalVentes = ventes.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
   const totalAchats = achats.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
@@ -944,7 +1116,11 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats' })
   const ledger = [
     ...ventes.map(v => ({ ...v, type: 'Vente', montant: v.quantite * v.prixUnitaire })),
     ...achats.map(a => ({ ...a, type: 'Achat', montant: -(a.quantite * a.prixUnitaire) })),
-  ].sort((a, b) => b.id - a.id);
+  ].sort((a, b) => {
+    const dateDiff = (parseDate(b.date)?.getTime() || 0) - (parseDate(a.date)?.getTime() || 0);
+    if (dateDiff !== 0) return dateDiff;
+    return String(b.id).localeCompare(String(a.id));
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -975,7 +1151,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats' })
             )}
             {ledger.map(l => (
               <tr key={l.type + l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{l.date}</td>
+                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(l.date)}</td>
                 <td>
                   {l.type === 'Vente'
                     ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowUpCircle size={13} /> Vente</span>
