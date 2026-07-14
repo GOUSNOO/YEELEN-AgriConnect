@@ -13,9 +13,69 @@ import {
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements, createCulturesMouvement, deleteCulturesMouvement,
+  getPoulaillerStocks, createPoulaillerStock, deletePoulaillerStock,
+  getPoulaillerMouvements, createPoulaillerMouvement, deletePoulaillerMouvement,
+  getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
+  getPoulaillerSuivi, createPoulaillerSuivi,
 } from './lib/api';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
+
+// ─────────────────────────────────────────────────────────────────────
+// Système de notifications global (toasts)
+// Permet à n'importe quel composant d'afficher une erreur/succès visible
+// sans avoir à faire remonter l'état jusqu'à la racine de l'appli.
+// ─────────────────────────────────────────────────────────────────────
+let toastListeners = [];
+function notify(message, type = 'error') {
+  const toast = { id: `${Date.now()}-${Math.random()}`, message, type };
+  toastListeners.forEach(fn => fn(toast));
+}
+function notifyError(err, fallback = 'Une erreur est survenue.') {
+  notify((err && err.message) || fallback, 'error');
+}
+function notifySuccess(message) {
+  notify(message, 'success');
+}
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    const handler = (toast) => {
+      setToasts(prev => [...prev, toast]);
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== toast.id));
+      }, 5000);
+    };
+    toastListeners.push(handler);
+    return () => { toastListeners = toastListeners.filter(l => l !== handler); };
+  }, []);
+
+  const dismiss = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', top: 16, right: 16, zIndex: 9999,
+      display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 340
+    }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          background: t.type === 'error' ? COLORS.red : COLORS.green,
+          color: '#fff', borderRadius: 10, padding: '11px 14px',
+          fontSize: 13.5, fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: 8,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+        }}>
+          {t.type === 'error' ? <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> : <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />}
+          <span style={{ flex: 1 }}>{t.message}</span>
+          <button onClick={() => dismiss(t.id)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8, padding: 0, lineHeight: 1 }}>✕</button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const COLORS = {
   bg: '#F1F0E4',
@@ -405,6 +465,7 @@ function CulturesModule({ farmId }) {
       if (saved) setHistorique(h => [saved, ...h.filter(x => !String(x.id).startsWith('local-'))].slice(0, 40));
     } catch (err) {
       console.error('[pushHistorique]', err);
+      notifyError(err, "L'historique n'a pas pu être enregistré.");
     }
   }, []);
 
@@ -419,7 +480,7 @@ function CulturesModule({ farmId }) {
           if (shouldOpen !== vanneOuverte) {
             vanneOuverte = shouldOpen;
             pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: shouldOpen ? 'Vanne ouverte automatiquement' : 'Vanne fermée automatiquement' });
-            updateParcelle(p.id, { vanneOuverte }).catch(err => console.error('[auto vanne update]', err));
+            updateParcelle(p.id, { vanneOuverte }).catch(err => { console.error('[auto vanne update]', err); notifyError(err); });
           }
         }
         // Note : humidité/température simulées restent côté client (non persistées à chaque tick)
@@ -434,7 +495,7 @@ function CulturesModule({ farmId }) {
     setParcelles(prev => prev.map(p => {
       if (p.id !== id) return p;
       const mode = p.mode === 'auto' ? 'manuel' : 'auto';
-      updateParcelle(id, { mode }).catch(err => console.error('[toggleMode]', err));
+      updateParcelle(id, { mode }).catch(err => { console.error('[toggleMode]', err); notifyError(err); });
       return { ...p, mode };
     }));
   };
@@ -444,7 +505,7 @@ function CulturesModule({ farmId }) {
       if (p.id !== id) return p;
       const vanneOuverte = !p.vanneOuverte;
       pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: vanneOuverte ? 'Vanne ouverte manuellement' : 'Vanne fermée manuellement' });
-      updateParcelle(id, { vanneOuverte }).catch(err => console.error('[toggleVanne]', err));
+      updateParcelle(id, { vanneOuverte }).catch(err => { console.error('[toggleVanne]', err); notifyError(err); });
       return { ...p, vanneOuverte };
     }));
   };
@@ -473,20 +534,25 @@ function CulturesModule({ farmId }) {
       if (parcelle) {
         setParcelles(prev => [...prev, normalizeParcelle(parcelle)]);
         setNewParcelleForm({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
+        notifySuccess('Parcelle ajoutée.');
       }
     } catch (err) {
       console.error('[addParcelle]', err);
+      notifyError(err, "Impossible d'ajouter la parcelle.");
     } finally {
       setAddingParcelle(false);
     }
   };
 
-  const removeParcelle = async (id) => {
+  const removeParcelle = async (id, nom) => {
+    if (!window.confirm(`Supprimer la parcelle « ${nom} » ? Cette action est irréversible.`)) return;
     try {
       await deleteParcelle(id);
       setParcelles(prev => prev.filter(p => p.id !== id));
+      notifySuccess('Parcelle supprimée.');
     } catch (err) {
       console.error('[removeParcelle]', err);
+      notifyError(err, 'Impossible de supprimer la parcelle.');
     }
   };
 
@@ -545,7 +611,7 @@ function CulturesModule({ farmId }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? 'Arrosage recommandé' : 'Sol suffisamment humide'}</Badge>
-                  <button onClick={() => removeParcelle(p.id)} title="Supprimer la parcelle" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                  <button onClick={() => removeParcelle(p.id, p.nom)} title="Supprimer la parcelle" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -648,16 +714,64 @@ function useTable(farmId, key, defaults) {
 }
 
 function StocksTab({ farmId }) {
-  const [stocks, setStocks] = useTable(farmId, 'stocks', DEFAULT_STOCKS);
+  const [stocks, setStocks] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [form, setForm] = useState({ nom: '', categorie: 'Aliment', quantite: '', unite: '', seuil: '' });
 
-  const add = (e) => {
+  useEffect(() => {
+    (async () => {
+      try {
+        const { stocks: fetched } = await getPoulaillerStocks();
+        if (fetched.length === 0) {
+          const seeded = [];
+          for (const s of DEFAULT_STOCKS) {
+            try {
+              const { stock } = await createPoulaillerStock({ nom: s.nom, categorie: s.categorie, quantite: s.quantite, unite: s.unite, seuil: s.seuil });
+              if (stock) seeded.push(stock);
+            } catch (err) {
+              console.error('[StocksTab seed]', err);
+            }
+          }
+          setStocks(seeded);
+        } else {
+          setStocks(fetched);
+        }
+      } catch (err) {
+        console.error('[StocksTab load]', err);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [farmId]);
+
+  const add = async (e) => {
     e.preventDefault();
     if (!form.nom || form.quantite === '') return;
-    setStocks(s => [...s, { id: Date.now(), ...form, quantite: Number(form.quantite), seuil: Number(form.seuil || 0) }]);
+    try {
+      const { stock } = await createPoulaillerStock({
+        nom: form.nom, categorie: form.categorie, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
+      });
+      if (stock) {
+        setStocks(s => [...s, stock]);
+        notifySuccess('Article ajouté au stock.');
+      }
+    } catch (err) {
+      console.error('[StocksTab add]', err);
+      notifyError(err, "Impossible d'ajouter l'article.");
+    }
     setForm({ nom: '', categorie: 'Aliment', quantite: '', unite: '', seuil: '' });
   };
-  const remove = (id) => setStocks(s => s.filter(r => r.id !== id));
+  const remove = async (id, nom) => {
+    if (!window.confirm(`Supprimer « ${nom} » du stock ?`)) return;
+    try {
+      await deletePoulaillerStock(id);
+      setStocks(s => s.filter(r => r.id !== id));
+      notifySuccess('Article supprimé.');
+    } catch (err) {
+      console.error('[StocksTab remove]', err);
+      notifyError(err, "Impossible de supprimer l'article.");
+    }
+  };
   const stockTotal = stocks.reduce((sum, item) => sum + item.quantite, 0);
   const stockEvolution = [
     { label: 'Jan', value: Math.max(50, stockTotal - 120) },
@@ -665,6 +779,10 @@ function StocksTab({ farmId }) {
     { label: 'Mar', value: Math.max(70, stockTotal - 40) },
     { label: 'Avr', value: stockTotal },
   ];
+
+  if (!loaded) {
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement des stocks…</div>;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -707,7 +825,7 @@ function StocksTab({ farmId }) {
                     : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
                 </td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                  <button onClick={() => remove(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                  <button onClick={() => remove(s.id, s.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={15} />
                   </button>
                 </td>
@@ -847,9 +965,14 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults,
     if (remote) {
       try {
         const created = await remote.create(payload);
-        if (created) setRows(r => [created, ...r]);
+        if (created) {
+          setRows(r => [created, ...r]);
+          notifySuccess('Enregistré.');
+        }
       } catch (err) {
         console.error('[MovementTab remote create]', err);
+        notifyError(err, "Impossible d'enregistrer.");
+        return;
       }
     } else if (editingId) {
       setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
@@ -860,12 +983,15 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults,
     setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', date: new Date().toLocaleDateString('fr-FR') });
   };
 
-  const remove = async (id) => {
+  const remove = async (id, produit) => {
+    if (!window.confirm(`Supprimer « ${produit} » ? Cette action est irréversible.`)) return;
     if (remote) {
       try {
         await remote.remove(id);
+        notifySuccess('Supprimé.');
       } catch (err) {
         console.error('[MovementTab remote delete]', err);
+        notifyError(err, 'Impossible de supprimer.');
         return;
       }
     }
@@ -997,7 +1123,7 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults,
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     {!remote && <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>}
                     <button onClick={() => printInvoice(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green }}><Printer size={15} /></button>
-                    <button onClick={() => remove(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
+                    <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
                   </div>
                 </td>
               </tr>
@@ -1031,21 +1157,64 @@ function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults,
 
 const STATUTS = ['En attente', 'En cours', 'Livré'];
 function LivraisonsTab({ farmId }) {
-  const [rows, setRows] = useTable(farmId, 'livraisons', [
-    { id: 1, date: new Date().toLocaleDateString('fr-FR'), client: 'Marché central', produit: 'Œufs', quantite: 50, statut: 'En cours' },
-  ]);
+  const [rows, setRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [form, setForm] = useState({ client: '', produit: '', quantite: '' });
 
-  const add = (e) => {
+  useEffect(() => {
+    (async () => {
+      try {
+        const { livraisons } = await getPoulaillerLivraisons();
+        setRows(livraisons);
+      } catch (err) {
+        console.error('[LivraisonsTab load]', err);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [farmId]);
+
+  const add = async (e) => {
     e.preventDefault();
     if (!form.client || !form.produit) return;
-    setRows(r => [{ id: Date.now(), date: new Date().toLocaleDateString('fr-FR'), client: form.client, produit: form.produit, quantite: Number(form.quantite || 0), statut: 'En attente' }, ...r]);
+    try {
+      const { livraison } = await createPoulaillerLivraison({ client: form.client, produit: form.produit, quantite: Number(form.quantite || 0) });
+      if (livraison) {
+        setRows(r => [livraison, ...r]);
+        notifySuccess('Livraison planifiée.');
+      }
+    } catch (err) {
+      console.error('[LivraisonsTab add]', err);
+      notifyError(err, "Impossible d'enregistrer la livraison.");
+    }
     setForm({ client: '', produit: '', quantite: '' });
   };
-  const remove = (id) => setRows(r => r.filter(x => x.id !== id));
-  const setStatut = (id, statut) => setRows(r => r.map(x => x.id === id ? { ...x, statut } : x));
+  const remove = async (id, produit) => {
+    if (!window.confirm(`Supprimer la livraison « ${produit} » ?`)) return;
+    try {
+      await deletePoulaillerLivraison(id);
+      setRows(r => r.filter(x => x.id !== id));
+      notifySuccess('Livraison supprimée.');
+    } catch (err) {
+      console.error('[LivraisonsTab remove]', err);
+      notifyError(err, 'Impossible de supprimer la livraison.');
+    }
+  };
+  const setStatut = async (id, statut) => {
+    setRows(r => r.map(x => x.id === id ? { ...x, statut } : x));
+    try {
+      await updatePoulaillerLivraison(id, { statut });
+    } catch (err) {
+      console.error('[LivraisonsTab setStatut]', err);
+      notifyError(err, 'Le statut n\'a pas pu être mis à jour.');
+    }
+  };
 
   const toneFor = (s) => s === 'Livré' ? 'green' : s === 'En cours' ? 'blue' : 'ochre';
+
+  if (!loaded) {
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement des livraisons…</div>;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1080,7 +1249,7 @@ function LivraisonsTab({ farmId }) {
                   </select>
                 </td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                  <button onClick={() => remove(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                  <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={15} />
                   </button>
                 </td>
@@ -1231,28 +1400,30 @@ function PoultryMonitoringTab({ farmId }) {
 
   useEffect(() => {
     (async () => {
-      const data = await storageGet(`poulailler-suivi-${farmId}`, []);
-      setRecords(data);
-      setLoaded(true);
+      try {
+        const { suivi } = await getPoulaillerSuivi();
+        setRecords(suivi.map(r => ({ id: r.id, date: r.date, type: r.type, quantity: r.quantite, detail: r.detail })));
+      } catch (err) {
+        console.error('[PoultryMonitoringTab load]', err);
+      } finally {
+        setLoaded(true);
+      }
     })();
   }, [farmId]);
 
-  useEffect(() => {
-    if (!loaded) return;
-    storageSet(`poulailler-suivi-${farmId}`, records);
-  }, [records, farmId, loaded]);
-
-  const addRecord = (e) => {
+  const addRecord = async (e) => {
     e.preventDefault();
     if (!form.date || form.quantity === '') return;
-    const entry = {
-      id: Date.now(),
-      date: form.date,
-      type: form.type,
-      quantity: Number(form.quantity),
-      detail: form.detail,
-    };
-    setRecords(prev => [entry, ...prev]);
+    try {
+      const { entry } = await createPoulaillerSuivi({ date: form.date, type: form.type, quantite: Number(form.quantity), detail: form.detail });
+      if (entry) {
+        setRecords(prev => [{ id: entry.id, date: entry.date, type: entry.type, quantity: entry.quantite, detail: entry.detail }, ...prev]);
+        notifySuccess('Entrée enregistrée.');
+      }
+    } catch (err) {
+      console.error('[PoultryMonitoringTab addRecord]', err);
+      notifyError(err, "Impossible d'enregistrer cette entrée.");
+    }
     setForm({ date: todayValue(), type: form.type, quantity: '', detail: '' });
   };
 
@@ -1336,7 +1507,7 @@ function PoultryMonitoringTab({ farmId }) {
               <tr><td colSpan="4" style={{ padding: 16, color: COLORS.inkSoft }}>Aucune donnée enregistrée.</td></tr>
             ) : records.map(item => (
               <tr key={item.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px' }}>{item.date}</td>
+                <td style={{ padding: '12px 16px' }}>{formatDateFr(item.date)}</td>
                 <td><Badge tone={typeMeta[item.type]?.tone || 'green'}>{typeMeta[item.type]?.label || item.type}</Badge></td>
                 <td>{item.quantity} {typeMeta[item.type]?.unit || 'u'}</td>
                 <td>{item.detail || '—'}</td>
@@ -1380,15 +1551,27 @@ function PoulaillerModule({ farmId }) {
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} />}
-      {tab === 'ventes' && <MovementTab farmId={farmId} storageKey="ventes" partnerLabel="Client" accent="green" defaults={[]} />}
-      {tab === 'achats' && <MovementTab farmId={farmId} storageKey="achats" partnerLabel="Fournisseur" accent="ochre" defaults={[]} />}
+      {tab === 'ventes' && <MovementTab farmId={farmId} storageKey="ventes" partnerLabel="Client" accent="green" defaults={[]} remote={{
+        list: async () => (await getPoulaillerMouvements('vente')).mouvements,
+        create: async (payload) => (await createPoulaillerMouvement({ ...payload, type: 'vente' })).mouvement,
+        remove: async (id) => deletePoulaillerMouvement(id),
+      }} />}
+      {tab === 'achats' && <MovementTab farmId={farmId} storageKey="achats" partnerLabel="Fournisseur" accent="ochre" defaults={[]} remote={{
+        list: async () => (await getPoulaillerMouvements('achat')).mouvements,
+        create: async (payload) => (await createPoulaillerMouvement({ ...payload, type: 'achat' })).mouvement,
+        remove: async (id) => deletePoulaillerMouvement(id),
+      }} />}
       {tab === 'livraisons' && <LivraisonsTab farmId={farmId} />}
-      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId} />}
+      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
+        remoteVentes={async () => (await getPoulaillerMouvements('vente')).mouvements}
+        remoteAchats={async () => (await getPoulaillerMouvements('achat')).mouvements}
+      />}
     </div>
   );
 }
 
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onAuth }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('admin');
@@ -1401,9 +1584,9 @@ function LoginScreen({ onLogin }) {
     setError('');
     setBusy(true);
     try {
-      await onLogin(email, role, password);
+      await onAuth(mode, email, password, role);
     } catch (err) {
-      setError(err.message || 'Erreur de connexion.');
+      setError(err.message || (mode === 'login' ? 'Connexion impossible.' : "Inscription impossible."));
     } finally {
       setBusy(false);
     }
@@ -1419,27 +1602,68 @@ function LoginScreen({ onLogin }) {
           <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.ink }}>YEELEN AgriConnect</span>
         </div>
         <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>Connexion</div>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>Accédez à vos outils de suivi d'exploitation.</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: COLORS.surfaceAlt, borderRadius: 10, padding: 4 }}>
+            <button
+              type="button"
+              onClick={() => { setMode('login'); setError(''); }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontWeight: 600, fontSize: 13.5,
+                background: mode === 'login' ? COLORS.surface : 'transparent',
+                color: mode === 'login' ? COLORS.ink : COLORS.inkSoft,
+                boxShadow: mode === 'login' ? `0 1px 2px rgba(0,0,0,0.06)` : 'none',
+              }}
+            >
+              Connexion
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('register'); setError(''); }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontWeight: 600, fontSize: 13.5,
+                background: mode === 'register' ? COLORS.surface : 'transparent',
+                color: mode === 'register' ? COLORS.ink : COLORS.inkSoft,
+                boxShadow: mode === 'register' ? `0 1px 2px rgba(0,0,0,0.06)` : 'none',
+              }}
+            >
+              Inscription
+            </button>
+          </div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
+            {mode === 'login' ? 'Connexion' : 'Créer un compte'}
+          </div>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
+            {mode === 'login' ? "Accédez à vos outils de suivi d'exploitation." : 'Quelques informations pour démarrer.'}
+          </div>
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <Field label="Adresse e-mail" type="email" placeholder="nom@exploitation.africa" value={email} onChange={e => setEmail(e.target.value)} required />
-            <Field label="Mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
-            <Select label="Rôle" value={role} onChange={e => setRole(e.target.value)}>
-              <option value="admin">Administrateur</option>
-              <option value="comptable">Comptable</option>
-              <option value="ouvrier">Ouvrier</option>
-              <option value="gestionnaire">Gestionnaire</option>
-            </Select>
+            <Field label="Mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 6 : undefined} />
+            {mode === 'register' && (
+              <Select label="Rôle" value={role} onChange={e => setRole(e.target.value)}>
+                <option value="admin">Administrateur</option>
+                <option value="comptable">Comptable</option>
+                <option value="ouvrier">Ouvrier</option>
+                <option value="gestionnaire">Gestionnaire</option>
+              </Select>
+            )}
             {error && (
               <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
                 <AlertTriangle size={14} /> {error}
               </div>
             )}
             <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
-              {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} Se connecter
+              {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {mode === 'login' ? 'Se connecter' : "S'inscrire"}
             </Button>
           </form>
-          <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 14, textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+            {mode === 'login' ? (
+              <>Pas encore de compte ? <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>S'inscrire</button></>
+            ) : (
+              <>Déjà un compte ? <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>Se connecter</button></>
+            )}
+          </div>
+          <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' }}>
             Authentification via API backend — connexion sécurisée.
           </div>
         </Card>
@@ -1594,8 +1818,8 @@ function AgriculturalCalendarModule({ farmId }) {
             {viewMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-            {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(day => (
-              <div key={day} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
+            {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, idx) => (
+              <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
             ))}
             {Array.from({ length: firstDayOffset }).map((_, idx) => (
               <div key={`empty-${idx}`} style={{ minHeight: 78, borderRadius: 10, border: `1px dashed ${COLORS.border}` }} />
@@ -2417,11 +2641,13 @@ function FinancesModule() {
     }
   };
 
-  const removeEntry = async (id) => {
+  const removeEntry = async (id, description) => {
+    if (!window.confirm(`Supprimer cette transaction${description ? ` « ${description} »` : ''} ?`)) return;
     setApiError('');
     try {
       await deleteFinance(id);
       setEntries(prev => prev.filter(e => e.id !== id));
+      notifySuccess('Transaction supprimée.');
     } catch (err) {
       setApiError(err.message || 'Erreur lors de la suppression.');
     }
@@ -2521,7 +2747,7 @@ function FinancesModule() {
                     {isDepense ? '-' : '+'}{Number(entry.montant).toLocaleString('fr-FR')} FCFA
                   </td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                    <button onClick={() => removeEntry(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                    <button onClick={() => removeEntry(entry.id, entry.description)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -2578,12 +2804,14 @@ function ClientsModule() {
     }
   };
 
-  const removeClient = async (id) => {
+  const removeClient = async (id, nom) => {
+    if (!window.confirm(`Supprimer le client « ${nom} » ? Cette action est irréversible.`)) return;
     setApiError('');
     try {
       await deleteClient(id);
       setClients(prev => prev.filter(c => c.id !== id));
       if (selectedId === id) setSelectedId(null);
+      notifySuccess('Client supprimé.');
     } catch (err) {
       setApiError(err.message || 'Erreur lors de la suppression.');
     }
@@ -2638,7 +2866,7 @@ function ClientsModule() {
                     <div style={{ fontWeight: 700 }}>{client.nom}</div>
                     <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{client.telephone || 'Pas de telephone'}</div>
                   </div>
-                  <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                  <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id, client.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -2792,33 +3020,19 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = async (email, selectedRole, password) => {
-    try {
-      const authResult = await login(email, password);
-      setToken(authResult.token);
-      const uiRole = mapBackendRoleToUi(authResult.user.role);
-      const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
-      setUser(authResult.user.email);
-      setRole(uiRole);
-      setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-      if (!selectedConfig.permissions.includes('modules')) {
-        setTab('accueil');
-      }
-    } catch (error) {
-      try {
-        const registerResult = await register(email, password, mapUiRoleToBackend(selectedRole));
-        setToken(registerResult.token);
-        const uiRole = mapBackendRoleToUi(registerResult.user.role);
-        const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
-        setUser(registerResult.user.email);
-        setRole(uiRole);
-        setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-        if (!selectedConfig.permissions.includes('modules')) {
-          setTab('accueil');
-        }
-      } catch (registerError) {
-        window.alert(registerError.message || 'Connexion impossible.');
-      }
+  const handleAuth = async (mode, email, password, selectedRole) => {
+    const authResult = mode === 'login'
+      ? await login(email, password)
+      : await register(email, password, mapUiRoleToBackend(selectedRole));
+
+    setToken(authResult.token);
+    const uiRole = mapBackendRoleToUi(authResult.user.role);
+    const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
+    setUser(authResult.user.email);
+    setRole(uiRole);
+    setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
+    if (!selectedConfig.permissions.includes('modules')) {
+      setTab('accueil');
     }
   };
 
@@ -2879,6 +3093,7 @@ export default function App() {
 
   return (
     <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: 480, borderRadius: 16, color: COLORS.ink }}>
+      <ToastContainer />
       <style>{`
         ${FONT_IMPORT}
         .spin { animation: spin 1s linear infinite; }
@@ -2931,7 +3146,7 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'login' && <LoginScreen onLogin={handleLogin} />}
+      {screen === 'login' && <LoginScreen onAuth={handleAuth} />}
 
       {screen === 'modules' && initLoaded && (
         <ModulesScreen activated={activated} onToggle={toggleModule} onContinue={goToDashboard} />

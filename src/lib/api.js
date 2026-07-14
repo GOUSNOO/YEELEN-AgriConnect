@@ -140,6 +140,66 @@ export async function deleteCulturesMouvement(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Poulailler — Stocks
+// ─────────────────────────────────────────────────────────────────────
+export async function getPoulaillerStocks() {
+  return request('/poulailler/stocks');
+}
+
+export async function createPoulaillerStock(payload) {
+  return safeRequest('/poulailler/stocks', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deletePoulaillerStock(id) {
+  return safeRequest(`/poulailler/stocks/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Poulailler — Ventes / Achats
+// ─────────────────────────────────────────────────────────────────────
+export async function getPoulaillerMouvements(type) {
+  return request(`/poulailler/mouvements${type ? `?type=${type}` : ''}`);
+}
+
+export async function createPoulaillerMouvement(payload) {
+  return safeRequest('/poulailler/mouvements', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deletePoulaillerMouvement(id) {
+  return safeRequest(`/poulailler/mouvements/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Poulailler — Livraisons
+// ─────────────────────────────────────────────────────────────────────
+export async function getPoulaillerLivraisons() {
+  return request('/poulailler/livraisons');
+}
+
+export async function createPoulaillerLivraison(payload) {
+  return safeRequest('/poulailler/livraisons', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updatePoulaillerLivraison(id, payload) {
+  return safeRequest(`/poulailler/livraisons/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deletePoulaillerLivraison(id) {
+  return safeRequest(`/poulailler/livraisons/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Poulailler — Suivi quotidien
+// ─────────────────────────────────────────────────────────────────────
+export async function getPoulaillerSuivi() {
+  return request('/poulailler/suivi');
+}
+
+export async function createPoulaillerSuivi(payload) {
+  return safeRequest('/poulailler/suivi', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Sync offline — rejoue les opérations en attente vers le backend
 // ─────────────────────────────────────────────────────────────────────
 export async function flushOfflineQueue() {
@@ -185,21 +245,25 @@ export async function flushOfflineQueue() {
  * sinon l'exécute directement.
  */
 export async function safeRequest(path, options = {}) {
-  if (navigator.onLine) {
-    return request(path, options);
+  try {
+    return await request(path, options);
+  } catch (err) {
+    const isNetworkError = err.message.includes('Impossible de contacter le serveur');
+    if (!isNetworkError) {
+      // Erreur serveur réelle (400, 500...) : on ne la masque pas, l'appelant doit la voir
+      throw err;
+    }
+    const op = {
+      path,
+      method: options.method || 'GET',
+      body: options.body ? JSON.parse(options.body) : undefined,
+      queuedAt: new Date().toISOString(),
+    };
+    const raw = localStorage.getItem('agri-offline-queue') || '[]';
+    const queue = JSON.parse(raw);
+    queue.push(op);
+    localStorage.setItem('agri-offline-queue', JSON.stringify(queue));
+    window.dispatchEvent(new Event('agri-sync-status-changed'));
+    return null; // signal écrit hors-ligne
   }
-
-  const op = {
-    path,
-    method: options.method || 'GET',
-    body: options.body ? JSON.parse(options.body) : undefined,
-    queuedAt: new Date().toISOString(),
-  };
-
-  const raw = localStorage.getItem('agri-offline-queue') || '[]';
-  const queue = JSON.parse(raw);
-  queue.push(op);
-  localStorage.setItem('agri-offline-queue', JSON.stringify(queue));
-  window.dispatchEvent(new Event('agri-sync-status-changed'));
-  return null; // signal écrit hors-ligne
 }

@@ -5,6 +5,7 @@ import { testDatabase } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import businessRoutes from "./routes/business.js";
 import culturesRoutes from "./routes/cultures.js";
+import poulaillerRoutes from "./routes/poulailler.js";
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/cultures", culturesRoutes);
+app.use("/api/poulailler", poulaillerRoutes);
 
 app.get("/", (req, res) => {
   res.json({

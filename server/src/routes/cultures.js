@@ -5,9 +5,14 @@ import { pool } from '../db.js';
 const router = express.Router();
 
 const PARCELLE_COLUMNS = `
-  id, nom, culture, humidite, temperature, mode,
+  id, nom, culture,
+  humidite::float8 AS humidite,
+  temperature::float8 AS temperature,
+  mode,
   vanne_ouverte AS "vanneOuverte",
-  seuil, pos_x AS x, pos_y AS y, superficie, localisation, created_at AS "createdAt"
+  seuil::float8 AS seuil,
+  pos_x::float8 AS x, pos_y::float8 AS y,
+  superficie, localisation, created_at AS "createdAt"
 `;
 
 const HISTORIQUE_COLUMNS = `
@@ -15,8 +20,10 @@ const HISTORIQUE_COLUMNS = `
 `;
 
 const MOUVEMENT_COLUMNS = `
-  id, type, date, partenaire, produit, quantite,
-  prix_unitaire AS "prixUnitaire", created_at AS "createdAt"
+  id, type, date, partenaire, produit,
+  quantite::float8 AS quantite,
+  prix_unitaire::float8 AS "prixUnitaire",
+  created_at AS "createdAt"
 `;
 
 // ═══════════════════════════════════════════════════════════
@@ -25,7 +32,10 @@ const MOUVEMENT_COLUMNS = `
 
 router.get('/parcelles', authRequired, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT ${PARCELLE_COLUMNS} FROM parcelles ORDER BY id ASC`);
+    const result = await pool.query(
+      `SELECT ${PARCELLE_COLUMNS} FROM parcelles WHERE user_id = $1 ORDER BY id ASC`,
+      [req.user.sub]
+    );
     return res.json({ parcelles: result.rows });
   } catch (err) {
     console.error('[GET /parcelles]', err);
@@ -40,10 +50,10 @@ router.post('/parcelles', authRequired, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `INSERT INTO parcelles (nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO parcelles (user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING ${PARCELLE_COLUMNS}`,
-      [nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null]
+      [req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null]
     );
     return res.status(201).json({ parcelle: result.rows[0] });
   } catch (err) {
@@ -66,9 +76,9 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
          seuil = COALESCE($7, seuil),
          pos_x = COALESCE($8, pos_x),
          pos_y = COALESCE($9, pos_y)
-       WHERE id = $10
+       WHERE id = $10 AND user_id = $11
        RETURNING ${PARCELLE_COLUMNS}`,
-      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, req.params.id]
+      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, req.params.id, req.user.sub]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Parcelle introuvable.' });
@@ -82,7 +92,7 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
 
 router.delete('/parcelles/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM parcelles WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM parcelles WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /parcelles]', err);
@@ -100,7 +110,9 @@ router.get('/historique', authRequired, async (req, res) => {
       `SELECT ${HISTORIQUE_COLUMNS}
        FROM parcelles_historique ph
        JOIN parcelles p ON p.id = ph.parcelle_id
-       ORDER BY ph.created_at DESC LIMIT 40`
+       WHERE ph.user_id = $1
+       ORDER BY ph.created_at DESC LIMIT 40`,
+      [req.user.sub]
     );
     return res.json({ historique: result.rows });
   } catch (err) {
@@ -115,9 +127,14 @@ router.post('/historique', authRequired, async (req, res) => {
     return res.status(400).json({ error: 'parcelleId et action sont requis.' });
   }
   try {
+    // Vérifie que la parcelle appartient bien à l'utilisateur avant d'enregistrer l'historique
+    const owned = await pool.query('SELECT id FROM parcelles WHERE id = $1 AND user_id = $2', [parcelleId, req.user.sub]);
+    if (owned.rows.length === 0) {
+      return res.status(404).json({ error: 'Parcelle introuvable.' });
+    }
     const insert = await pool.query(
-      `INSERT INTO parcelles_historique (parcelle_id, action) VALUES ($1, $2) RETURNING id`,
-      [parcelleId, action]
+      `INSERT INTO parcelles_historique (user_id, parcelle_id, action) VALUES ($1, $2, $3) RETURNING id`,
+      [req.user.sub, parcelleId, action]
     );
     const result = await pool.query(
       `SELECT ${HISTORIQUE_COLUMNS} FROM parcelles_historique ph JOIN parcelles p ON p.id = ph.parcelle_id WHERE ph.id = $1`,
@@ -138,8 +155,8 @@ router.get('/mouvements', authRequired, async (req, res) => {
   const { type } = req.query;
   try {
     const result = type
-      ? await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE type = $1 ORDER BY date DESC, created_at DESC`, [type])
-      : await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements ORDER BY date DESC, created_at DESC`);
+      ? await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE user_id = $1 AND type = $2 ORDER BY date DESC, created_at DESC`, [req.user.sub, type])
+      : await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE user_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.sub]);
     return res.json({ mouvements: result.rows });
   } catch (err) {
     console.error('[GET /mouvements]', err);
@@ -154,10 +171,10 @@ router.post('/mouvements', authRequired, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `INSERT INTO cultures_mouvements (type, date, partenaire, produit, quantite, prix_unitaire)
-       VALUES ($1, COALESCE($2, CURRENT_DATE), $3, $4, $5, $6)
+      `INSERT INTO cultures_mouvements (user_id, type, date, partenaire, produit, quantite, prix_unitaire)
+       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, $7)
        RETURNING ${MOUVEMENT_COLUMNS}`,
-      [type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0]
+      [req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0]
     );
     return res.status(201).json({ mouvement: result.rows[0] });
   } catch (err) {
@@ -168,7 +185,7 @@ router.post('/mouvements', authRequired, async (req, res) => {
 
 router.delete('/mouvements/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM cultures_mouvements WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM cultures_mouvements WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /mouvements]', err);

@@ -11,7 +11,7 @@ const router = express.Router();
 // GET /api/business/clients
 router.get('/clients', authRequired, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM clients ORDER BY id DESC');
+    const result = await pool.query('SELECT * FROM clients WHERE user_id = $1 ORDER BY id DESC', [req.user.sub]);
     return res.json({ clients: result.rows });
   } catch (err) {
     console.error('[GET /clients]', err);
@@ -28,10 +28,10 @@ router.post('/clients', authRequired, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO clients (nom, telephone, adresse)
-       VALUES ($1, $2, $3)
+      `INSERT INTO clients (user_id, nom, telephone, adresse)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [nom, telephone || null, adresse || null]
+      [req.user.sub, nom, telephone || null, adresse || null]
     );
     return res.status(201).json({ client: result.rows[0] });
   } catch (err) {
@@ -43,7 +43,7 @@ router.post('/clients', authRequired, async (req, res) => {
 // DELETE /api/business/clients/:id
 router.delete('/clients/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM clients WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM clients WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /clients]', err);
@@ -61,7 +61,9 @@ router.get('/finances', authRequired, async (req, res) => {
     const result = await pool.query(
       `SELECT id, type AS categorie, montant::float8 AS montant, description, created_at AS date
        FROM finances
-       ORDER BY created_at DESC`
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [req.user.sub]
     );
     return res.json({ finances: result.rows });
   } catch (err) {
@@ -80,10 +82,10 @@ router.post('/finances', authRequired, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO finances (type, montant, description)
-       VALUES ($1, $2, $3)
+      `INSERT INTO finances (user_id, type, montant, description)
+       VALUES ($1, $2, $3, $4)
        RETURNING id, type AS categorie, montant::float8 AS montant, description, created_at AS date`,
-      [categorie, Number(montant), description]
+      [req.user.sub, categorie, Number(montant), description]
     );
     return res.status(201).json({ entry: result.rows[0] });
   } catch (err) {
@@ -95,7 +97,7 @@ router.post('/finances', authRequired, async (req, res) => {
 // DELETE /api/business/finances/:id
 router.delete('/finances/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM finances WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM finances WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /finances]', err);
