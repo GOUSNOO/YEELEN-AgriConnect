@@ -1,6 +1,8 @@
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import { syncFinanceEntry, removeFinanceEntry, updateFinanceEntry } from '../utils/financeSync.js';
+import { logMouvementHistorique, getMouvementHistorique, getAllMouvementHistorique } from '../utils/mouvementHistorique.js';
 
 const router = express.Router();
 
@@ -23,6 +25,7 @@ const MOUVEMENT_COLUMNS = `
   id, type, date, partenaire, produit,
   quantite::float8 AS quantite,
   prix_unitaire::float8 AS "prixUnitaire",
+  remise::float8 AS remise,
   created_at AS "createdAt"
 `;
 
@@ -33,8 +36,8 @@ const MOUVEMENT_COLUMNS = `
 router.get('/parcelles', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT ${PARCELLE_COLUMNS} FROM parcelles WHERE user_id = $1 ORDER BY id ASC`,
-      [req.user.sub]
+      `SELECT ${PARCELLE_COLUMNS} FROM parcelles WHERE entreprise_id = $1 ORDER BY id ASC`,
+      [req.user.entrepriseId]
     );
     return res.json({ parcelles: result.rows });
   } catch (err) {
@@ -50,10 +53,10 @@ router.post('/parcelles', authRequired, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `INSERT INTO parcelles (user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO parcelles (entreprise_id, user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING ${PARCELLE_COLUMNS}`,
-      [req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null]
+      [req.user.entrepriseId, req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null]
     );
     return res.status(201).json({ parcelle: result.rows[0] });
   } catch (err) {
@@ -76,9 +79,9 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
          seuil = COALESCE($7, seuil),
          pos_x = COALESCE($8, pos_x),
          pos_y = COALESCE($9, pos_y)
-       WHERE id = $10 AND user_id = $11
+       WHERE id = $10 AND entreprise_id = $11
        RETURNING ${PARCELLE_COLUMNS}`,
-      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, req.params.id, req.user.sub]
+      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Parcelle introuvable.' });
@@ -92,7 +95,7 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
 
 router.delete('/parcelles/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM parcelles WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
+    await pool.query('DELETE FROM parcelles WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /parcelles]', err);
@@ -110,9 +113,9 @@ router.get('/historique', authRequired, async (req, res) => {
       `SELECT ${HISTORIQUE_COLUMNS}
        FROM parcelles_historique ph
        JOIN parcelles p ON p.id = ph.parcelle_id
-       WHERE ph.user_id = $1
+       WHERE ph.entreprise_id = $1
        ORDER BY ph.created_at DESC LIMIT 40`,
-      [req.user.sub]
+      [req.user.entrepriseId]
     );
     return res.json({ historique: result.rows });
   } catch (err) {
@@ -127,14 +130,13 @@ router.post('/historique', authRequired, async (req, res) => {
     return res.status(400).json({ error: 'parcelleId et action sont requis.' });
   }
   try {
-    // Vérifie que la parcelle appartient bien à l'utilisateur avant d'enregistrer l'historique
-    const owned = await pool.query('SELECT id FROM parcelles WHERE id = $1 AND user_id = $2', [parcelleId, req.user.sub]);
+    const owned = await pool.query('SELECT id FROM parcelles WHERE id = $1 AND entreprise_id = $2', [parcelleId, req.user.entrepriseId]);
     if (owned.rows.length === 0) {
       return res.status(404).json({ error: 'Parcelle introuvable.' });
     }
     const insert = await pool.query(
-      `INSERT INTO parcelles_historique (user_id, parcelle_id, action) VALUES ($1, $2, $3) RETURNING id`,
-      [req.user.sub, parcelleId, action]
+      `INSERT INTO parcelles_historique (entreprise_id, user_id, parcelle_id, action) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [req.user.entrepriseId, req.user.sub, parcelleId, action]
     );
     const result = await pool.query(
       `SELECT ${HISTORIQUE_COLUMNS} FROM parcelles_historique ph JOIN parcelles p ON p.id = ph.parcelle_id WHERE ph.id = $1`,
@@ -155,8 +157,8 @@ router.get('/mouvements', authRequired, async (req, res) => {
   const { type } = req.query;
   try {
     const result = type
-      ? await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE user_id = $1 AND type = $2 ORDER BY date DESC, created_at DESC`, [req.user.sub, type])
-      : await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE user_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.sub]);
+      ? await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE entreprise_id = $1 AND type = $2 ORDER BY date DESC, created_at DESC`, [req.user.entrepriseId, type])
+      : await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE entreprise_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.entrepriseId]);
     return res.json({ mouvements: result.rows });
   } catch (err) {
     console.error('[GET /mouvements]', err);
@@ -165,17 +167,29 @@ router.get('/mouvements', authRequired, async (req, res) => {
 });
 
 router.post('/mouvements', authRequired, async (req, res) => {
-  const { type, date, partenaire, produit, quantite, prixUnitaire } = req.body;
+  const { type, date, partenaire, produit, quantite, prixUnitaire, remise } = req.body;
   if (!type || !['vente', 'achat'].includes(type) || !partenaire || !produit) {
     return res.status(400).json({ error: 'type (vente/achat), partenaire et produit sont requis.' });
   }
   try {
     const result = await pool.query(
-      `INSERT INTO cultures_mouvements (user_id, type, date, partenaire, produit, quantite, prix_unitaire)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, $7)
+      `INSERT INTO cultures_mouvements (entreprise_id, user_id, type, date, partenaire, produit, quantite, prix_unitaire, remise)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9)
        RETURNING ${MOUVEMENT_COLUMNS}`,
-      [req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0]
+      [req.user.entrepriseId, req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0, Number(remise) || 0]
     );
+
+    await syncFinanceEntry(req.user.entrepriseId, req.user.sub, {
+      type,
+      module: 'Cultures',
+      produit,
+      partenaire,
+      quantite: Number(quantite) || 0,
+      prixUnitaire: Number(prixUnitaire) || 0,
+      remise: Number(remise) || 0,
+      mouvementId: result.rows[0].id,
+    });
+
     return res.status(201).json({ mouvement: result.rows[0] });
   } catch (err) {
     console.error('[POST /mouvements]', err);
@@ -183,13 +197,105 @@ router.post('/mouvements', authRequired, async (req, res) => {
   }
 });
 
-router.delete('/mouvements/:id', authRequired, async (req, res) => {
+router.put('/mouvements/:id', authRequired, async (req, res) => {
+  const { type, date, partenaire, produit, quantite, prixUnitaire, remise, raison } = req.body;
+  if (!raison) {
+    return res.status(400).json({ error: 'La raison de la modification est requise.' });
+  }
   try {
-    await pool.query('DELETE FROM cultures_mouvements WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
+    const before = await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE id = $1 AND entreprise_id = $2`, [req.params.id, req.user.entrepriseId]);
+    if (before.rows.length === 0) {
+      return res.status(404).json({ error: 'Mouvement introuvable.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE cultures_mouvements SET
+         type = COALESCE($1, type),
+         date = COALESCE($2, date),
+         partenaire = COALESCE($3, partenaire),
+         produit = COALESCE($4, produit),
+         quantite = COALESCE($5, quantite),
+         prix_unitaire = COALESCE($6, prix_unitaire),
+         remise = COALESCE($7, remise)
+       WHERE id = $8 AND entreprise_id = $9
+       RETURNING ${MOUVEMENT_COLUMNS}`,
+      [type, date, partenaire, produit, quantite, prixUnitaire, remise, req.params.id, req.user.entrepriseId]
+    );
+
+    const updated = result.rows[0];
+
+    await updateFinanceEntry(req.user.entrepriseId, 'Cultures', req.params.id, {
+      type: updated.type,
+      produit: updated.produit,
+      partenaire: updated.partenaire,
+      quantite: updated.quantite,
+      prixUnitaire: updated.prixUnitaire,
+      remise: updated.remise,
+    });
+
+    await logMouvementHistorique(req.user.entrepriseId, req.user.sub, {
+      module: 'Cultures',
+      mouvementId: req.params.id,
+      action: 'modification',
+      raison,
+      anciennesValeurs: before.rows[0],
+      nouvellesValeurs: updated,
+    });
+
+    return res.json({ mouvement: updated });
+  } catch (err) {
+    console.error('[PUT /mouvements]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour du mouvement.' });
+  }
+});
+
+router.delete('/mouvements/:id', authRequired, async (req, res) => {
+  const { raison } = req.body;
+  if (!raison) {
+    return res.status(400).json({ error: 'La raison de la suppression est requise.' });
+  }
+  try {
+    const before = await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM cultures_mouvements WHERE id = $1 AND entreprise_id = $2`, [req.params.id, req.user.entrepriseId]);
+    if (before.rows.length === 0) {
+      return res.status(404).json({ error: 'Mouvement introuvable.' });
+    }
+
+    await pool.query('DELETE FROM cultures_mouvements WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    await removeFinanceEntry(req.user.entrepriseId, 'Cultures', req.params.id);
+
+    await logMouvementHistorique(req.user.entrepriseId, req.user.sub, {
+      module: 'Cultures',
+      mouvementId: req.params.id,
+      action: 'suppression',
+      raison,
+      anciennesValeurs: before.rows[0],
+      nouvellesValeurs: null,
+    });
+
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /mouvements]', err);
     return res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+router.get('/mouvements/:id/historique', authRequired, async (req, res) => {
+  try {
+    const historique = await getMouvementHistorique(req.user.entrepriseId, 'Cultures', req.params.id);
+    return res.json({ historique });
+  } catch (err) {
+    console.error('[GET /mouvements/historique]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
+  }
+});
+
+router.get('/historique-mouvements', authRequired, async (req, res) => {
+  try {
+    const historique = await getAllMouvementHistorique(req.user.entrepriseId, 'Cultures');
+    return res.json({ historique });
+  } catch (err) {
+    console.error('[GET /cultures/historique-mouvements]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
   }
 });
 

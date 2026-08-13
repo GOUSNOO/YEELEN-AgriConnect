@@ -1,0 +1,526 @@
+import express from 'express';
+import crypto from 'crypto';
+import { authRequired } from '../middleware/auth.js';
+import { requireRole } from '../middleware/requireRole.js';
+import { pool } from '../db.js';
+import { sendDevisEmail } from '../services/mailer.js';
+import { syncDevisPaiement } from '../utils/financeSync.js';
+import { streamDevisPdf } from '../utils/devisPdf.js';
+
+const router = express.Router();
+
+const DEVIS_COLUMNS = `
+  d.id, d.numero, d.statut, d.date, d.date_signature AS "dateSignature",
+  d.signataire_nom AS "signataireNom", d.total::float8 AS total, d.notes,
+  d.client_id AS "clientId", c.nom AS "clientNom", c.prenom AS "clientPrenom",
+  c.email AS "clientEmail", c.telephone AS "clientTelephone", c.adresse AS "clientAdresse",
+  d.created_at AS "createdAt"
+`;
+
+// Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
+async function genererNumero(entrepriseId) {
+  const year = new Date().getFullYear();
+  const count = await pool.query(
+    `SELECT COUNT(*) FROM devis WHERE entreprise_id = $1 AND EXTRACT(YEAR FROM created_at) = $2`,
+    [entrepriseId, year]
+  );
+  const n = Number(count.rows[0].count) + 1;
+  return `DEV-${year}-${String(n).padStart(4, '0')}`;
+}
+
+// Récupère un devis complet (en-tête + lignes) à partir de son id, en vérifiant l'entreprise
+async function getDevisComplet(devisId, entrepriseId) {
+  const devisResult = await pool.query(
+    `SELECT ${DEVIS_COLUMNS}, d.mode_paiement AS "modePaiement", d.modalite_paiement AS "modalitePaiement"
+     FROM devis d LEFT JOIN clients c ON c.id = d.client_id WHERE d.id = $1 AND d.entreprise_id = $2`,
+    [devisId, entrepriseId]
+  );
+  if (devisResult.rows.length === 0) return null;
+  const lignesResult = await pool.query(
+    `SELECT id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise
+     FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
+    [devisId]
+  );
+  const echeancesResult = await pool.query(
+    `SELECT id, montant::float8 AS montant, date_echeance AS "dateEcheance", statut, date_paiement AS "datePaiement" FROM echeances_paiement WHERE devis_id = $1 ORDER BY ordre ASC`,
+    [devisId]
+  );
+  return { ...devisResult.rows[0], lignes: lignesResult.rows, echeances: echeancesResult.rows };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  LISTE / DÉTAIL (authentifié)
+// ═══════════════════════════════════════════════════════════
+
+router.get('/', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN clients c ON c.id = d.client_id
+       WHERE d.entreprise_id = $1 ORDER BY d.id DESC`,
+      [req.user.entrepriseId]
+    );
+    return res.json({ devis: result.rows });
+  } catch (err) {
+    console.error('[GET /devis]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des devis.' });
+  }
+});
+
+router.get('/:id', authRequired, async (req, res) => {
+  try {
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    if (!devis) return res.status(404).json({ error: 'Devis introuvable.' });
+    return res.json({ devis });
+  } catch (err) {
+    console.error('[GET /devis/:id]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération du devis.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  CRÉATION (Brouillon, avec plusieurs lignes de produits)
+// ═══════════════════════════════════════════════════════════
+
+router.post('/', authRequired, async (req, res) => {
+  const { clientId, lignes, notes } = req.body;
+  if (!clientId || !Array.isArray(lignes) || lignes.length === 0) {
+    return res.status(400).json({ error: 'Un client et au moins une ligne de produit sont requis.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const numero = await genererNumero(req.user.entrepriseId);
+    const total = lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+
+    const devisResult = await client.query(
+      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes)
+       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6) RETURNING id`,
+      [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null]
+    );
+    const devisId = devisResult.rows[0].id;
+
+    for (let i = 0; i < lignes.length; i++) {
+      const l = lignes[i];
+      await client.query(
+        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [devisId, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    const devis = await getDevisComplet(devisId, req.user.entrepriseId);
+    return res.status(201).json({ devis });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /devis]', err);
+    return res.status(500).json({ error: 'Erreur lors de la création du devis.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  MODIFICATION (uniquement si Brouillon)
+// ═══════════════════════════════════════════════════════════
+
+router.put('/:id', authRequired, async (req, res) => {
+  const { clientId, lignes, notes } = req.body;
+
+  const client = await pool.connect();
+  try {
+    const check = await client.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
+      return res.status(400).json({ error: 'Ce devis ne peut plus être modifié à ce stade.' });
+    }
+
+    await client.query('BEGIN');
+
+    const total = (lignes || []).reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+
+    await client.query(
+      `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes) WHERE id = $4`,
+      [clientId, total, notes, req.params.id]
+    );
+
+    if (Array.isArray(lignes)) {
+      await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
+      for (let i = 0; i < lignes.length; i++) {
+        const l = lignes[i];
+        await client.query(
+          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [req.params.id, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /devis/:id]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/:id', authRequired, async (req, res) => {
+  try {
+    const check = await pool.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
+      return res.status(400).json({ error: 'Seul un devis en brouillon peut être supprimé.' });
+    }
+    await pool.query('DELETE FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /devis/:id]', err);
+    return res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  ENVOI AU CLIENT (génère le lien public + envoie l'email)
+// ═══════════════════════════════════════════════════════════
+
+router.post('/:id/envoyer', authRequired, async (req, res) => {
+  try {
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    if (!devis) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (!devis.clientEmail) return res.status(400).json({ error: "Le client n'a pas d'adresse email renseignée." });
+
+    const token = crypto.randomBytes(24).toString('hex');
+    await pool.query(`UPDATE devis SET statut = 'Envoyé', token_public = $1 WHERE id = $2`, [token, req.params.id]);
+
+    const entrepriseResult = await pool.query('SELECT nom FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
+    const entrepriseNom = entrepriseResult.rows[0]?.nom || 'Votre exploitant';
+
+    const lienConsultation = `${process.env.FRONTEND_URL || 'http://localhost:8090'}/devis/${token}`;
+    await sendDevisEmail(devis.clientEmail, `${devis.clientPrenom || ''} ${devis.clientNom}`.trim(), entrepriseNom, devis.numero, lienConsultation);
+
+    return res.json({ success: true, lienConsultation });
+  } catch (err) {
+    console.error('[POST /devis/:id/envoyer]', err);
+    return res.status(500).json({ error: "Erreur lors de l'envoi du devis." });
+  }
+});
+
+// Valide manuellement un devis (accord obtenu par téléphone, en personne, etc.),
+// sans passer par le lien de signature électronique. Réservé à l'admin.
+router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (req, res) => {
+  const { confirmePar } = req.body;
+  if (!confirmePar || !confirmePar.trim()) {
+    return res.status(400).json({ error: 'Précisez qui a donné son accord (nom du client).' });
+  }
+  try {
+    const check = await pool.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
+      return res.status(400).json({ error: 'Ce devis ne peut plus être validé manuellement.' });
+    }
+
+    await pool.query(
+      `UPDATE devis SET statut = 'Signé', signataire_nom = $1, date_signature = now() WHERE id = $2`,
+      [`${confirmePar} (validation manuelle, sans signature)`, req.params.id]
+    );
+
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    console.error('[POST /devis/:id/valider-manuel]', err);
+    return res.status(500).json({ error: 'Erreur lors de la validation.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  CONSULTATION PUBLIQUE (sans authentification, via token)
+// ═══════════════════════════════════════════════════════════
+
+router.get('/public/:token', async (req, res) => {
+  try {
+    const devisResult = await pool.query(
+      `SELECT d.id, d.numero, d.statut, d.date, d.total::float8 AS total, d.notes, d.signature_data AS "signatureData",
+              c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom"
+       FROM devis d
+       LEFT JOIN clients c ON c.id = d.client_id
+       LEFT JOIN entreprises e ON e.id = d.entreprise_id
+       WHERE d.token_public = $1`,
+      [req.params.token]
+    );
+    if (devisResult.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+
+    const devis = devisResult.rows[0];
+    const lignesResult = await pool.query(
+      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise
+       FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
+      [devis.id]
+    );
+    return res.json({ devis: { ...devis, lignes: lignesResult.rows } });
+  } catch (err) {
+    console.error('[GET /devis/public]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération du devis.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  SIGNATURE (sans authentification, via token)
+// ═══════════════════════════════════════════════════════════
+
+router.post('/public/:token/signer', async (req, res) => {
+  const { signatureData, signataireNom } = req.body;
+  if (!signatureData || !signataireNom) {
+    return res.status(400).json({ error: 'La signature et le nom du signataire sont requis.' });
+  }
+  try {
+    const check = await pool.query(`SELECT id, statut FROM devis WHERE token_public = $1`, [req.params.token]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (check.rows[0].statut === 'Signé' || check.rows[0].statut === 'Facturé') {
+      return res.status(400).json({ error: 'Ce devis a déjà été signé.' });
+    }
+
+    await pool.query(
+      `UPDATE devis SET statut = 'Signé', signature_data = $1, signataire_nom = $2, date_signature = now() WHERE token_public = $3`,
+      [signatureData, signataireNom, req.params.token]
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[POST /devis/public/signer]', err);
+    return res.status(500).json({ error: 'Erreur lors de la signature.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  CONVERSION EN FACTURE
+// ═══════════════════════════════════════════════════════════
+
+router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res) => {
+  const { modePaiement, modalitePaiement, echeances } = req.body;
+
+  const MODES_VALIDES = ['Espèces', 'Banque', 'Mobile Money', 'Chèque'];
+  if (!modePaiement || !MODES_VALIDES.includes(modePaiement)) {
+    return res.status(400).json({ error: 'Mode de paiement invalide.' });
+  }
+  if (!['complet', 'echelonne'].includes(modalitePaiement)) {
+    return res.status(400).json({ error: 'Modalité de paiement invalide.' });
+  }
+  if (modalitePaiement === 'echelonne' && (!Array.isArray(echeances) || echeances.length === 0)) {
+    return res.status(400).json({ error: 'Au moins une échéance est requise pour un paiement échelonné.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const check = await client.query(
+      `SELECT d.statut, d.total, d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom"
+       FROM devis d LEFT JOIN clients c ON c.id = d.client_id
+       WHERE d.id = $1 AND d.entreprise_id = $2`,
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (check.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Devis introuvable.' });
+    }
+    if (check.rows[0].statut !== 'Signé') {
+      client.release();
+      return res.status(400).json({ error: 'Seul un devis signé peut être converti en facture.' });
+    }
+
+    const { total, numero, clientNom, clientPrenom } = check.rows[0];
+    const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
+
+    if (modalitePaiement === 'echelonne') {
+      const sommeEcheances = echeances.reduce((s, e) => s + Number(e.montant), 0);
+      if (Math.abs(sommeEcheances - Number(total)) > 1) {
+        client.release();
+        return res.status(400).json({ error: `La somme des échéances (${sommeEcheances}) ne correspond pas au total de la facture (${total}).` });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    // Statut initial : "Facturé" si tout est payé d'un coup, "Non payé" si échelonné
+    const statutInitial = modalitePaiement === 'complet' ? 'Facturé' : 'Non payé';
+    await client.query(
+      `UPDATE devis SET statut = $1, mode_paiement = $2, modalite_paiement = $3 WHERE id = $4`,
+      [statutInitial, modePaiement, modalitePaiement, req.params.id]
+    );
+
+    if (modalitePaiement === 'echelonne') {
+      for (let i = 0; i < echeances.length; i++) {
+        const e = echeances[i];
+        await client.query(
+          `INSERT INTO echeances_paiement (devis_id, montant, date_echeance, ordre) VALUES ($1, $2, $3, $4)`,
+          [req.params.id, Number(e.montant), e.dateEcheance, i]
+        );
+      }
+    } else {
+      // Paiement complet : une échéance unique, déjà réglée
+      const echeanceResult = await client.query(
+        `INSERT INTO echeances_paiement (devis_id, montant, date_echeance, statut, date_paiement, ordre)
+         VALUES ($1, $2, CURRENT_DATE, 'Payé', now(), 0) RETURNING id`,
+        [req.params.id, total]
+      );
+      await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
+        montant: Number(total),
+        modePaiement,
+        numero,
+        clientNom: clientNomComplet,
+        devisId: req.params.id,
+        echeanceId: echeanceResult.rows[0].id,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /devis/:id/facturer]', err);
+    return res.status(500).json({ error: 'Erreur lors de la conversion en facture.' });
+  } finally {
+    client.release();
+  }
+});
+
+// Annule la facturation et remet le devis en brouillon : supprime les échéances
+// et les entrées Finances liées, réinitialise le mode/modalité de paiement.
+router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const check = await client.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Devis introuvable.' });
+    }
+
+    await client.query('BEGIN');
+
+    // Supprime toutes les entrées Finances liées aux échéances de ce devis
+    await client.query(`DELETE FROM finances WHERE source_module = 'Devis' AND source_mouvement_id IN (SELECT id FROM echeances_paiement WHERE devis_id = $1)`, [req.params.id]);
+    // Supprime les échéances elles-mêmes
+    await client.query(`DELETE FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
+    // Réinitialise le devis en brouillon
+    await client.query(
+      `UPDATE devis SET statut = 'Brouillon', mode_paiement = NULL, modalite_paiement = NULL,
+       signature_data = NULL, signataire_nom = NULL, date_signature = NULL, token_public = NULL
+       WHERE id = $1`,
+      [req.params.id]
+    );
+
+    await client.query('COMMIT');
+
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /devis/:id/remettre-brouillon]', err);
+    return res.status(500).json({ error: 'Erreur lors de la remise en brouillon.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const devisResult = await pool.query(
+      `SELECT d.mode_paiement AS "modePaiement", d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom"
+       FROM devis d LEFT JOIN clients c ON c.id = d.client_id
+       WHERE d.id = $1 AND d.entreprise_id = $2`,
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (devisResult.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+
+    const echeanceResult = await pool.query(
+      `SELECT id, montant::float8 AS montant, statut FROM echeances_paiement WHERE id = $1 AND devis_id = $2`,
+      [req.params.echeanceId, req.params.id]
+    );
+    if (echeanceResult.rows.length === 0) return res.status(404).json({ error: 'Échéance introuvable.' });
+    if (echeanceResult.rows[0].statut === 'Payé') {
+      return res.status(400).json({ error: 'Cette échéance est déjà marquée comme payée.' });
+    }
+
+    await pool.query(`UPDATE echeances_paiement SET statut = 'Payé', date_paiement = now() WHERE id = $1`, [req.params.echeanceId]);
+
+    const { modePaiement, numero, clientNom, clientPrenom } = devisResult.rows[0];
+    const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
+
+    await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
+      montant: echeanceResult.rows[0].montant,
+      modePaiement,
+      numero,
+      clientNom: clientNomComplet,
+      devisId: req.params.id,
+      echeanceId: req.params.echeanceId,
+    });
+
+    // Recalcule le statut global du devis selon l'état de toutes ses échéances
+    const toutesEcheances = await pool.query(`SELECT statut FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
+    const toutesPayees = toutesEcheances.rows.every(e => e.statut === 'Payé');
+    const auMoinsUnePayee = toutesEcheances.rows.some(e => e.statut === 'Payé');
+    const nouveauStatut = toutesPayees ? 'Facturé' : auMoinsUnePayee ? 'Payé partiellement' : 'Non payé';
+
+    await pool.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
+
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    console.error('[POST /devis/:id/echeances/:echeanceId/payer]', err);
+    return res.status(500).json({ error: 'Erreur lors du paiement.' });
+  }
+});
+
+
+// PDF public (via le lien envoyé au client, sans authentification)
+router.get('/public/:token/pdf', async (req, res) => {
+  try {
+    const devisResult = await pool.query(
+      `SELECT d.id, d.numero, d.statut, d.date, d.total::float8 AS total, d.notes,
+              d.signature_data AS "signatureData", d.signataire_nom AS "signataireNom", d.date_signature AS "dateSignature",
+              c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom"
+       FROM devis d
+       LEFT JOIN clients c ON c.id = d.client_id
+       LEFT JOIN entreprises e ON e.id = d.entreprise_id
+       WHERE d.token_public = $1`,
+      [req.params.token]
+    );
+    if (devisResult.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+
+    const devis = devisResult.rows[0];
+    const lignesResult = await pool.query(
+      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise
+       FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
+      [devis.id]
+    );
+    devis.lignes = lignesResult.rows;
+
+    streamDevisPdf(res, devis);
+  } catch (err) {
+    console.error('[GET /devis/public/:token/pdf]', err);
+    return res.status(500).json({ error: 'Erreur lors de la génération du PDF.' });
+  }
+});
+
+// PDF pour le propriétaire (authentifié), n'importe quel statut
+router.get('/:id/pdf', authRequired, async (req, res) => {
+  try {
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    if (!devis) return res.status(404).json({ error: 'Devis introuvable.' });
+
+    const entrepriseResult = await pool.query('SELECT nom FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
+    devis.entrepriseNom = entrepriseResult.rows[0]?.nom || 'Entreprise';
+
+    streamDevisPdf(res, devis);
+  } catch (err) {
+    console.error('[GET /devis/:id/pdf]', err);
+    return res.status(500).json({ error: 'Erreur lors de la génération du PDF.' });
+  }
+});
+
+
+export default router;

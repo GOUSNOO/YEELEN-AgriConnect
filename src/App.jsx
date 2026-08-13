@@ -1,3 +1,4 @@
+import './App.css';
 ﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
@@ -5,336 +6,53 @@ import {
   TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home,
   Search, Printer, FileText, PencilLine, Download, Users, Briefcase, Landmark, Bell,
-  CalendarDays
+  CalendarDays, Settings
 } from 'lucide-react';
 import {
-  clearToken, createClient, createFinance, deleteClient, deleteFinance, flushOfflineQueue,
+  clearToken, createClient, createFinance, deleteClient, deleteFinance,
   getClients, getFinances, getMe, getToken, login, register, setToken,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
-  getCulturesMouvements, createCulturesMouvement, deleteCulturesMouvement,
+  getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
   getPoulaillerStocks, createPoulaillerStock, deletePoulaillerStock,
-  getPoulaillerMouvements, createPoulaillerMouvement, deletePoulaillerMouvement,
+  getPoulaillerMouvements, createPoulaillerMouvement, updatePoulaillerMouvement, deletePoulaillerMouvement,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
+  setupMfa, verifyMfa, disableMfa,
+  getMfaCompanyMethod, setMfaCompanyMethod,
+  getSalaries, createSalarie, updateSalarie, deleteSalarie,
+  getFournisseurs, createFournisseur, updateFournisseur, deleteFournisseur,
+  updateClient,
+  getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
+  getPoulaillerHistorique, getCulturesHistorique,
+  getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument,
+  getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis,
+  openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
 } from './lib/api';
-
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
-
-// ─────────────────────────────────────────────────────────────────────
-// Système de notifications global (toasts)
-// Permet à n'importe quel composant d'afficher une erreur/succès visible
-// sans avoir à faire remonter l'état jusqu'à la racine de l'appli.
-// ─────────────────────────────────────────────────────────────────────
-let toastListeners = [];
-function notify(message, type = 'error') {
-  const toast = { id: `${Date.now()}-${Math.random()}`, message, type };
-  toastListeners.forEach(fn => fn(toast));
-}
-function notifyError(err, fallback = 'Une erreur est survenue.') {
-  notify((err && err.message) || fallback, 'error');
-}
-function notifySuccess(message) {
-  notify(message, 'success');
-}
-
-function ToastContainer() {
-  const [toasts, setToasts] = useState([]);
-
-  useEffect(() => {
-    const handler = (toast) => {
-      setToasts(prev => [...prev, toast]);
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== toast.id));
-      }, 5000);
-    };
-    toastListeners.push(handler);
-    return () => { toastListeners = toastListeners.filter(l => l !== handler); };
-  }, []);
-
-  const dismiss = (id) => setToasts(prev => prev.filter(t => t.id !== id));
-
-  if (toasts.length === 0) return null;
-
-  return (
-    <div style={{
-      position: 'fixed', top: 16, right: 16, zIndex: 9999,
-      display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 340
-    }}>
-      {toasts.map(t => (
-        <div key={t.id} style={{
-          background: t.type === 'error' ? COLORS.red : COLORS.green,
-          color: '#fff', borderRadius: 10, padding: '11px 14px',
-          fontSize: 13.5, fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: 8,
-          boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
-        }}>
-          {t.type === 'error' ? <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> : <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />}
-          <span style={{ flex: 1 }}>{t.message}</span>
-          <button onClick={() => dismiss(t.id)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8, padding: 0, lineHeight: 1 }}>✕</button>
-        </div>
-      ))}
-    </div>
-  );
-}
+import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
+import { ObservationListView } from './components/ObservationListView'; // Import the new component
+import { ROLE_DEFINITIONS, mapBackendRoleToUi, mapUiRoleToBackend } from './components/roles.js';
+import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
+import { FinancesModule, BanquesModule } from './modules/finances.jsx';
 
 const COLORS = {
-  bg: '#F1F0E4',
+  bg: '#F7FAFC', // Nouveau fond très clair et aéré
   surface: '#FFFFFF',
   surfaceAlt: '#FBFAF4',
-  ink: '#22271D',
+  ink: '#2D374A', // Bleu-gris profond pour le texte
   inkSoft: '#5B6357',
-  border: '#DAD6C4',
-  green: '#3F6B3B',
-  greenSoft: '#E7EFDF',
-  ochre: '#C1861F',
-  ochreSoft: '#F7EAD2',
-  blue: '#2E6E8E',
-  blueSoft: '#E1EDF2',
-  red: '#B23B2E',
-  redSoft: '#F6E2DE',
+  border: '#E2E8F0', // Gris pâle doux pour les bordures
+  green: '#38A169', // Vert vif et moderne (Action principale)
+  greenSoft: '#D6EAD7', // Version claire du vert principal
+  ochre: '#D5974E', // Or terne moderne pour l'alerte/secondaire
+  ochreSoft: '#F2EECC', // Clair pour le complément de couleur ocre
+  blue: '#3B82F6', // Bleu standard plus éclatant (pour les badges, etc.)
+  blueSoft: '#E0F2FE',
+  red: '#E53E3E', // Rouge d'alerte plus vif et standard
+  redSoft: '#FED7D7',
 };
 
-const ROLE_DEFINITIONS = {
-  admin: {
-    label: 'Administrateur',
-    description: 'Accès complet à toutes les fonctionnalités',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'clients', 'employees', 'finances', 'notifications', 'modules', 'reports'],
-  },
-  comptable: {
-    label: 'Comptable',
-    description: 'Gestion financière et suivi client',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'clients', 'finances', 'notifications', 'reports'],
-  },
-  ouvrier: {
-    label: 'Ouvrier',
-    description: 'Suivi terrain et opérations courantes',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'notifications'],
-  },
-  gestionnaire: {
-    label: 'Gestionnaire',
-    description: 'Pilotage opérationnel et reporting',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'clients', 'finances', 'notifications', 'modules', 'reports'],
-  },
-};
-
-function mapUiRoleToBackend(role) {
-  switch (role) {
-    case 'comptable':
-      return 'comptable';
-    case 'ouvrier':
-      return 'worker';
-    case 'gestionnaire':
-      return 'manager';
-    case 'admin':
-    default:
-      return 'admin';
-  }
-}
-
-function mapBackendRoleToUi(role) {
-  switch (role) {
-    case 'comptable':
-      return 'comptable';
-    case 'worker':
-      return 'ouvrier';
-    case 'manager':
-      return 'gestionnaire';
-    case 'admin':
-    default:
-      return 'admin';
-  }
-}
-
-function useLiveClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
-  }, []);
-  return now;
-}
-
-async function storageGet(key, fallback) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-async function storageSet(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    if (typeof window !== 'undefined' && !navigator.onLine) {
-      const queue = JSON.parse(localStorage.getItem('agri-sync-queue') || '[]');
-      queue.push({ key, value, timestamp: new Date().toISOString() });
-      localStorage.setItem('agri-sync-queue', JSON.stringify(queue));
-    }
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('agri-sync-status-changed'));
-    }
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function syncPendingChanges() {
-  if (typeof window === 'undefined' || !navigator.onLine) {
-    const raw = localStorage.getItem('agri-offline-queue') || '[]';
-    const queue = JSON.parse(raw);
-    return { pending: queue.length, synced: false };
-  }
-  try {
-    const result = await flushOfflineQueue();
-    return { pending: 0, synced: true, flushed: result.flushed };
-  } catch {
-    return { pending: 0, synced: false };
-  }
-}
-
-function GaugeDial({ value, max = 100, label, unit, colorMain, colorTrack, icon }) {
-  const size = 108;
-  const stroke = 9;
-  const r = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(1, value / max));
-  const offset = circumference * (1 - pct);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-      <div style={{ position: 'relative', width: size, height: size }}>
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colorTrack} strokeWidth={stroke} />
-          <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none"
-            stroke={colorMain} strokeWidth={stroke} strokeLinecap="round"
-            strokeDasharray={circumference} strokeDashoffset={offset}
-            style={{ transition: 'stroke-dashoffset 0.8s ease' }}
-          />
-        </svg>
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center'
-        }}>
-          {icon}
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 17, color: COLORS.ink, marginTop: 2 }}>
-            {Math.round(value)}{unit}
-          </span>
-        </div>
-      </div>
-      <span style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>{label}</span>
-    </div>
-  );
-}
-
-function Card({ children, style }) {
-  return (
-    <div style={{
-      background: COLORS.surface, border: `1px solid ${COLORS.border}`,
-      borderRadius: 14, padding: '18px 20px', ...style
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function MiniChart({ data, color, height = 110 }) {
-  if (!data || data.length === 0) {
-    return <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucune donnée</div>;
-  }
-  const max = Math.max(...data.map(d => d.value), 1);
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height, marginTop: 8 }}>
-      {data.map(item => (
-        <div key={item.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: '100%', maxWidth: 24, height: `${Math.max(8, (item.value / max) * 100)}%`, minHeight: 8, background: color, borderRadius: '6px 6px 0 0' }} />
-          <span style={{ fontSize: 10, color: COLORS.inkSoft, textAlign: 'center' }}>{item.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Button({ children, onClick, variant = 'default', small, style, type = 'button', disabled }) {
-  const base = {
-    fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: small ? 13 : 14,
-    padding: small ? '7px 12px' : '10px 16px', borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer',
-    border: '1px solid transparent', display: 'inline-flex', alignItems: 'center', gap: 6,
-    transition: 'transform 0.1s ease, opacity 0.15s ease', opacity: disabled ? 0.5 : 1,
-  };
-  const variants = {
-    default: { background: COLORS.ink, color: '#fff' },
-    outline: { background: 'transparent', color: COLORS.ink, borderColor: COLORS.border },
-    green: { background: COLORS.green, color: '#fff' },
-    ochre: { background: COLORS.ochre, color: '#fff' },
-    danger: { background: 'transparent', color: COLORS.red, borderColor: COLORS.redSoft },
-    ghost: { background: 'transparent', color: COLORS.inkSoft },
-  };
-  return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      onMouseDown={e => { if (!disabled) e.currentTarget.style.transform = 'scale(0.97)'; }}
-      onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-      style={{ ...base, ...variants[variant], ...style }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Field({ label, ...props }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
-      {label}
-      <input
-        {...props}
-        style={{
-          fontFamily: "'Inter', sans-serif", fontSize: 14, padding: '9px 11px',
-          borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt,
-          color: COLORS.ink, outline: 'none'
-        }}
-      />
-    </label>
-  );
-}
-
-function Select({ label, children, ...props }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
-      {label}
-      <select
-        {...props}
-        style={{
-          fontFamily: "'Inter', sans-serif", fontSize: 14, padding: '9px 11px',
-          borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt,
-          color: COLORS.ink, outline: 'none'
-        }}
-      >
-        {children}
-      </select>
-    </label>
-  );
-}
-
-function Badge({ children, tone = 'green' }) {
-  const map = {
-    green: { bg: COLORS.greenSoft, fg: COLORS.green },
-    ochre: { bg: COLORS.ochreSoft, fg: COLORS.ochre },
-    blue: { bg: COLORS.blueSoft, fg: COLORS.blue },
-    red: { bg: COLORS.redSoft, fg: COLORS.red },
-  };
-  const t = map[tone];
-  return (
-    <span style={{
-      background: t.bg, color: t.fg, fontSize: 11.5, fontWeight: 600,
-      padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap'
-    }}>
-      {children}
-    </span>
-  );
-}
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
 
 const DEFAULT_PARCELLES = [
   { id: 1, nom: 'Parcelle A', culture: 'Maïs', humidite: 46, temperature: 27, mode: 'auto', vanneOuverte: false, seuil: 35, x: 20, y: 25 },
@@ -405,286 +123,1301 @@ function ParcelMapTab({ parcelles }) {
   );
 }
 
-function CulturesModule({ farmId }) {
-  const [tab, setTab] = useState('parcelles');
-  const [parcelles, setParcelles] = useState(DEFAULT_PARCELLES);
-  const [historique, setHistorique] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-  const loadedRef = useRef(false);
+function EnvironnementTab({ farmId }) {
+  const [env, setEnv] = useState({ temperature: 28, humidite: 61 });
+  useEffect(() => {
+    const t = setInterval(() => {
+      setEnv(prev => ({
+        temperature: Math.max(18, Math.min(38, prev.temperature + (Math.random() - 0.5) * 1.2)),
+        humidite: Math.max(30, Math.min(90, prev.humidite + (Math.random() - 0.5) * 4)),
+      }));
+    }, 6000);
+    return () => clearInterval(t);
+  }, []);
+  const alerte = env.temperature > 33 || env.humidite > 80;
+  return (
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Ambiance du poulailler</div>
+        <Badge tone={alerte ? 'red' : 'green'}>{alerte ? 'Conditions à surveiller' : 'Conditions normales'}</Badge>
+      </div>
+      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0' }}>
+        <GaugeDial value={env.temperature} max={45} label="Température" unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
+        <GaugeDial value={env.humidite} label="Humidité" unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Évolution de la température</div>
+          <MiniChart data={[
+            { label: 'Lun', value: 27 },
+            { label: 'Mar', value: 29 },
+            { label: 'Mer', value: 31 },
+            { label: 'Jeu', value: 28 },
+          ]} color={COLORS.ochre} />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Évolution de l'humidité</div>
+          <MiniChart data={[
+            { label: 'Lun', value: 62 },
+            { label: 'Mar', value: 58 },
+            { label: 'Mer', value: 54 },
+            { label: 'Jeu', value: 60 },
+          ]} color={COLORS.blue} />
+        </div>
+      </div>
+    </Card>
+  );
+}
 
-  const normalizeParcelle = useCallback((p) => ({
-    ...p,
-    humidite: Number(p.humidite),
-    temperature: Number(p.temperature),
-    seuil: Number(p.seuil),
-    x: Number(p.x),
-    y: Number(p.y),
-  }), []);
+// partnerType indique quelle liste charger : 'client' (pour les ventes) ou 'fournisseur' (pour les achats)
+function MovementTab({ farmId, storageKey, partnerLabel, partnerType, icon, accent, defaults, remote }) {
+  const [localRows, setLocalRows] = useTable(farmId, remote ? `__unused-${storageKey}` : storageKey, defaults);
+  const [remoteRows, setRemoteRows] = useState([]);
+  const [remoteLoaded, setRemoteLoaded] = useState(false);
+  const rows = remote ? remoteRows : localRows;
+  const setRows = remote ? setRemoteRows : setLocalRows;
 
-  const seedDefaultParcelles = useCallback(async () => {
-    const created = [];
-    for (const p of DEFAULT_PARCELLES) {
+  // Liste des clients ou fournisseurs existants, pour le sélecteur du formulaire
+  const [partners, setPartners] = useState([]);
+
+const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouvement dont on affiche l'historique
+  const [historiqueData, setHistoriqueData] = useState([]);
+
+  const showHistorique = async (row) => {
+    if (!remote?.historique) return;
+    try {
+      const data = await remote.historique(row.id);
+      setHistoriqueData(data.historique || []);
+      setHistoriqueVisible(row.id);
+    } catch (err) {
+      console.error('[MovementTab historique]', err);
+      notifyError(err, "Impossible de charger l'historique.");
+    }
+  };
+  
+  useEffect(() => {
+    if (!remote) return;
+    (async () => {
       try {
-        const { parcelle } = await createParcelle({
-          nom: p.nom, culture: p.culture, humidite: p.humidite, temperature: p.temperature,
-          mode: p.mode, vanneOuverte: p.vanneOuverte, seuil: p.seuil, x: p.x, y: p.y,
-        });
-        if (parcelle) created.push(normalizeParcelle(parcelle));
+        const data = await remote.list();
+        setRemoteRows(data);
       } catch (err) {
-        console.error('[seedDefaultParcelles]', err);
+        console.error('[MovementTab remote load]', err);
+      } finally {
+        setRemoteLoaded(true);
+      }
+    })();
+  }, [remote]);
+
+  // Charge la liste des clients ou fournisseurs selon partnerType, pour peupler le sélecteur
+  useEffect(() => {
+    if (!partnerType) return;
+    (async () => {
+      try {
+        if (partnerType === 'client') {
+          const { clients } = await getClients();
+          setPartners(clients || []);
+        } else if (partnerType === 'fournisseur') {
+          const { fournisseurs } = await getFournisseurs();
+          setPartners(fournisseurs || []);
+        }
+      } catch (err) {
+        console.error('[MovementTab partners load]', err);
+      }
+    })();
+  }, [partnerType]);
+
+  const [form, setForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
+  const [editingId, setEditingId] = useState(null);
+  const [period, setPeriod] = useState('mois');
+  const [query, setQuery] = useState('');
+
+ const save = async (e) => {
+    e.preventDefault();
+    if (!form.partenaire || !form.produit || form.quantite === '' || form.prixUnitaire === '') return;
+
+    // Si on modifie une transaction existante (remote), la raison est obligatoire
+    let raison = null;
+    if (remote && editingId) {
+      raison = window.prompt('Raison de la modification (obligatoire) :');
+      if (!raison || !raison.trim()) {
+        notifyError(new Error('Modification annulée : une raison est requise.'));
+        return;
       }
     }
-    return created;
-  }, [normalizeParcelle]);
+
+    const dateFr = form.date || new Date().toLocaleDateString('fr-FR');
+    const dateIso = dateFr.includes('/')
+      ? dateFr.split('/').reverse().join('-')
+      : dateFr;
+
+    const payload = {
+      date: remote ? dateIso : dateFr,
+      partenaire: form.partenaire,
+      produit: form.produit,
+      quantite: Number(form.quantite),
+      prixUnitaire: Number(form.prixUnitaire),
+      remise: Number(form.remise || 0),
+      raison: raison || undefined,
+    };
+    if (remote) {
+      try {
+        if (editingId) {
+          const updated = await remote.update(editingId, payload);
+          if (updated) {
+            updated.remise = payload.remise;
+            setRows(r => r.map(x => x.id === editingId ? updated : x));
+            notifySuccess('Transaction mise à jour.');
+          }
+          setEditingId(null);
+        } else {
+          const created = await remote.create(payload);
+          if (created) {
+            created.remise = payload.remise;
+            setRows(r => [created, ...r]);
+            notifySuccess('Enregistré.');
+          }
+        }
+      } catch (err) {
+        console.error('[MovementTab remote save]', err);
+        notifyError(err, "Impossible d'enregistrer.");
+        return;
+      }
+    } else if (editingId) {
+      setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
+      setEditingId(null);
+    } else {
+      setRows(r => [{ id: Date.now(), ...payload }, ...r]);
+    }
+    setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
+  };
+
+  const remove = async (id, produit) => {
+    if (!window.confirm(`Supprimer « ${produit} » ? Cette action est irréversible.`)) return;
+
+    let raison = null;
+    if (remote) {
+      raison = window.prompt('Raison de la suppression (obligatoire) :');
+      if (!raison || !raison.trim()) {
+        notifyError(new Error('Suppression annulée : une raison est requise.'));
+        return;
+      }
+    }
+
+    if (remote) {
+      try {
+        await remote.remove(id, raison);
+        notifySuccess('Supprimé.');
+      } catch (err) {
+        console.error('[MovementTab remote delete]', err);
+        notifyError(err, 'Impossible de supprimer.');
+        return;
+      }
+    }
+    setRows(r => r.filter(x => x.id !== id));
+  };
+
+  // Prépare le formulaire pour modifier une transaction existante
+  const startEdit = (row) => {
+    setEditingId(row.id);
+    setForm({
+      partenaire: row.partenaire,
+      produit: row.produit,
+      quantite: row.quantite,
+      prixUnitaire: row.prixUnitaire,
+      remise: row.remise != null ? row.remise : '',
+      // Reconvertit la date ISO (venant de l'API) en format français pour l'affichage dans le formulaire
+      date: remote && row.date && row.date.includes('-') ? String(row.date).slice(0, 10).split('-').reverse().join('/') : row.date,
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
+  };
+
+  const printInvoice = (row) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) return;
+    printWindow.document.write(renderInvoiceHtml(row, partnerLabel));
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 250);
+  };
+
+  const lineTotal = (row) => {
+    return Math.max(0, (Number(row.quantite) || 0) * (Number(row.prixUnitaire) || 0) - (Number(row.remise) || 0));
+  };
+
+  const exportExcel = () => {
+    const header = ['Date', partnerLabel, 'Produit', 'Quantité', 'Prix unitaire', 'Remise', 'Total'];
+    const body = rows.map(r => [
+      r.date,
+      r.partenaire,
+      r.produit,
+      r.quantite,
+      r.prixUnitaire,
+      Number(r.remise || 0),
+      lineTotal(r),
+    ]);
+    const csv = [header, ...body].map(line => line.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+    downloadFile(`${storageKey}.csv`, csv, 'text/csv;charset=utf-8;');
+  };
+
+  const exportPdf = () => {
+    const printWindow = window.open('', '_blank', 'width=900,height=1000');
+    if (!printWindow) return;
+    const content = rows.map(r => `<tr><td>${r.date}</td><td>${r.partenaire}</td><td>${r.produit}</td><td>${r.quantite}</td><td>${r.prixUnitaire.toLocaleString('fr-FR')}</td><td>${(Number(r.remise || 0)).toLocaleString('fr-FR')}</td><td>${lineTotal(r).toLocaleString('fr-FR')}</td></tr>`).join('');
+    printWindow.document.write(`<!doctype html><html><head><title>Export PDF</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left} th{background:#f7f7f7}</style></head><body><h2>Historique ${partnerLabel}</h2><table><thead><tr><th>Date</th><th>${partnerLabel}</th><th>Produit</th><th>Qté</th><th>Prix U.</th><th>Remise</th><th>Total</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 250);
+  };
+
+  const filteredRows = useMemo(() => {
+    return rows.filter(r => {
+      const okPeriod = matchesPeriod(r.date, period);
+      const queryText = `${r.partenaire} ${r.produit}`.toLowerCase();
+      const okQuery = queryText.includes(query.toLowerCase());
+      return okPeriod && (query === '' || okQuery);
+    });
+  }, [rows, period, query]);
+
+  const total = filteredRows.reduce((s, r) => s + lineTotal(r), 0);
+  const chartData = useMemo(() => {
+    const byDate = filteredRows.reduce((acc, row) => {
+      const key = row.date;
+      acc[key] = (acc[key] || 0) + lineTotal(row);
+      return acc;
+    }, {});
+    return Object.entries(byDate).slice(0, 8).map(([label, value]) => ({ label, value }));
+  }, [filteredRows]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card>
+        <form onSubmit={save} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label="Date" type="date" value={form.date ? form.date.split('/').reverse().join('-') : ''} onChange={e => setForm({ ...form, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
+
+          {/* Si une liste de clients/fournisseurs existe, on propose un sélecteur ; sinon, champ texte libre en secours */}
+          {partners.length > 0 ? (
+            <Select label={partnerLabel} value={form.partenaire} onChange={e => setForm({ ...form, partenaire: e.target.value })}>
+              <option value="">Sélectionner...</option>
+              {partners.map(p => (
+                <option key={p.id} value={`${p.prenom ? p.prenom + ' ' : ''}${p.nom}`}>
+                  {p.prenom ? `${p.prenom} ${p.nom}` : p.nom}
+                </option>
+              ))}
+              <option value="__autre__">Autre (saisir un nom)</option>
+            </Select>
+          ) : (
+            <Field label={partnerLabel} placeholder="Nom" value={form.partenaire} onChange={e => setForm({ ...form, partenaire: e.target.value })} />
+          )}
+
+          {/* Si "Autre" est choisi dans le sélecteur, on affiche un champ texte pour saisir le nom manuellement */}
+          {partners.length > 0 && form.partenaire === '__autre__' && (
+            <Field label={`Nom du ${partnerLabel.toLowerCase()}`} placeholder="Nom" value="" onChange={e => setForm({ ...form, partenaire: e.target.value })} />
+          )}
+
+          <Field label="Produit" placeholder="Ex: Œufs" value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
+          <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
+          <Field label="Prix unitaire (FCFA)" type="number" placeholder="0" value={form.prixUnitaire} onChange={e => setForm({ ...form, prixUnitaire: e.target.value })} />
+          <Field label="Remise (FCFA)" type="number" placeholder="0" value={form.remise} onChange={e => setForm({ ...form, remise: e.target.value })} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant={accent} type="submit"><Plus size={15} /> {editingId ? 'Mettre à jour' : 'Enregistrer'}</Button>
+            {editingId && <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>}
+          </div>
+        </form>
+      </Card>
+
+      <Card>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {['jour', 'semaine', 'mois', 'annee', 'tout'].map(opt => (
+              <button key={opt} onClick={() => setPeriod(opt)} style={{ padding: '7px 10px', borderRadius: 999, border: `1px solid ${period === opt ? COLORS.green : COLORS.border}`, background: period === opt ? COLORS.greenSoft : COLORS.surfaceAlt, color: period === opt ? COLORS.green : COLORS.inkSoft, fontWeight: 600, cursor: 'pointer' }}>
+                {opt === 'tout' ? 'Tout' : opt === 'jour' ? 'Jour' : opt === 'semaine' ? 'Semaine' : opt === 'mois' ? 'Mois' : 'Année'}
+              </button>
+            ))}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '7px 10px', background: COLORS.surfaceAlt }}>
+            <Search size={14} color={COLORS.inkSoft} />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher ${partnerLabel.toLowerCase()}`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, minWidth: 180 }} />
+          </label>
+        </div>
+      </Card>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        <Card>
+          <div style={{ fontSize: 12, color: COLORS.inkSoft, fontWeight: 600, marginBottom: 6 }}>Revenus filtrés</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700 }}>{total.toLocaleString('fr-FR')} FCFA</div>
+        </Card>
+        <Card>
+          <div style={{ fontSize: 12, color: COLORS.inkSoft, fontWeight: 600, marginBottom: 8 }}>Graphique des revenus</div>
+          <MiniChart data={chartData} color={COLORS.green} />
+        </Card>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Button small variant={accent} onClick={exportExcel}><Download size={14} /> Export Excel</Button>
+        <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> Export PDF</Button>
+      </div>
+
+      <Card style={{ padding: 0 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+              <th style={{ padding: '12px 16px' }}>Date</th>
+              <th>{partnerLabel}</th>
+              <th>Produit</th>
+              <th>Qté</th>
+              <th>Prix U.</th>
+              <th>Remise</th>
+              <th>Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map(r => (
+              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(r.date)}</td>
+                <td>{r.partenaire}</td>
+                <td>{r.produit}</td>
+                <td>{r.quantite}</td>
+                <td>{r.prixUnitaire.toLocaleString('fr-FR')}</td>
+                <td>{(Number(r.remise) || 0).toLocaleString('fr-FR')}</td>
+                <td style={{ fontWeight: 600 }}>{lineTotal(r).toLocaleString('fr-FR')}</td>
+                <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                    {remote?.historique && (
+                      <button onClick={() => showHistorique(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.ochre }}><ClipboardList size={15} /></button>
+                    )}
+                    <button onClick={() => printInvoice(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green }}><Printer size={15} /></button>
+                    <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {filteredRows.length > 0 && (
+            <tfoot>
+              <tr style={{ borderTop: `2px solid ${COLORS.border}` }}>
+                <td colSpan={6} style={{ padding: '12px 16px', fontWeight: 600 }}>Total</td>
+                <td colSpan={2} style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{total.toLocaleString('fr-FR')} FCFA</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </Card>
+
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Historique complet</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+          {rows.length === 0 ? <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun historique enregistré.</div> : rows.map(r => (
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
+              <span><strong>{r.partenaire}</strong> — {r.produit} ({r.quantite})</span>
+              <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateFr(r.date)} • {(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+      {/* Popup affichant l'historique des modifications/suppressions d'un mouvement précis */}
+      {historiqueVisible && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueVisible(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 500, width: '90%', maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>Historique des modifications</div>
+            {historiqueData.length === 0 ? (
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune modification enregistrée pour cette transaction.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {historiqueData.map(h => (
+                  <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {h.action === 'modification' ? 'Modifié' : 'Supprimé'} par {h.utilisateurEmail || 'utilisateur inconnu'}
+                    </div>
+                    <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{new Date(h.date).toLocaleString('fr-FR')}</div>
+                    <div style={{ fontSize: 13, marginTop: 4 }}>Raison : {h.raison}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button variant="ghost" onClick={() => setHistoriqueVisible(null)} style={{ marginTop: 14 }}>Fermer</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Module de gestion des devis/factures multi-lignes, avec envoi au client et signature électronique.
+// clientsListe : liste des clients existants (pour le sélecteur), transmise par le parent (Ventes)
+function DevisModule({ clientsListe }) {
+  const [devisListe, setDevisListe] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
+
+  const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '' };
+  const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const [detailId, setDetailId] = useState(null); // devis actuellement affiché en détail
+  const [detailData, setDetailData] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  // Popup demandant le mode et la modalité de paiement avant de valider la facturation
+  const [paiementPopupOpen, setPaiementPopupOpen] = useState(false);
+  const [paiementDevisId, setPaiementDevisId] = useState(null);
+  const emptyEcheance = { montant: '', dateEcheance: '' };
+  const [paiementForm, setPaiementForm] = useState({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ ...emptyEcheance }] });
+
+  const loadDevis = async () => {
+    setLoading(true);
+    try {
+      const data = await getDevisListe();
+      setDevisListe(data.devis || []);
+    } catch (err) {
+      setApiError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadDevis(); }, []);
+
+  // Ajoute une ligne de produit vide au formulaire
+  const addLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
+
+  // Supprime une ligne précise du formulaire (garde toujours au moins une ligne)
+  const removeLigne = (index) => setForm(f => ({ ...f, lignes: f.lignes.filter((_, i) => i !== index) }));
+
+  const updateLigne = (index, field, value) => {
+    setForm(f => ({
+      ...f,
+      lignes: f.lignes.map((l, i) => i === index ? { ...l, [field]: value } : l),
+    }));
+  };
+
+  const totalForm = form.lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+
+  const resetForm = () => {
+    setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+    setEditingId(null);
+  };
+
+  const submitForm = async (e) => {
+    e.preventDefault();
+    if (!form.clientId || form.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
+      setApiError('Un client et toutes les lignes de produits (complètes) sont requis.');
+      return;
+    }
+    setSaving(true);
+    setApiError('');
+    try {
+      const payload = {
+      clientId: Number(form.clientId),
+      notes: form.notes,
+      lignes: form.lignes.map(l => ({
+        produit: l.produit,
+        quantite: Number(l.quantite) || 0,
+        prixUnitaire: Number(l.prixUnitaire) || 0,
+        remise: Number(l.remise) || 0,
+      })),
+    };
+      if (editingId) {
+        await updateDevis(editingId, payload);
+        notifySuccess('Devis mis à jour.');
+      } else {
+        await createDevis(payload);
+        notifySuccess('Devis créé en brouillon.');
+      }
+      resetForm();
+      await loadDevis();
+    } catch (err) {
+      setApiError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+ const startEditDevis = async (d) => {
+    if (d.statut !== 'Brouillon') return;
+    try {
+      const data = await getDevisDetail(d.id);
+      const devisComplet = data.devis;
+      setEditingId(devisComplet.id);
+      setForm({
+        clientId: String(devisComplet.clientId),
+        notes: devisComplet.notes || '',
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '' })),
+      });
+    } catch (err) {
+      setApiError(err.message);
+    }
+  };
+
+  const openDetail = async (id) => {
+    setDetailId(id);
+    try {
+      const data = await getDevisDetail(id);
+      setDetailData(data.devis);
+    } catch (err) {
+      setApiError(err.message);
+    }
+  };
+
+  const handleEnvoyer = async (id) => {
+    setActionBusy(true);
+    try {
+      await envoyerDevis(id);
+      notifySuccess('Devis envoyé par email au client.');
+      await loadDevis();
+      if (detailId === id) await openDetail(id);
+    } catch (err) {
+      notifyError(err, "Impossible d'envoyer le devis.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleValiderManuel = async (id) => {
+    const confirmePar = window.prompt('Nom du client ayant donné son accord :');
+    if (!confirmePar || !confirmePar.trim()) return;
+    setActionBusy(true);
+    try {
+      await validerDevisManuel(id, confirmePar);
+      notifySuccess('Devis validé manuellement.');
+      await loadDevis();
+      if (detailId === id) await openDetail(id);
+    } catch (err) {
+      notifyError(err, 'Impossible de valider ce devis.');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  // Ouvre la popup de paiement avant conversion en facture
+  const openPaiementPopup = (id, total) => {
+    setPaiementDevisId(id);
+    setPaiementForm({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ montant: total, dateEcheance: '' }] });
+    setPaiementPopupOpen(true);
+  };
+
+  const addEcheance = () => setPaiementForm(f => ({ ...f, echeances: [...f.echeances, { ...emptyEcheance }] }));
+  const removeEcheance = (i) => setPaiementForm(f => ({ ...f, echeances: f.echeances.filter((_, idx) => idx !== i) }));
+  const updateEcheance = (i, field, value) => {
+    setPaiementForm(f => ({ ...f, echeances: f.echeances.map((e, idx) => idx === i ? { ...e, [field]: value } : e) }));
+  };
+
+  const submitFacturer = async () => {
+    if (paiementForm.modalitePaiement === 'echelonne' && paiementForm.echeances.some(e => !e.montant || !e.dateEcheance)) {
+      notifyError(new Error('Toutes les échéances doivent avoir un montant et une date.'));
+      return;
+    }
+    setActionBusy(true);
+    try {
+      await facturerDevis(paiementDevisId, {
+        modePaiement: paiementForm.modePaiement,
+        modalitePaiement: paiementForm.modalitePaiement,
+        echeances: paiementForm.modalitePaiement === 'echelonne' ? paiementForm.echeances : undefined,
+      });
+      notifySuccess('Devis converti en facture.');
+      setPaiementPopupOpen(false);
+      await loadDevis();
+      if (detailId === paiementDevisId) await openDetail(paiementDevisId);
+    } catch (err) {
+      notifyError(err, 'Impossible de valider et Facturer.');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleRemettreBrouillon = async (id) => {
+    if (!window.confirm('Remettre ce document en brouillon ? Les paiements enregistrés seront annulés et retirés de Finances.')) return;
+    setActionBusy(true);
+    try {
+      await remettreDevisBrouillon(id);
+      notifySuccess('Document remis en brouillon.');
+      await loadDevis();
+      if (detailId === id) await openDetail(id);
+    } catch (err) {
+      notifyError(err, 'Impossible de remettre en brouillon.');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handlePayerEcheance = async (devisId, echeanceId) => {
+    if (!window.confirm('Confirmer que cette échéance a bien été payée ?')) return;
+    setActionBusy(true);
+    try {
+      await payerEcheance(devisId, echeanceId);
+      notifySuccess('Échéance marquée comme payée.');
+      await loadDevis();
+      await openDetail(devisId);
+    } catch (err) {
+      notifyError(err, "Impossible de marquer cette échéance comme payée.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleDelete = async (id, numero) => {
+    if (!window.confirm(`Supprimer le devis « ${numero} » ?`)) return;
+    try {
+      await deleteDevis(id);
+      notifySuccess('Devis supprimé.');
+      await loadDevis();
+    } catch (err) {
+      notifyError(err, 'Impossible de supprimer.');
+    }
+  };
+
+  const statutTone = {
+    Brouillon: 'ochre',
+    Devis: 'blue',
+    'Signé': 'blue',
+    'Non payé': 'red',
+    'Payé partiellement': 'ochre',
+    'Facturé': 'green',
+    'Annulé': 'red',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {apiError && (
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={15} /> {apiError}
+          <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
+        </div>
+      )}
+
+      {/* Formulaire de création / modification d'un devis, avec plusieurs lignes de produits */}
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+          {editingId ? 'Modifier le devis' : 'Nouveau devis'}
+        </div>
+        <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Select label="Client" value={form.clientId} onChange={e => setForm({ ...form, clientId: e.target.value })} required>
+            <option value="">Sélectionner un client...</option>
+            {(clientsListe || []).map(c => (
+              <option key={c.id} value={c.id}>{c.prenom ? `${c.prenom} ${c.nom}` : c.nom}</option>
+            ))}
+          </Select>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
+            {form.lignes.map((ligne, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
+                <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
+                <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
+                <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateLigne(i, 'remise', e.target.value)} />
+                <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
+              <Plus size={14} /> Ajouter une ligne
+            </Button>
+          </div>
+
+          <Field label="Notes (optionnel)" placeholder="Conditions, délais, remarques..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalForm.toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {editingId && <Button type="button" variant="ghost" onClick={resetForm}>Annuler</Button>}
+              <Button type="submit" variant="green" disabled={saving}>
+                {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {editingId ? 'Mettre à jour' : 'Créer le devis'}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Card>
+
+      {/* Liste des devis existants */}
+      <Card style={{ padding: 0 }}>
+        {loading ? (
+          <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
+            <Loader2 size={16} className="spin" /> Chargement...
+          </div>
+        ) : devisListe.length === 0 ? (
+          <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: 13 }}>Aucun devis pour l'instant.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+                <th style={{ padding: '12px 16px' }}>Numéro</th>
+                <th>Client</th>
+                <th>Statut</th>
+                <th>Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {devisListe.map(d => (
+                <tr key={d.id} style={{ borderTop: `1px solid ${COLORS.border}`, cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
+                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{d.numero}</td>
+                  <td>{d.clientPrenom} {d.clientNom}</td>
+                  <td><Badge tone={statutTone[d.statut] || 'blue'}>{d.statut}</Badge></td>
+                  <td style={{ fontWeight: 600 }}>{d.total.toLocaleString('fr-FR')} FCFA</td>
+                  <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                      {['Brouillon', 'Devis'].includes(d.statut) && (
+                        <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                      )}
+                      {d.statut === 'Brouillon' && (
+                        <button onClick={() => handleDelete(d.id, d.numero)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Popup de détail d'un devis, avec actions (envoyer, facturer) et aperçu de la signature */}
+      {detailId && detailData && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setDetailId(null); setDetailData(null); }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 560, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>{detailData.numero}</div>
+              <Badge tone={statutTone[detailData.statut] || 'blue'}>{detailData.statut}</Badge>
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 14 }}>
+              {detailData.clientPrenom} {detailData.clientNom} {detailData.clientEmail ? `· ${detailData.clientEmail}` : '(pas d\'email renseigné)'}
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+                  <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>P.U.</th><th>Remise</th><th style={{ textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detailData.lignes.map(l => {
+                  const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0);
+                  return (
+                    <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                      <td style={{ padding: '6px 0' }}>{l.produit}</td>
+                      <td>{l.quantite}</td>
+                      <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
+                      <td>{(Number(l.remise) || 0).toLocaleString('fr-FR')}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{netLigne.toLocaleString('fr-FR')}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, marginBottom: 14 }}>
+              Total : {detailData.total.toLocaleString('fr-FR')} FCFA
+            </div>
+
+            {detailData.signataireNom && (
+              <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 10 }}>
+                Signé par <strong>{detailData.signataireNom}</strong> le {new Date(detailData.dateSignature).toLocaleString('fr-FR')}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {detailData.statut === 'Brouillon' && detailData.clientEmail && (
+                <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
+                  {actionBusy ? <Loader2 size={14} className="spin" /> : null} Envoyer au client
+                </Button>
+              )}
+              {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
+                <Button variant="outline" onClick={() => handleValiderManuel(detailData.id)} disabled={actionBusy}>
+                  {actionBusy ? <Loader2 size={14} className="spin" /> : null} Valider manuellement (téléphone)
+                </Button>
+              )}
+              {detailData.statut === 'Signé' && (
+                <Button variant="green" onClick={() => openPaiementPopup(detailData.id, detailData.total)} disabled={actionBusy}>
+                  Valider et facturer
+                </Button>
+              )}
+              {detailData.signataireNom && (
+              <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 10 }}>
+                Signé par <strong>{detailData.signataireNom}</strong> le {new Date(detailData.dateSignature).toLocaleString('fr-FR')}
+              </div>
+              )}
+
+              {detailData.echeances && detailData.echeances.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                  Échéances {detailData.modePaiement && `· ${detailData.modePaiement}`}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {detailData.echeances.map(ech => (
+                    <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{ech.montant.toLocaleString('fr-FR')} FCFA</div>
+                        <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>Échéance : {new Date(ech.dateEcheance).toLocaleDateString('fr-FR')}</div>
+                      </div>
+                      {ech.statut === 'Payé' ? (
+                        <Badge tone="green">Payé le {new Date(ech.datePaiement).toLocaleDateString('fr-FR')}</Badge>
+                      ) : (
+                        <Button small variant="green" onClick={() => handlePayerEcheance(detailData.id, ech.id)} disabled={actionBusy}>
+                          Marquer comme payé
+                        </Button>
+                      )}
+                      {detailData.statut === 'Brouillon' && (
+                        <Button small variant="outline" onClick={() => handleRemettreBrouillon(detailData.id)} disabled={actionBusy}>
+                          Remettre en brouillon
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+              <Button variant="outline" onClick={() => openDevisPdf(detailData.id)}>
+                <FileText size={14} /> Télécharger le PDF
+              </Button>
+              <Button variant="ghost" onClick={() => { setDetailId(null); setDetailData(null); }}>Fermer</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Popup demandant le mode et la modalité de paiement avant de facturer */}
+      {paiementPopupOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 480, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Conditions de paiement</div>
+
+            <Select label="Mode de paiement" value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
+              <option value="Espèces">Espèces</option>
+              <option value="Banque">Banque (virement)</option>
+              <option value="Mobile Money">Mobile Money</option>
+              <option value="Chèque">Chèque</option>
+            </Select>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'complet' })}
+                style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  border: `1.5px solid ${paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.border}`,
+                  background: paiementForm.modalitePaiement === 'complet' ? COLORS.greenSoft : '#fff',
+                  color: paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.inkSoft,
+                  fontWeight: 600, fontSize: 13,
+                }}
+              >
+                Paiement complet
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'echelonne' })}
+                style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  border: `1.5px solid ${paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.border}`,
+                  background: paiementForm.modalitePaiement === 'echelonne' ? COLORS.greenSoft : '#fff',
+                  color: paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.inkSoft,
+                  fontWeight: 600, fontSize: 13,
+                }}
+              >
+                Paiement échelonné
+              </button>
+            </div>
+
+            {paiementForm.modalitePaiement === 'echelonne' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Échéances</div>
+                {paiementForm.echeances.map((e, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                    <Field label={i === 0 ? 'Montant' : ''} type="text" inputMode="decimal" placeholder="0" value={e.montant} onChange={ev => updateEcheance(i, 'montant', ev.target.value.replace(/[^\d]/g, ''))} />
+                    <Field label={i === 0 ? 'Date' : ''} type="date" value={e.dateEcheance} onChange={ev => updateEcheance(i, 'dateEcheance', ev.target.value)} />
+                    <button type="button" onClick={() => removeEcheance(i)} disabled={paiementForm.echeances.length === 1} style={{ background: 'none', border: 'none', cursor: paiementForm.echeances.length === 1 ? 'default' : 'pointer', color: paiementForm.echeances.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <Button type="button" variant="ghost" onClick={addEcheance} style={{ alignSelf: 'flex-start' }}>
+                  <Plus size={14} /> Ajouter une échéance
+                </Button>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button variant="ghost" onClick={() => setPaiementPopupOpen(false)}>Annuler</Button>
+              <Button variant="green" onClick={submitFacturer} disabled={actionBusy}>
+                {actionBusy ? <Loader2 size={14} className="spin" /> : null} Confirmer et facturer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Affiche le modèle de devis multi-lignes dans l'onglet Ventes.
+function VentesWithDevis() {
+  const [clientsListe, setClientsListe] = useState([]);
+
+  // Charge la liste des clients une seule fois, nécessaire au formulaire de devis
+  useEffect(() => {
+    (async () => {
+      try {
+        const { clients } = await getClients();
+        setClientsListe(clients || []);
+      } catch (err) {
+        console.error('[VentesWithDevis clients]', err);
+      }
+    })();
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+          Ventes via devis multi-lignes
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+          Créez et modifiez un devis détaillé, puis envoyez-le ou facturez-le directement depuis cet onglet.
+        </div>
+      </Card>
+      <DevisModule clientsListe={clientsListe} />
+    </div>
+  );
+}
+
+function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures' }) {
+  const [fournisseurs, setFournisseurs] = useState([]);
+  const [docs, setDocs] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [useRemote, setUseRemote] = useState(true);
+  const [form, setForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState('');
+  const [detailDoc, setDetailDoc] = useState(null);
+  const key = `${storageKey}-${farmId}`;
+
+  const loadDocs = useCallback(async () => {
+    try {
+      const data = await getAchatsDocuments(moduleType);
+      if (!data || !Array.isArray(data.documents)) {
+        throw new Error('Aucune donnée reçue du serveur.');
+      }
+      setDocs(data.documents);
+      setUseRemote(true);
+    } catch (err) {
+      console.error('[AchatModule remote load]', err);
+      setUseRemote(false);
+      const stored = await storageGet(key, []);
+      setDocs(Array.isArray(stored) ? stored : []);
+    } finally {
+      setLoaded(true);
+    }
+  }, [key, moduleType]);
 
   useEffect(() => {
     (async () => {
       try {
-        const { parcelles: fetched } = await getParcelles();
-        if (fetched.length === 0) {
-          const seeded = await seedDefaultParcelles();
-          setParcelles(seeded);
-        } else {
-          setParcelles(fetched.map(normalizeParcelle));
-        }
-        const { historique: fetchedHistorique } = await getParcellesHistorique();
-        setHistorique(fetchedHistorique);
+        const { fournisseurs } = await getFournisseurs();
+        setFournisseurs(fournisseurs || []);
       } catch (err) {
-        console.error('[CulturesModule load]', err);
-      } finally {
-        setLoaded(true);
-        loadedRef.current = true;
+        console.error('[AchatModule fournisseurs]', err);
       }
     })();
-  }, [farmId, seedDefaultParcelles]);
-
-  const pushHistorique = useCallback(async (entry) => {
-    setHistorique(h => [{ id: `local-${Date.now()}`, date: new Date().toISOString(), parcelle: entry.parcelle, action: entry.action }, ...h].slice(0, 40));
-    try {
-      const { entry: saved } = await createParcelleHistorique({ parcelleId: entry.parcelleId, action: entry.action });
-      if (saved) setHistorique(h => [saved, ...h.filter(x => !String(x.id).startsWith('local-'))].slice(0, 40));
-    } catch (err) {
-      console.error('[pushHistorique]', err);
-      notifyError(err, "L'historique n'a pas pu être enregistré.");
-    }
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setParcelles(prev => prev.map(p => {
-        const humidite = Math.max(10, Math.min(85, p.humidite + (Math.random() - 0.5) * 6));
-        const temperature = Math.max(15, Math.min(40, p.temperature + (Math.random() - 0.5) * 1.5));
-        let vanneOuverte = p.vanneOuverte;
-        if (p.mode === 'auto') {
-          const shouldOpen = humidite < p.seuil;
-          if (shouldOpen !== vanneOuverte) {
-            vanneOuverte = shouldOpen;
-            pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: shouldOpen ? 'Vanne ouverte automatiquement' : 'Vanne fermée automatiquement' });
-            updateParcelle(p.id, { vanneOuverte }).catch(err => { console.error('[auto vanne update]', err); notifyError(err); });
-          }
-        }
-        // Note : humidité/température simulées restent côté client (non persistées à chaque tick)
-        // pour éviter de saturer la base — seuls les changements d'état (mode, vanne) sont enregistrés.
-        return { ...p, humidite, temperature, vanneOuverte };
-      }));
-    }, 6000);
-    return () => clearInterval(t);
-  }, [pushHistorique]);
+    loadDocs();
+  }, [loadDocs]);
 
-  const toggleMode = (id) => {
-    setParcelles(prev => prev.map(p => {
-      if (p.id !== id) return p;
-      const mode = p.mode === 'auto' ? 'manuel' : 'auto';
-      updateParcelle(id, { mode }).catch(err => { console.error('[toggleMode]', err); notifyError(err); });
-      return { ...p, mode };
+  useEffect(() => {
+    if (!loaded || useRemote) return;
+    storageSet(key, docs);
+  }, [docs, loaded, useRemote, key]);
+
+  const supplierName = form.fournisseurId === '__autre__'
+    ? form.fournisseurNom
+    : fournisseurs.find(f => String(f.id) === String(form.fournisseurId))?.nom || '';
+
+  const addLigne = () => setForm(f => ({
+    ...f,
+    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '' }],
+  }));
+
+  const removeLigne = (index) => setForm(f => ({
+    ...f,
+    lignes: f.lignes.filter((_, i) => i !== index),
+  }));
+
+  const updateLigne = (index, field, value) => {
+    setForm(f => ({
+      ...f,
+      lignes: f.lignes.map((ligne, i) => i === index ? { ...ligne, [field]: value } : ligne),
     }));
   };
 
-  const toggleVanne = (id) => {
-    setParcelles(prev => prev.map(p => {
-      if (p.id !== id) return p;
-      const vanneOuverte = !p.vanneOuverte;
-      pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: vanneOuverte ? 'Vanne ouverte manuellement' : 'Vanne fermée manuellement' });
-      updateParcelle(id, { vanneOuverte }).catch(err => { console.error('[toggleVanne]', err); notifyError(err); });
-      return { ...p, vanneOuverte };
-    }));
+  const totalForm = form.lignes.reduce((sum, ligne) => sum + (Number(ligne.quantite) || 0) * (Number(ligne.prixUnitaire) || 0), 0);
+
+  const resetForm = () => {
+    setForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+    setEditingId(null);
+    setError('');
   };
 
-  const [newParcelleForm, setNewParcelleForm] = useState({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
-  const [addingParcelle, setAddingParcelle] = useState(false);
-
-  const addParcelle = async (e) => {
+  const submitForm = async (e) => {
     e.preventDefault();
-    if (!newParcelleForm.nom) return;
-    setAddingParcelle(true);
-    try {
-      const { parcelle } = await createParcelle({
-        nom: newParcelleForm.nom,
-        culture: newParcelleForm.culture || null,
-        humidite: 50,
-        temperature: 25,
-        mode: 'auto',
-        vanneOuverte: false,
-        seuil: Number(newParcelleForm.seuil) || 35,
-        x: Math.round(10 + Math.random() * 80),
-        y: Math.round(10 + Math.random() * 80),
-        superficie: newParcelleForm.superficie ? Number(newParcelleForm.superficie) : null,
-        localisation: newParcelleForm.localisation || null,
-      });
-      if (parcelle) {
-        setParcelles(prev => [...prev, normalizeParcelle(parcelle)]);
-        setNewParcelleForm({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
-        notifySuccess('Parcelle ajoutée.');
+    if (!supplierName) {
+      setError('Un fournisseur est requis.');
+      return;
+    }
+    if (form.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
+      setError('Toutes les lignes d’achat doivent être complètes.');
+      return;
+    }
+
+    const payload = {
+      fournisseurId: form.fournisseurId === '__autre__' ? null : Number(form.fournisseurId),
+      fournisseurNom: supplierName,
+      notes: form.notes,
+      date: new Date().toLocaleDateString('fr-FR'),
+      lignes: form.lignes.map(l => ({
+        produit: l.produit,
+        quantite: Number(l.quantite),
+        prixUnitaire: Number(l.prixUnitaire),
+      })),
+    };
+
+    if (useRemote) {
+      try {
+        if (editingId) {
+          await updateAchatDocument(editingId, { module: moduleType, ...payload });
+        } else {
+          await createAchatDocument({ module: moduleType, ...payload });
+        }
+        await loadDocs();
+        resetForm();
+      } catch (err) {
+        setError(err.message || 'Impossible d\'enregistrer l\'achat.');
       }
-    } catch (err) {
-      console.error('[addParcelle]', err);
-      notifyError(err, "Impossible d'ajouter la parcelle.");
-    } finally {
-      setAddingParcelle(false);
+      return;
     }
+
+    const doc = {
+      id: editingId || Date.now(),
+      fournisseurId: payload.fournisseurId,
+      fournisseurNom: payload.fournisseurNom,
+      notes: payload.notes,
+      date: payload.date,
+      lignes: payload.lignes,
+      total: totalForm,
+    };
+
+    setDocs(docs => editingId ? docs.map(d => d.id === editingId ? doc : d) : [doc, ...docs]);
+    resetForm();
   };
 
-  const removeParcelle = async (id, nom) => {
-    if (!window.confirm(`Supprimer la parcelle « ${nom} » ? Cette action est irréversible.`)) return;
-    try {
-      await deleteParcelle(id);
-      setParcelles(prev => prev.filter(p => p.id !== id));
-      notifySuccess('Parcelle supprimée.');
-    } catch (err) {
-      console.error('[removeParcelle]', err);
-      notifyError(err, 'Impossible de supprimer la parcelle.');
+  const startEdit = async (doc) => {
+    setError('');
+    let source = doc;
+    if (useRemote) {
+      try {
+        const data = await getAchatDocument(doc.id);
+        source = data.document;
+      } catch (err) {
+        setError(err.message || 'Impossible de charger le document.');
+        return;
+      }
     }
+
+    setEditingId(source.id);
+    setForm({
+      fournisseurId: source.fournisseurId ? String(source.fournisseurId) : '__autre__',
+      fournisseurNom: source.fournisseurId ? '' : source.fournisseurNom,
+      notes: source.notes || '',
+      lignes: source.lignes.map(l => ({ produit: l.produit, quantite: String(l.quantite), prixUnitaire: String(l.prixUnitaire) })),
+    });
   };
 
-  if (!loaded) {
-    return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
-      <Loader2 size={18} className="spin" /> Chargement des parcelles…
-    </div>;
-  }
+  const removeDoc = async (id) => {
+    if (!window.confirm('Supprimer cet achat multi-lignes ?')) return;
+    if (useRemote) {
+      try {
+        await deleteAchatDocument(id);
+        await loadDocs();
+      } catch (err) {
+        setError(err.message || 'Impossible de supprimer le document.');
+      }
+      return;
+    }
+    setDocs(docs => docs.filter(doc => doc.id !== id));
+  };
+
+  const openDetail = async (doc) => {
+    if (useRemote) {
+      try {
+        const data = await getAchatDocument(doc.id);
+        setDetailDoc(data.document);
+      } catch (err) {
+        setError(err.message || 'Impossible de charger le détail.');
+      }
+      return;
+    }
+    setDetailDoc(doc);
+  };
+
+  const closeDetail = () => {
+    setDetailDoc(null);
+  };
+
+  const exportCsv = () => {
+    const header = ['Date', 'Fournisseur', 'Notes', 'Total', 'Lignes'];
+    const rows = docs.map(doc => [
+      doc.date,
+      doc.fournisseurNom,
+      doc.notes || '',
+      doc.total,
+      doc.lignes.map(l => `${l.produit} x${l.quantite} @ ${l.prixUnitaire}`).join(' | '),
+    ]);
+    const csv = [header, ...rows].map(line => line.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+    downloadFile(`${storageKey}.csv`, csv, 'text/csv;charset=utf-8;');
+  };
+
+  const exportPdf = () => {
+    const content = docs.map(doc => `
+      <tr>
+        <td>${doc.date}</td>
+        <td>${doc.fournisseurNom}</td>
+        <td>${doc.total.toLocaleString('fr-FR')}</td>
+        <td>${doc.lignes.map(l => `${l.produit} x${l.quantite} à ${l.prixUnitaire.toLocaleString('fr-FR')} FCFA`).join('<br />')}</td>
+      </tr>
+    `).join('');
+    const printWindow = window.open('', '_blank', 'width=900,height=1000');
+    if (!printWindow) return;
+    printWindow.document.write(`<!doctype html><html><head><title>Export achats</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1f2937}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left} th{background:#f7f7f7}</style></head><body><h2>Historique des achats</h2><table><thead><tr><th>Date</th><th>Fournisseur</th><th>Total</th><th>Lignes</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 250);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 10 }}>
-        {[
-          { id: 'parcelles', label: 'Parcelles', icon: Sprout },
-          { id: 'carte', label: 'Carte', icon: Home },
-          { id: 'ventes', label: 'Ventes', icon: TrendingUp },
-          { id: 'achats', label: 'Achats', icon: ShoppingCart },
-          { id: 'comptabilite', label: 'Comptabilité', icon: Wallet },
-        ].map(t => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-              padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
-              background: active ? COLORS.green : 'transparent', color: active ? '#fff' : COLORS.inkSoft
-            }}>
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {tab === 'parcelles' && (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Ajouter une parcelle</div>
-        <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom" placeholder="Ex: Parcelle D" value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
-          <Field label="Culture" placeholder="Ex: Riz" value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
-          <Field label="Seuil d'humidité (%)" type="number" value={newParcelleForm.seuil} onChange={e => setNewParcelleForm({ ...newParcelleForm, seuil: e.target.value })} />
-          <Field label="Superficie (ha)" type="number" placeholder="Optionnel" value={newParcelleForm.superficie} onChange={e => setNewParcelleForm({ ...newParcelleForm, superficie: e.target.value })} />
-          <Field label="Localisation" placeholder="Optionnel" value={newParcelleForm.localisation} onChange={e => setNewParcelleForm({ ...newParcelleForm, localisation: e.target.value })} />
-          <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? 'Ajout…' : 'Ajouter'}</Button>
-        </form>
-      </Card>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        {parcelles.map(p => {
-          const needsWater = p.humidite < p.seuil;
-          return (
-            <Card key={p.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, color: COLORS.ink }}>{p.nom}</div>
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{p.culture}</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? 'Arrosage recommandé' : 'Sol suffisamment humide'}</Badge>
-                  <button onClick={() => removeParcelle(p.id, p.nom)} title="Supprimer la parcelle" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0 14px' }}>
-                <GaugeDial
-                  value={p.humidite} label="Humidité du sol" unit="%"
-                  colorMain={COLORS.blue} colorTrack={COLORS.blueSoft}
-                  icon={<Droplet size={15} color={COLORS.blue} />}
-                />
-                <GaugeDial
-                  value={p.temperature} max={45} label="Température" unit="°"
-                  colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft}
-                  icon={<Thermometer size={15} color={COLORS.ochre} />}
-                />
-              </div>
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button
-                  onClick={() => toggleMode(p.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}
-                >
-                  {p.mode === 'auto' ? <ToggleRight size={22} color={COLORS.green} /> : <ToggleLeft size={22} color={COLORS.inkSoft} />}
-                  Mode {p.mode === 'auto' ? 'automatique' : 'manuel'}
-                </button>
-                <Button
-                  small
-                  variant={p.vanneOuverte ? 'green' : 'outline'}
-                  disabled={p.mode === 'auto'}
-                  onClick={() => toggleVanne(p.id)}
-                >
-                  Vanne {p.vanneOuverte ? 'ouverte' : 'fermée'}
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
-          <ClipboardList size={16} color={COLORS.green} /> Historique des vannes
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+          {editingId ? 'Modifier un achat' : 'Nouvel achat multi-lignes'}
         </div>
-        {historique.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun évènement pour le moment.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-            {historique.map(h => (
-              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
-                <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {h.action}</span>
-                <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateTimeFr(h.date)}</span>
+        {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
+        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Select label="Fournisseur" value={form.fournisseurId} onChange={e => setForm({ ...form, fournisseurId: e.target.value, fournisseurNom: '' })}>
+            <option value="">Sélectionner un fournisseur...</option>
+            {fournisseurs.map(f => (
+              <option key={f.id} value={f.id}>{f.nom}</option>
+            ))}
+            <option value="__autre__">Autre fournisseur</option>
+          </Select>
+          {form.fournisseurId === '__autre__' && (
+            <Field label="Nom du fournisseur" placeholder="Nom" value={form.fournisseurNom} onChange={e => setForm({ ...form, fournisseurNom: e.target.value })} />
+          )}
+          <Field label="Notes" placeholder="Optionnel" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes d’achat</div>
+            {form.lignes.map((ligne, index) => (
+              <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                <Field placeholder="Produit" value={ligne.produit} onChange={e => updateLigne(index, 'produit', e.target.value)} />
+                <Field type="number" placeholder="Qté" value={ligne.quantite} onChange={e => updateLigne(index, 'quantite', e.target.value)} />
+                <Field type="number" placeholder="Prix U." value={ligne.prixUnitaire} onChange={e => updateLigne(index, 'prixUnitaire', e.target.value)} />
+                <button type="button" onClick={() => removeLigne(index)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '8px 0' }}>
+                  <Trash2 size={16} />
+                </button>
               </div>
             ))}
+            <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> Ajouter une ligne</Button>
           </div>
-        )}
+          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalForm.toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {editingId && <Button type="button" variant="ghost" onClick={resetForm}>Annuler</Button>}
+              <Button type="submit" variant="ochre">{editingId ? 'Mettre à jour' : 'Enregistrer l’achat'}</Button>
+            </div>
+          </div>
+        </form>
       </Card>
-      </div>
-      )}
 
-      {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
-      {tab === 'ventes' && <MovementTab farmId={farmId} storageKey="ventes-cultures" partnerLabel="Client" accent="green" defaults={[]} remote={{
-        list: async () => (await getCulturesMouvements('vente')).mouvements,
-        create: async (payload) => (await createCulturesMouvement({ ...payload, type: 'vente' })).mouvement,
-        remove: async (id) => deleteCulturesMouvement(id),
-      }} />}
-      {tab === 'achats' && <MovementTab farmId={farmId} storageKey="achats-cultures" partnerLabel="Fournisseur" accent="green" defaults={[]} remote={{
-        list: async () => (await getCulturesMouvements('achat')).mouvements,
-        create: async (payload) => (await createCulturesMouvement({ ...payload, type: 'achat' })).mouvement,
-        remove: async (id) => deleteCulturesMouvement(id),
-      }} />}
-      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
-        remoteVentes={async () => (await getCulturesMouvements('vente')).mouvements}
-        remoteAchats={async () => (await getCulturesMouvements('achat')).mouvements}
-      />}
+      <Card>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Historique des achats</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button small variant="outline" onClick={exportCsv}><Download size={14} /> Export CSV</Button>
+            <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> Export PDF</Button>
+          </div>
+        </div>
+      </Card>
+      <Card style={{ padding: 0 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+              <th style={{ padding: '12px 16px' }}>Date</th>
+              <th>Fournisseur</th>
+              <th>Total</th>
+              <th style={{ textAlign: 'right', paddingRight: 16 }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.length === 0 ? (
+              <tr><td colSpan={4} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
+            ) : docs.map(doc => (
+              <tr key={doc.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{doc.date}</td>
+                <td>{doc.fournisseurNom}</td>
+                <td style={{ fontWeight: 600 }}>{doc.total.toLocaleString('fr-FR')} FCFA</td>
+                <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={() => openDetail(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><ChevronRight size={15} /></button>
+                    <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                    <button onClick={() => removeDoc(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      {detailDoc && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
+                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{detailDoc.date}</div>
+              </div>
+              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>Total</strong><div style={{ fontWeight: 700, marginTop: 6 }}>{detailDoc.total.toLocaleString('fr-FR')} FCFA</div></div>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>Notes</strong><div style={{ marginTop: 6 }}>{detailDoc.notes || 'Aucune note'}</div></div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Lignes</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+                    <th style={{ padding: '10px 12px' }}>Produit</th>
+                    <th>Qté</th>
+                    <th>PU</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailDoc.lignes.map((ligne, index) => (
+                    <tr key={index} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                      <td style={{ padding: '10px 12px' }}>{ligne.produit}</td>
+                      <td>{ligne.quantite}</td>
+                      <td>{Number(ligne.prixUnitaire).toLocaleString('fr-FR')}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(ligne.quantite) * Number(ligne.prixUnitaire)).toLocaleString('fr-FR')} FCFA</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Button variant="ghost" onClick={closeDetail}>Fermer</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -902,7 +1635,8 @@ function downloadFile(filename, content, type) {
 }
 
 function renderInvoiceHtml(row, partnerLabel) {
-  const total = row.quantite * row.prixUnitaire;
+  const remise = Number(row.remise || 0);
+  const total = Math.max(0, row.quantite * row.prixUnitaire - remise);
   return `
     <html>
       <head><title>Facture</title>
@@ -920,239 +1654,11 @@ function renderInvoiceHtml(row, partnerLabel) {
           <div class="row"><span>Produit</span><strong>${row.produit}</strong></div>
           <div class="row"><span>Quantité</span><strong>${row.quantite}</strong></div>
           <div class="row"><span>Prix unitaire</span><strong>${row.prixUnitaire.toLocaleString('fr-FR')} FCFA</strong></div>
+          <div class="row"><span>Remise</span><strong>${remise.toLocaleString('fr-FR')} FCFA</strong></div>
           <div class="row"><span>Total</span><strong>${total.toLocaleString('fr-FR')} FCFA</strong></div>
         </div>
       </body>
     </html>`;
-}
-
-function MovementTab({ farmId, storageKey, partnerLabel, icon, accent, defaults, remote }) {
-  const [localRows, setLocalRows] = useTable(farmId, remote ? `__unused-${storageKey}` : storageKey, defaults);
-  const [remoteRows, setRemoteRows] = useState([]);
-  const [remoteLoaded, setRemoteLoaded] = useState(false);
-  const rows = remote ? remoteRows : localRows;
-  const setRows = remote ? setRemoteRows : setLocalRows;
-
-  useEffect(() => {
-    if (!remote) return;
-    (async () => {
-      try {
-        const data = await remote.list();
-        setRemoteRows(data);
-      } catch (err) {
-        console.error('[MovementTab remote load]', err);
-      } finally {
-        setRemoteLoaded(true);
-      }
-    })();
-  }, [remote]);
-
-  const [form, setForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', date: new Date().toLocaleDateString('fr-FR') });
-  const [editingId, setEditingId] = useState(null);
-  const [period, setPeriod] = useState('mois');
-  const [query, setQuery] = useState('');
-
-  const save = async (e) => {
-    e.preventDefault();
-    if (!form.partenaire || !form.produit || form.quantite === '' || form.prixUnitaire === '') return;
-    const payload = {
-      date: form.date || new Date().toLocaleDateString('fr-FR'),
-      partenaire: form.partenaire,
-      produit: form.produit,
-      quantite: Number(form.quantite),
-      prixUnitaire: Number(form.prixUnitaire),
-    };
-    if (remote) {
-      try {
-        const created = await remote.create(payload);
-        if (created) {
-          setRows(r => [created, ...r]);
-          notifySuccess('Enregistré.');
-        }
-      } catch (err) {
-        console.error('[MovementTab remote create]', err);
-        notifyError(err, "Impossible d'enregistrer.");
-        return;
-      }
-    } else if (editingId) {
-      setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
-      setEditingId(null);
-    } else {
-      setRows(r => [{ id: Date.now(), ...payload }, ...r]);
-    }
-    setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', date: new Date().toLocaleDateString('fr-FR') });
-  };
-
-  const remove = async (id, produit) => {
-    if (!window.confirm(`Supprimer « ${produit} » ? Cette action est irréversible.`)) return;
-    if (remote) {
-      try {
-        await remote.remove(id);
-        notifySuccess('Supprimé.');
-      } catch (err) {
-        console.error('[MovementTab remote delete]', err);
-        notifyError(err, 'Impossible de supprimer.');
-        return;
-      }
-    }
-    setRows(r => r.filter(x => x.id !== id));
-  };
-
-  const startEdit = (row) => {
-    setEditingId(row.id);
-    setForm({
-      partenaire: row.partenaire,
-      produit: row.produit,
-      quantite: row.quantite,
-      prixUnitaire: row.prixUnitaire,
-      date: row.date,
-    });
-  };
-
-  const printInvoice = (row) => {
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
-    if (!printWindow) return;
-    printWindow.document.write(renderInvoiceHtml(row, partnerLabel));
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 250);
-  };
-
-  const exportExcel = () => {
-    const header = ['Date', partnerLabel, 'Produit', 'Quantité', 'Prix unitaire', 'Total'];
-    const body = rows.map(r => [r.date, r.partenaire, r.produit, r.quantite, r.prixUnitaire, r.quantite * r.prixUnitaire]);
-    const csv = [header, ...body].map(line => line.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
-    downloadFile(`${storageKey}.csv`, csv, 'text/csv;charset=utf-8;');
-  };
-
-  const exportPdf = () => {
-    const printWindow = window.open('', '_blank', 'width=900,height=1000');
-    if (!printWindow) return;
-    const content = rows.map(r => `<tr><td>${r.date}</td><td>${r.partenaire}</td><td>${r.produit}</td><td>${r.quantite}</td><td>${r.prixUnitaire.toLocaleString('fr-FR')}</td><td>${(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')}</td></tr>`).join('');
-    printWindow.document.write(`<!doctype html><html><head><title>Export PDF</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}</style></head><body><h2>Historique ${partnerLabel}</h2><table><thead><tr><th>Date</th><th>${partnerLabel}</th><th>Produit</th><th>Qté</th><th>Prix U.</th><th>Total</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 250);
-  };
-
-  const filteredRows = useMemo(() => {
-    return rows.filter(r => {
-      const okPeriod = matchesPeriod(r.date, period);
-      const queryText = `${r.partenaire} ${r.produit}`.toLowerCase();
-      const okQuery = queryText.includes(query.toLowerCase());
-      return okPeriod && (query === '' || okQuery);
-    });
-  }, [rows, period, query]);
-
-  const total = filteredRows.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
-  const chartData = useMemo(() => {
-    const byDate = filteredRows.reduce((acc, row) => {
-      const key = row.date;
-      acc[key] = (acc[key] || 0) + row.quantite * row.prixUnitaire;
-      return acc;
-    }, {});
-    return Object.entries(byDate).slice(0, 8).map(([label, value]) => ({ label, value }));
-  }, [filteredRows]);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card>
-        <form onSubmit={save} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Date" type="date" value={form.date ? form.date.split('/').reverse().join('-') : ''} onChange={e => setForm({ ...form, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
-          <Field label={partnerLabel} placeholder="Nom" value={form.partenaire} onChange={e => setForm({ ...form, partenaire: e.target.value })} />
-          <Field label="Produit" placeholder="Ex: Œufs" value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
-          <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
-          <Field label="Prix unitaire (FCFA)" type="number" placeholder="0" value={form.prixUnitaire} onChange={e => setForm({ ...form, prixUnitaire: e.target.value })} />
-          <Button variant={accent} type="submit"><Plus size={15} /> {editingId ? 'Mettre à jour' : 'Enregistrer'}</Button>
-        </form>
-      </Card>
-
-      <Card>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {['jour', 'semaine', 'mois', 'annee', 'tout'].map(opt => (
-              <button key={opt} onClick={() => setPeriod(opt)} style={{ padding: '7px 10px', borderRadius: 999, border: `1px solid ${period === opt ? COLORS.green : COLORS.border}`, background: period === opt ? COLORS.greenSoft : COLORS.surfaceAlt, color: period === opt ? COLORS.green : COLORS.inkSoft, fontWeight: 600, cursor: 'pointer' }}>
-                {opt === 'tout' ? 'Tout' : opt === 'jour' ? 'Jour' : opt === 'semaine' ? 'Semaine' : opt === 'mois' ? 'Mois' : 'Année'}
-              </button>
-            ))}
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '7px 10px', background: COLORS.surfaceAlt }}>
-            <Search size={14} color={COLORS.inkSoft} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher ${partnerLabel.toLowerCase()}`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, minWidth: 180 }} />
-          </label>
-        </div>
-      </Card>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        <Card>
-          <div style={{ fontSize: 12, color: COLORS.inkSoft, fontWeight: 600, marginBottom: 6 }}>Revenus filtrés</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700 }}>{total.toLocaleString('fr-FR')} FCFA</div>
-        </Card>
-        <Card>
-          <div style={{ fontSize: 12, color: COLORS.inkSoft, fontWeight: 600, marginBottom: 8 }}>Graphique des revenus</div>
-          <MiniChart data={chartData} color={COLORS.green} />
-        </Card>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button small variant={accent} onClick={exportExcel}><Download size={14} /> Export Excel</Button>
-        <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> Export PDF</Button>
-      </div>
-
-      <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
-              <th>{partnerLabel}</th>
-              <th>Produit</th>
-              <th>Qté</th>
-              <th>Prix U.</th>
-              <th>Total</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRows.map(r => (
-              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(r.date)}</td>
-                <td>{r.partenaire}</td>
-                <td>{r.produit}</td>
-                <td>{r.quantite}</td>
-                <td>{r.prixUnitaire.toLocaleString('fr-FR')}</td>
-                <td style={{ fontWeight: 600 }}>{(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')}</td>
-                <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    {!remote && <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>}
-                    <button onClick={() => printInvoice(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green }}><Printer size={15} /></button>
-                    <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          {filteredRows.length > 0 && (
-            <tfoot>
-              <tr style={{ borderTop: `2px solid ${COLORS.border}` }}>
-                <td colSpan={5} style={{ padding: '12px 16px', fontWeight: 600 }}>Total</td>
-                <td colSpan={2} style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{total.toLocaleString('fr-FR')} FCFA</td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </Card>
-
-      <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Historique complet</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-          {rows.length === 0 ? <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun historique enregistré.</div> : rows.map(r => (
-            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
-              <span><strong>{r.partenaire}</strong> — {r.produit} ({r.quantite})</span>
-              <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateFr(r.date)} • {(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
 }
 
 const STATUTS = ['En attente', 'En cours', 'Livré'];
@@ -1262,11 +1768,16 @@ function LivraisonsTab({ farmId }) {
   );
 }
 
-function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', remoteVentes, remoteAchats }) {
+function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', remoteVentes, remoteAchats, remoteHistorique }) {
   const [localVentes] = useTable(farmId, remoteVentes ? '__unused-ventes' : ventesKey, []);
   const [localAchats] = useTable(farmId, remoteAchats ? '__unused-achats' : achatsKey, []);
   const [fetchedVentes, setFetchedVentes] = useState([]);
   const [fetchedAchats, setFetchedAchats] = useState([]);
+
+  // Popup listant l'historique global des modifications/suppressions du module
+  const [historiqueOpen, setHistoriqueOpen] = useState(false);
+  const [historiqueData, setHistoriqueData] = useState([]);
+  const [historiqueLoading, setHistoriqueLoading] = useState(false);
 
   useEffect(() => {
     if (remoteVentes) remoteVentes().then(setFetchedVentes).catch(err => console.error('[ComptabiliteTab ventes]', err));
@@ -1274,6 +1785,20 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
   useEffect(() => {
     if (remoteAchats) remoteAchats().then(setFetchedAchats).catch(err => console.error('[ComptabiliteTab achats]', err));
   }, [remoteAchats]);
+
+  const openHistorique = async () => {
+    if (!remoteHistorique) return;
+    setHistoriqueOpen(true);
+    setHistoriqueLoading(true);
+    try {
+      const data = await remoteHistorique();
+      setHistoriqueData(data.historique || []);
+    } catch (err) {
+      console.error('[ComptabiliteTab historique]', err);
+    } finally {
+      setHistoriqueLoading(false);
+    }
+  };
 
   const ventes = remoteVentes ? fetchedVentes : localVentes;
   const achats = remoteAchats ? fetchedAchats : localAchats;
@@ -1307,6 +1832,14 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: solde >= 0 ? COLORS.blue : COLORS.red }}>{solde.toLocaleString('fr-FR')} FCFA</div>
         </Card>
       </div>
+
+      {/* Bouton d'accès au journal complet des modifications/suppressions */}
+      {remoteHistorique && (
+        <Button variant="outline" onClick={openHistorique} style={{ alignSelf: 'flex-start' }}>
+          <ClipboardList size={15} /> Historique des modifications et suppressions
+        </Button>
+      )}
+
       <Card style={{ padding: 0 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
@@ -1335,55 +1868,48 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
           </tbody>
         </table>
       </Card>
+
+      {/* Popup listant tout l'historique (modifications + suppressions) du module */}
+      {historiqueOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 600, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>Historique des modifications et suppressions</div>
+            {historiqueLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
+                <Loader2 size={15} className="spin" /> Chargement...
+              </div>
+            ) : historiqueData.length === 0 ? (
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune modification ou suppression enregistrée.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {historiqueData.map(h => {
+                  const values = h.action === 'suppression' ? h.anciennesValeurs : h.nouvellesValeurs;
+                  return (
+                    <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        <Badge tone={h.action === 'suppression' ? 'red' : 'blue'}>{h.action === 'suppression' ? 'Supprimé' : 'Modifié'}</Badge>
+                        {' '}par {h.utilisateurEmail || 'utilisateur inconnu'}
+                      </div>
+                      {values && (
+                        <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 3 }}>
+                          {values.produit} — {values.partenaire} ({values.quantite} × {values.prixUnitaire?.toLocaleString('fr-FR')} FCFA)
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{new Date(h.date).toLocaleString('fr-FR')}</div>
+                      <div style={{ fontSize: 13, marginTop: 4 }}>Raison : {h.raison}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <Button variant="ghost" onClick={() => setHistoriqueOpen(false)} style={{ marginTop: 14 }}>Fermer</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function EnvironnementTab({ farmId }) {
-  const [env, setEnv] = useState({ temperature: 28, humidite: 61 });
-  useEffect(() => {
-    const t = setInterval(() => {
-      setEnv(prev => ({
-        temperature: Math.max(18, Math.min(38, prev.temperature + (Math.random() - 0.5) * 1.2)),
-        humidite: Math.max(30, Math.min(90, prev.humidite + (Math.random() - 0.5) * 4)),
-      }));
-    }, 6000);
-    return () => clearInterval(t);
-  }, []);
-  const alerte = env.temperature > 33 || env.humidite > 80;
-  return (
-    <Card>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Ambiance du poulailler</div>
-        <Badge tone={alerte ? 'red' : 'green'}>{alerte ? 'Conditions à surveiller' : 'Conditions normales'}</Badge>
-      </div>
-      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0' }}>
-        <GaugeDial value={env.temperature} max={45} label="Température" unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
-        <GaugeDial value={env.humidite} label="Humidité" unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Évolution de la température</div>
-          <MiniChart data={[
-            { label: 'Lun', value: 27 },
-            { label: 'Mar', value: 29 },
-            { label: 'Mer', value: 31 },
-            { label: 'Jeu', value: 28 },
-          ]} color={COLORS.ochre} />
-        </div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Évolution de l’humidité</div>
-          <MiniChart data={[
-            { label: 'Lun', value: 62 },
-            { label: 'Mar', value: 58 },
-            { label: 'Mer', value: 54 },
-            { label: 'Jeu', value: 60 },
-          ]} color={COLORS.blue} />
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 function PoultryMonitoringTab({ farmId }) {
   const todayValue = () => {
@@ -1520,6 +2046,281 @@ function PoultryMonitoringTab({ farmId }) {
   );
 }
 
+function CulturesModule({ farmId }) {
+  const [tab, setTab] = useState('parcelles');
+  const [parcelles, setParcelles] = useState(DEFAULT_PARCELLES);
+  const [historique, setHistorique] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
+
+  const normalizeParcelle = useCallback((p) => ({
+    ...p,
+    humidite: Number(p.humidite),
+    temperature: Number(p.temperature),
+    seuil: Number(p.seuil),
+    x: Number(p.x),
+    y: Number(p.y),
+  }), []);
+
+  const seedDefaultParcelles = useCallback(async () => {
+    const created = [];
+    for (const p of DEFAULT_PARCELLES) {
+      try {
+        const { parcelle } = await createParcelle({
+          nom: p.nom, culture: p.culture, humidite: p.humidite, temperature: p.temperature,
+          mode: p.mode, vanneOuverte: p.vanneOuverte, seuil: p.seuil, x: p.x, y: p.y,
+        });
+        if (parcelle) created.push(normalizeParcelle(parcelle));
+      } catch (err) {
+        console.error('[seedDefaultParcelles]', err);
+      }
+    }
+    return created;
+  }, [normalizeParcelle]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { parcelles: fetched } = await getParcelles();
+        if (fetched.length === 0) {
+          const seeded = await seedDefaultParcelles();
+          setParcelles(seeded);
+        } else {
+          setParcelles(fetched.map(normalizeParcelle));
+        }
+        const { historique: fetchedHistorique } = await getParcellesHistorique();
+        setHistorique(fetchedHistorique);
+      } catch (err) {
+        console.error('[CulturesModule load]', err);
+      } finally {
+        setLoaded(true);
+        loadedRef.current = true;
+      }
+    })();
+  }, [farmId, seedDefaultParcelles]);
+
+  const pushHistorique = useCallback(async (entry) => {
+    setHistorique(h => [{ id: `local-${Date.now()}`, date: new Date().toISOString(), parcelle: entry.parcelle, action: entry.action }, ...h].slice(0, 40));
+    try {
+      const { entry: saved } = await createParcelleHistorique({ parcelleId: entry.parcelleId, action: entry.action });
+      if (saved) setHistorique(h => [saved, ...h.filter(x => !String(x.id).startsWith('local-'))].slice(0, 40));
+    } catch (err) {
+      console.error('[pushHistorique]', err);
+      notifyError(err, "L'historique n'a pas pu être enregistré.");
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setParcelles(prev => prev.map(p => {
+        const humidite = Math.max(10, Math.min(85, p.humidite + (Math.random() - 0.5) * 6));
+        const temperature = Math.max(15, Math.min(40, p.temperature + (Math.random() - 0.5) * 1.5));
+        let vanneOuverte = p.vanneOuverte;
+        if (p.mode === 'auto') {
+          const shouldOpen = humidite < p.seuil;
+          if (shouldOpen !== vanneOuverte) {
+            vanneOuverte = shouldOpen;
+            pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: shouldOpen ? 'Vanne ouverte automatiquement' : 'Vanne fermée automatiquement' });
+            updateParcelle(p.id, { vanneOuverte }).catch(err => { console.error('[auto vanne update]', err); notifyError(err); });
+          }
+        }
+        return { ...p, humidite, temperature, vanneOuverte };
+      }));
+    }, 6000);
+    return () => clearInterval(t);
+  }, [pushHistorique]);
+
+  const toggleMode = (id) => {
+    setParcelles(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const mode = p.mode === 'auto' ? 'manuel' : 'auto';
+      updateParcelle(id, { mode }).catch(err => { console.error('[toggleMode]', err); notifyError(err); });
+      return { ...p, mode };
+    }));
+  };
+
+  const toggleVanne = (id) => {
+    setParcelles(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const vanneOuverte = !p.vanneOuverte;
+      pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: vanneOuverte ? 'Vanne ouverte manuellement' : 'Vanne fermée manuellement' });
+      updateParcelle(id, { vanneOuverte }).catch(err => { console.error('[toggleVanne]', err); notifyError(err); });
+      return { ...p, vanneOuverte };
+    }));
+  };
+
+  const [newParcelleForm, setNewParcelleForm] = useState({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
+  const [addingParcelle, setAddingParcelle] = useState(false);
+
+  const addParcelle = async (e) => {
+    e.preventDefault();
+    if (!newParcelleForm.nom) return;
+    setAddingParcelle(true);
+    try {
+      const { parcelle } = await createParcelle({
+        nom: newParcelleForm.nom,
+        culture: newParcelleForm.culture || null,
+        humidite: 50,
+        temperature: 25,
+        mode: 'auto',
+        vanneOuverte: false,
+        seuil: Number(newParcelleForm.seuil) || 35,
+        x: Math.round(10 + Math.random() * 80),
+        y: Math.round(10 + Math.random() * 80),
+        superficie: newParcelleForm.superficie ? Number(newParcelleForm.superficie) : null,
+        localisation: newParcelleForm.localisation || null,
+      });
+      if (parcelle) {
+        setParcelles(prev => [...prev, normalizeParcelle(parcelle)]);
+        setNewParcelleForm({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
+        notifySuccess('Parcelle ajoutée.');
+      }
+    } catch (err) {
+      console.error('[addParcelle]', err);
+      notifyError(err, "Impossible d'ajouter la parcelle.");
+    } finally {
+      setAddingParcelle(false);
+    }
+  };
+
+  const removeParcelle = async (id, nom) => {
+    if (!window.confirm(`Supprimer la parcelle « ${nom} » ? Cette action est irréversible.`)) return;
+    try {
+      await deleteParcelle(id);
+      setParcelles(prev => prev.filter(p => p.id !== id));
+      notifySuccess('Parcelle supprimée.');
+    } catch (err) {
+      console.error('[removeParcelle]', err);
+      notifyError(err, 'Impossible de supprimer la parcelle.');
+    }
+  };
+
+  if (!loaded) {
+    return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
+      <Loader2 size={18} className="spin" /> Chargement des parcelles…
+    </div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 10 }}>
+        {[
+          { id: 'parcelles', label: 'Parcelles', icon: Sprout },
+          { id: 'carte', label: 'Carte', icon: Home },
+          { id: 'ventes', label: 'Ventes', icon: TrendingUp },
+          { id: 'achats', label: 'Achats', icon: ShoppingCart },
+          { id: 'comptabilite', label: 'Comptabilité', icon: Wallet },
+        ].map(t => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
+              padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+              background: active ? COLORS.green : 'transparent', color: active ? '#fff' : COLORS.inkSoft
+            }}>
+              <Icon size={14} /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === 'parcelles' && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Ajouter une parcelle</div>
+        <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label="Nom" placeholder="Ex: Parcelle D" value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
+          <Field label="Culture" placeholder="Ex: Riz" value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
+          <Field label="Seuil d'humidité (%)" type="number" value={newParcelleForm.seuil} onChange={e => setNewParcelleForm({ ...newParcelleForm, seuil: e.target.value })} />
+          <Field label="Superficie (ha)" type="number" placeholder="Optionnel" value={newParcelleForm.superficie} onChange={e => setNewParcelleForm({ ...newParcelleForm, superficie: e.target.value })} />
+          <Field label="Localisation" placeholder="Optionnel" value={newParcelleForm.localisation} onChange={e => setNewParcelleForm({ ...newParcelleForm, localisation: e.target.value })} />
+          <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? 'Ajout…' : 'Ajouter'}</Button>
+        </form>
+      </Card>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        {parcelles.map(p => {
+          const needsWater = p.humidite < p.seuil;
+          return (
+            <Card key={p.id}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, color: COLORS.ink }}>{p.nom}</div>
+                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{p.culture}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? 'Arrosage recommandé' : 'Sol suffisamment humide'}</Badge>
+                  <button onClick={() => removeParcelle(p.id, p.nom)} title="Supprimer la parcelle" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0 14px' }}>
+                <GaugeDial
+                  value={p.humidite} label="Humidité du sol" unit="%"
+                  colorMain={COLORS.blue} colorTrack={COLORS.blueSoft}
+                  icon={<Droplet size={15} color={COLORS.blue} />}
+                />
+                <GaugeDial
+                  value={p.temperature} max={45} label="Température" unit="°"
+                  colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft}
+                  icon={<Thermometer size={15} color={COLORS.ochre} />}
+                />
+              </div>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  onClick={() => toggleMode(p.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}
+                >
+                  {p.mode === 'auto' ? <ToggleRight size={22} color={COLORS.green} /> : <ToggleLeft size={22} color={COLORS.inkSoft} />}
+                  Mode {p.mode === 'auto' ? 'automatique' : 'manuel'}
+                </button>
+                <Button
+                  small
+                  variant={p.vanneOuverte ? 'green' : 'outline'}
+                  disabled={p.mode === 'auto'}
+                  onClick={() => toggleVanne(p.id)}
+                >
+                  Vanne {p.vanneOuverte ? 'ouverte' : 'fermée'}
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <ClipboardList size={16} color={COLORS.green} /> Historique des vannes
+        </div>
+        {historique.length === 0 ? (
+          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun évènement pour le moment.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+            {historique.map(h => (
+              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
+                <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {h.action}</span>
+                <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateTimeFr(h.date)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      </div>
+      )}
+
+      {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
+      {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
+      {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
+      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
+        remoteVentes={async () => (await getCulturesMouvements('vente')).mouvements}
+        remoteAchats={async () => (await getCulturesMouvements('achat')).mouvements}
+        remoteHistorique={getCulturesHistorique}
+      />}
+    </div>
+  );
+}
+
 function PoulaillerModule({ farmId }) {
   const [tab, setTab] = useState('environnement');
   const tabs = [
@@ -1551,20 +2352,13 @@ function PoulaillerModule({ farmId }) {
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} />}
-      {tab === 'ventes' && <MovementTab farmId={farmId} storageKey="ventes" partnerLabel="Client" accent="green" defaults={[]} remote={{
-        list: async () => (await getPoulaillerMouvements('vente')).mouvements,
-        create: async (payload) => (await createPoulaillerMouvement({ ...payload, type: 'vente' })).mouvement,
-        remove: async (id) => deletePoulaillerMouvement(id),
-      }} />}
-      {tab === 'achats' && <MovementTab farmId={farmId} storageKey="achats" partnerLabel="Fournisseur" accent="ochre" defaults={[]} remote={{
-        list: async () => (await getPoulaillerMouvements('achat')).mouvements,
-        create: async (payload) => (await createPoulaillerMouvement({ ...payload, type: 'achat' })).mouvement,
-        remove: async (id) => deletePoulaillerMouvement(id),
-      }} />}
+      {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
+      {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats" moduleType="Poulailler" />}
       {tab === 'livraisons' && <LivraisonsTab farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
         remoteVentes={async () => (await getPoulaillerMouvements('vente')).mouvements}
         remoteAchats={async () => (await getPoulaillerMouvements('achat')).mouvements}
+        remoteHistorique={getPoulaillerHistorique}
       />}
     </div>
   );
@@ -1574,9 +2368,13 @@ function LoginScreen({ onAuth }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('admin');
+  const [nomEntreprise, setNomEntreprise] = useState('');
+  const [typeCompte, setTypeCompte] = useState('entreprise'); // 'entreprise' | 'particulier'
+  const [siret, setSiret] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
@@ -1584,13 +2382,66 @@ function LoginScreen({ onAuth }) {
     setError('');
     setBusy(true);
     try {
-      await onAuth(mode, email, password, role);
+      const extra = mode === 'register'
+        ? { nomEntreprise, typeCompte, siret: typeCompte === 'entreprise' ? siret : undefined }
+        : null;
+      const result = await onAuth(mode, email, password, extra);
+      if (result?.mfaRequired) {
+        setMfaStep(true);
+      }
     } catch (err) {
       setError(err.message || (mode === 'login' ? 'Connexion impossible.' : "Inscription impossible."));
     } finally {
       setBusy(false);
     }
   };
+
+  const submitMfa = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      await onAuth('login', email, password, null, mfaCode);
+    } catch (err) {
+      setError(err.message || 'Code invalide.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (mfaStep) {
+    return (
+      <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
+        <div style={{ width: '100%', maxWidth: 380 }}>
+          <Card>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
+              Vérification en deux étapes
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
+              Saisissez le code à 6 chiffres généré par votre application d'authentification.
+            </div>
+            <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Field label="Code de vérification" placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
+              {error && (
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <AlertTriangle size={14} /> {error}
+                </div>
+              )}
+              <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
+                {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} Valider
+              </Button>
+            </form>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+              <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
+                Retour
+              </button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
@@ -1636,16 +2487,51 @@ function LoginScreen({ onAuth }) {
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
             {mode === 'login' ? "Accédez à vos outils de suivi d'exploitation." : 'Quelques informations pour démarrer.'}
           </div>
+
+          {mode === 'register' && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setTypeCompte('entreprise')}
+                style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  border: `1.5px solid ${typeCompte === 'entreprise' ? COLORS.green : COLORS.border}`,
+                  background: typeCompte === 'entreprise' ? COLORS.greenSoft || '#e6f4ea' : '#fff',
+                  color: typeCompte === 'entreprise' ? COLORS.green : COLORS.inkSoft,
+                  fontWeight: 600, fontSize: 13,
+                }}
+              >
+                Entreprise
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeCompte('particulier')}
+                style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  border: `1.5px solid ${typeCompte === 'particulier' ? COLORS.green : COLORS.border}`,
+                  background: typeCompte === 'particulier' ? COLORS.greenSoft || '#e6f4ea' : '#fff',
+                  color: typeCompte === 'particulier' ? COLORS.green : COLORS.inkSoft,
+                  fontWeight: 600, fontSize: 13,
+                }}
+              >
+                Particulier / Auto-entrepreneur
+              </button>
+            </div>
+          )}
+
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <Field label="Adresse e-mail" type="email" placeholder="nom@exploitation.africa" value={email} onChange={e => setEmail(e.target.value)} required />
             <Field label="Mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 6 : undefined} />
             {mode === 'register' && (
-              <Select label="Rôle" value={role} onChange={e => setRole(e.target.value)}>
-                <option value="admin">Administrateur</option>
-                <option value="comptable">Comptable</option>
-                <option value="ouvrier">Ouvrier</option>
-                <option value="gestionnaire">Gestionnaire</option>
-              </Select>
+              <Field
+                label={typeCompte === 'entreprise' ? "Nom de votre entreprise" : "Votre nom ou celui de votre activité (optionnel)"}
+                placeholder={typeCompte === 'entreprise' ? 'Ex. Ferme Diallo SARL' : 'Ex. Diallo Agriculture'}
+                value={nomEntreprise}
+                onChange={e => setNomEntreprise(e.target.value)}
+              />
+            )}
+            {mode === 'register' && typeCompte === 'entreprise' && (
+              <Field label="SIRET (optionnel)" placeholder="Ex. 123 456 789 00012" value={siret} onChange={e => setSiret(e.target.value)} />
             )}
             {error && (
               <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -2366,43 +3252,55 @@ function HomeOverview({ farmId, activated }) {
     alertes: [],
   });
 
-  useEffect(() => {
-    (async () => {
-      const [culturesParcelles, culturesVentes, culturesAchats, culturesLivraisons, stokages] = await Promise.all([
-        storageGet(`cultures-parcelles-${farmId}`, DEFAULT_PARCELLES),
-        storageGet(`poulailler-ventes-cultures-${farmId}`, []),
-        storageGet(`poulailler-achats-cultures-${farmId}`, []),
-        storageGet(`poulailler-livraisons-${farmId}`, []),
-        storageGet(`poulailler-stocks-${farmId}`, DEFAULT_STOCKS),
+ useEffect(() => {
+  (async () => {
+    try {
+      // Charge en parallèle : parcelles, livraisons, stocks, et les transactions financières
+      // (source unique de vérité pour les chiffres, alignée sur l'onglet Finances)
+      const [culturesParcelles, poulaillerLivraisons, stokages, financesData, culturesVentes, poulaillerVentes] = await Promise.all([
+        activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
+        activated.poulailler ? getPoulaillerLivraisons() : Promise.resolve({ livraisons: [] }),
+        activated.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+        getFinances(),
+        activated.cultures ? getCulturesMouvements('vente') : Promise.resolve({ mouvements: [] }),
+        activated.poulailler ? getPoulaillerMouvements('vente') : Promise.resolve({ mouvements: [] }),
       ]);
 
-      const poulaillerVentes = await storageGet(`poulailler-ventes-${farmId}`, []);
-      const poulaillerAchats = await storageGet(`poulailler-achats-${farmId}`, []);
-      const poulaillerLivraisons = await storageGet(`poulailler-livraisons-${farmId}`, []);
+      const culturesParcellesList = culturesParcelles.parcelles || [];
+      const livraisons = poulaillerLivraisons.livraisons || [];
+      const stocksList = stokages.stocks || [];
+      const ventes = [...(culturesVentes.mouvements || []), ...(poulaillerVentes.mouvements || [])];
 
-      const ventes = [
-        ...(activated.cultures ? culturesVentes : []),
-        ...(activated.poulailler ? poulaillerVentes : []),
-      ];
-      const achats = [
-        ...(activated.cultures ? culturesAchats : []),
-        ...(activated.poulailler ? poulaillerAchats : []),
-      ];
-      const livraisons = [
-        ...(activated.cultures ? culturesLivraisons : []),
-        ...(activated.poulailler ? poulaillerLivraisons : []),
-      ];
+      // Catégories de dépenses "pures" saisies manuellement dans Finances
+      const CATEGORIES_DEPENSES = ['Depenses diverses', 'Carburant', 'Salaire', 'Entretien'];
 
-      const chiffreAffaires = ventes.reduce((sum, row) => sum + row.quantite * row.prixUnitaire, 0);
-      const depenses = achats.reduce((sum, row) => sum + row.quantite * row.prixUnitaire, 0);
+      // Ne garde que les transactions du mois en cours
+      const now = new Date();
+      const entriesThisMonth = (financesData.finances || []).filter(e => {
+        if (!e.date) return false;
+        const d = new Date(e.date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      });
+
+      // Chiffre d'affaires : toutes les entrées positives (ventes), hors dépenses
+      const chiffreAffaires = entriesThisMonth
+        .filter(e => Number(e.montant) > 0 && !CATEGORIES_DEPENSES.includes(e.categorie))
+        .reduce((sum, e) => sum + Number(e.montant), 0);
+
+      // Dépenses : achats (montants négatifs) + dépenses pures (Salaire, Carburant, etc.)
+      const depenses = entriesThisMonth
+        .filter(e => Number(e.montant) < 0 || CATEGORIES_DEPENSES.includes(e.categorie))
+        .reduce((sum, e) => sum + Math.abs(Number(e.montant)), 0);
+
       const benefice = chiffreAffaires - depenses;
-      const parcellesAArroser = (activated.cultures ? culturesParcelles : []).filter(p => p.humidite < p.seuil).length;
-      const oeufsDisponibles = (activated.poulailler ? stokages : []).filter(item => item.categorie === 'Œufs').reduce((sum, item) => sum + item.quantite, 0);
+      const parcellesAArroser = culturesParcellesList.filter(p => p.humidite < p.seuil).length;
+      const oeufsDisponibles = stocksList.filter(item => item.categorie === 'Œufs').reduce((sum, item) => sum + item.quantite, 0);
+      const livraisonsEnAttente = livraisons.filter(l => l.statut === 'En attente').length;
 
       const alertes = [];
       if (parcellesAArroser > 0) alertes.push(`${parcellesAArroser} parcelle${parcellesAArroser > 1 ? 's' : ''} à arroser`);
       if (oeufsDisponibles < 100) alertes.push(`Stock d'œufs faible (${oeufsDisponibles})`);
-      if (livraisons.filter(l => l.statut === 'En attente').length > 0) alertes.push(`${livraisons.filter(l => l.statut === 'En attente').length} livraison${livraisons.filter(l => l.statut === 'En attente').length > 1 ? 's' : ''} en attente`);
+      if (livraisonsEnAttente > 0) alertes.push(`${livraisonsEnAttente} livraison${livraisonsEnAttente > 1 ? 's' : ''} en attente`);
       if (benefice < 0) alertes.push(`Bénéfice négatif (${benefice.toLocaleString('fr-FR')} FCFA)`);
 
       setStats({
@@ -2410,14 +3308,16 @@ function HomeOverview({ farmId, activated }) {
         depenses,
         benefice,
         ventes: ventes.length,
-        livraisons: livraisons.filter(l => l.statut === 'En attente').length,
+        livraisons: livraisonsEnAttente,
         parcelles: parcellesAArroser,
         oeufs: oeufsDisponibles,
         alertes,
       });
-    })();
-  }, [farmId, activated]);
-
+    } catch (err) {
+      console.error('[Dashboard stats]', err);
+    }
+  })();
+}, [activated]);
   const cards = [
     { label: 'Chiffre d’affaires du mois', value: `${stats.chiffreAffaires.toLocaleString('fr-FR')} FCFA`, icon: Wallet, tone: 'green' },
     { label: 'Dépenses du mois', value: `${stats.depenses.toLocaleString('fr-FR')} FCFA`, icon: ShoppingCart, tone: 'red' },
@@ -2464,75 +3364,180 @@ function HomeOverview({ farmId, activated }) {
 }
 
 function EmployeesModule({ farmId }) {
-  const [employees, setEmployees] = useTable(farmId, 'employees', []);
-  const [form, setForm] = useState({ nom: '', prenom: '', email: '', poste: '', salaire: '', presence: 'Présent', avances: '', conges: '' });
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const addEmployee = (e) => {
+  const emptyForm = {
+    nom: '', prenom: '', poste: '', dateEmbauche: '', salaire: '',
+    presence: 'Présent', avances: '', conges: '',
+    createAccount: false, email: '', role: 'ouvrier', password: '',
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const loadEmployees = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await getSalaries();
+      setEmployees(data.salaries || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadEmployees(); }, [farmId]);
+
+  const addEmployee = async (e) => {
     e.preventDefault();
-    if (!form.nom || !form.prenom || !form.email || !form.poste || form.salaire === '') return;
-    const employee = {
-      id: Date.now(),
-      nom: form.nom,
-      prenom: form.prenom,
-      email: form.email,
-      poste: form.poste,
-      salaire: Number(form.salaire),
-      presence: form.presence,
-      avances: Number(form.avances || 0),
-      conges: Number(form.conges || 0),
-    };
-    setEmployees(prev => [employee, ...prev]);
-    setForm({ nom: '', prenom: '', email: '', poste: '', salaire: '', presence: 'Présent', avances: '', conges: '' });
+    if (!form.nom || !form.prenom) return;
+    if (form.createAccount && (!form.email || !form.password || !form.role)) {
+      setFormError('Email, mot de passe temporaire et rôle sont requis pour créer un compte.');
+      return;
+    }
+    setSubmitting(true);
+    setFormError('');
+    try {
+      await createSalarie({
+        nom: form.nom,
+        prenom: form.prenom,
+        poste: form.poste || null,
+        dateEmbauche: form.dateEmbauche || null,
+        salaire: Number(form.salaire) || 0,
+        presence: form.presence,
+        avances: Number(form.avances) || 0,
+        conges: Number(form.conges) || 0,
+        createAccount: form.createAccount,
+        email: form.createAccount ? form.email : undefined,
+        password: form.createAccount ? form.password : undefined,
+        role: form.createAccount ? form.role : undefined,
+      });
+      setForm(emptyForm);
+      await loadEmployees();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const removeEmployee = async (id) => {
+    try {
+      await deleteSalarie(id);
+      await loadEmployees();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const roleLabels = {
+    admin: 'Administrateur',
+    comptable: 'Comptable',
+    ouvrier: 'Ouvrier',
+    gestionnaire: 'Gestionnaire',
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Ajouter un employé</div>
-        <form onSubmit={addEmployee} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom" placeholder="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
-          <Field label="Prénom" placeholder="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} />
-          <Field label="Email" type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <Field label="Poste" placeholder="Poste" value={form.poste} onChange={e => setForm({ ...form, poste: e.target.value })} />
-          <Field label="Salaire" type="number" placeholder="Salaire" value={form.salaire} onChange={e => setForm({ ...form, salaire: e.target.value })} />
-          <Select label="Présence" value={form.presence} onChange={e => setForm({ ...form, presence: e.target.value })}>
-            <option>Présent</option>
-            <option>Absent</option>
-            <option>Congé</option>
-          </Select>
-          <Field label="Avances" type="number" placeholder="0" value={form.avances} onChange={e => setForm({ ...form, avances: e.target.value })} />
-          <Field label="Congés" type="number" placeholder="0" value={form.conges} onChange={e => setForm({ ...form, conges: e.target.value })} />
-          <Button type="submit" variant="green"><Plus size={15} /> Ajouter</Button>
+
+        {formError && (
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+            {formError}
+          </div>
+        )}
+
+        <form onSubmit={addEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <Field label="Nom" placeholder="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
+            <Field label="Prénom" placeholder="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} required />
+            <Field label="Poste" placeholder="Poste" value={form.poste} onChange={e => setForm({ ...form, poste: e.target.value })} />
+            <Field label="Date d'embauche" type="date" value={form.dateEmbauche} onChange={e => setForm({ ...form, dateEmbauche: e.target.value })} />
+            <Field label="Salaire" type="number" placeholder="Salaire" value={form.salaire} onChange={e => setForm({ ...form, salaire: e.target.value })} />
+            <Select label="Présence" value={form.presence} onChange={e => setForm({ ...form, presence: e.target.value })}>
+              <option>Présent</option>
+              <option>Absent</option>
+              <option>Congé</option>
+            </Select>
+            <Field label="Avances" type="number" placeholder="0" value={form.avances} onChange={e => setForm({ ...form, avances: e.target.value })} />
+            <Field label="Congés" type="number" placeholder="0" value={form.conges} onChange={e => setForm({ ...form, conges: e.target.value })} />
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={form.createAccount}
+              onChange={e => setForm({ ...form, createAccount: e.target.checked })}
+            />
+            Créer un compte de connexion pour cet employé
+          </label>
+
+          {form.createAccount && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
+              <Field label="Email" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required={form.createAccount} />
+              <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+                <option value="admin">Administrateur</option>
+                <option value="directeur">Directeur</option>
+                <option value="gestionnaire">Gestionnaire</option>
+                <option value="comptable">Comptable</option>
+                <option value="assistant_direction">Assistant(e) de direction</option>
+                <option value="ouvrier">Ouvrier</option>
+              </Select>
+              <Field label="Mot de passe temporaire" type="text" placeholder="Mot de passe temporaire" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required={form.createAccount} />
+            </div>
+          )}
+
+          <Button type="submit" variant="green" disabled={submitting} style={{ alignSelf: 'flex-start' }}>
+            {submitting ? <Loader2 size={15} className="spin" /> : <Plus size={15} />} Ajouter
+          </Button>
         </form>
       </Card>
 
-      <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Nom</th>
-              <th>Poste</th>
-              <th>Email</th>
-              <th>Salaire</th>
-              <th>Présence</th>
-              <th>Avances</th>
-              <th>Congés</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Employés</div>
+
+        {error && (
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
+            <Loader2 size={15} className="spin" /> Chargement...
+          </div>
+        ) : employees.length === 0 ? (
+          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun employé pour l'instant.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {employees.map(emp => (
-              <tr key={emp.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontWeight: 600 }}>{emp.prenom} {emp.nom}</td>
-                <td>{emp.poste}</td>
-                <td>{emp.email}</td>
-                <td>{emp.salaire.toLocaleString('fr-FR')} FCFA</td>
-                <td><Badge tone={emp.presence === 'Présent' ? 'green' : emp.presence === 'Congé' ? 'ochre' : 'red'}>{emp.presence}</Badge></td>
-                <td>{emp.avances.toLocaleString('fr-FR')} FCFA</td>
-                <td>{emp.conges} j</td>
-              </tr>
+              <div key={emp.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 12px', borderRadius: 10, border: `1px solid ${COLORS.border}`,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
+                  <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                    {emp.poste || 'Poste non renseigné'}
+                    {emp.email && ` · ${emp.email}`}
+                    {emp.role && ` · ${roleLabels[emp.role] || emp.role}`}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{emp.presence}</span>
+                  <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -2595,171 +3600,7 @@ function NotificationsModule({ farmId }) {
   );
 }
 
-function FinancesModule() {
-  const [entries, setEntries]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [apiError, setApiError] = useState('');
-  const [form, setForm]         = useState({ categorie: 'Caisse', montant: '', description: '', date: new Date().toISOString().slice(0, 10) });
 
-  const CATEGORIES_REVENUS  = ['Caisse', 'Banque'];
-  const CATEGORIES_DEPENSES = ['Depenses diverses', 'Carburant', 'Salaire', 'Entretien'];
-  const ALL_CATEGORIES      = [...CATEGORIES_REVENUS, ...CATEGORIES_DEPENSES];
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { finances } = await getFinances();
-        setEntries(finances || []);
-      } catch (err) {
-        setApiError(err.message || 'Impossible de charger les finances.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const addEntry = async (e) => {
-    e.preventDefault();
-    if (!form.categorie || form.montant === '' || !form.description) return;
-    setSaving(true);
-    setApiError('');
-    try {
-      const { entry } = await createFinance({
-        categorie:   form.categorie,
-        montant:     Number(form.montant),
-        description: form.description,
-        date:        form.date,
-      });
-      setEntries(prev => [entry, ...prev]);
-      setForm({ categorie: 'Caisse', montant: '', description: '', date: new Date().toISOString().slice(0, 10) });
-    } catch (err) {
-      setApiError(err.message || "Erreur lors de l'enregistrement.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const removeEntry = async (id, description) => {
-    if (!window.confirm(`Supprimer cette transaction${description ? ` « ${description} »` : ''} ?`)) return;
-    setApiError('');
-    try {
-      await deleteFinance(id);
-      setEntries(prev => prev.filter(e => e.id !== id));
-      notifySuccess('Transaction supprimée.');
-    } catch (err) {
-      setApiError(err.message || 'Erreur lors de la suppression.');
-    }
-  };
-
-  const totalCaisse   = entries.filter(e => e.categorie === 'Caisse').reduce((s, e) => s + Number(e.montant), 0);
-  const totalBanque   = entries.filter(e => e.categorie === 'Banque').reduce((s, e) => s + Number(e.montant), 0);
-  const totalDepenses = entries.filter(e => CATEGORIES_DEPENSES.includes(e.categorie)).reduce((s, e) => s + Number(e.montant), 0);
-  const totalRevenus  = entries.filter(e => CATEGORIES_REVENUS.includes(e.categorie)).reduce((s, e) => s + Number(e.montant), 0);
-  const beneficeNet   = totalRevenus - totalDepenses;
-  const chartRevenus  = entries.filter(e => CATEGORIES_REVENUS.includes(e.categorie)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Number(e.montant) })).reverse();
-  const chartDepenses = entries.filter(e => CATEGORIES_DEPENSES.includes(e.categorie)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Number(e.montant) })).reverse();
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
-      <Loader2 size={18} className="spin" /> Chargement des finances...
-    </div>
-  );
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <AlertTriangle size={15} /> {apiError}
-          <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
-        </div>
-      )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Caisse</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{totalCaisse.toLocaleString('fr-FR')} FCFA</div>
-        </Card>
-        <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>Banque</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{totalBanque.toLocaleString('fr-FR')} FCFA</div>
-        </Card>
-        <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>Depenses</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{totalDepenses.toLocaleString('fr-FR')} FCFA</div>
-        </Card>
-        <Card style={{ background: beneficeNet >= 0 ? COLORS.greenSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: beneficeNet >= 0 ? COLORS.green : COLORS.red, fontWeight: 600, marginBottom: 4 }}>Benefice net</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: beneficeNet >= 0 ? COLORS.green : COLORS.red }}>{beneficeNet.toLocaleString('fr-FR')} FCFA</div>
-        </Card>
-      </div>
-      <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Nouvelle operation</div>
-        <form onSubmit={addEntry} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Select label="Categorie" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
-            {ALL_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
-          </Select>
-          <Field label="Montant (FCFA)" type="number" placeholder="0" value={form.montant} onChange={e => setForm({ ...form, montant: e.target.value })} />
-          <Field label="Description" placeholder="Ex : Vente d oeufs" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-          <Button variant="green" type="submit" disabled={saving}>
-            {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
-          </Button>
-        </form>
-      </Card>
-      <Card>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Graphiques financiers</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Revenus recents</div>
-            <MiniChart data={chartRevenus.length ? chartRevenus : [{ label: '-', value: 0 }]} color={COLORS.green} />
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Depenses recentes</div>
-            <MiniChart data={chartDepenses.length ? chartDepenses : [{ label: '-', value: 0 }]} color={COLORS.red} />
-          </div>
-        </div>
-      </Card>
-      <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
-              <th>Categorie</th>
-              <th>Description</th>
-              <th>Montant</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.length === 0 && (
-              <tr><td colSpan={5} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>Aucune operation enregistree.</td></tr>
-            )}
-            {entries.map(entry => {
-              const isDepense = CATEGORIES_DEPENSES.includes(entry.categorie);
-              const dateLabel = entry.date ? String(entry.date).slice(0, 10) : '-';
-              return (
-                <tr key={entry.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{dateLabel}</td>
-                  <td><Badge tone={isDepense ? 'red' : 'green'}>{entry.categorie}</Badge></td>
-                  <td style={{ color: COLORS.inkSoft }}>{entry.description}</td>
-                  <td style={{ fontWeight: 600, color: isDepense ? COLORS.red : COLORS.green }}>
-                    {isDepense ? '-' : '+'}{Number(entry.montant).toLocaleString('fr-FR')} FCFA
-                  </td>
-                  <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                    <button onClick={() => removeEntry(entry.id, entry.description)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-}
 
 function ClientsModule() {
   const [clients, setClients]   = useState([]);
@@ -2767,7 +3608,9 @@ function ClientsModule() {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [apiError, setApiError] = useState('');
-  const [form, setForm]         = useState({ nom: '', telephone: '', adresse: '' });
+  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '' };
+  const [form, setForm]         = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null); // null = mode ajout, sinon id du client en cours d'édition
   const [query, setQuery]       = useState('');
 
   const selectedClient = clients.find(c => c.id === selectedId) || null;
@@ -2787,21 +3630,47 @@ function ClientsModule() {
     })();
   }, []);
 
-  const addClient = async (e) => {
+  // Soumet le formulaire : crée un nouveau client, ou met à jour celui en cours d'édition
+  const submitForm = async (e) => {
     e.preventDefault();
     if (!form.nom) return;
     setSaving(true);
     setApiError('');
     try {
-      const { client } = await createClient({ nom: form.nom, telephone: form.telephone, adresse: form.adresse });
-      setClients(prev => [client, ...prev]);
-      setSelectedId(client.id);
-      setForm({ nom: '', telephone: '', adresse: '' });
+      if (editingId) {
+        const { client } = await updateClient(editingId, form);
+        setClients(prev => prev.map(c => c.id === editingId ? client : c));
+        notifySuccess('Client mis à jour.');
+      } else {
+        const { client } = await createClient(form);
+        setClients(prev => [client, ...prev]);
+        setSelectedId(client.id);
+      }
+      setForm(emptyForm);
+      setEditingId(null);
     } catch (err) {
-      setApiError(err.message || "Erreur lors de l'ajout du client.");
+      setApiError(err.message || "Erreur lors de l'enregistrement.");
     } finally {
       setSaving(false);
     }
+  };
+
+  // Prépare le formulaire pour modifier un client existant
+  const startEdit = (client) => {
+    setEditingId(client.id);
+    setForm({
+      nom: client.nom || '',
+      prenom: client.prenom || '',
+      telephone: client.telephone || '',
+      adresse: client.adresse || '',
+      email: client.email || '',
+      siret: client.siret || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
   };
 
   const removeClient = async (id, nom) => {
@@ -2818,7 +3687,7 @@ function ClientsModule() {
   };
 
   const filtered = clients.filter(c =>
-    `${c.nom} ${c.telephone || ''} ${c.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
+    `${c.nom} ${c.prenom || ''} ${c.telephone || ''} ${c.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
   );
 
   if (loading) return (
@@ -2836,14 +3705,24 @@ function ClientsModule() {
         </div>
       )}
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Ajouter un client</div>
-        <form onSubmit={addClient} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom complet" placeholder="Ex: Amadou Diallo" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
-          <Field label="Telephone" placeholder="+223..." value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+          {editingId ? 'Modifier le client' : 'Ajouter un client'}
+        </div>
+        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label="Nom" placeholder="Ex: Diallo" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
+          <Field label="Prénom" placeholder="Ex: Amadou" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} />
+          <Field label="Téléphone" placeholder="+223..." value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
+          <Field label="Email" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
           <Field label="Adresse" placeholder="Ville / quartier" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
-          <Button type="submit" variant="green" disabled={saving}>
-            {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
-          </Button>
+          <Field label="SIRET (optionnel)" placeholder="Si société" value={form.siret} onChange={e => setForm({ ...form, siret: e.target.value })} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button type="submit" variant="green" disabled={saving}>
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {editingId ? 'Mettre à jour' : 'Ajouter'}
+            </Button>
+            {editingId && (
+              <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+            )}
+          </div>
         </form>
       </Card>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
@@ -2863,12 +3742,17 @@ function ClientsModule() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 700 }}>{client.nom}</div>
+                    <div style={{ fontWeight: 700 }}>{client.prenom} {client.nom}</div>
                     <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{client.telephone || 'Pas de telephone'}</div>
                   </div>
-                  <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id, client.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
-                    <Trash2 size={14} />
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={(ev) => { ev.stopPropagation(); startEdit(client); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
+                      <PencilLine size={14} />
+                    </button>
+                    <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id, client.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{client.adresse || 'Aucune adresse renseignee'}</div>
               </Card>
@@ -2876,10 +3760,12 @@ function ClientsModule() {
           </div>
           {selectedClient && (
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedClient.nom}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedClient.prenom} {selectedClient.nom}</div>
               <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span>Tel : {selectedClient.telephone || 'Non renseigne'}</span>
+                <span>Email : {selectedClient.email || 'Non renseigne'}</span>
                 <span>Adresse : {selectedClient.adresse || 'Non renseignee'}</span>
+                {selectedClient.siret && <span>SIRET : {selectedClient.siret}</span>}
                 <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedClient.id}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
@@ -2901,6 +3787,179 @@ function ClientsModule() {
     </div>
   );
 }
+
+function FournisseursModule() {
+  const [fournisseurs, setFournisseurs] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [apiError, setApiError] = useState('');
+  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '' };
+  const [form, setForm]         = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [query, setQuery]       = useState('');
+
+  const selectedFournisseur = fournisseurs.find(f => f.id === selectedId) || null;
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const { fournisseurs: loaded } = await getFournisseurs();
+        setFournisseurs(loaded || []);
+        if (loaded && loaded.length > 0) setSelectedId(loaded[0].id);
+      } catch (err) {
+        setApiError(err.message || 'Impossible de charger les fournisseurs.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const submitForm = async (e) => {
+    e.preventDefault();
+    if (!form.nom) return;
+    setSaving(true);
+    setApiError('');
+    try {
+      if (editingId) {
+        const { fournisseur } = await updateFournisseur(editingId, form);
+        setFournisseurs(prev => prev.map(f => f.id === editingId ? fournisseur : f));
+        notifySuccess('Fournisseur mis à jour.');
+      } else {
+        const { fournisseur } = await createFournisseur(form);
+        setFournisseurs(prev => [fournisseur, ...prev]);
+        setSelectedId(fournisseur.id);
+      }
+      setForm(emptyForm);
+      setEditingId(null);
+    } catch (err) {
+      setApiError(err.message || "Erreur lors de l'enregistrement.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEdit = (fournisseur) => {
+    setEditingId(fournisseur.id);
+    setForm({
+      nom: fournisseur.nom || '',
+      prenom: fournisseur.prenom || '',
+      telephone: fournisseur.telephone || '',
+      adresse: fournisseur.adresse || '',
+      email: fournisseur.email || '',
+      siret: fournisseur.siret || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const removeFournisseur = async (id, nom) => {
+    if (!window.confirm(`Supprimer le fournisseur « ${nom} » ? Cette action est irréversible.`)) return;
+    setApiError('');
+    try {
+      await deleteFournisseur(id);
+      setFournisseurs(prev => prev.filter(f => f.id !== id));
+      if (selectedId === id) setSelectedId(null);
+      notifySuccess('Fournisseur supprimé.');
+    } catch (err) {
+      setApiError(err.message || 'Erreur lors de la suppression.');
+    }
+  };
+
+  const filtered = fournisseurs.filter(f =>
+    `${f.nom} ${f.prenom || ''} ${f.telephone || ''} ${f.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
+  );
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
+      <Loader2 size={18} className="spin" /> Chargement des fournisseurs...
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {apiError && (
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={15} /> {apiError}
+          <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
+        </div>
+      )}
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+          {editingId ? 'Modifier le fournisseur' : 'Ajouter un fournisseur'}
+        </div>
+        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label="Nom" placeholder="Ex: Traoré" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
+          <Field label="Prénom" placeholder="Ex: Ibrahim" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} />
+          <Field label="Téléphone" placeholder="+223..." value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
+          <Field label="Email" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          <Field label="Adresse" placeholder="Ville / quartier" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
+          <Field label="SIRET (optionnel)" placeholder="Si société" value={form.siret} onChange={e => setForm({ ...form, siret: e.target.value })} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button type="submit" variant="ochre" disabled={saving}>
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {editingId ? 'Mettre à jour' : 'Ajouter'}
+            </Button>
+            {editingId && (
+              <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+            )}
+          </div>
+        </form>
+      </Card>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
+        <Search size={14} color={COLORS.inkSoft} />
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un fournisseur..." style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
+      </label>
+      {filtered.length === 0 ? (
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun fournisseur trouve.</div></Card>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filtered.map(f => (
+              <Card
+                key={f.id}
+                style={{ border: selectedFournisseur && selectedFournisseur.id === f.id ? `2px solid ${COLORS.ochre}` : `1px solid ${COLORS.border}`, cursor: 'pointer', padding: '14px 16px' }}
+                onClick={() => setSelectedId(f.id)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{f.prenom} {f.nom}</div>
+                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{f.telephone || 'Pas de telephone'}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={(ev) => { ev.stopPropagation(); startEdit(f); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
+                      <PencilLine size={14} />
+                    </button>
+                    <button onClick={(ev) => { ev.stopPropagation(); removeFournisseur(f.id, f.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{f.adresse || 'Aucune adresse renseignee'}</div>
+              </Card>
+            ))}
+          </div>
+          {selectedFournisseur && (
+            <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedFournisseur.prenom} {selectedFournisseur.nom}</div>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Tel : {selectedFournisseur.telephone || 'Non renseigne'}</span>
+                <span>Email : {selectedFournisseur.email || 'Non renseigne'}</span>
+                <span>Adresse : {selectedFournisseur.adresse || 'Non renseignee'}</span>
+                {selectedFournisseur.siret && <span>SIRET : {selectedFournisseur.siret}</span>}
+                <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedFournisseur.id}</span>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ModulesScreen({ activated, onToggle, onContinue }) {
   const anyActive = activated.cultures || activated.poulailler || activated.clients;
   return (
@@ -2942,6 +4001,15 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
           price="Option incluse dans l'abonnement"
           onToggle={() => onToggle('employees')}
         />
+          <OptionCard
+          icon={Truck} accent="ochre" active={activated.fournisseurs}
+          title="Gestion des fournisseurs"
+          description="Enregistrez vos fournisseurs et retrouvez-les facilement lors de vos achats."
+          features={['Fiche fournisseur complète', 'Historique des achats', 'Coordonnées et SIRET']}
+          price="Option incluse dans l'abonnement"
+          onToggle={() => onToggle('fournisseurs')}
+        />
+
         <OptionCard
           icon={Landmark} accent="blue" active={activated.finances}
           title="Gestion financière"
@@ -2970,9 +4038,10 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
 
 export default function App() {
   const [screen, setScreen] = useState('login');
+  const [isOnboarding, setIsOnboarding] = useState(false);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('admin');
-  const [activated, setActivated] = useState({ cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false });
+  const [activated, setActivated] = useState({ cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
   const [tab, setTab] = useState(null);
   const [initLoaded, setInitLoaded] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
@@ -2981,7 +4050,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const saved = await storageGet('agriconnect-modules', { cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false });
+      const saved = await storageGet('agriconnect-modules', { cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
       setActivated(saved);
       setInitLoaded(true);
     })();
@@ -3020,21 +4089,26 @@ export default function App() {
     };
   }, []);
 
-  const handleAuth = async (mode, email, password, selectedRole) => {
-    const authResult = mode === 'login'
-      ? await login(email, password)
-      : await register(email, password, mapUiRoleToBackend(selectedRole));
+  const handleAuth = async (mode, email, password, extra, mfaCode) => {
+  const authResult = mode === 'login'
+    ? await login(email, password, mfaCode)
+    : await register(email, password, extra);
 
-    setToken(authResult.token);
-    const uiRole = mapBackendRoleToUi(authResult.user.role);
-    const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
-    setUser(authResult.user.email);
-    setRole(uiRole);
-    setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-    if (!selectedConfig.permissions.includes('modules')) {
-      setTab('accueil');
-    }
-  };
+  if (authResult?.mfaRequired) {
+    return authResult; // on ne connecte pas encore, LoginScreen va demander le code
+  }
+
+  setToken(authResult.token);
+  const uiRole = mapBackendRoleToUi(authResult.user.role);
+  const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
+  setUser(authResult.user.email);
+  setRole(uiRole);
+  setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
+  if (!selectedConfig.permissions.includes('modules')) {
+    setTab('accueil');
+  }
+  return authResult;
+};
 
   const toggleModule = (key) => {
     setActivated(prev => {
@@ -3045,8 +4119,24 @@ export default function App() {
   };
 
   const goToDashboard = () => {
-    setTab('accueil');
-    setScreen('dashboard');
+  setTab('accueil');
+  setScreen('dashboard');
+  };
+
+  // Après l'étape "modules", propose à l'utilisateur de configurer son entreprise
+  // (banques, salariés) tout de suite, ou de le faire plus tard.
+  const goToOnboardingChoice = () => {
+  setScreen('onboarding-choice');
+  };
+
+  // Passe à l'étape "banques" du wizard de configuration
+  const goToOnboardingBanques = () => {
+  setScreen('onboarding-banques');
+  };
+
+  // Passe à l'étape "salariés" du wizard de configuration
+  const goToOnboardingSalaries = () => {
+  setScreen('onboarding-salaries');
   };
 
   const roleConfig = ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.admin;
@@ -3060,9 +4150,11 @@ export default function App() {
     activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: 'Cultures & irrigation', icon: Sprout },
     activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: 'Poulailler', icon: Egg },
     activated.clients && roleConfig.permissions.includes('clients') && { id: 'clients', label: 'Clients', icon: Users },
+    activated.fournisseurs && roleConfig.permissions.includes('fournisseurs') && { id: 'fournisseurs', label: 'Fournisseurs', icon: Truck },
     activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: 'Employés', icon: Briefcase },
     activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark },
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'profil', label: 'Profil', icon: Settings },
   ].filter(Boolean);
 
   useEffect(() => {
@@ -3081,6 +4173,7 @@ export default function App() {
         const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
         setUser(user.email);
         setRole(uiRole);
+        setIsOnboarding(true);
         setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
         if (!selectedConfig.permissions.includes('modules')) {
           setTab('accueil');
@@ -3122,7 +4215,7 @@ export default function App() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {screen === 'dashboard' && roleConfig.permissions.includes('modules') && (
-                <button onClick={() => setScreen('modules')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: COLORS.inkSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button onClick={() => { setIsOnboarding(false); setScreen('modules'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: COLORS.inkSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   Gérer les options
                 </button>
               )}
@@ -3149,8 +4242,74 @@ export default function App() {
       {screen === 'login' && <LoginScreen onAuth={handleAuth} />}
 
       {screen === 'modules' && initLoaded && (
-        <ModulesScreen activated={activated} onToggle={toggleModule} onContinue={goToDashboard} />
+  <ModulesScreen activated={activated} onToggle={toggleModule} onContinue={isOnboarding ? goToOnboardingChoice : goToDashboard} />
       )}
+
+      {/* Écran de transition : propose de configurer l'entreprise maintenant ou plus tard */}
+{screen === 'onboarding-choice' && (
+  <div style={{ maxWidth: 480, margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
+    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 10 }}>
+      Configurer votre entreprise
+    </div>
+    <div style={{ fontSize: 14, color: COLORS.inkSoft, marginBottom: 26 }}>
+      Ajoutez vos comptes bancaires et vos salariés maintenant, ou passez directement au tableau de bord et configurez-les plus tard depuis "Gérer les options".
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Button variant="green" onClick={goToOnboardingBanques} style={{ justifyContent: 'center' }}>
+        Configurer maintenant
+      </Button>
+      <Button variant="ghost" onClick={goToDashboard} style={{ justifyContent: 'center' }}>
+        Plus tard
+      </Button>
+    </div>
+  </div>
+)}
+
+{/* Étape 1 du wizard : comptes bancaires */}
+{screen === 'onboarding-banques' && (
+  <div style={{ maxWidth: 700, margin: '0 auto', padding: '36px 16px' }}>
+    <div style={{ textAlign: 'center', marginBottom: 22 }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+        Vos comptes bancaires
+      </div>
+      <div style={{ fontSize: 14, color: COLORS.inkSoft }}>
+        Ajoutez un ou plusieurs comptes bancaires. Vous pourrez en ajouter d'autres plus tard.
+      </div>
+    </div>
+    <BanquesModule />
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
+      <Button variant="ghost" onClick={goToOnboardingSalaries}>
+        Passer cette étape
+      </Button>
+      <Button variant="default" onClick={goToOnboardingSalaries}>
+        Suivant <ChevronRight size={16} />
+      </Button>
+    </div>
+  </div>
+)}
+
+{/* Étape 2 du wizard : salariés */}
+{screen === 'onboarding-salaries' && (
+  <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
+    <div style={{ textAlign: 'center', marginBottom: 22 }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+        Vos salariés
+      </div>
+      <div style={{ fontSize: 14, color: COLORS.inkSoft }}>
+        Ajoutez vos employés maintenant, ou passez cette étape et faites-le plus tard depuis l'onglet Employés.
+      </div>
+    </div>
+    <EmployeesModule farmId={user} />
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
+      <Button variant="ghost" onClick={goToDashboard}>
+        Passer cette étape
+      </Button>
+      <Button variant="default" onClick={goToDashboard}>
+        Terminer <Check size={16} />
+      </Button>
+    </div>
+  </div>
+)}
 
       {screen === 'dashboard' && (
         <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
@@ -3182,11 +4341,234 @@ export default function App() {
           {tab === 'cultures' && <CulturesModule farmId={user} />}
           {tab === 'poulailler' && <PoulaillerModule farmId={user} />}
           {tab === 'clients' && <ClientsModule farmId={user} />}
+          {tab === 'fournisseurs' && <FournisseursModule farmId={user} />}
           {tab === 'employees' && <EmployeesModule farmId={user} />}
-          {tab === 'finances' && <FinancesModule farmId={user} />}
+          {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
           {tab === 'notifications' && <NotificationsModule farmId={user} />}
+          {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
         </div>
       )}
     </div>
   );
 }
+
+function ProfilModule({ role }) {
+ const isAdmin = role === 'admin';
+
+  const [qrCode, setQrCode] = useState(null);
+  const [code, setCode] = useState('');
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [sentTo, setSentTo] = useState('');
+  const [mfaMode, setMfaMode] = useState(null); // 'totp' | 'email' | 'sms'
+
+  const [companyMethod, setCompanyMethod] = useState('totp');
+  const [methodBusy, setMethodBusy] = useState(false);
+  const [methodError, setMethodError] = useState('');
+  const [methodSuccess, setMethodSuccess] = useState('');
+
+  useEffect(() => {
+    getMe().then(data => {
+      if (data.user?.mfaEnabled) setMfaEnabled(true);
+    }).catch(() => {});
+
+    getMfaCompanyMethod().then(data => {
+      setCompanyMethod(data.method);
+    }).catch(() => {});
+  }, []);
+
+  const startSetup = async () => {
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const data = await setupMfa();
+      setMfaMode(data.method);
+      if (data.method === 'totp') {
+        setQrCode(data.qrCode);
+      } else {
+        setSentTo(data.sentTo);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmSetup = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      await verifyMfa(code);
+      setMfaEnabled(true);
+      setQrCode(null);
+      setMfaMode(null);
+      setCode('');
+      setSuccess('Authentification à deux facteurs activée.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDisable = async () => {
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      await disableMfa();
+      setMfaEnabled(false);
+      setSuccess('Authentification à deux facteurs désactivée.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeCompanyMethod = async (method) => {
+    setMethodBusy(true);
+    setMethodError('');
+    setMethodSuccess('');
+    try {
+      await setMfaCompanyMethod(method);
+      setCompanyMethod(method);
+      setMethodSuccess('Méthode de vérification mise à jour pour toute l\'entreprise.');
+    } catch (err) {
+      setMethodError(err.message);
+    } finally {
+      setMethodBusy(false);
+    }
+  };
+
+  const methodLabels = {
+    totp: "Application d'authentification (QR code)",
+    email: 'Code par email',
+    sms: 'Code par SMS',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
+
+      {isAdmin && (
+        <Card>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+            Méthode de vérification (entreprise)
+          </div>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+            Choisissez comment vos salariés recevront leur code de vérification en deux étapes. Ce réglage s'applique à toute l'entreprise.
+          </div>
+
+          {methodError && (
+            <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+              {methodError}
+            </div>
+          )}
+          {methodSuccess && (
+            <div style={{ background: COLORS.greenSoft || '#e6f4ea', color: COLORS.green, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+              {methodSuccess}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {['totp', 'email', 'sms'].map(m => (
+              <button
+                key={m}
+                onClick={() => changeCompanyMethod(m)}
+                disabled={methodBusy || companyMethod === m}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px', borderRadius: 10, cursor: methodBusy ? 'default' : 'pointer',
+                  border: `1px solid ${companyMethod === m ? COLORS.ink : COLORS.border}`,
+                  background: companyMethod === m ? COLORS.ink : '#fff',
+                  color: companyMethod === m ? '#fff' : COLORS.ink,
+                  fontSize: 13.5, fontWeight: 600,
+                }}
+              >
+                {methodLabels[m]}
+                {companyMethod === m && <Check size={15} />}
+              </button>
+            ))}
+          </div>
+          {companyMethod === 'sms' && (
+            <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 10 }}>
+              Note : l'envoi SMS n'est pas encore relié à un prestataire, les codes s'afficheront uniquement dans les journaux du serveur pour le moment.
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+          Sécurité du compte
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+          Ajoutez une étape de vérification supplémentaire à la connexion.
+        </div>
+
+        {error && (
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+        {success && (
+          <div style={{ background: COLORS.greenSoft || '#e6f4ea', color: COLORS.green, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+            {success}
+          </div>
+        )}
+
+        {!mfaMode && !mfaEnabled && (
+          <Button variant="green" onClick={startSetup} disabled={busy}>
+            {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} Activer la vérification en deux étapes
+          </Button>
+        )}
+
+        {mfaMode === 'totp' && qrCode && (
+          <div>
+            <div style={{ fontSize: 13, marginBottom: 10 }}>
+              Scannez ce code avec votre application d'authentification, puis saisissez le code généré :
+            </div>
+            <img src={qrCode} alt="QR code MFA" style={{ width: 180, height: 180, marginBottom: 14, borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
+            <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Field label="Code de vérification" placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
+              <Button type="submit" variant="green" disabled={busy}>
+                {busy ? <Loader2 size={15} className="spin" /> : null} Confirmer l'activation
+              </Button>
+            </form>
+          </div>
+        )}
+
+        {(mfaMode === 'email' || mfaMode === 'sms') && (
+          <div>
+            <div style={{ fontSize: 13, marginBottom: 10 }}>
+              Un code a été envoyé à <strong>{sentTo}</strong>. Saisissez-le ci-dessous :
+            </div>
+            <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Field label="Code de vérification" placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
+              <Button type="submit" variant="green" disabled={busy}>
+                {busy ? <Loader2 size={15} className="spin" /> : null} Confirmer l'activation
+              </Button>
+            </form>
+          </div>
+        )}
+
+        {mfaEnabled && (
+          <Button variant="ghost" onClick={handleDisable} disabled={busy}>
+            {busy ? <Loader2 size={15} className="spin" /> : null} Désactiver la vérification en deux étapes
+          </Button>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// Composant de gestion des comptes bancaires de l'entreprise.
+// Props :
+// - onCountChange (optionnel) : callback appelé avec le nombre de banques, utile pour le wizard
+//   afin de savoir si l'utilisateur a ajouté au moins un compte avant de continuer

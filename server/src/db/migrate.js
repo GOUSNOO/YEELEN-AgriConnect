@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS parcelles_historique (
 );
 
 -- Ventes et achats du module Cultures (mutualisés dans une seule table)
+ALTER TABLE cultures_mouvements ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
+
 CREATE TABLE IF NOT EXISTS cultures_mouvements (
   id            SERIAL PRIMARY KEY,
   type          TEXT NOT NULL CHECK (type IN ('vente', 'achat')),
@@ -57,11 +59,13 @@ CREATE TABLE IF NOT EXISTS cultures_mouvements (
   produit       TEXT NOT NULL,
   quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
   prix_unitaire NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  remise        NUMERIC(12, 2) NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_parcelles_historique_parcelle_id ON parcelles_historique(parcelle_id);
 CREATE INDEX IF NOT EXISTS idx_cultures_mouvements_type ON cultures_mouvements(type);
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
 -- ═══════════════ Module Poulailler ═══════════════
 -- Stocks (aliments, œufs, volailles vivantes...)
@@ -76,6 +80,7 @@ CREATE TABLE IF NOT EXISTS poulailler_stocks (
 );
 
 -- Ventes et achats du module Poulailler (mutualisés dans une seule table)
+ALTER TABLE poulailler_mouvements ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS poulailler_mouvements (
   id            SERIAL PRIMARY KEY,
   type          TEXT NOT NULL CHECK (type IN ('vente', 'achat')),
@@ -84,7 +89,31 @@ CREATE TABLE IF NOT EXISTS poulailler_mouvements (
   produit       TEXT NOT NULL,
   quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
   prix_unitaire NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  remise        NUMERIC(12, 2) NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Documents achats multi-lignes pour Cultures et Poulailler
+CREATE TABLE IF NOT EXISTS achats_documents (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  module         TEXT NOT NULL CHECK (module IN ('Cultures', 'Poulailler')),
+  date           DATE NOT NULL DEFAULT CURRENT_DATE,
+  fournisseur_id INTEGER REFERENCES fournisseurs(id) ON DELETE SET NULL,
+  fournisseur_nom TEXT,
+  notes          TEXT,
+  total          NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS achats_lignes (
+  id          SERIAL PRIMARY KEY,
+  document_id INTEGER NOT NULL REFERENCES achats_documents(id) ON DELETE CASCADE,
+  produit     TEXT NOT NULL,
+  quantite    NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  prix_unitaire NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  ordre       INTEGER NOT NULL DEFAULT 0
 );
 
 -- Livraisons
@@ -145,6 +174,26 @@ CREATE INDEX IF NOT EXISTS idx_poulailler_livraisons_user_id ON poulailler_livra
 CREATE INDEX IF NOT EXISTS idx_poulailler_suivi_user_id ON poulailler_suivi(user_id);
 CREATE INDEX IF NOT EXISTS idx_finances_user_id ON finances(user_id);
 CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id);
+
+-- ═══════════════ Journal d'audit (connexions, puis actions sensibles) ═══════════════
+-- Généraliste (contrairement à mouvements_historique, lié aux ventes/achats) :
+-- entreprise_id/user_id nullables car une tentative de connexion échouée peut
+-- ne correspondre à aucun compte connu.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  email         TEXT,
+  action        TEXT NOT NULL,
+  ip_address    TEXT,
+  user_agent    TEXT,
+  details       JSONB,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_entreprise_id ON audit_log(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
 `;
 
 async function migrate() {

@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'YEELEN AgriConnect',
         short_name: 'AgriConnect',
         description: 'Suivi des cultures, irrigation et gestion agricole',
-        theme_color: '#3F6B3B',
-        background_color: '#F1F0E4',
+        theme_color: '#38A169', // Mise à jour avec le nouveau vert principal
+        background_color: '#F7FAFC', // Mise à jour avec le fond général
         display: 'standalone',
         start_url: '/',
         icons: [

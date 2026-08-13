@@ -52,12 +52,16 @@ export function clearToken() {
 // ─────────────────────────────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────────────────────────────
-export async function login(email, password) {
-  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+export async function login(email, password, mfaCode) {
+  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, mfaCode }) });
 }
 
-export async function register(email, password, role) {
-  return request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, role }) });
+export async function register(email, password, extra) {
+  const { nomEntreprise, typeCompte, siret } = extra || {};
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret }),
+  });
 }
 
 export async function getMe() {
@@ -135,8 +139,8 @@ export async function createCulturesMouvement(payload) {
   return safeRequest('/cultures/mouvements', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function deleteCulturesMouvement(id) {
-  return safeRequest(`/cultures/mouvements/${id}`, { method: 'DELETE' });
+export async function deleteCulturesMouvement(id, payload) {
+  return safeRequest(`/cultures/mouvements/${id}`, { method: 'DELETE', body: JSON.stringify(payload) });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -165,8 +169,8 @@ export async function createPoulaillerMouvement(payload) {
   return safeRequest('/poulailler/mouvements', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function deletePoulaillerMouvement(id) {
-  return safeRequest(`/poulailler/mouvements/${id}`, { method: 'DELETE' });
+export async function deletePoulaillerMouvement(id, payload) {
+  return safeRequest(`/poulailler/mouvements/${id}`, { method: 'DELETE', body: JSON.stringify(payload) });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -266,4 +270,250 @@ export async function safeRequest(path, options = {}) {
     window.dispatchEvent(new Event('agri-sync-status-changed'));
     return null; // signal écrit hors-ligne
   }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// MFA
+// ─────────────────────────────────────────────────────────────────────
+export async function setupMfa() {
+  return request('/mfa/setup', { method: 'POST' });
+}
+
+export async function verifyMfa(code) {
+  return request('/mfa/verify', { method: 'POST', body: JSON.stringify({ code }) });
+}
+
+export async function disableMfa() {
+  return request('/mfa/disable', { method: 'POST' });
+}
+
+export async function getMfaCompanyMethod() {
+  return request('/mfa/company-method', { method: 'GET' });
+}
+
+export async function setMfaCompanyMethod(method) {
+  return request('/mfa/company-method', { method: 'PUT', body: JSON.stringify({ method }) });
+}
+
+export async function getSalaries() {
+  return request('/salaries', { method: 'GET' });
+}
+
+export async function createSalarie(payload) {
+  return request('/salaries', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateSalarie(id, payload) {
+  return request(`/salaries/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteSalarie(id) {
+  return request(`/salaries/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BANQUES — comptes bancaires de l'entreprise
+// ─────────────────────────────────────────────────────────────────────
+
+// Récupère la liste des comptes bancaires de l'entreprise connectée
+export async function getBanques() {
+  return request('/banques', { method: 'GET' });
+}
+
+// Crée un nouveau compte bancaire (nomBanque, iban, typeCompte, solde)
+export async function createBanque(payload) {
+  return request('/banques', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Met à jour un compte bancaire existant, identifié par son id
+export async function updateBanque(id, payload) {
+  return request(`/banques/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+// Supprime définitivement un compte bancaire (pas de désactivation ici)
+export async function deleteBanque(id) {
+  return request(`/banques/${id}`, { method: 'DELETE' });
+}
+
+// Récupère le compte bancaire principal actuel de l'entreprise
+export async function getBanquePrincipale() {
+  return request('/entreprise/banque-principale', { method: 'GET' });
+}
+
+// Définit le compte bancaire principal (réservé à l'admin)
+export async function setBanquePrincipale(banqueId) {
+  return request('/entreprise/banque-principale', { method: 'PUT', body: JSON.stringify({ banqueId }) });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// FOURNISSEURS
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getFournisseurs() {
+  return request('/business/fournisseurs', { method: 'GET' });
+}
+
+export async function createFournisseur(payload) {
+  return request('/business/fournisseurs', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateFournisseur(id, payload) {
+  return request(`/business/fournisseurs/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteFournisseur(id) {
+  return request(`/business/fournisseurs/${id}`, { method: 'DELETE' });
+}
+
+export async function getAchatsDocuments(module) {
+  return request(`/achats?module=${encodeURIComponent(module)}`, { method: 'GET' });
+}
+
+export async function getAchatDocument(id) {
+  return request(`/achats/${id}`, { method: 'GET' });
+}
+
+export async function createAchatDocument(payload) {
+  return request('/achats', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateAchatDocument(id, payload) {
+  return request(`/achats/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteAchatDocument(id) {
+  return request(`/achats/${id}`, { method: 'DELETE' });
+}
+
+// Modifie une fiche client existante (coordonnées mises à jour)
+export async function updateClient(id, payload) {
+  return request(`/business/clients/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function updatePoulaillerMouvement(id, payload) {
+  return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function updateCulturesMouvement(id, payload) {
+  return request(`/cultures/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+// Récupère l'historique des modifications/suppressions pour un mouvement Poulailler précis
+export async function getPoulaillerMouvementHistorique(id) {
+  return request(`/poulailler/mouvements/${id}/historique`, { method: 'GET' });
+}
+
+// Récupère l'historique des modifications/suppressions pour un mouvement Cultures précis
+export async function getCulturesMouvementHistorique(id) {
+  return request(`/cultures/mouvements/${id}/historique`, { method: 'GET' });
+}
+
+// Historique global des modifications/suppressions pour Poulailler
+export async function getPoulaillerHistorique() {
+  return request('/poulailler/historique', { method: 'GET' });
+}
+
+// Historique global des modifications/suppressions pour Cultures
+export async function getCulturesHistorique() {
+  return request('/cultures/historique-mouvements', { method: 'GET' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// DEVIS / FACTURES (documents multi-lignes, avec signature électronique)
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getDevisListe() {
+  return request('/devis', { method: 'GET' });
+}
+
+export async function getDevisDetail(id) {
+  return request(`/devis/${id}`, { method: 'GET' });
+}
+
+export async function createDevis(payload) {
+  return request('/devis', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateDevis(id, payload) {
+  return request(`/devis/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteDevis(id) {
+  return request(`/devis/${id}`, { method: 'DELETE' });
+}
+
+export async function envoyerDevis(id) {
+  return request(`/devis/${id}/envoyer`, { method: 'POST' });
+}
+
+// Valide manuellement un devis (accord obtenu par téléphone), sans signature électronique
+export async function validerDevisManuel(id, confirmePar) {
+  return request(`/devis/${id}/valider-manuel`, { method: 'POST', body: JSON.stringify({ confirmePar }) });
+}
+
+export async function facturerDevis(id, payload) {
+  return request(`/devis/${id}/facturer`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+
+// Ouvre le PDF d'un devis dans un nouvel onglet, avec authentification
+export async function openDevisPdf(id) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/devis/${id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Impossible de générer le PDF.');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
+
+// Consultation publique (aucun token d'authentification requis, juste le token du lien)
+export async function getDevisPublic(token) {
+  const response = await fetch(`${API_BASE_URL}/devis/public/${token}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Devis introuvable.');
+  return data;
+}
+
+// Signature publique (aucun token d'authentification requis)
+export async function signerDevisPublic(token, signatureData, signataireNom) {
+  const response = await fetch(`${API_BASE_URL}/devis/public/${token}/signer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ signatureData, signataireNom }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Erreur lors de la signature.');
+  return data;
+}
+
+// Marque une échéance de paiement comme réglée, et synchronise avec Finances
+export async function payerEcheance(devisId, echeanceId) {
+  return request(`/devis/${devisId}/echeances/${echeanceId}/payer`, { method: 'POST' });
+}
+
+export async function remettreDevisBrouillon(id) {
+  return request(`/devis/${id}/remettre-brouillon`, { method: 'POST' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// OBSERVATIONS — notes de terrain
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getObservations() {
+  return request('/observations', { method: 'GET' });
+}
+
+export async function createObservation(payload) {
+  return safeRequest('/observations', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateObservation(id, payload) {
+  return safeRequest(`/observations/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteObservation(id) {
+  return safeRequest(`/observations/${id}`, { method: 'DELETE' });
 }

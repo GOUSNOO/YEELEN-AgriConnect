@@ -1,6 +1,8 @@
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import { syncFinanceEntry, removeFinanceEntry, updateFinanceEntry } from '../utils/financeSync.js';
+import { logMouvementHistorique, getMouvementHistorique, getAllMouvementHistorique } from '../utils/mouvementHistorique.js';
 
 const router = express.Router();
 
@@ -9,6 +11,7 @@ const MOUVEMENT_COLUMNS = `
   id, type, date, partenaire, produit,
   quantite::float8 AS quantite,
   prix_unitaire::float8 AS "prixUnitaire",
+  remise::float8 AS remise,
   created_at AS "createdAt"
 `;
 const LIVRAISON_COLUMNS = `id, date, client, produit, quantite::float8 AS quantite, statut, created_at AS "createdAt"`;
@@ -20,7 +23,7 @@ const SUIVI_COLUMNS = `id, date, type, quantite::float8 AS quantite, detail, cre
 
 router.get('/stocks', authRequired, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT ${STOCK_COLUMNS} FROM poulailler_stocks WHERE user_id = $1 ORDER BY id ASC`, [req.user.sub]);
+    const result = await pool.query(`SELECT ${STOCK_COLUMNS} FROM poulailler_stocks WHERE entreprise_id = $1 ORDER BY id ASC`, [req.user.entrepriseId]);
     return res.json({ stocks: result.rows });
   } catch (err) {
     console.error('[GET /poulailler/stocks]', err);
@@ -33,9 +36,9 @@ router.post('/stocks', authRequired, async (req, res) => {
   if (!nom) return res.status(400).json({ error: 'Le nom est requis.' });
   try {
     const result = await pool.query(
-      `INSERT INTO poulailler_stocks (user_id, nom, categorie, quantite, unite, seuil)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${STOCK_COLUMNS}`,
-      [req.user.sub, nom, categorie, Number(quantite) || 0, unite, Number(seuil) || 0]
+      `INSERT INTO poulailler_stocks (entreprise_id, user_id, nom, categorie, quantite, unite, seuil)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${STOCK_COLUMNS}`,
+      [req.user.entrepriseId, req.user.sub, nom, categorie, Number(quantite) || 0, unite, Number(seuil) || 0]
     );
     return res.status(201).json({ stock: result.rows[0] });
   } catch (err) {
@@ -46,7 +49,7 @@ router.post('/stocks', authRequired, async (req, res) => {
 
 router.delete('/stocks/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM poulailler_stocks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
+    await pool.query('DELETE FROM poulailler_stocks WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /poulailler/stocks]', err);
@@ -62,8 +65,8 @@ router.get('/mouvements', authRequired, async (req, res) => {
   const { type } = req.query;
   try {
     const result = type
-      ? await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM poulailler_mouvements WHERE user_id = $1 AND type = $2 ORDER BY date DESC, created_at DESC`, [req.user.sub, type])
-      : await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM poulailler_mouvements WHERE user_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.sub]);
+      ? await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM poulailler_mouvements WHERE entreprise_id = $1 AND type = $2 ORDER BY date DESC, created_at DESC`, [req.user.entrepriseId, type])
+      : await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM poulailler_mouvements WHERE entreprise_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.entrepriseId]);
     return res.json({ mouvements: result.rows });
   } catch (err) {
     console.error('[GET /poulailler/mouvements]', err);
@@ -72,17 +75,29 @@ router.get('/mouvements', authRequired, async (req, res) => {
 });
 
 router.post('/mouvements', authRequired, async (req, res) => {
-  const { type, date, partenaire, produit, quantite, prixUnitaire } = req.body;
+  const { type, date, partenaire, produit, quantite, prixUnitaire, remise } = req.body;
   if (!type || !['vente', 'achat'].includes(type) || !partenaire || !produit) {
     return res.status(400).json({ error: 'type (vente/achat), partenaire et produit sont requis.' });
   }
   try {
     const result = await pool.query(
-      `INSERT INTO poulailler_mouvements (user_id, type, date, partenaire, produit, quantite, prix_unitaire)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, $7)
+      `INSERT INTO poulailler_mouvements (entreprise_id, user_id, type, date, partenaire, produit, quantite, prix_unitaire, remise)
+       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9)
        RETURNING ${MOUVEMENT_COLUMNS}`,
-      [req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0]
+      [req.user.entrepriseId, req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0, Number(remise) || 0]
     );
+
+    await syncFinanceEntry(req.user.entrepriseId, req.user.sub, {
+      type,
+      module: 'Poulailler',
+      produit,
+      partenaire,
+      quantite: Number(quantite) || 0,
+      prixUnitaire: Number(prixUnitaire) || 0,
+      remise: Number(remise) || 0,
+      mouvementId: result.rows[0].id,
+    });
+
     return res.status(201).json({ mouvement: result.rows[0] });
   } catch (err) {
     console.error('[POST /poulailler/mouvements]', err);
@@ -90,13 +105,58 @@ router.post('/mouvements', authRequired, async (req, res) => {
   }
 });
 
-router.delete('/mouvements/:id', authRequired, async (req, res) => {
+
+router.put('/mouvements/:id', authRequired, async (req, res) => {
+  const { type, date, partenaire, produit, quantite, prixUnitaire, remise, raison } = req.body;
+  if (!raison) {
+    return res.status(400).json({ error: 'La raison de la modification est requise.' });
+  }
   try {
-    await pool.query('DELETE FROM poulailler_mouvements WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
-    return res.json({ success: true });
+    // Récupère les valeurs actuelles avant modification, pour l'historique
+    const before = await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM poulailler_mouvements WHERE id = $1 AND entreprise_id = $2`, [req.params.id, req.user.entrepriseId]);
+    if (before.rows.length === 0) {
+      return res.status(404).json({ error: 'Mouvement introuvable.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE poulailler_mouvements SET
+         type = COALESCE($1, type),
+         date = COALESCE($2, date),
+         partenaire = COALESCE($3, partenaire),
+         produit = COALESCE($4, produit),
+         quantite = COALESCE($5, quantite),
+         prix_unitaire = COALESCE($6, prix_unitaire),
+         remise = COALESCE($7, remise)
+       WHERE id = $8 AND entreprise_id = $9
+       RETURNING ${MOUVEMENT_COLUMNS}`,
+      [type, date, partenaire, produit, quantite, prixUnitaire, remise, req.params.id, req.user.entrepriseId]
+    );
+
+    const updated = result.rows[0];
+
+    await updateFinanceEntry(req.user.entrepriseId, 'Poulailler', req.params.id, {
+      type: updated.type,
+      produit: updated.produit,
+      partenaire: updated.partenaire,
+      quantite: updated.quantite,
+      prixUnitaire: updated.prixUnitaire,
+      remise: updated.remise,
+    });
+
+    // Trace la modification avec la raison, les valeurs avant et après
+    await logMouvementHistorique(req.user.entrepriseId, req.user.sub, {
+      module: 'Poulailler',
+      mouvementId: req.params.id,
+      action: 'modification',
+      raison,
+      anciennesValeurs: before.rows[0],
+      nouvellesValeurs: updated,
+    });
+
+    return res.json({ mouvement: updated });
   } catch (err) {
-    console.error('[DELETE /poulailler/mouvements]', err);
-    return res.status(500).json({ error: 'Erreur lors de la suppression.' });
+    console.error('[PUT /poulailler/mouvements]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour du mouvement.' });
   }
 });
 
@@ -106,7 +166,7 @@ router.delete('/mouvements/:id', authRequired, async (req, res) => {
 
 router.get('/livraisons', authRequired, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT ${LIVRAISON_COLUMNS} FROM poulailler_livraisons WHERE user_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.sub]);
+    const result = await pool.query(`SELECT ${LIVRAISON_COLUMNS} FROM poulailler_livraisons WHERE entreprise_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.entrepriseId]);
     return res.json({ livraisons: result.rows });
   } catch (err) {
     console.error('[GET /poulailler/livraisons]', err);
@@ -119,10 +179,10 @@ router.post('/livraisons', authRequired, async (req, res) => {
   if (!client || !produit) return res.status(400).json({ error: 'client et produit sont requis.' });
   try {
     const result = await pool.query(
-      `INSERT INTO poulailler_livraisons (user_id, date, client, produit, quantite, statut)
-       VALUES ($1, COALESCE($2, CURRENT_DATE), $3, $4, $5, 'En attente')
+      `INSERT INTO poulailler_livraisons (entreprise_id, user_id, date, client, produit, quantite, statut)
+       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, 'En attente')
        RETURNING ${LIVRAISON_COLUMNS}`,
-      [req.user.sub, date || null, client, produit, Number(quantite) || 0]
+      [req.user.entrepriseId, req.user.sub, date || null, client, produit, Number(quantite) || 0]
     );
     return res.status(201).json({ livraison: result.rows[0] });
   } catch (err) {
@@ -136,8 +196,8 @@ router.put('/livraisons/:id', authRequired, async (req, res) => {
   if (!statut) return res.status(400).json({ error: 'statut est requis.' });
   try {
     const result = await pool.query(
-      `UPDATE poulailler_livraisons SET statut = $1 WHERE id = $2 AND user_id = $3 RETURNING ${LIVRAISON_COLUMNS}`,
-      [statut, req.params.id, req.user.sub]
+      `UPDATE poulailler_livraisons SET statut = $1 WHERE id = $2 AND entreprise_id = $3 RETURNING ${LIVRAISON_COLUMNS}`,
+      [statut, req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Livraison introuvable.' });
     return res.json({ livraison: result.rows[0] });
@@ -149,7 +209,7 @@ router.put('/livraisons/:id', authRequired, async (req, res) => {
 
 router.delete('/livraisons/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM poulailler_livraisons WHERE id = $1 AND user_id = $2', [req.params.id, req.user.sub]);
+    await pool.query('DELETE FROM poulailler_livraisons WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /poulailler/livraisons]', err);
@@ -163,7 +223,7 @@ router.delete('/livraisons/:id', authRequired, async (req, res) => {
 
 router.get('/suivi', authRequired, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT ${SUIVI_COLUMNS} FROM poulailler_suivi WHERE user_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.sub]);
+    const result = await pool.query(`SELECT ${SUIVI_COLUMNS} FROM poulailler_suivi WHERE entreprise_id = $1 ORDER BY date DESC, created_at DESC`, [req.user.entrepriseId]);
     return res.json({ suivi: result.rows });
   } catch (err) {
     console.error('[GET /poulailler/suivi]', err);
@@ -176,15 +236,66 @@ router.post('/suivi', authRequired, async (req, res) => {
   if (!type || quantite === undefined) return res.status(400).json({ error: 'type et quantite sont requis.' });
   try {
     const result = await pool.query(
-      `INSERT INTO poulailler_suivi (user_id, date, type, quantite, detail)
-       VALUES ($1, COALESCE($2, CURRENT_DATE), $3, $4, $5)
+      `INSERT INTO poulailler_suivi (entreprise_id, user_id, date, type, quantite, detail)
+       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6)
        RETURNING ${SUIVI_COLUMNS}`,
-      [req.user.sub, date || null, type, Number(quantite) || 0, detail]
+      [req.user.entrepriseId, req.user.sub, date || null, type, Number(quantite) || 0, detail]
     );
     return res.status(201).json({ entry: result.rows[0] });
   } catch (err) {
     console.error('[POST /poulailler/suivi]', err);
     return res.status(500).json({ error: "Erreur lors de l'enregistrement." });
+  }
+});
+
+router.delete('/mouvements/:id', authRequired, async (req, res) => {
+  const { raison } = req.body;
+  if (!raison) {
+    return res.status(400).json({ error: 'La raison de la suppression est requise.' });
+  }
+  try {
+    const before = await pool.query(`SELECT ${MOUVEMENT_COLUMNS} FROM poulailler_mouvements WHERE id = $1 AND entreprise_id = $2`, [req.params.id, req.user.entrepriseId]);
+    if (before.rows.length === 0) {
+      return res.status(404).json({ error: 'Mouvement introuvable.' });
+    }
+
+    await pool.query('DELETE FROM poulailler_mouvements WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    await removeFinanceEntry(req.user.entrepriseId, 'Poulailler', req.params.id);
+
+    // Trace la suppression avec la raison et les valeurs avant suppression
+    await logMouvementHistorique(req.user.entrepriseId, req.user.sub, {
+      module: 'Poulailler',
+      mouvementId: req.params.id,
+      action: 'suppression',
+      raison,
+      anciennesValeurs: before.rows[0],
+      nouvellesValeurs: null,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /poulailler/mouvements]', err);
+    return res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+router.get('/mouvements/:id/historique', authRequired, async (req, res) => {
+  try {
+    const historique = await getMouvementHistorique(req.user.entrepriseId, 'Poulailler', req.params.id);
+    return res.json({ historique });
+  } catch (err) {
+    console.error('[GET /poulailler/mouvements/historique]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
+  }
+});
+
+router.get('/historique', authRequired, async (req, res) => {
+  try {
+    const historique = await getAllMouvementHistorique(req.user.entrepriseId, 'Poulailler');
+    return res.json({ historique });
+  } catch (err) {
+    console.error('[GET /poulailler/historique]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
   }
 });
 
