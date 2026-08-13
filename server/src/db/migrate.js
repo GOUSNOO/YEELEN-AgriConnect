@@ -4,8 +4,11 @@
  * (humidité, température, vanne...) et ajoute l'historique des vannes
  * ainsi que les ventes/achats du module Cultures.
  *
- * Ne touche PAS aux tables users / clients / finances / cultures / recoltes /
+ * Ne touche PAS aux tables users / clients / finances / cultures /
  * poulaillers / lots_volailles / production_oeufs déjà existantes.
+ * `recoltes` (table orpheline pré-existante, jamais requêtée) est étendue
+ * plus bas pour porter le module Récoltes, avec calendar_events (nouvelle)
+ * pour le module Calendrier.
  *
  * Lancer avec : node src/db/migrate.js (depuis le dossier server/)
  */
@@ -194,6 +197,36 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_entreprise_id ON audit_log(entreprise_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+
+-- ═══════════════ Calendrier agricole partagé ═══════════════
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  date          DATE NOT NULL,
+  type          TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  description   TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_entreprise_id ON calendar_events(entreprise_id);
+
+-- ═══════════════ Récoltes ═══════════════
+-- Étend la table recoltes existante (orpheline, jamais requêtée jusqu'ici)
+-- pour coller au formulaire actuel du module Récoltes, au lieu de créer une
+-- table concurrente. culture_id / unite / observations restent inutilisés.
+ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS parcelle    TEXT;
+ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS culture     TEXT;
+ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS qualite     TEXT;
+ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS destination TEXT;
+CREATE INDEX IF NOT EXISTS idx_recoltes_entreprise_id ON recoltes(entreprise_id);
+
+-- ═══════════════ Traçabilité parcelle → récolte → vente (étiquettes, sans gestion de stock) ═══════════════
+ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS parcelle_id INTEGER REFERENCES parcelles(id) ON DELETE SET NULL;
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS recolte_id INTEGER REFERENCES recoltes(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_recoltes_parcelle_id ON recoltes(parcelle_id);
+CREATE INDEX IF NOT EXISTS idx_devis_lignes_recolte_id ON devis_lignes(recolte_id);
 `;
 
 async function migrate() {

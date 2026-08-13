@@ -28,6 +28,7 @@ import {
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument,
   getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis,
   openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
+  getCalendarEvents, createCalendarEvent, getRecoltes, createRecolte,
 } from './lib/api';
 import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
@@ -554,10 +555,11 @@ function DevisModule({ clientsListe }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '' };
+  const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '', recolteId: '' };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [recoltes, setRecoltes] = useState([]);
 
   const [detailId, setDetailId] = useState(null); // devis actuellement affiché en détail
   const [detailData, setDetailData] = useState(null);
@@ -581,6 +583,17 @@ function DevisModule({ clientsListe }) {
   };
 
   useEffect(() => { loadDevis(); }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { recoltes } = await getRecoltes();
+        setRecoltes(recoltes || []);
+      } catch (err) {
+        console.error('[DevisModule recoltes]', err);
+      }
+    })();
+  }, []);
 
   // Ajoute une ligne de produit vide au formulaire
   const addLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
@@ -619,6 +632,7 @@ function DevisModule({ clientsListe }) {
         quantite: Number(l.quantite) || 0,
         prixUnitaire: Number(l.prixUnitaire) || 0,
         remise: Number(l.remise) || 0,
+        recolteId: l.recolteId ? Number(l.recolteId) : null,
       })),
     };
       if (editingId) {
@@ -646,7 +660,7 @@ function DevisModule({ clientsListe }) {
       setForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '' })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '', recolteId: l.recolteId || '' })),
       });
     } catch (err) {
       setApiError(err.message);
@@ -805,14 +819,22 @@ function DevisModule({ clientsListe }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
             {form.lignes.map((ligne, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
-                <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
-                <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
-                <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateLigne(i, 'remise', e.target.value)} />
-                <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                  <Trash2 size={16} />
-                </button>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                  <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
+                  <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
+                  <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
+                  <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateLigne(i, 'remise', e.target.value)} />
+                  <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
+                  <option value="">Aucune</option>
+                  {recoltes.map(r => (
+                    <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
+                  ))}
+                </Select>
               </div>
             ))}
             <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
@@ -898,9 +920,17 @@ function DevisModule({ clientsListe }) {
               <tbody>
                 {detailData.lignes.map(l => {
                   const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0);
+                  const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
                   return (
                     <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                      <td style={{ padding: '6px 0' }}>{l.produit}</td>
+                      <td style={{ padding: '6px 0' }}>
+                        {l.produit}
+                        {recolteLiee && (
+                          <div style={{ fontSize: 11, color: COLORS.inkSoft, marginTop: 2 }}>
+                            🌾 {recolteLiee.parcelle} — {formatDateFr(recolteLiee.date)}
+                          </div>
+                        )}
+                      </td>
                       <td>{l.quantite}</td>
                       <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
                       <td>{(Number(l.remise) || 0).toLocaleString('fr-FR')}</td>
@@ -1176,7 +1206,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       fournisseurId: form.fournisseurId === '__autre__' ? null : Number(form.fournisseurId),
       fournisseurNom: supplierName,
       notes: form.notes,
-      date: new Date().toLocaleDateString('fr-FR'),
+      date: new Date().toISOString().slice(0, 10),
       lignes: form.lignes.map(l => ({
         produit: l.produit,
         quantite: Number(l.quantite),
@@ -1362,7 +1392,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               <tr><td colSpan={4} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
             ) : docs.map(doc => (
               <tr key={doc.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{doc.date}</td>
+                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(doc.date)}</td>
                 <td>{doc.fournisseurNom}</td>
                 <td style={{ fontWeight: 600 }}>{doc.total.toLocaleString('fr-FR')} FCFA</td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
@@ -2596,8 +2626,11 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
 function AgriculturalCalendarModule({ farmId }) {
   const [events, setEvents] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [useRemote, setUseRemote] = useState(true);
+  const [error, setError] = useState('');
   const [viewMonth, setViewMonth] = useState(new Date());
   const [form, setForm] = useState({ date: '', type: 'irrigation', title: '', description: '' });
+  const key = `agri-calendar-${farmId}`;
 
   const buildIsoDate = (date) => {
     const y = date.getFullYear();
@@ -2615,23 +2648,49 @@ function AgriculturalCalendarModule({ farmId }) {
     ];
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const data = await storageGet(`agri-calendar-${farmId}`, defaultEvents);
-      setEvents(data);
+  const loadEvents = useCallback(async () => {
+    try {
+      const data = await getCalendarEvents();
+      if (!data || !Array.isArray(data.events)) {
+        throw new Error('Aucune donnée reçue du serveur.');
+      }
+      setEvents(data.events.map(ev => ({ ...ev, date: String(ev.date).slice(0, 10) })));
+      setUseRemote(true);
+    } catch (err) {
+      console.error('[AgriculturalCalendarModule remote load]', err);
+      setUseRemote(false);
+      const stored = await storageGet(key, defaultEvents);
+      setEvents(stored);
+    } finally {
       setForm(prev => ({ ...prev, date: prev.date || buildIsoDate(new Date()) }));
       setLoaded(true);
-    })();
-  }, [farmId, defaultEvents]);
+    }
+  }, [key, defaultEvents]);
 
   useEffect(() => {
-    if (!loaded) return;
-    storageSet(`agri-calendar-${farmId}`, events);
-  }, [events, farmId, loaded]);
+    loadEvents();
+  }, [loadEvents]);
 
-  const addEvent = (e) => {
+  useEffect(() => {
+    if (!loaded || useRemote) return;
+    storageSet(key, events);
+  }, [events, loaded, useRemote, key]);
+
+  const addEvent = async (e) => {
     e.preventDefault();
     if (!form.date || !form.title) return;
+
+    if (useRemote) {
+      try {
+        await createCalendarEvent(form);
+        await loadEvents();
+        setForm({ date: form.date, type: 'irrigation', title: '', description: '' });
+      } catch (err) {
+        setError(err.message || "Impossible d'enregistrer l'activité.");
+      }
+      return;
+    }
+
     const entry = {
       id: Date.now(),
       date: form.date,
@@ -2676,6 +2735,7 @@ function AgriculturalCalendarModule({ farmId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Planifier une activité</div>
+        {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={addEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label="Type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
@@ -2778,42 +2838,98 @@ function HarvestsModule({ farmId }) {
 
   const [harvests, setHarvests] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [useRemote, setUseRemote] = useState(true);
+  const [error, setError] = useState('');
+  const [parcelles, setParcelles] = useState([]);
   const [form, setForm] = useState({
     date: todayValue(),
-    parcelle: '',
+    parcelleId: '',
+    parcelleNom: '',
     culture: '',
     quantite: '',
     qualite: 'Bonne',
     destination: '',
   });
+  const key = `agri-recoltes-${farmId}`;
+
+  const parcelleNomFinal = form.parcelleId === '__autre__'
+    ? form.parcelleNom
+    : parcelles.find(p => String(p.id) === String(form.parcelleId))?.nom || '';
 
   useEffect(() => {
     (async () => {
-      const data = await storageGet(`agri-recoltes-${farmId}`, []);
-      setHarvests(data);
-      setLoaded(true);
+      try {
+        const { parcelles } = await getParcelles();
+        setParcelles(parcelles || []);
+      } catch (err) {
+        console.error('[HarvestsModule parcelles]', err);
+      }
     })();
-  }, [farmId]);
+  }, []);
+
+  const loadHarvests = useCallback(async () => {
+    try {
+      const data = await getRecoltes();
+      if (!data || !Array.isArray(data.recoltes)) {
+        throw new Error('Aucune donnée reçue du serveur.');
+      }
+      setHarvests(data.recoltes.map(r => ({ ...r, date: String(r.date).slice(0, 10) })));
+      setUseRemote(true);
+    } catch (err) {
+      console.error('[HarvestsModule remote load]', err);
+      setUseRemote(false);
+      const stored = await storageGet(key, []);
+      setHarvests(Array.isArray(stored) ? stored : []);
+    } finally {
+      setLoaded(true);
+    }
+  }, [key]);
 
   useEffect(() => {
-    if (!loaded) return;
-    storageSet(`agri-recoltes-${farmId}`, harvests);
-  }, [harvests, farmId, loaded]);
+    loadHarvests();
+  }, [loadHarvests]);
 
-  const addHarvest = (e) => {
+  useEffect(() => {
+    if (!loaded || useRemote) return;
+    storageSet(key, harvests);
+  }, [harvests, loaded, useRemote, key]);
+
+  const addHarvest = async (e) => {
     e.preventDefault();
-    if (!form.date || !form.parcelle || !form.culture || form.quantite === '' || !form.destination) return;
+    if (!form.date || !parcelleNomFinal || !form.culture || form.quantite === '' || !form.destination) return;
+
+    const resetForm = () => setForm({ date: todayValue(), parcelleId: '', parcelleNom: '', culture: '', quantite: '', qualite: 'Bonne', destination: '' });
+
+    if (useRemote) {
+      try {
+        await createRecolte({
+          date: form.date,
+          parcelle: parcelleNomFinal,
+          parcelleId: form.parcelleId === '__autre__' ? null : (Number(form.parcelleId) || null),
+          culture: form.culture,
+          quantite: form.quantite,
+          qualite: form.qualite,
+          destination: form.destination,
+        });
+        await loadHarvests();
+        resetForm();
+      } catch (err) {
+        setError(err.message || "Impossible d'enregistrer la récolte.");
+      }
+      return;
+    }
+
     const entry = {
       id: Date.now(),
       date: form.date,
-      parcelle: form.parcelle,
+      parcelle: parcelleNomFinal,
       culture: form.culture,
       quantite: Number(form.quantite),
       qualite: form.qualite,
       destination: form.destination,
     };
     setHarvests(prev => [entry, ...prev]);
-    setForm({ date: todayValue(), parcelle: '', culture: '', quantite: '', qualite: 'Bonne', destination: '' });
+    resetForm();
   };
 
   const totalQuantite = harvests.reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
@@ -2826,9 +2942,19 @@ function HarvestsModule({ farmId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Enregistrer une récolte</div>
+        {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={addHarvest} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-          <Field label="Parcelle" placeholder="Ex: Parcelle A" value={form.parcelle} onChange={e => setForm({ ...form, parcelle: e.target.value })} />
+          <Select label="Parcelle" value={form.parcelleId} onChange={e => setForm({ ...form, parcelleId: e.target.value, parcelleNom: '' })}>
+            <option value="">Sélectionner une parcelle...</option>
+            {parcelles.map(p => (
+              <option key={p.id} value={p.id}>{p.nom}</option>
+            ))}
+            <option value="__autre__">Autre parcelle</option>
+          </Select>
+          {form.parcelleId === '__autre__' && (
+            <Field label="Nom de la parcelle" placeholder="Ex: Parcelle A" value={form.parcelleNom} onChange={e => setForm({ ...form, parcelleNom: e.target.value })} />
+          )}
           <Field label="Culture" placeholder="Ex: Maïs" value={form.culture} onChange={e => setForm({ ...form, culture: e.target.value })} />
           <Field label="Quantité récoltée" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
           <Select label="Qualité" value={form.qualite} onChange={e => setForm({ ...form, qualite: e.target.value })}>
@@ -4154,6 +4280,7 @@ export default function App() {
     activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: 'Employés', icon: Briefcase },
     activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark },
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'observations', label: 'Observations', icon: ClipboardList },
     { id: 'profil', label: 'Profil', icon: Settings },
   ].filter(Boolean);
 
@@ -4345,6 +4472,7 @@ export default function App() {
           {tab === 'employees' && <EmployeesModule farmId={user} />}
           {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
           {tab === 'notifications' && <NotificationsModule farmId={user} />}
+          {tab === 'observations' && <ObservationListView />}
           {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
         </div>
       )}

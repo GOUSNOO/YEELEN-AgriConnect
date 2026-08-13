@@ -517,3 +517,27 @@ export async function updateObservation(id, payload) {
 export async function deleteObservation(id) {
   return safeRequest(`/observations/${id}`, { method: 'DELETE' });
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CALENDRIER — activités planifiées
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getCalendarEvents() {
+  return request('/calendar', { method: 'GET' });
+}
+
+export async function createCalendarEvent(payload) {
+  return safeRequest('/calendar', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RÉCOLTES
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getRecoltes() {
+  return request('/recoltes', { method: 'GET' });
+}
+
+export async function createRecolte(payload) {
+  return safeRequest('/recoltes', { method: 'POST', body: JSON.stringify(payload) });
+}

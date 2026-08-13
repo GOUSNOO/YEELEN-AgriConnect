@@ -17,6 +17,17 @@ const DEVIS_COLUMNS = `
   d.created_at AS "createdAt"
 `;
 
+// Ne garde qu'un recolte_id qui appartient réellement à l'entreprise appelante (isolation multi-tenant)
+async function validerRecolteIds(dbClient, lignes, entrepriseId) {
+  const ids = [...new Set(lignes.map(l => l.recolteId).filter(Boolean))];
+  if (ids.length === 0) return new Set();
+  const result = await dbClient.query(
+    'SELECT id FROM recoltes WHERE id = ANY($1::int[]) AND entreprise_id = $2',
+    [ids, entrepriseId]
+  );
+  return new Set(result.rows.map(r => r.id));
+}
+
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
 async function genererNumero(entrepriseId) {
   const year = new Date().getFullYear();
@@ -37,7 +48,7 @@ async function getDevisComplet(devisId, entrepriseId) {
   );
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
-    `SELECT id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise
+    `SELECT id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise, recolte_id AS "recolteId"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
@@ -100,12 +111,13 @@ router.post('/', authRequired, async (req, res) => {
       [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null]
     );
     const devisId = devisResult.rows[0].id;
+    const recolteIdsValides = await validerRecolteIds(client, lignes, req.user.entrepriseId);
 
     for (let i = 0; i < lignes.length; i++) {
       const l = lignes[i];
       await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [devisId, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i]
+        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [devisId, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i, recolteIdsValides.has(l.recolteId) ? l.recolteId : null]
       );
     }
 
@@ -148,11 +160,12 @@ router.put('/:id', authRequired, async (req, res) => {
 
     if (Array.isArray(lignes)) {
       await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
+      const recolteIdsValides = await validerRecolteIds(client, lignes, req.user.entrepriseId);
       for (let i = 0; i < lignes.length; i++) {
         const l = lignes[i];
         await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [req.params.id, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i]
+          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [req.params.id, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i, recolteIdsValides.has(l.recolteId) ? l.recolteId : null]
         );
       }
     }
@@ -257,7 +270,7 @@ router.get('/public/:token', async (req, res) => {
 
     const devis = devisResult.rows[0];
     const lignesResult = await pool.query(
-      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise
+      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise, recolte_id AS "recolteId"
        FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
       [devis.id]
     );
@@ -493,7 +506,7 @@ router.get('/public/:token/pdf', async (req, res) => {
 
     const devis = devisResult.rows[0];
     const lignesResult = await pool.query(
-      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise
+      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise, recolte_id AS "recolteId"
        FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
       [devis.id]
     );
