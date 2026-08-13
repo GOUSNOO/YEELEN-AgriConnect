@@ -227,6 +227,25 @@ ALTER TABLE recoltes ADD COLUMN IF NOT EXISTS parcelle_id INTEGER REFERENCES par
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS recolte_id INTEGER REFERENCES recoltes(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_recoltes_parcelle_id ON recoltes(parcelle_id);
 CREATE INDEX IF NOT EXISTS idx_devis_lignes_recolte_id ON devis_lignes(recolte_id);
+
+-- ═══════════════ Observations (notes de terrain) ═══════════════
+-- Reprend migrations/001_create_observations_table.sql (FK déjà corrigée vers users,
+-- pas utilisateurs) — repliée ici pour que cette table soit créée automatiquement
+-- partout où ce script tourne, au lieu de devoir être appliquée à la main.
+CREATE TABLE IF NOT EXISTS observations (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  date_observation  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  notes             TEXT NOT NULL,
+  localisation      VARCHAR(255),
+  created_at        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_observations_entreprise_id ON observations(entreprise_id);
+
+-- ═══════════════ Assistant de configuration (banque/salarié) — confirmation explicite ═══════════════
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS banque_non_requise BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS salarie_non_requis BOOLEAN NOT NULL DEFAULT FALSE;
 `;
 
 async function migrate() {

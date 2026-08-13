@@ -55,12 +55,12 @@ export function ToastContainer() {
   );
 }
 
-export function Card({ children, style }) {
+export function Card({ children, style, ...rest }) {
   return (
     <div style={{
       background: '#FFFFFF', border: '1px solid #DAD6C4',
       borderRadius: 14, padding: '18px 20px', ...style
-    }}>
+    }} {...rest}>
       {children}
     </div>
   );

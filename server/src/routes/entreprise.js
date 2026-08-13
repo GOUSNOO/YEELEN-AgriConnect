@@ -79,4 +79,47 @@ router.put('/banque-principale', authRequired, requireRole('admin'), async (req,
   }
 });
 
+// Calcule si l'assistant "Configurer votre entreprise" (banque + salarié) peut être considéré comme fait :
+// soit une vraie donnée existe, soit l'utilisateur a explicitement confirmé qu'il n'en a pas besoin.
+router.get('/onboarding-status', authRequired, async (req, res) => {
+  try {
+    const [entrepriseResult, banqueResult, salarieResult] = await Promise.all([
+      pool.query('SELECT banque_non_requise AS "banqueNonRequise", salarie_non_requis AS "salarieNonRequis" FROM entreprises WHERE id = $1', [req.user.entrepriseId]),
+      pool.query('SELECT EXISTS(SELECT 1 FROM banques WHERE entreprise_id = $1) AS "hasBanque"', [req.user.entrepriseId]),
+      pool.query("SELECT EXISTS(SELECT 1 FROM salaries WHERE entreprise_id = $1 AND statut != 'Inactif') AS \"hasSalarie\"", [req.user.entrepriseId]),
+    ]);
+    if (entrepriseResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Entreprise introuvable.' });
+    }
+    const { banqueNonRequise, salarieNonRequis } = entrepriseResult.rows[0];
+    const { hasBanque } = banqueResult.rows[0];
+    const { hasSalarie } = salarieResult.rows[0];
+    return res.json({
+      banqueOk: hasBanque || banqueNonRequise,
+      salarieOk: hasSalarie || salarieNonRequis,
+    });
+  } catch (err) {
+    console.error('[GET /entreprise/onboarding-status]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération du statut de configuration." });
+  }
+});
+
+// Réservé à admin/directeur : ce sont eux qui confirment que la config est volontairement incomplète.
+router.put('/onboarding-status', authRequired, requireRole('admin', 'directeur'), async (req, res) => {
+  const { banqueNonRequise, salarieNonRequis } = req.body;
+  try {
+    await pool.query(
+      `UPDATE entreprises SET
+         banque_non_requise = COALESCE($1, banque_non_requise),
+         salarie_non_requis = COALESCE($2, salarie_non_requis)
+       WHERE id = $3`,
+      [banqueNonRequise ?? null, salarieNonRequis ?? null, req.user.entrepriseId]
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUT /entreprise/onboarding-status]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  }
+});
+
 export default router;

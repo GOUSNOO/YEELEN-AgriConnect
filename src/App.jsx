@@ -29,6 +29,7 @@ import {
   getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis,
   openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
   getCalendarEvents, createCalendarEvent, getRecoltes, createRecolte,
+  getOnboardingStatus, updateOnboardingStatus,
 } from './lib/api';
 import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
@@ -4215,6 +4216,23 @@ export default function App() {
     };
   }, []);
 
+  // Seuls admin/directeur voient l'assistant "Configurer votre entreprise" ; pour les autres
+  // rôles on ne l'affiche jamais et on ne fait même pas l'appel réseau. L'état vient du serveur
+  // (pas de localStorage) car c'est un fait qui appartient à l'entreprise, pas au navigateur.
+  const checkOnboardingNeeded = async (uiRole) => {
+    if (uiRole !== 'admin' && uiRole !== 'directeur') {
+      setIsOnboarding(false);
+      return;
+    }
+    try {
+      const { banqueOk, salarieOk } = await getOnboardingStatus();
+      setIsOnboarding(!(banqueOk && salarieOk));
+    } catch (err) {
+      console.error('[checkOnboardingNeeded]', err);
+      setIsOnboarding(false);
+    }
+  };
+
   const handleAuth = async (mode, email, password, extra, mfaCode) => {
   const authResult = mode === 'login'
     ? await login(email, password, mfaCode)
@@ -4229,6 +4247,7 @@ export default function App() {
   const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
   setUser(authResult.user.email);
   setRole(uiRole);
+  await checkOnboardingNeeded(uiRole);
   setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
   if (!selectedConfig.permissions.includes('modules')) {
     setTab('accueil');
@@ -4265,23 +4284,45 @@ export default function App() {
   setScreen('onboarding-salaries');
   };
 
+  // Confirme explicitement (côté serveur) qu'une étape de l'assistant n'est pas nécessaire,
+  // pour que l'assistant ne réapparaisse plus à la prochaine connexion sur ce point.
+  const confirmerPasDeBanque = async () => {
+    try {
+      await updateOnboardingStatus({ banqueNonRequise: true });
+    } catch (err) {
+      console.error('[confirmerPasDeBanque]', err);
+    }
+    goToOnboardingSalaries();
+  };
+
+  const confirmerPasDeSalarie = async () => {
+    try {
+      await updateOnboardingStatus({ salarieNonRequis: true });
+    } catch (err) {
+      console.error('[confirmerPasDeSalarie]', err);
+    }
+    goToDashboard();
+  };
+
   const roleConfig = ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.admin;
+  // `category` ne pilote encore aucun affichage (pas de sidebar/groupement pour l'instant) —
+  // préparation de données pour une future navigation groupée, sans changement visuel aujourd'hui.
   const availableTabs = [
-    roleConfig.permissions.includes('home') && { id: 'accueil', label: 'Accueil', icon: Home },
-    roleConfig.permissions.includes('calendar') && { id: 'calendar', label: 'Calendrier', icon: CalendarDays },
-    roleConfig.permissions.includes('recoltes') && { id: 'recoltes', label: 'Récoltes', icon: Package },
-    roleConfig.permissions.includes('assistant') && { id: 'assistant', label: 'Assistant IA', icon: Search },
-    roleConfig.permissions.includes('assistant') && { id: 'forecasting', label: 'Prévisions', icon: TrendingUp },
-    roleConfig.permissions.includes('reports') && { id: 'reports', label: 'Rapports', icon: FileText },
-    activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: 'Cultures & irrigation', icon: Sprout },
-    activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: 'Poulailler', icon: Egg },
-    activated.clients && roleConfig.permissions.includes('clients') && { id: 'clients', label: 'Clients', icon: Users },
-    activated.fournisseurs && roleConfig.permissions.includes('fournisseurs') && { id: 'fournisseurs', label: 'Fournisseurs', icon: Truck },
-    activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: 'Employés', icon: Briefcase },
-    activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark },
-    activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'observations', label: 'Observations', icon: ClipboardList },
-    { id: 'profil', label: 'Profil', icon: Settings },
+    roleConfig.permissions.includes('home') && { id: 'accueil', label: 'Accueil', icon: Home, category: null },
+    roleConfig.permissions.includes('calendar') && { id: 'calendar', label: 'Calendrier', icon: CalendarDays, category: 'operations' },
+    roleConfig.permissions.includes('recoltes') && { id: 'recoltes', label: 'Récoltes', icon: Package, category: 'operations' },
+    roleConfig.permissions.includes('assistant') && { id: 'assistant', label: 'Assistant IA', icon: Search, category: 'analyse' },
+    roleConfig.permissions.includes('assistant') && { id: 'forecasting', label: 'Prévisions', icon: TrendingUp, category: 'analyse' },
+    roleConfig.permissions.includes('reports') && { id: 'reports', label: 'Rapports', icon: FileText, category: 'analyse' },
+    activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: 'Cultures & irrigation', icon: Sprout, category: 'operations' },
+    activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: 'Poulailler', icon: Egg, category: 'operations' },
+    activated.clients && roleConfig.permissions.includes('clients') && { id: 'clients', label: 'Clients', icon: Users, category: 'commercial' },
+    activated.fournisseurs && roleConfig.permissions.includes('fournisseurs') && { id: 'fournisseurs', label: 'Fournisseurs', icon: Truck, category: 'commercial' },
+    activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: 'Employés', icon: Briefcase, category: 'rh' },
+    activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark, category: 'finance' },
+    activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell, category: 'operations' },
+    { id: 'observations', label: 'Observations', icon: ClipboardList, category: 'operations' },
+    { id: 'profil', label: 'Profil', icon: Settings, category: null },
   ].filter(Boolean);
 
   useEffect(() => {
@@ -4300,7 +4341,7 @@ export default function App() {
         const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
         setUser(user.email);
         setRole(uiRole);
-        setIsOnboarding(true);
+        await checkOnboardingNeeded(uiRole);
         setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
         if (!selectedConfig.permissions.includes('modules')) {
           setTab('accueil');
@@ -4319,7 +4360,7 @@ export default function App() {
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .app-shell { max-width: 1500px; margin: 0 auto; }
-        .topbar { background: rgba(255,255,255,0.96); backdrop-filter: blur(10px); box-shadow: 0 6px 24px rgba(20,35,24,0.06); }
+        .topbar { background: #FFFFFF; box-shadow: 0 6px 24px rgba(20,35,24,0.06); }
         .dashboard-shell { max-width: 1500px; margin: 0 auto; }
         .nav-chip { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .nav-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,24,0.08); }
@@ -4329,7 +4370,7 @@ export default function App() {
       `}</style>
 
       {screen !== 'login' && (
-        <div>
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: COLORS.bg }}>
           <div className="topbar" style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
             padding: '14px 22px', borderBottom: `1px solid ${COLORS.border}`
@@ -4363,6 +4404,25 @@ export default function App() {
               {pendingSyncCount > 0 ? `${pendingSyncCount} modification(s) à synchroniser` : lastSync ? `Dernière synchronisation : ${new Date(lastSync).toLocaleString('fr-FR')}` : 'Aucune synchronisation enregistrée'}
             </span>
           </div>
+          {screen === 'dashboard' && availableTabs.length > 1 && (
+            <div style={{ padding: '10px 22px 16px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', rowGap: 8, maxWidth: '100%', overflowX: 'auto' }}>
+              {availableTabs.map(t => {
+                const Icon = t.icon;
+                const active = tab === t.id;
+                return (
+                  <button key={t.id} onClick={() => setTab(t.id)} className="nav-chip" style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 15.5, fontWeight: 700,
+                    padding: '12px 24px', minHeight: 46, borderRadius: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                    border: `1px solid ${active ? COLORS.ink : COLORS.border}`,
+                    background: active ? COLORS.ink : COLORS.surface, color: active ? '#fff' : COLORS.ink,
+                    boxShadow: active ? '0 4px 10px rgba(20,35,24,0.08)' : 'none'
+                  }}>
+                    <Icon size={15} /> {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -4405,8 +4465,8 @@ export default function App() {
     </div>
     <BanquesModule />
     <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
-      <Button variant="ghost" onClick={goToOnboardingSalaries}>
-        Passer cette étape
+      <Button variant="ghost" onClick={confirmerPasDeBanque}>
+        Je n'ai pas de compte bancaire (caisse uniquement)
       </Button>
       <Button variant="default" onClick={goToOnboardingSalaries}>
         Suivant <ChevronRight size={16} />
@@ -4428,8 +4488,8 @@ export default function App() {
     </div>
     <EmployeesModule farmId={user} />
     <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
-      <Button variant="ghost" onClick={goToDashboard}>
-        Passer cette étape
+      <Button variant="ghost" onClick={confirmerPasDeSalarie}>
+        Je travaille seul, pas de salarié à ajouter
       </Button>
       <Button variant="default" onClick={goToDashboard}>
         Terminer <Check size={16} />
@@ -4440,25 +4500,6 @@ export default function App() {
 
       {screen === 'dashboard' && (
         <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
-          {availableTabs.length > 1 && (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center', rowGap: 8, maxWidth: '100%', overflowX: 'auto', paddingBottom: 2 }}>
-              {availableTabs.map(t => {
-                const Icon = t.icon;
-                const active = tab === t.id;
-                return (
-                  <button key={t.id} onClick={() => setTab(t.id)} className="nav-chip" style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 15.5, fontWeight: 700,
-                    padding: '12px 24px', minHeight: 46, borderRadius: 12, cursor: 'pointer', whiteSpace: 'nowrap',
-                    border: `1px solid ${active ? COLORS.ink : COLORS.border}`,
-                    background: active ? COLORS.ink : COLORS.surface, color: active ? '#fff' : COLORS.ink,
-                    boxShadow: active ? '0 4px 10px rgba(20,35,24,0.08)' : 'none'
-                  }}>
-                    <Icon size={15} /> {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
           {tab === 'accueil' && <HomeOverview farmId={user} activated={activated} />}
           {tab === 'calendar' && <AgriculturalCalendarModule farmId={user} />}
           {tab === 'recoltes' && <HarvestsModule farmId={user} />}

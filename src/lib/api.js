@@ -346,6 +346,16 @@ export async function setBanquePrincipale(banqueId) {
   return request('/entreprise/banque-principale', { method: 'PUT', body: JSON.stringify({ banqueId }) });
 }
 
+// Statut de l'assistant "Configurer votre entreprise" (banque + salarié)
+export async function getOnboardingStatus() {
+  return request('/entreprise/onboarding-status', { method: 'GET' });
+}
+
+// Réservé à admin/directeur : confirme explicitement qu'une étape n'est pas nécessaire
+export async function updateOnboardingStatus(payload) {
+  return request('/entreprise/onboarding-status', { method: 'PUT', body: JSON.stringify(payload) });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // FOURNISSEURS
 // ─────────────────────────────────────────────────────────────────────
