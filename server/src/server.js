@@ -16,6 +16,7 @@ import observationsRoutes from "./routes/observations.js"; // <-- AJOUTÉ
 import planningRoutes from "./routes/planning.js";
 import calendarRoutes from "./routes/calendar.js";
 import recoltesRoutes from "./routes/recoltes.js";
+import feedbackRoutes from "./routes/feedback.js";
 
 
 dotenv.config();
@@ -39,6 +40,7 @@ app.use("/api/observations", observationsRoutes); // <-- AJOUTÉ
 app.use("/api/planning", planningRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/recoltes", recoltesRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
 app.get("/", (req, res) => {
   res.json({

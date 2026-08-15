@@ -1,6 +1,7 @@
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import { syncAchatDocumentFinance, updateAchatDocumentFinance, removeFinanceEntry } from '../utils/financeSync.js';
 
 const router = express.Router();
 
@@ -47,6 +48,33 @@ router.get('/', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[GET /achats]', err);
     return res.status(500).json({ error: 'Erreur lors de la récupération des achats.' });
+  }
+});
+
+// Achats en lignes individuelles (une ligne par produit), pour alimenter le sous-onglet
+// Comptabilité de chaque module — remplace l'ancienne source cultures_mouvements/
+// poulailler_mouvements, jamais alimentée par ce formulaire multi-lignes.
+router.get('/ledger', authRequired, async (req, res) => {
+  const { module } = req.query;
+  if (!module) {
+    return res.status(400).json({ error: 'Le module est requis (Cultures ou Poulailler).' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT al.id, ad.date, al.produit,
+              ad.fournisseur_nom AS partenaire,
+              al.quantite::float8 AS quantite,
+              al.prix_unitaire::float8 AS "prixUnitaire"
+       FROM achats_lignes al
+       JOIN achats_documents ad ON ad.id = al.document_id
+       WHERE ad.entreprise_id = $1 AND ad.module = $2
+       ORDER BY ad.date DESC, al.ordre ASC`,
+      [req.user.entrepriseId, module]
+    );
+    return res.json({ mouvements: result.rows });
+  } catch (err) {
+    console.error('[GET /achats/ledger]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique des achats." });
   }
 });
 
@@ -97,6 +125,9 @@ router.post('/', authRequired, async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await syncAchatDocumentFinance(req.user.entrepriseId, req.user.sub, {
+      module, total, fournisseurNom: fournisseurNom || null, documentId,
+    });
     const document = await getDocumentComplete(documentId, req.user.entrepriseId);
     return res.status(201).json({ document });
   } catch (err) {
@@ -151,6 +182,9 @@ router.put('/:id', authRequired, async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await updateAchatDocumentFinance(req.user.entrepriseId, module, req.params.id, {
+      total, fournisseurNom: fournisseurNom || null,
+    });
     const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
     return res.json({ document });
   } catch (err) {
@@ -168,12 +202,13 @@ router.delete('/:id', authRequired, async (req, res) => {
     // via document_id) : il faut vérifier l'appartenance du document AVANT de
     // supprimer ses lignes, sinon n'importe quel utilisateur authentifié pourrait
     // effacer les lignes d'un document d'une autre entreprise en devinant son id.
-    const check = await pool.query('SELECT id FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await pool.query('SELECT id, module FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) {
       return res.status(404).json({ error: 'Document d\'achat introuvable.' });
     }
     await pool.query('DELETE FROM achats_lignes WHERE document_id = $1', [req.params.id]);
     await pool.query('DELETE FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    await removeFinanceEntry(req.user.entrepriseId, check.rows[0].module, req.params.id);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /achats/:id]', err);

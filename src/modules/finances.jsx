@@ -125,13 +125,19 @@ export function FinancesModule({ role }) {
     }
   };
 
+  // Une ligne est une "dépense" si sa catégorie l'indique (saisie manuelle, montant
+  // toujours positif dans ce cas) OU si son montant est négatif (achats synchronisés
+  // automatiquement depuis Cultures/Poulailler, qui gardent Caisse/Banque comme
+  // catégorie — nécessaire pour que les soldes par compte restent exacts).
+  const isDepenseEntry = (e) => CATEGORIES_DEPENSES.includes(e.categorie) || Number(e.montant) < 0;
+
   const totalCaisse = entries.filter(e => e.categorie === 'Caisse').reduce((s, e) => s + Number(e.montant), 0);
   const totalBanque = entries.filter(e => e.categorie === 'Banque').reduce((s, e) => s + Number(e.montant), 0);
-  const totalDepenses = entries.filter(e => CATEGORIES_DEPENSES.includes(e.categorie)).reduce((s, e) => s + Number(e.montant), 0);
-  const totalRevenus = entries.filter(e => CATEGORIES_REVENUS.includes(e.categorie)).reduce((s, e) => s + Number(e.montant), 0);
+  const totalDepenses = entries.filter(isDepenseEntry).reduce((s, e) => s + Math.abs(Number(e.montant)), 0);
+  const totalRevenus = entries.filter(e => !isDepenseEntry(e)).reduce((s, e) => s + Math.abs(Number(e.montant)), 0);
   const beneficeNet = totalRevenus - totalDepenses;
-  const chartRevenus = entries.filter(e => CATEGORIES_REVENUS.includes(e.categorie)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Number(e.montant) })).reverse();
-  const chartDepenses = entries.filter(e => CATEGORIES_DEPENSES.includes(e.categorie)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Number(e.montant) })).reverse();
+  const chartRevenus = entries.filter(e => !isDepenseEntry(e)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Math.abs(Number(e.montant)) })).reverse();
+  const chartDepenses = entries.filter(isDepenseEntry).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Math.abs(Number(e.montant)) })).reverse();
 
   const soldesParBanque = useMemo(() => {
     return banques.map(b => {
@@ -275,7 +281,7 @@ export function FinancesModule({ role }) {
               <tr><td colSpan={5} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>Aucune operation enregistree.</td></tr>
             )}
             {entries.map(entry => {
-              const isDepense = CATEGORIES_DEPENSES.includes(entry.categorie);
+              const isDepense = isDepenseEntry(entry);
               const dateLabel = entry.date ? String(entry.date).slice(0, 10) : '-';
               return (
                 <tr key={entry.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
@@ -286,7 +292,7 @@ export function FinancesModule({ role }) {
                   </td>
                   <td style={{ color: COLORS.inkSoft }}>{entry.description}</td>
                   <td style={{ fontWeight: 600, color: isDepense ? COLORS.red : COLORS.green }}>
-                    {isDepense ? '-' : '+'}{Number(entry.montant).toLocaleString('fr-FR')} FCFA
+                    {isDepense ? '-' : '+'}{Math.abs(Number(entry.montant)).toLocaleString('fr-FR')} FCFA
                   </td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }}>
                     <button onClick={() => removeEntry(entry.id, entry.description)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>

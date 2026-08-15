@@ -50,6 +50,46 @@ export async function updateFinanceEntry(entrepriseId, module, mouvementId, { ty
   }
 }
 
+// Version "document multi-lignes" de syncFinanceEntry, pour les achats enregistrés via
+// AchatModule (achats_documents/achats_lignes) — le montant est déjà le total du document,
+// pas à recalculer depuis une seule ligne quantite/prixUnitaire.
+export async function syncAchatDocumentFinance(entrepriseId, userId, { module, total, fournisseurNom, documentId }) {
+  const montant = -Math.max(0, Number(total) || 0);
+  const description = `Achat — ${fournisseurNom || 'Fournisseur'} (${module})`;
+
+  try {
+    const entrepriseResult = await pool.query(
+      'SELECT banque_principale_id FROM entreprises WHERE id = $1',
+      [entrepriseId]
+    );
+    const banquePrincipaleId = entrepriseResult.rows[0]?.banque_principale_id || null;
+    const categorie = banquePrincipaleId ? 'Banque' : 'Caisse';
+
+    await pool.query(
+      `INSERT INTO finances (entreprise_id, user_id, type, montant, description, source_module, source_mouvement_id, banque_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [entrepriseId, userId, categorie, montant, description, module, documentId, banquePrincipaleId]
+    );
+  } catch (err) {
+    console.error('[syncAchatDocumentFinance]', err);
+  }
+}
+
+export async function updateAchatDocumentFinance(entrepriseId, module, documentId, { total, fournisseurNom }) {
+  const montant = -Math.max(0, Number(total) || 0);
+  const description = `Achat — ${fournisseurNom || 'Fournisseur'} (${module})`;
+
+  try {
+    await pool.query(
+      `UPDATE finances SET montant = $1, description = $2
+       WHERE entreprise_id = $3 AND source_module = $4 AND source_mouvement_id = $5`,
+      [montant, description, entrepriseId, module, documentId]
+    );
+  } catch (err) {
+    console.error('[updateAchatDocumentFinance]', err);
+  }
+}
+
 export async function removeFinanceEntry(entrepriseId, module, mouvementId) {
   try {
     await pool.query(

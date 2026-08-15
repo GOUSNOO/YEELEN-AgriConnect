@@ -51,4 +51,32 @@ router.post("/", authRequired, async (req, res) => {
     }
 });
 
+/**
+ * @route PUT /api/calendar/:id
+ * @description Modifie une activité existante (correction d'une erreur de saisie), pour l'entreprise de l'utilisateur connecté.
+ * @requires authRequired
+ */
+router.put("/:id", authRequired, async (req, res) => {
+    const { date, type, title, description } = req.body;
+    try {
+        const result = await pool.query(
+            `UPDATE calendar_events SET
+               date = COALESCE($1, date),
+               type = COALESCE($2, type),
+               title = COALESCE($3, title),
+               description = COALESCE($4, description)
+             WHERE id = $5 AND entreprise_id = $6
+             RETURNING ${EVENT_COLUMNS}`,
+            [date, type, title, description, req.params.id, req.user.entrepriseId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Activité introuvable." });
+        }
+        res.status(200).json({ event: result.rows[0] });
+    } catch (err) {
+        console.error("[PUT /calendar]", err);
+        res.status(500).json({ error: "Erreur lors de la mise à jour de l'activité." });
+    }
+});
+
 export default router;

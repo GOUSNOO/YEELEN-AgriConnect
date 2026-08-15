@@ -29,6 +29,8 @@ const MOUVEMENT_COLUMNS = `
   created_at AS "createdAt"
 `;
 
+const STOCK_COLUMNS = `id, nom, categorie, quantite::float8 AS quantite, unite, seuil::float8 AS seuil, created_at AS "createdAt"`;
+
 // ═══════════════════════════════════════════════════════════
 //  PARCELLES
 // ═══════════════════════════════════════════════════════════
@@ -296,6 +298,70 @@ router.get('/historique-mouvements', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[GET /cultures/historique-mouvements]', err);
     return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  STOCKS (semences, engrais, produits phytosanitaires...)
+// ═══════════════════════════════════════════════════════════
+
+router.get('/stocks', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT ${STOCK_COLUMNS} FROM cultures_stocks WHERE entreprise_id = $1 ORDER BY id ASC`, [req.user.entrepriseId]);
+    return res.json({ stocks: result.rows });
+  } catch (err) {
+    console.error('[GET /cultures/stocks]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des stocks.' });
+  }
+});
+
+router.post('/stocks', authRequired, async (req, res) => {
+  const { nom, categorie = 'Semences', quantite = 0, unite = '', seuil = 0 } = req.body;
+  if (!nom) return res.status(400).json({ error: 'Le nom est requis.' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO cultures_stocks (entreprise_id, user_id, nom, categorie, quantite, unite, seuil)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${STOCK_COLUMNS}`,
+      [req.user.entrepriseId, req.user.sub, nom, categorie, Number(quantite) || 0, unite, Number(seuil) || 0]
+    );
+    return res.status(201).json({ stock: result.rows[0] });
+  } catch (err) {
+    console.error('[POST /cultures/stocks]', err);
+    return res.status(500).json({ error: 'Erreur lors de la création du stock.' });
+  }
+});
+
+router.put('/stocks/:id', authRequired, async (req, res) => {
+  const { nom, categorie, quantite, unite, seuil } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE cultures_stocks SET
+         nom = COALESCE($1, nom),
+         categorie = COALESCE($2, categorie),
+         quantite = COALESCE($3, quantite),
+         unite = COALESCE($4, unite),
+         seuil = COALESCE($5, seuil)
+       WHERE id = $6 AND entreprise_id = $7
+       RETURNING ${STOCK_COLUMNS}`,
+      [nom, categorie, quantite, unite, seuil, req.params.id, req.user.entrepriseId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Stock introuvable.' });
+    }
+    return res.json({ stock: result.rows[0] });
+  } catch (err) {
+    console.error('[PUT /cultures/stocks]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  }
+});
+
+router.delete('/stocks/:id', authRequired, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM cultures_stocks WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /cultures/stocks]', err);
+    return res.status(500).json({ error: 'Erreur lors de la suppression.' });
   }
 });
 

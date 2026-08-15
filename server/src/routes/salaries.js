@@ -12,8 +12,9 @@ const SALARIE_COLUMNS = `
   s.id, s.nom, s.prenom, s.poste, s.date_embauche AS "dateEmbauche",
   s.salaire::float8 AS salaire, s.presence,
   s.avances::float8 AS avances, s.conges::float8 AS conges,
+  s.email, s.telephone, s.adresse,
   s.statut, s.created_at AS "createdAt",
-  u.email, eu.role
+  u.email AS "compteEmail", eu.role
 `;
 
 // ═══════════════════════════════════════════════════════════
@@ -46,14 +47,15 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
   const {
     nom, prenom, poste, dateEmbauche, salaire,
     presence, avances, conges,
-    createAccount, email, password, role,
+    email, telephone, adresse,
+    createAccount, compteEmail, password, role,
   } = req.body;
 
   if (!nom || !prenom) {
     return res.status(400).json({ error: 'Nom et prénom requis.' });
   }
-  if (createAccount && (!email || !password || !role)) {
-    return res.status(400).json({ error: 'Email, mot de passe et rôle requis pour créer un compte.' });
+  if (createAccount && (!compteEmail || !password || !role)) {
+    return res.status(400).json({ error: 'Email de connexion, mot de passe et rôle requis pour créer un compte.' });
   }
 
   const client = await pool.connect();
@@ -62,7 +64,7 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
     let userId = null;
 
     if (createAccount) {
-      const existing = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+      const existing = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [compteEmail]);
       if (existing.rows.length > 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({ error: 'Un utilisateur avec cet email existe déjà.' });
@@ -71,7 +73,7 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
       const passwordHash = await bcrypt.hash(password, 10);
       const userResult = await client.query(
         `INSERT INTO users (email, role, password) VALUES ($1, $2, $3) RETURNING id`,
-        [email.toLowerCase(), role, passwordHash]
+        [compteEmail.toLowerCase(), role, passwordHash]
       );
       userId = userResult.rows[0].id;
 
@@ -83,12 +85,13 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
     }
 
     const salarieResult = await client.query(
-      `INSERT INTO salaries (entreprise_id, user_id, nom, prenom, poste, date_embauche, salaire, presence, avances, conges, statut)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Actif')
+      `INSERT INTO salaries (entreprise_id, user_id, nom, prenom, poste, date_embauche, salaire, presence, avances, conges, email, telephone, adresse, statut)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'Actif')
        RETURNING id`,
       [
         req.user.entrepriseId, userId, nom, prenom, poste || null, dateEmbauche || null,
         Number(salaire) || 0, presence || 'Présent', Number(avances) || 0, Number(conges) || 0,
+        email || null, telephone || null, adresse || null,
       ]
     );
 
@@ -98,10 +101,10 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
       await logAuditEvent({
         entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,
         action: 'account_created', req,
-        details: { targetUserId: userId, targetEmail: email, role },
+        details: { targetUserId: userId, targetEmail: compteEmail, role },
       });
       try {
-        await sendWelcomeEmail(email, password, prenom);
+        await sendWelcomeEmail(compteEmail, password, prenom);
       } catch (mailErr) {
         console.error('[POST /salaries] email non envoyé', mailErr);
       }
@@ -132,7 +135,7 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.put('/:id', authRequired, requireRole('admin'), async (req, res) => {
-  const { nom, prenom, poste, dateEmbauche, salaire, presence, avances, conges, statut } = req.body;
+  const { nom, prenom, poste, dateEmbauche, salaire, presence, avances, conges, email, telephone, adresse, statut } = req.body;
   try {
     const before = await pool.query(
       'SELECT statut, user_id FROM salaries WHERE id = $1 AND entreprise_id = $2',
@@ -153,10 +156,13 @@ router.put('/:id', authRequired, requireRole('admin'), async (req, res) => {
          presence = COALESCE($6, presence),
          avances = COALESCE($7, avances),
          conges = COALESCE($8, conges),
-         statut = COALESCE($9, statut)
-       WHERE id = $10 AND entreprise_id = $11
+         email = COALESCE($9, email),
+         telephone = COALESCE($10, telephone),
+         adresse = COALESCE($11, adresse),
+         statut = COALESCE($12, statut)
+       WHERE id = $13 AND entreprise_id = $14
        RETURNING id`,
-      [nom, prenom, poste, dateEmbauche, salaire, presence, avances, conges, statut, req.params.id, req.user.entrepriseId]
+      [nom, prenom, poste, dateEmbauche, salaire, presence, avances, conges, email, telephone, adresse, statut, req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Salarié introuvable.' });

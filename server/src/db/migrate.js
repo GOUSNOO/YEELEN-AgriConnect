@@ -70,17 +70,40 @@ CREATE INDEX IF NOT EXISTS idx_parcelles_historique_parcelle_id ON parcelles_his
 CREATE INDEX IF NOT EXISTS idx_cultures_mouvements_type ON cultures_mouvements(type);
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
 
+-- Stocks du module Cultures (semences, engrais, produits phytosanitaires...)
+-- Même forme que poulailler_stocks, mais entreprise_id dès la création (voir
+-- le correctif appliqué à poulailler_stocks plus bas pour le même besoin).
+CREATE TABLE IF NOT EXISTS cultures_stocks (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  nom           TEXT NOT NULL,
+  categorie     TEXT NOT NULL DEFAULT 'Semences',
+  quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  unite         TEXT,
+  seuil         NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cultures_stocks_entreprise_id ON cultures_stocks(entreprise_id);
+
 -- ═══════════════ Module Poulailler ═══════════════
 -- Stocks (aliments, œufs, volailles vivantes...)
 CREATE TABLE IF NOT EXISTS poulailler_stocks (
-  id         SERIAL PRIMARY KEY,
-  nom        TEXT NOT NULL,
-  categorie  TEXT NOT NULL DEFAULT 'Aliment',
-  quantite   NUMERIC(12, 2) NOT NULL DEFAULT 0,
-  unite      TEXT,
-  seuil      NUMERIC(12, 2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom           TEXT NOT NULL,
+  categorie     TEXT NOT NULL DEFAULT 'Aliment',
+  quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  unite         TEXT,
+  seuil         NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- entreprise_id existait déjà en base (ajoutée hors versionnement à un moment) mais
+-- n'était créée nulle part dans ce script — un environnement neuf plantait dessus
+-- (routes/poulailler.js l'utilise partout). Filet de sécurité pour les instances déjà
+-- migrées avant ce correctif, sans la forcer NOT NULL pour ne pas casser des lignes existantes.
+ALTER TABLE poulailler_stocks ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_poulailler_stocks_entreprise_id ON poulailler_stocks(entreprise_id);
 
 -- Ventes et achats du module Poulailler (mutualisés dans une seule table)
 ALTER TABLE poulailler_mouvements ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
@@ -246,6 +269,28 @@ CREATE INDEX IF NOT EXISTS idx_observations_entreprise_id ON observations(entrep
 -- ═══════════════ Assistant de configuration (banque/salarié) — confirmation explicite ═══════════════
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS banque_non_requise BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS salarie_non_requis BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ═══════════════ Coordonnées personnelles du salarié (distinct de l'email du compte de connexion) ═══════════════
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email     TEXT;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS telephone TEXT;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS adresse   TEXT;
+
+-- ═══════════════ Forum de feedback (retours des clients sur l'app elle-même) ═══════════════
+-- is_platform_admin distingue "propriétaire de la plateforme" (voit le feedback de
+-- toutes les entreprises) des rôles admin/directeur existants (cloisonnés à leur
+-- propre entreprise) — un utilisateur normal parmi d'autres, pas un rôle à part.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  type          TEXT NOT NULL DEFAULT 'Suggestion',
+  message       TEXT NOT NULL,
+  statut        TEXT NOT NULL DEFAULT 'Nouveau',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_entreprise_id ON feedback(entreprise_id);
 `;
 
 async function migrate() {

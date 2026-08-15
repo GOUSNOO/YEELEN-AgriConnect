@@ -47,6 +47,30 @@ router.post('/stocks', authRequired, async (req, res) => {
   }
 });
 
+router.put('/stocks/:id', authRequired, async (req, res) => {
+  const { nom, categorie, quantite, unite, seuil } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE poulailler_stocks SET
+         nom = COALESCE($1, nom),
+         categorie = COALESCE($2, categorie),
+         quantite = COALESCE($3, quantite),
+         unite = COALESCE($4, unite),
+         seuil = COALESCE($5, seuil)
+       WHERE id = $6 AND entreprise_id = $7
+       RETURNING ${STOCK_COLUMNS}`,
+      [nom, categorie, quantite, unite, seuil, req.params.id, req.user.entrepriseId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Stock introuvable.' });
+    }
+    return res.json({ stock: result.rows[0] });
+  } catch (err) {
+    console.error('[PUT /poulailler/stocks]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  }
+});
+
 router.delete('/stocks/:id', authRequired, async (req, res) => {
   try {
     await pool.query('DELETE FROM poulailler_stocks WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);

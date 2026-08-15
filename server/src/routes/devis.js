@@ -77,6 +77,32 @@ router.get('/', authRequired, async (req, res) => {
   }
 });
 
+// Ventes en lignes individuelles (une ligne par produit), pour alimenter le sous-onglet
+// Comptabilité de Cultures et Poulailler. Un devis n'est PAS rattaché à un module
+// (contrairement à achats_documents) — ce ledger est donc pour toute l'entreprise,
+// partagé à l'identique entre les deux sous-onglets Comptabilité. Les devis encore en
+// Brouillon sont exclus : ce ne sont pas encore des ventes engagées.
+router.get('/ledger', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT dl.id, d.date, dl.produit,
+              COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom, 'Client') AS partenaire,
+              dl.quantite::float8 AS quantite,
+              dl.prix_unitaire::float8 AS "prixUnitaire"
+       FROM devis_lignes dl
+       JOIN devis d ON d.id = dl.devis_id
+       LEFT JOIN clients c ON c.id = d.client_id
+       WHERE d.entreprise_id = $1 AND d.statut != 'Brouillon'
+       ORDER BY d.date DESC, dl.ordre ASC`,
+      [req.user.entrepriseId]
+    );
+    return res.json({ mouvements: result.rows });
+  } catch (err) {
+    console.error('[GET /devis/ledger]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique des ventes." });
+  }
+});
+
 router.get('/:id', authRequired, async (req, res) => {
   try {
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);

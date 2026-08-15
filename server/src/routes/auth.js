@@ -63,14 +63,14 @@ router.post('/register', async (req, res) => {
     await client.query('COMMIT');
 
     const token = jwt.sign(
-      { sub: user.id, email: user.email, entrepriseId: entreprise.id, role: 'admin' },
+      { sub: user.id, email: user.email, entrepriseId: entreprise.id, role: 'admin', isPlatformAdmin: false },
       env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     return res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, role: 'admin', createdAt: user.created_at },
+      user: { id: user.id, email: user.email, role: 'admin', createdAt: user.created_at, isPlatformAdmin: false },
       entreprise: { id: entreprise.id, nom: entreprise.nom, typeCompte: entreprise.type_compte },
     });
   } catch (err) {
@@ -141,9 +141,10 @@ router.post('/login', async (req, res) => {
     }
 
     const { role, entreprise_nom: entrepriseNom } = rattachement.rows[0];
+    const isPlatformAdmin = user.is_platform_admin === true;
 
     const token = jwt.sign(
-      { sub: user.id, email: user.email, entrepriseId, role },
+      { sub: user.id, email: user.email, entrepriseId, role, isPlatformAdmin },
       env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -152,7 +153,7 @@ router.post('/login', async (req, res) => {
 
     return res.json({
       token,
-      user: { id: user.id, email: user.email, role, createdAt: user.created_at },
+      user: { id: user.id, email: user.email, role, createdAt: user.created_at, isPlatformAdmin },
       entreprise: { id: entrepriseId, nom: entrepriseNom },
     });
   } catch (err) {
@@ -165,7 +166,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom
+  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom
    FROM users u
    JOIN entreprise_utilisateurs eu ON eu.user_id = u.id
    JOIN entreprises e ON e.id = eu.entreprise_id
@@ -179,7 +180,7 @@ router.get('/me', authRequired, async (req, res) => {
 
     const row = result.rows[0];
 return res.json({
-  user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, mfaEnabled: row.mfa_enabled },
+  user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, mfaEnabled: row.mfa_enabled, isPlatformAdmin: row.is_platform_admin === true },
   entreprise: { id: row.entreprise_id, nom: row.entreprise_nom },
 });
   } catch (err) {

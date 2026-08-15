@@ -154,8 +154,31 @@ export async function createPoulaillerStock(payload) {
   return safeRequest('/poulailler/stocks', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function updatePoulaillerStock(id, payload) {
+  return safeRequest(`/poulailler/stocks/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
 export async function deletePoulaillerStock(id) {
   return safeRequest(`/poulailler/stocks/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Cultures — Stocks
+// ─────────────────────────────────────────────────────────────────────
+export async function getCulturesStocks() {
+  return request('/cultures/stocks');
+}
+
+export async function createCulturesStock(payload) {
+  return safeRequest('/cultures/stocks', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateCulturesStock(id, payload) {
+  return safeRequest(`/cultures/stocks/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteCulturesStock(id) {
+  return safeRequest(`/cultures/stocks/${id}`, { method: 'DELETE' });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -380,6 +403,10 @@ export async function getAchatsDocuments(module) {
   return request(`/achats?module=${encodeURIComponent(module)}`, { method: 'GET' });
 }
 
+export async function getAchatsLedger(module) {
+  return request(`/achats/ledger?module=${encodeURIComponent(module)}`, { method: 'GET' });
+}
+
 export async function getAchatDocument(id) {
   return request(`/achats/${id}`, { method: 'GET' });
 }
@@ -435,6 +462,10 @@ export async function getCulturesHistorique() {
 
 export async function getDevisListe() {
   return request('/devis', { method: 'GET' });
+}
+
+export async function getVentesLedger() {
+  return request('/devis/ledger', { method: 'GET' });
 }
 
 export async function getDevisDetail(id) {
@@ -540,6 +571,10 @@ export async function createCalendarEvent(payload) {
   return safeRequest('/calendar', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function updateCalendarEvent(id, payload) {
+  return safeRequest(`/calendar/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // RÉCOLTES
 // ─────────────────────────────────────────────────────────────────────
@@ -550,4 +585,21 @@ export async function getRecoltes() {
 
 export async function createRecolte(payload) {
   return safeRequest('/recoltes', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// FEEDBACK (retours des clients sur l'app elle-même)
+// ─────────────────────────────────────────────────────────────────────
+
+export async function createFeedback(payload) {
+  return safeRequest('/feedback', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Réservé au propriétaire de la plateforme (isPlatformAdmin) — toutes entreprises confondues
+export async function getAllFeedback() {
+  return request('/feedback', { method: 'GET' });
+}
+
+export async function updateFeedbackStatus(id, statut) {
+  return request(`/feedback/${id}`, { method: 'PATCH', body: JSON.stringify({ statut }) });
 }

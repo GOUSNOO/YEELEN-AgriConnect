@@ -5,8 +5,8 @@ import {
   Plus, Trash2, Sun, ToggleLeft, ToggleRight, Package, TrendingUp,
   TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home,
-  Search, Printer, FileText, PencilLine, Download, Users, Briefcase, Landmark, Bell,
-  CalendarDays, Settings
+  Search, Printer, FileText, Download, Users, Briefcase, Landmark, Bell,
+  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle
 } from 'lucide-react';
 import {
   clearToken, createClient, createFinance, deleteClient, deleteFinance,
@@ -14,7 +14,8 @@ import {
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
-  getPoulaillerStocks, createPoulaillerStock, deletePoulaillerStock,
+  getPoulaillerStocks, createPoulaillerStock, updatePoulaillerStock, deletePoulaillerStock,
+  getCulturesStocks, createCulturesStock, updateCulturesStock, deleteCulturesStock,
   getPoulaillerMouvements, createPoulaillerMouvement, updatePoulaillerMouvement, deletePoulaillerMouvement,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
@@ -25,14 +26,16 @@ import {
   updateClient,
   getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
   getPoulaillerHistorique, getCulturesHistorique,
-  getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument,
-  getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis,
+  getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger,
+  getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
-  getCalendarEvents, createCalendarEvent, getRecoltes, createRecolte,
+  getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
   getOnboardingStatus, updateOnboardingStatus,
 } from './lib/api';
 import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
+import { FeedbackModule } from './components/FeedbackModule';
+import { HelpModule } from './components/HelpModule';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi, mapUiRoleToBackend } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
 import { FinancesModule, BanquesModule } from './modules/finances.jsx';
@@ -230,23 +233,16 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
   }, [partnerType]);
 
   const [form, setForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
-  const [editingId, setEditingId] = useState(null);
   const [period, setPeriod] = useState('mois');
   const [query, setQuery] = useState('');
 
- const save = async (e) => {
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const save = async (e) => {
     e.preventDefault();
     if (!form.partenaire || !form.produit || form.quantite === '' || form.prixUnitaire === '') return;
-
-    // Si on modifie une transaction existante (remote), la raison est obligatoire
-    let raison = null;
-    if (remote && editingId) {
-      raison = window.prompt('Raison de la modification (obligatoire) :');
-      if (!raison || !raison.trim()) {
-        notifyError(new Error('Modification annulée : une raison est requise.'));
-        return;
-      }
-    }
 
     const dateFr = form.date || new Date().toLocaleDateString('fr-FR');
     const dateIso = dateFr.includes('/')
@@ -260,34 +256,20 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
       quantite: Number(form.quantite),
       prixUnitaire: Number(form.prixUnitaire),
       remise: Number(form.remise || 0),
-      raison: raison || undefined,
     };
     if (remote) {
       try {
-        if (editingId) {
-          const updated = await remote.update(editingId, payload);
-          if (updated) {
-            updated.remise = payload.remise;
-            setRows(r => r.map(x => x.id === editingId ? updated : x));
-            notifySuccess('Transaction mise à jour.');
-          }
-          setEditingId(null);
-        } else {
-          const created = await remote.create(payload);
-          if (created) {
-            created.remise = payload.remise;
-            setRows(r => [created, ...r]);
-            notifySuccess('Enregistré.');
-          }
+        const created = await remote.create(payload);
+        if (created) {
+          created.remise = payload.remise;
+          setRows(r => [created, ...r]);
+          notifySuccess('Enregistré.');
         }
       } catch (err) {
         console.error('[MovementTab remote save]', err);
         notifyError(err, "Impossible d'enregistrer.");
         return;
       }
-    } else if (editingId) {
-      setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
-      setEditingId(null);
     } else {
       setRows(r => [{ id: Date.now(), ...payload }, ...r]);
     }
@@ -319,10 +301,10 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
     setRows(r => r.filter(x => x.id !== id));
   };
 
-  // Prépare le formulaire pour modifier une transaction existante
+  // Ouvre la fenêtre de modification d'une transaction existante
   const startEdit = (row) => {
     setEditingId(row.id);
-    setForm({
+    setEditForm({
       partenaire: row.partenaire,
       produit: row.produit,
       quantite: row.quantite,
@@ -335,7 +317,58 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
+    setEditForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: '' });
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (!editForm.partenaire || !editForm.produit || editForm.quantite === '' || editForm.prixUnitaire === '') return;
+
+    // Si on modifie une transaction existante (remote), la raison est obligatoire
+    let raison = null;
+    if (remote) {
+      raison = window.prompt('Raison de la modification (obligatoire) :');
+      if (!raison || !raison.trim()) {
+        notifyError(new Error('Modification annulée : une raison est requise.'));
+        return;
+      }
+    }
+
+    const dateFr = editForm.date || new Date().toLocaleDateString('fr-FR');
+    const dateIso = dateFr.includes('/')
+      ? dateFr.split('/').reverse().join('-')
+      : dateFr;
+
+    const payload = {
+      date: remote ? dateIso : dateFr,
+      partenaire: editForm.partenaire,
+      produit: editForm.produit,
+      quantite: Number(editForm.quantite),
+      prixUnitaire: Number(editForm.prixUnitaire),
+      remise: Number(editForm.remise || 0),
+      raison: raison || undefined,
+    };
+
+    setEditSubmitting(true);
+    if (remote) {
+      try {
+        const updated = await remote.update(editingId, payload);
+        if (updated) {
+          updated.remise = payload.remise;
+          setRows(r => r.map(x => x.id === editingId ? updated : x));
+          notifySuccess('Transaction mise à jour.');
+        }
+      } catch (err) {
+        console.error('[MovementTab remote update]', err);
+        notifyError(err, 'Impossible de mettre à jour.');
+        setEditSubmitting(false);
+        return;
+      }
+    } else {
+      setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
+    }
+    setEditSubmitting(false);
+    cancelEdit();
   };
 
   const printInvoice = (row) => {
@@ -424,8 +457,7 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
           <Field label="Prix unitaire (FCFA)" type="number" placeholder="0" value={form.prixUnitaire} onChange={e => setForm({ ...form, prixUnitaire: e.target.value })} />
           <Field label="Remise (FCFA)" type="number" placeholder="0" value={form.remise} onChange={e => setForm({ ...form, remise: e.target.value })} />
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant={accent} type="submit"><Plus size={15} /> {editingId ? 'Mettre à jour' : 'Enregistrer'}</Button>
-            {editingId && <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>}
+            <Button variant={accent} type="submit"><Plus size={15} /> Enregistrer</Button>
           </div>
         </form>
       </Card>
@@ -488,7 +520,7 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
                 <td style={{ fontWeight: 600 }}>{lineTotal(r).toLocaleString('fr-FR')}</td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                    <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
                     {remote?.historique && (
                       <button onClick={() => showHistorique(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.ochre }}><ClipboardList size={15} /></button>
                     )}
@@ -545,6 +577,48 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
           </div>
         </div>
       )}
+      {/* Fenêtre de modification d'une transaction existante, séparée du formulaire d'ajout */}
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier la transaction</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+                <Field label="Date" type="date" value={editForm.date ? editForm.date.split('/').reverse().join('-') : ''} onChange={e => setEditForm({ ...editForm, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
+                {partners.length > 0 ? (
+                  <Select label={partnerLabel} value={editForm.partenaire} onChange={e => setEditForm({ ...editForm, partenaire: e.target.value })}>
+                    <option value="">Sélectionner...</option>
+                    {partners.map(p => (
+                      <option key={p.id} value={`${p.prenom ? p.prenom + ' ' : ''}${p.nom}`}>
+                        {p.prenom ? `${p.prenom} ${p.nom}` : p.nom}
+                      </option>
+                    ))}
+                    <option value="__autre__">Autre (saisir un nom)</option>
+                  </Select>
+                ) : (
+                  <Field label={partnerLabel} placeholder="Nom" value={editForm.partenaire} onChange={e => setEditForm({ ...editForm, partenaire: e.target.value })} />
+                )}
+                {partners.length > 0 && editForm.partenaire === '__autre__' && (
+                  <Field label={`Nom du ${partnerLabel.toLowerCase()}`} placeholder="Nom" value="" onChange={e => setEditForm({ ...editForm, partenaire: e.target.value })} />
+                )}
+                <Field label="Produit" placeholder="Ex: Œufs" value={editForm.produit} onChange={e => setEditForm({ ...editForm, produit: e.target.value })} />
+                <Field label="Quantité" type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} />
+                <Field label="Prix unitaire (FCFA)" type="number" placeholder="0" value={editForm.prixUnitaire} onChange={e => setEditForm({ ...editForm, prixUnitaire: e.target.value })} />
+                <Field label="Remise (FCFA)" type="number" placeholder="0" value={editForm.remise} onChange={e => setEditForm({ ...editForm, remise: e.target.value })} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Button type="submit" variant="green" disabled={editSubmitting}>
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                </Button>
+                <Button type="button" onClick={cancelEdit}>Annuler</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -558,9 +632,12 @@ function DevisModule({ clientsListe }) {
 
   const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '', recolteId: '' };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
-  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [recoltes, setRecoltes] = useState([]);
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+  const [editSaving, setEditSaving] = useState(false);
 
   const [detailId, setDetailId] = useState(null); // devis actuellement affiché en détail
   const [detailData, setDetailData] = useState(null);
@@ -610,10 +687,10 @@ function DevisModule({ clientsListe }) {
   };
 
   const totalForm = form.lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+  const totalEditForm = editForm.lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
 
   const resetForm = () => {
     setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
-    setEditingId(null);
   };
 
   const submitForm = async (e) => {
@@ -626,23 +703,18 @@ function DevisModule({ clientsListe }) {
     setApiError('');
     try {
       const payload = {
-      clientId: Number(form.clientId),
-      notes: form.notes,
-      lignes: form.lignes.map(l => ({
-        produit: l.produit,
-        quantite: Number(l.quantite) || 0,
-        prixUnitaire: Number(l.prixUnitaire) || 0,
-        remise: Number(l.remise) || 0,
-        recolteId: l.recolteId ? Number(l.recolteId) : null,
-      })),
-    };
-      if (editingId) {
-        await updateDevis(editingId, payload);
-        notifySuccess('Devis mis à jour.');
-      } else {
-        await createDevis(payload);
-        notifySuccess('Devis créé en brouillon.');
-      }
+        clientId: Number(form.clientId),
+        notes: form.notes,
+        lignes: form.lignes.map(l => ({
+          produit: l.produit,
+          quantite: Number(l.quantite) || 0,
+          prixUnitaire: Number(l.prixUnitaire) || 0,
+          remise: Number(l.remise) || 0,
+          recolteId: l.recolteId ? Number(l.recolteId) : null,
+        })),
+      };
+      await createDevis(payload);
+      notifySuccess('Devis créé en brouillon.');
       resetForm();
       await loadDevis();
     } catch (err) {
@@ -652,19 +724,65 @@ function DevisModule({ clientsListe }) {
     }
   };
 
- const startEditDevis = async (d) => {
+  // Ligne de produits — version formulaire de modification (fenêtre séparée)
+  const addEditLigne = () => setEditForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
+  const removeEditLigne = (index) => setEditForm(f => ({ ...f, lignes: f.lignes.filter((_, i) => i !== index) }));
+  const updateEditLigne = (index, field, value) => {
+    setEditForm(f => ({
+      ...f,
+      lignes: f.lignes.map((l, i) => i === index ? { ...l, [field]: value } : l),
+    }));
+  };
+
+  const cancelEditDevis = () => {
+    setEditingId(null);
+    setEditForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+  };
+
+  const startEditDevis = async (d) => {
     if (d.statut !== 'Brouillon') return;
     try {
       const data = await getDevisDetail(d.id);
       const devisComplet = data.devis;
       setEditingId(devisComplet.id);
-      setForm({
+      setEditForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
         lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '', recolteId: l.recolteId || '' })),
       });
     } catch (err) {
       setApiError(err.message);
+    }
+  };
+
+  const submitEditForm = async (e) => {
+    e.preventDefault();
+    if (!editForm.clientId || editForm.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
+      setApiError('Un client et toutes les lignes de produits (complètes) sont requis.');
+      return;
+    }
+    setEditSaving(true);
+    setApiError('');
+    try {
+      const payload = {
+        clientId: Number(editForm.clientId),
+        notes: editForm.notes,
+        lignes: editForm.lignes.map(l => ({
+          produit: l.produit,
+          quantite: Number(l.quantite) || 0,
+          prixUnitaire: Number(l.prixUnitaire) || 0,
+          remise: Number(l.remise) || 0,
+          recolteId: l.recolteId ? Number(l.recolteId) : null,
+        })),
+      };
+      await updateDevis(editingId, payload);
+      notifySuccess('Devis mis à jour.');
+      cancelEditDevis();
+      await loadDevis();
+    } catch (err) {
+      setApiError(err.message);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -804,10 +922,10 @@ function DevisModule({ clientsListe }) {
         </div>
       )}
 
-      {/* Formulaire de création / modification d'un devis, avec plusieurs lignes de produits */}
+      {/* Formulaire de création d'un devis, avec plusieurs lignes de produits */}
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          {editingId ? 'Modifier le devis' : 'Nouveau devis'}
+          Nouveau devis
         </div>
         <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Select label="Client" value={form.clientId} onChange={e => setForm({ ...form, clientId: e.target.value })} required>
@@ -848,9 +966,8 @@ function DevisModule({ clientsListe }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalForm.toLocaleString('fr-FR')} FCFA</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {editingId && <Button type="button" variant="ghost" onClick={resetForm}>Annuler</Button>}
               <Button type="submit" variant="green" disabled={saving}>
-                {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {editingId ? 'Mettre à jour' : 'Créer le devis'}
+                {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Créer le devis
               </Button>
             </div>
           </div>
@@ -886,7 +1003,7 @@ function DevisModule({ clientsListe }) {
                   <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                       {['Brouillon', 'Devis'].includes(d.statut) && (
-                        <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                        <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
                       )}
                       {d.statut === 'Brouillon' && (
                         <button onClick={() => handleDelete(d.id, d.numero)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
@@ -1079,6 +1196,63 @@ function DevisModule({ clientsListe }) {
           </div>
         </div>
       )}
+      {/* Fenêtre de modification d'un devis existant, séparée du formulaire de création */}
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 620, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le devis</div>
+              <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Select label="Client" value={editForm.clientId} onChange={e => setEditForm({ ...editForm, clientId: e.target.value })} required>
+                <option value="">Sélectionner un client...</option>
+                {(clientsListe || []).map(c => (
+                  <option key={c.id} value={c.id}>{c.prenom ? `${c.prenom} ${c.nom}` : c.nom}</option>
+                ))}
+              </Select>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
+                {editForm.lignes.map((ligne, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                      <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} />
+                      <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
+                      <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} />
+                      <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateEditLigne(i, 'remise', e.target.value)} />
+                      <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
+                      <option value="">Aucune</option>
+                      {recoltes.map(r => (
+                        <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
+                      ))}
+                    </Select>
+                  </div>
+                ))}
+                <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}>
+                  <Plus size={14} /> Ajouter une ligne
+                </Button>
+              </div>
+
+              <Field label="Notes (optionnel)" placeholder="Conditions, délais, remarques..." value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalEditForm.toLocaleString('fr-FR')} FCFA</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button type="button" variant="ghost" onClick={cancelEditDevis}>Annuler</Button>
+                  <Button type="submit" variant="green" disabled={editSaving}>
+                    {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Mettre à jour
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1120,10 +1294,13 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const [loaded, setLoaded] = useState(false);
   const [useRemote, setUseRemote] = useState(true);
   const [form, setForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
-  const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   const [detailDoc, setDetailDoc] = useState(null);
   const key = `${storageKey}-${farmId}`;
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const loadDocs = useCallback(async () => {
     try {
@@ -1188,7 +1365,6 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
   const resetForm = () => {
     setForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
-    setEditingId(null);
     setError('');
   };
 
@@ -1217,11 +1393,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
     if (useRemote) {
       try {
-        if (editingId) {
-          await updateAchatDocument(editingId, { module: moduleType, ...payload });
-        } else {
-          await createAchatDocument({ module: moduleType, ...payload });
-        }
+        await createAchatDocument({ module: moduleType, ...payload });
         await loadDocs();
         resetForm();
       } catch (err) {
@@ -1231,7 +1403,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
     }
 
     const doc = {
-      id: editingId || Date.now(),
+      id: Date.now(),
       fournisseurId: payload.fournisseurId,
       fournisseurNom: payload.fournisseurNom,
       notes: payload.notes,
@@ -1240,8 +1412,33 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       total: totalForm,
     };
 
-    setDocs(docs => editingId ? docs.map(d => d.id === editingId ? doc : d) : [doc, ...docs]);
+    setDocs(docs => [doc, ...docs]);
     resetForm();
+  };
+
+  // Ligne d'achat — version formulaire de modification (fenêtre séparée)
+  const addEditLigne = () => setEditForm(f => ({
+    ...f,
+    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '' }],
+  }));
+  const removeEditLigne = (index) => setEditForm(f => ({
+    ...f,
+    lignes: f.lignes.filter((_, i) => i !== index),
+  }));
+  const updateEditLigne = (index, field, value) => {
+    setEditForm(f => ({
+      ...f,
+      lignes: f.lignes.map((ligne, i) => i === index ? { ...ligne, [field]: value } : ligne),
+    }));
+  };
+  const editSupplierName = editForm.fournisseurId === '__autre__'
+    ? editForm.fournisseurNom
+    : fournisseurs.find(f => String(f.id) === String(editForm.fournisseurId))?.nom || '';
+  const totalEditForm = editForm.lignes.reduce((sum, ligne) => sum + (Number(ligne.quantite) || 0) * (Number(ligne.prixUnitaire) || 0), 0);
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
   };
 
   const startEdit = async (doc) => {
@@ -1258,12 +1455,63 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
     }
 
     setEditingId(source.id);
-    setForm({
+    setEditForm({
       fournisseurId: source.fournisseurId ? String(source.fournisseurId) : '__autre__',
       fournisseurNom: source.fournisseurId ? '' : source.fournisseurNom,
       notes: source.notes || '',
       lignes: source.lignes.map(l => ({ produit: l.produit, quantite: String(l.quantite), prixUnitaire: String(l.prixUnitaire) })),
     });
+  };
+
+  const submitEditForm = async (e) => {
+    e.preventDefault();
+    if (!editSupplierName) {
+      setError('Un fournisseur est requis.');
+      return;
+    }
+    if (editForm.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
+      setError('Toutes les lignes d’achat doivent être complètes.');
+      return;
+    }
+
+    const payload = {
+      fournisseurId: editForm.fournisseurId === '__autre__' ? null : Number(editForm.fournisseurId),
+      fournisseurNom: editSupplierName,
+      notes: editForm.notes,
+      date: new Date().toISOString().slice(0, 10),
+      lignes: editForm.lignes.map(l => ({
+        produit: l.produit,
+        quantite: Number(l.quantite),
+        prixUnitaire: Number(l.prixUnitaire),
+      })),
+    };
+
+    setEditSubmitting(true);
+    if (useRemote) {
+      try {
+        await updateAchatDocument(editingId, { module: moduleType, ...payload });
+        await loadDocs();
+        cancelEdit();
+      } catch (err) {
+        setError(err.message || 'Impossible d\'enregistrer l\'achat.');
+      } finally {
+        setEditSubmitting(false);
+      }
+      return;
+    }
+
+    const doc = {
+      id: editingId,
+      fournisseurId: payload.fournisseurId,
+      fournisseurNom: payload.fournisseurNom,
+      notes: payload.notes,
+      date: payload.date,
+      lignes: payload.lignes,
+      total: totalEditForm,
+    };
+    setDocs(docs => docs.map(d => d.id === editingId ? doc : d));
+    setEditSubmitting(false);
+    cancelEdit();
   };
 
   const removeDoc = async (id) => {
@@ -1330,7 +1578,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          {editingId ? 'Modifier un achat' : 'Nouvel achat multi-lignes'}
+          Nouvel achat multi-lignes
         </div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
@@ -1362,8 +1610,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalForm.toLocaleString('fr-FR')} FCFA</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {editingId && <Button type="button" variant="ghost" onClick={resetForm}>Annuler</Button>}
-              <Button type="submit" variant="ochre">{editingId ? 'Mettre à jour' : 'Enregistrer l’achat'}</Button>
+              <Button type="submit" variant="ochre">Enregistrer l’achat</Button>
             </div>
           </div>
         </form>
@@ -1399,7 +1646,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button onClick={() => openDetail(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><ChevronRight size={15} /></button>
-                    <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><PencilLine size={15} /></button>
+                    <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
                     <button onClick={() => removeDoc(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
                   </div>
                 </td>
@@ -1449,16 +1696,70 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           </div>
         </div>
       )}
+      {/* Fenêtre de modification d'un achat existant, séparée du formulaire d'ajout */}
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 620, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier un achat</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
+            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+              <Select label="Fournisseur" value={editForm.fournisseurId} onChange={e => setEditForm({ ...editForm, fournisseurId: e.target.value, fournisseurNom: '' })}>
+                <option value="">Sélectionner un fournisseur...</option>
+                {fournisseurs.map(f => (
+                  <option key={f.id} value={f.id}>{f.nom}</option>
+                ))}
+                <option value="__autre__">Autre fournisseur</option>
+              </Select>
+              {editForm.fournisseurId === '__autre__' && (
+                <Field label="Nom du fournisseur" placeholder="Nom" value={editForm.fournisseurNom} onChange={e => setEditForm({ ...editForm, fournisseurNom: e.target.value })} />
+              )}
+              <Field label="Notes" placeholder="Optionnel" value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+              <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes d’achat</div>
+                {editForm.lignes.map((ligne, index) => (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                    <Field placeholder="Produit" value={ligne.produit} onChange={e => updateEditLigne(index, 'produit', e.target.value)} />
+                    <Field type="number" placeholder="Qté" value={ligne.quantite} onChange={e => updateEditLigne(index, 'quantite', e.target.value)} />
+                    <Field type="number" placeholder="Prix U." value={ligne.prixUnitaire} onChange={e => updateEditLigne(index, 'prixUnitaire', e.target.value)} />
+                    <button type="button" onClick={() => removeEditLigne(index)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '8px 0' }}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> Ajouter une ligne</Button>
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalEditForm.toLocaleString('fr-FR')} FCFA</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+                  <Button type="submit" variant="green" disabled={editSubmitting}>
+                    {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Mettre à jour
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 const STOCK_CATS = ['Aliment', 'Œufs', 'Volailles vivantes', 'Autre'];
+const CULTURES_STOCK_CATS = ['Semences', 'Engrais', 'Produits phytosanitaires', 'Autre'];
 const DEFAULT_STOCKS = [
   { id: 1, nom: 'Aliment ponte', categorie: 'Aliment', quantite: 12, unite: 'sacs 50kg', seuil: 5 },
   { id: 2, nom: 'Œufs frais', categorie: 'Œufs', quantite: 340, unite: 'unités', seuil: 100 },
   { id: 3, nom: 'Poulets de chair', categorie: 'Volailles vivantes', quantite: 180, unite: 'têtes', seuil: 20 },
 ];
+
+const STOCK_API = {
+  Poulailler: { get: getPoulaillerStocks, create: createPoulaillerStock, update: updatePoulaillerStock, remove: deletePoulaillerStock },
+  Cultures: { get: getCulturesStocks, create: createCulturesStock, update: updateCulturesStock, remove: deleteCulturesStock },
+};
 
 function useTable(farmId, key, defaults) {
   const [rows, setRows] = useState(defaults);
@@ -1477,20 +1778,28 @@ function useTable(farmId, key, defaults) {
   return [rows, setRows];
 }
 
-function StocksTab({ farmId }) {
+function StocksTab({ farmId, moduleType = 'Poulailler' }) {
+  const api = STOCK_API[moduleType];
+  const cats = moduleType === 'Cultures' ? CULTURES_STOCK_CATS : STOCK_CATS;
+  const defaultCat = cats[0];
+
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ nom: '', categorie: 'Aliment', quantite: '', unite: '', seuil: '' });
+  const [form, setForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const { stocks: fetched } = await getPoulaillerStocks();
-        if (fetched.length === 0) {
+        const { stocks: fetched } = await api.get();
+        if (fetched.length === 0 && moduleType === 'Poulailler') {
           const seeded = [];
           for (const s of DEFAULT_STOCKS) {
             try {
-              const { stock } = await createPoulaillerStock({ nom: s.nom, categorie: s.categorie, quantite: s.quantite, unite: s.unite, seuil: s.seuil });
+              const { stock } = await api.create({ nom: s.nom, categorie: s.categorie, quantite: s.quantite, unite: s.unite, seuil: s.seuil });
               if (stock) seeded.push(stock);
             } catch (err) {
               console.error('[StocksTab seed]', err);
@@ -1506,13 +1815,13 @@ function StocksTab({ farmId }) {
         setLoaded(true);
       }
     })();
-  }, [farmId]);
+  }, [farmId, moduleType]);
 
   const add = async (e) => {
     e.preventDefault();
     if (!form.nom || form.quantite === '') return;
     try {
-      const { stock } = await createPoulaillerStock({
+      const { stock } = await api.create({
         nom: form.nom, categorie: form.categorie, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
       });
       if (stock) {
@@ -1523,12 +1832,12 @@ function StocksTab({ farmId }) {
       console.error('[StocksTab add]', err);
       notifyError(err, "Impossible d'ajouter l'article.");
     }
-    setForm({ nom: '', categorie: 'Aliment', quantite: '', unite: '', seuil: '' });
+    setForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
   };
   const remove = async (id, nom) => {
     if (!window.confirm(`Supprimer « ${nom} » du stock ?`)) return;
     try {
-      await deletePoulaillerStock(id);
+      await api.remove(id);
       setStocks(s => s.filter(r => r.id !== id));
       notifySuccess('Article supprimé.');
     } catch (err) {
@@ -1536,6 +1845,36 @@ function StocksTab({ farmId }) {
       notifyError(err, "Impossible de supprimer l'article.");
     }
   };
+
+  const startEdit = (s) => {
+    setEditingId(s.id);
+    setEditForm({ nom: s.nom, categorie: s.categorie, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil) });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+  };
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (!editForm.nom || editForm.quantite === '') return;
+    setEditSubmitting(true);
+    try {
+      const { stock } = await api.update(editingId, {
+        nom: editForm.nom, categorie: editForm.categorie, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
+      });
+      if (stock) {
+        setStocks(s => s.map(r => r.id === editingId ? stock : r));
+        notifySuccess('Article mis à jour.');
+      }
+      cancelEdit();
+    } catch (err) {
+      console.error('[StocksTab saveEdit]', err);
+      notifyError(err, "Impossible de mettre à jour l'article.");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const stockTotal = stocks.reduce((sum, item) => sum + item.quantite, 0);
   const stockEvolution = [
     { label: 'Jan', value: Math.max(50, stockTotal - 120) },
@@ -1554,7 +1893,7 @@ function StocksTab({ farmId }) {
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label="Article" placeholder="Ex: Maïs concassé" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
           <Select label="Catégorie" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
-            {STOCK_CATS.map(c => <option key={c}>{c}</option>)}
+            {cats.map(c => <option key={c}>{c}</option>)}
           </Select>
           <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
           <Field label="Unité" placeholder="kg, sacs…" value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
@@ -1578,7 +1917,9 @@ function StocksTab({ farmId }) {
             </tr>
           </thead>
           <tbody>
-            {stocks.map(s => (
+            {stocks.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun article en stock pour l'instant.</td></tr>
+            ) : stocks.map(s => (
               <tr key={s.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                 <td style={{ padding: '12px 16px', fontWeight: 500 }}>{s.nom}</td>
                 <td><Badge tone="ochre">{s.categorie}</Badge></td>
@@ -1589,15 +1930,48 @@ function StocksTab({ farmId }) {
                     : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
                 </td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                  <button onClick={() => remove(s.id, s.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
-                    <Trash2 size={15} />
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={() => startEdit(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
+                      <Settings2 size={15} />
+                    </button>
+                    <button onClick={() => remove(s.id, s.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
+
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 480, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'article</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+                <Field label="Article" placeholder="Ex: Maïs concassé" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
+                <Select label="Catégorie" value={editForm.categorie} onChange={e => setEditForm({ ...editForm, categorie: e.target.value })}>
+                  {cats.map(c => <option key={c}>{c}</option>)}
+                </Select>
+                <Field label="Quantité" type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
+                <Field label="Unité" placeholder="kg, sacs…" value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
+                <Field label="Seuil d'alerte" type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Button type="submit" variant="green" disabled={editSubmitting}>
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                </Button>
+                <Button type="button" onClick={cancelEdit}>Annuler</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2238,6 +2612,7 @@ function CulturesModule({ farmId }) {
         {[
           { id: 'parcelles', label: 'Parcelles', icon: Sprout },
           { id: 'carte', label: 'Carte', icon: Home },
+          { id: 'stocks', label: 'Stocks', icon: Package },
           { id: 'ventes', label: 'Ventes', icon: TrendingUp },
           { id: 'achats', label: 'Achats', icon: ShoppingCart },
           { id: 'comptabilite', label: 'Comptabilité', icon: Wallet },
@@ -2341,11 +2716,12 @@ function CulturesModule({ farmId }) {
       )}
 
       {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
+      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
-        remoteVentes={async () => (await getCulturesMouvements('vente')).mouvements}
-        remoteAchats={async () => (await getCulturesMouvements('achat')).mouvements}
+        remoteVentes={async () => (await getVentesLedger()).mouvements}
+        remoteAchats={async () => (await getAchatsLedger('Cultures')).mouvements}
         remoteHistorique={getCulturesHistorique}
       />}
     </div>
@@ -2382,13 +2758,13 @@ function PoulaillerModule({ farmId }) {
       </div>
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
-      {tab === 'stocks' && <StocksTab farmId={farmId} />}
+      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats" moduleType="Poulailler" />}
       {tab === 'livraisons' && <LivraisonsTab farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
-        remoteVentes={async () => (await getPoulaillerMouvements('vente')).mouvements}
-        remoteAchats={async () => (await getPoulaillerMouvements('achat')).mouvements}
+        remoteVentes={async () => (await getVentesLedger()).mouvements}
+        remoteAchats={async () => (await getAchatsLedger('Poulailler')).mouvements}
         remoteHistorique={getPoulaillerHistorique}
       />}
     </div>
@@ -2633,6 +3009,10 @@ function AgriculturalCalendarModule({ farmId }) {
   const [form, setForm] = useState({ date: '', type: 'irrigation', title: '', description: '' });
   const key = `agri-calendar-${farmId}`;
 
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ date: '', type: 'irrigation', title: '', description: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   const buildIsoDate = (date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -2715,10 +3095,38 @@ function AgriculturalCalendarModule({ farmId }) {
     return acc;
   }, {}), [events]);
 
-  const upcomingEvents = useMemo(() => [...events]
-    .filter(event => event.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 6), [events, today]);
+  // Tous les événements (passés et à venir), pour pouvoir corriger une erreur de saisie
+  // sur n'importe quel événement, pas seulement les prochains.
+  const allEventsSorted = useMemo(() => [...events].sort((a, b) => a.date.localeCompare(b.date)), [events]);
+
+  const startEditEvent = (event) => {
+    setEditingId(event.id);
+    setEditForm({ date: event.date, type: event.type, title: event.title, description: event.description || '' });
+  };
+  const cancelEditEvent = () => {
+    setEditingId(null);
+    setEditForm({ date: '', type: 'irrigation', title: '', description: '' });
+  };
+  const saveEditEvent = async (e) => {
+    e.preventDefault();
+    if (!editForm.date || !editForm.title) return;
+    setEditSubmitting(true);
+    try {
+      if (useRemote) {
+        await updateCalendarEvent(editingId, editForm);
+        await loadEvents();
+      } else {
+        setEvents(prev => prev.map(ev => ev.id === editingId ? { ...ev, ...editForm } : ev).sort((a, b) => a.date.localeCompare(b.date)));
+      }
+      notifySuccess('Activité mise à jour.');
+      cancelEditEvent();
+    } catch (err) {
+      console.error('[AgriculturalCalendarModule saveEditEvent]', err);
+      notifyError(err, "Impossible de mettre à jour l'activité.");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
 
   const activityMeta = {
     irrigation: { label: 'Irrigation', tone: 'blue' },
@@ -2808,15 +3216,21 @@ function AgriculturalCalendarModule({ farmId }) {
             </div>
           </Card>
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Prochaines activités</div>
-            {upcomingEvents.length === 0 ? (
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Tous les événements</div>
+            <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginBottom: 8 }}>Passés et à venir — pour corriger une erreur de saisie.</div>
+            {allEventsSorted.length === 0 ? (
               <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune activité prévue.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {upcomingEvents.map(event => (
-                  <div key={event.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{event.title}</div>
-                    <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 3 }}>{event.date} • {activityMeta[event.type]?.label || event.type}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                {allEventsSorted.map(event => (
+                  <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{event.title}</div>
+                      <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 3 }}>{event.date} • {activityMeta[event.type]?.label || event.type}</div>
+                    </div>
+                    <button onClick={() => startEditEvent(event)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex', flexShrink: 0 }}>
+                      <Settings2 size={14} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -2824,6 +3238,34 @@ function AgriculturalCalendarModule({ farmId }) {
           </Card>
         </div>
       </div>
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEvent}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 520, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'activité</div>
+              <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={saveEditEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+              <Field label="Date" type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} required />
+              <Select label="Type" value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value })}>
+                <option value="irrigation">Irrigation</option>
+                <option value="traitement">Traitement</option>
+                <option value="recolte">Récolte</option>
+                <option value="vaccination">Vaccination</option>
+                <option value="livraison">Livraison</option>
+              </Select>
+              <Field label="Titre" placeholder="Ex: Arrosage parcelle B" value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} required />
+              <Field label="Description" placeholder="Détails" value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button type="submit" variant="green" disabled={editSubmitting}>
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                </Button>
+                <Button type="button" onClick={cancelEditEvent}>Annuler</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3021,40 +3463,53 @@ function AIAssistantModule({ farmId, activated }) {
 
   useEffect(() => {
     (async () => {
-      const [parcelles, stocks, clients, entries] = await Promise.all([
-        storageGet(`cultures-parcelles-${farmId}`, DEFAULT_PARCELLES),
-        storageGet(`poulailler-stocks-${farmId}`, DEFAULT_STOCKS),
-        storageGet(`poulailler-clients-${farmId}`, []),
-        storageGet(`poulailler-finances-${farmId}`, []),
-      ]);
+      const monthLabel = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      try {
+        const [parcellesData, stocksData, ventesData, financesData] = await Promise.all([
+          activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
+          activated.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+          getVentesLedger(),
+          getFinances(),
+        ]);
 
-      const financeEntries = Array.isArray(entries) ? entries : [];
-      const now = new Date();
-      const currentMonthEntries = financeEntries.filter(entry => {
-        const d = parseDate(entry.date);
-        if (!d) return true;
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      });
+        const parcelles = parcellesData.parcelles || [];
+        const stocks = stocksData.stocks || [];
+        const ventes = ventesData.mouvements || [];
+        const financeEntries = financesData.finances || [];
 
-      const revenues = currentMonthEntries.filter(e => ['Caisse', 'Banque'].includes(e.categorie)).reduce((sum, e) => sum + (Number(e.montant) || 0), 0);
-      const expenses = currentMonthEntries.filter(e => ['Dépenses diverses', 'Carburant', 'Salaire', 'Entretien'].includes(e.categorie)).reduce((sum, e) => sum + (Number(e.montant) || 0), 0);
-      const benefit = revenues - expenses;
-      const foodStock = (Array.isArray(stocks) ? stocks : []).filter(item => item.categorie === 'Aliment').reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
-      const parcelsToWater = (Array.isArray(parcelles) ? parcelles : []).filter(p => Number(p.humidite) < Number(p.seuil || 0));
-      const bestClient = (Array.isArray(clients) ? clients : []).map(client => ({
-        ...client,
-        total: (Array.isArray(client.historique) ? client.historique : []).reduce((sum, purchase) => sum + (Number(purchase.montant) || 0), 0),
-      })).sort((a, b) => b.total - a.total)[0];
+        // Même convention que finances.jsx : une entrée est une dépense si sa catégorie
+        // l'indique explicitement (saisie manuelle) OU si son montant est négatif (achat auto-synchronisé).
+        const CATEGORIES_DEPENSES = ['Depenses diverses', 'Carburant', 'Salaire', 'Entretien'];
+        const isDepenseEntry = (e) => CATEGORIES_DEPENSES.includes(e.categorie) || Number(e.montant) < 0;
 
-      setFacts({
-        benefit,
-        revenues,
-        expenses,
-        foodStock,
-        parcelsToWater,
-        bestClient,
-        monthLabel: now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-      });
+        const now = new Date();
+        const currentMonthEntries = financeEntries.filter(entry => {
+          const d = parseDate(entry.date);
+          if (!d) return true;
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+
+        const revenues = currentMonthEntries.filter(e => !isDepenseEntry(e)).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
+        const expenses = currentMonthEntries.filter(isDepenseEntry).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
+        const benefit = revenues - expenses;
+        const foodStock = stocks.filter(item => item.categorie === 'Aliment').reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
+        const parcelsToWater = parcelles.filter(p => Number(p.humidite) < Number(p.seuil || 0));
+
+        const spendByClient = new Map();
+        ventes.forEach(v => {
+          const nom = v.partenaire || 'Client';
+          const total = (Number(v.quantite) || 0) * (Number(v.prixUnitaire) || 0);
+          spendByClient.set(nom, (spendByClient.get(nom) || 0) + total);
+        });
+        const bestClient = [...spendByClient.entries()]
+          .map(([nom, total]) => ({ nom, total }))
+          .sort((a, b) => b.total - a.total)[0] || null;
+
+        setFacts({ benefit, revenues, expenses, foodStock, parcelsToWater, bestClient, monthLabel });
+      } catch (err) {
+        console.error('[AIAssistantModule]', err);
+        setFacts({ benefit: 0, revenues: 0, expenses: 0, foodStock: 0, parcelsToWater: [], bestClient: null, monthLabel });
+      }
       setLoaded(true);
     })();
   }, [farmId, activated]);
@@ -3090,7 +3545,7 @@ function AIAssistantModule({ farmId, activated }) {
 
     if (/client|achete|achats|plus/.test(q)) {
       if (facts.bestClient) {
-        setAnswer(`${facts.bestClient.prenom} ${facts.bestClient.nom} est le client qui a le plus dépensé avec ${facts.bestClient.total.toLocaleString('fr-FR')} FCFA.`);
+        setAnswer(`${facts.bestClient.nom} est le client qui a le plus dépensé avec ${facts.bestClient.total.toLocaleString('fr-FR')} FCFA.`);
       } else {
         setAnswer('Aucun client n’a encore d’historique d’achat enregistré.');
       }
@@ -3142,45 +3597,61 @@ function ForecastingModule({ farmId, activated }) {
 
   useEffect(() => {
     (async () => {
-      const [parcelles, harvests, stocks, clients, financeEntries] = await Promise.all([
-        storageGet(`cultures-parcelles-${farmId}`, DEFAULT_PARCELLES),
-        storageGet(`agri-recoltes-${farmId}`, []),
-        storageGet(`poulailler-stocks-${farmId}`, DEFAULT_STOCKS),
-        storageGet(`poulailler-clients-${farmId}`, []),
-        storageGet(`poulailler-finances-${farmId}`, []),
-      ]);
+      try {
+        const [parcellesData, harvestsData, stocksData, ventesData, financesData] = await Promise.all([
+          activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
+          getRecoltes(),
+          activated.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+          getVentesLedger(),
+          getFinances(),
+        ]);
 
-      const harvestTotal = (Array.isArray(harvests) ? harvests : []).reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
-      const avgHarvest = harvests.length > 0 ? harvestTotal / Math.max(1, harvests.length) : 100;
-      const feedStock = (Array.isArray(stocks) ? stocks : []).filter(item => item.categorie === 'Aliment').reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
-      const clientSpend = (Array.isArray(clients) ? clients : []).reduce((sum, client) => sum + (Array.isArray(client.historique) ? client.historique : []).reduce((cSum, purchase) => cSum + (Number(purchase.montant) || 0), 0), 0);
-      const monthlyFinance = (Array.isArray(financeEntries) ? financeEntries : []).filter(entry => {
-        const d = parseDate(entry.date);
-        if (!d) return true;
-        const now = new Date();
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      });
-      const revenue = monthlyFinance.filter(e => ['Caisse', 'Banque'].includes(e.categorie)).reduce((sum, e) => sum + (Number(e.montant) || 0), 0);
-      const expenses = monthlyFinance.filter(e => ['Dépenses diverses', 'Carburant', 'Salaire', 'Entretien'].includes(e.categorie)).reduce((sum, e) => sum + (Number(e.montant) || 0), 0);
-      const avgParcelleHumidity = Array.isArray(parcelles) && parcelles.length > 0
-        ? parcelles.reduce((sum, p) => sum + (Number(p.humidite) || 0), 0) / parcelles.length
-        : 40;
+        const parcelles = parcellesData.parcelles || [];
+        const harvests = harvestsData.recoltes || [];
+        const stocks = stocksData.stocks || [];
+        const ventes = ventesData.mouvements || [];
+        const financeEntries = financesData.finances || [];
 
-      const nextSales = Math.max(0, revenue * 1.08);
-      const nextExpenses = Math.max(0, expenses * 1.05);
-      const nextHarvests = Math.max(0, avgHarvest * 1.1);
-      const nextFeed = Math.max(0, Math.round(feedStock * 0.9));
-      const nextProfit = nextSales - nextExpenses;
+        // Même convention que finances.jsx : une entrée est une dépense si sa catégorie
+        // l'indique explicitement (saisie manuelle) OU si son montant est négatif (achat auto-synchronisé).
+        const CATEGORIES_DEPENSES = ['Depenses diverses', 'Carburant', 'Salaire', 'Entretien'];
+        const isDepenseEntry = (e) => CATEGORIES_DEPENSES.includes(e.categorie) || Number(e.montant) < 0;
 
-      setForecast({
-        nextSales,
-        nextExpenses,
-        nextHarvests,
-        nextFeed,
-        nextProfit,
-        avgParcelleHumidity,
-        clientSpend,
-      });
+        const harvestTotal = harvests.reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
+        const avgHarvest = harvests.length > 0 ? harvestTotal / Math.max(1, harvests.length) : 100;
+        const feedStock = stocks.filter(item => item.categorie === 'Aliment').reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
+        const clientSpend = ventes.reduce((sum, v) => sum + (Number(v.quantite) || 0) * (Number(v.prixUnitaire) || 0), 0);
+        const monthlyFinance = financeEntries.filter(entry => {
+          const d = parseDate(entry.date);
+          if (!d) return true;
+          const now = new Date();
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+        const revenue = monthlyFinance.filter(e => !isDepenseEntry(e)).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
+        const expenses = monthlyFinance.filter(isDepenseEntry).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
+        const avgParcelleHumidity = parcelles.length > 0
+          ? parcelles.reduce((sum, p) => sum + (Number(p.humidite) || 0), 0) / parcelles.length
+          : 40;
+
+        const nextSales = Math.max(0, revenue * 1.08);
+        const nextExpenses = Math.max(0, expenses * 1.05);
+        const nextHarvests = Math.max(0, avgHarvest * 1.1);
+        const nextFeed = Math.max(0, Math.round(feedStock * 0.9));
+        const nextProfit = nextSales - nextExpenses;
+
+        setForecast({
+          nextSales,
+          nextExpenses,
+          nextHarvests,
+          nextFeed,
+          nextProfit,
+          avgParcelleHumidity,
+          clientSpend,
+        });
+      } catch (err) {
+        console.error('[ForecastingModule]', err);
+        setForecast({ nextSales: 0, nextExpenses: 0, nextHarvests: 0, nextFeed: 0, nextProfit: 0, avgParcelleHumidity: 0, clientSpend: 0 });
+      }
       setLoaded(true);
     })();
   }, [farmId, activated]);
@@ -3239,14 +3710,22 @@ function ReportsModule({ farmId, activated }) {
 
   useEffect(() => {
     (async () => {
-      const [culturesVentes, culturesAchats, poulaillerVentes, poulaillerAchats, harvests] = await Promise.all([
-        storageGet(`poulailler-ventes-cultures-${farmId}`, []),
-        storageGet(`poulailler-achats-cultures-${farmId}`, []),
-        storageGet(`poulailler-ventes-${farmId}`, []),
-        storageGet(`poulailler-achats-${farmId}`, []),
-        storageGet(`agri-recoltes-${farmId}`, []),
-      ]);
-      setRaw({ culturesVentes, culturesAchats, poulaillerVentes, poulaillerAchats, harvests });
+      try {
+        const [culturesAchats, poulaillerAchats, ventes, recoltesData] = await Promise.all([
+          activated.cultures ? getAchatsLedger('Cultures') : Promise.resolve({ mouvements: [] }),
+          activated.poulailler ? getAchatsLedger('Poulailler') : Promise.resolve({ mouvements: [] }),
+          getVentesLedger(),
+          getRecoltes(),
+        ]);
+        setRaw({
+          ventes: ventes.mouvements || [],
+          achats: [...(culturesAchats.mouvements || []), ...(poulaillerAchats.mouvements || [])],
+          harvests: recoltesData.recoltes || [],
+        });
+      } catch (err) {
+        console.error('[ReportsModule]', err);
+        setRaw({ ventes: [], achats: [], harvests: [] });
+      }
       setLoaded(true);
     })();
   }, [farmId, activated]);
@@ -3255,8 +3734,8 @@ function ReportsModule({ farmId, activated }) {
     if (!raw) return null;
     const f = (arr) => arr.filter(r => matchesPeriod(r.date, period));
     return {
-      ventes: [...f(raw.culturesVentes), ...f(raw.poulaillerVentes)],
-      achats: [...f(raw.culturesAchats), ...f(raw.poulaillerAchats)],
+      ventes: f(raw.ventes),
+      achats: f(raw.achats),
       recoltes: f(raw.harvests),
     };
   }, [raw, period]);
@@ -3498,11 +3977,22 @@ function EmployeesModule({ farmId }) {
   const emptyForm = {
     nom: '', prenom: '', poste: '', dateEmbauche: '', salaire: '',
     presence: 'Présent', avances: '', conges: '',
-    createAccount: false, email: '', role: 'ouvrier', password: '',
+    email: '', telephone: '', adresse: '',
+    createAccount: false, compteEmail: '', role: 'ouvrier', password: '',
   };
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  const emptyEditForm = {
+    nom: '', prenom: '', poste: '', dateEmbauche: '', salaire: '',
+    presence: 'Présent', avances: '', conges: '',
+    email: '', telephone: '', adresse: '',
+  };
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyEditForm);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const loadEmployees = async () => {
     setLoading(true);
@@ -3522,8 +4012,8 @@ function EmployeesModule({ farmId }) {
   const addEmployee = async (e) => {
     e.preventDefault();
     if (!form.nom || !form.prenom) return;
-    if (form.createAccount && (!form.email || !form.password || !form.role)) {
-      setFormError('Email, mot de passe temporaire et rôle sont requis pour créer un compte.');
+    if (form.createAccount && (!form.compteEmail || !form.password || !form.role)) {
+      setFormError('Email de connexion, mot de passe temporaire et rôle sont requis pour créer un compte.');
       return;
     }
     setSubmitting(true);
@@ -3538,8 +4028,11 @@ function EmployeesModule({ farmId }) {
         presence: form.presence,
         avances: Number(form.avances) || 0,
         conges: Number(form.conges) || 0,
+        email: form.email || null,
+        telephone: form.telephone || null,
+        adresse: form.adresse || null,
         createAccount: form.createAccount,
-        email: form.createAccount ? form.email : undefined,
+        compteEmail: form.createAccount ? form.compteEmail : undefined,
         password: form.createAccount ? form.password : undefined,
         role: form.createAccount ? form.role : undefined,
       });
@@ -3558,6 +4051,58 @@ function EmployeesModule({ farmId }) {
       await loadEmployees();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const startEditEmployee = (emp) => {
+    setEditingId(emp.id);
+    setEditError('');
+    setEditForm({
+      nom: emp.nom || '',
+      prenom: emp.prenom || '',
+      poste: emp.poste || '',
+      dateEmbauche: emp.dateEmbauche ? String(emp.dateEmbauche).slice(0, 10) : '',
+      salaire: emp.salaire ?? '',
+      presence: emp.presence || 'Présent',
+      avances: emp.avances ?? '',
+      conges: emp.conges ?? '',
+      email: emp.email || '',
+      telephone: emp.telephone || '',
+      adresse: emp.adresse || '',
+    });
+  };
+
+  const cancelEditEmployee = () => {
+    setEditingId(null);
+    setEditForm(emptyEditForm);
+    setEditError('');
+  };
+
+  const saveEditEmployee = async (e) => {
+    e.preventDefault();
+    if (!editForm.nom || !editForm.prenom) return;
+    setEditSubmitting(true);
+    setEditError('');
+    try {
+      await updateSalarie(editingId, {
+        nom: editForm.nom,
+        prenom: editForm.prenom,
+        poste: editForm.poste || null,
+        dateEmbauche: editForm.dateEmbauche || null,
+        salaire: Number(editForm.salaire) || 0,
+        presence: editForm.presence,
+        avances: Number(editForm.avances) || 0,
+        conges: Number(editForm.conges) || 0,
+        email: editForm.email || null,
+        telephone: editForm.telephone || null,
+        adresse: editForm.adresse || null,
+      });
+      cancelEditEmployee();
+      await loadEmployees();
+    } catch (err) {
+      setEditError(err.message);
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -3593,6 +4138,9 @@ function EmployeesModule({ farmId }) {
             </Select>
             <Field label="Avances" type="number" placeholder="0" value={form.avances} onChange={e => setForm({ ...form, avances: e.target.value })} />
             <Field label="Congés" type="number" placeholder="0" value={form.conges} onChange={e => setForm({ ...form, conges: e.target.value })} />
+            <Field label="Email personnel" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+            <Field label="Téléphone" type="tel" placeholder="Téléphone" value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
+            <Field label="Adresse" placeholder="Adresse" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
@@ -3606,7 +4154,7 @@ function EmployeesModule({ farmId }) {
 
           {form.createAccount && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
-              <Field label="Email" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required={form.createAccount} />
+              <Field label="Email de connexion" type="email" placeholder="email@exemple.com" value={form.compteEmail} onChange={e => setForm({ ...form, compteEmail: e.target.value })} required={form.createAccount} />
               <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
                 <option value="admin">Administrateur</option>
                 <option value="directeur">Directeur</option>
@@ -3651,12 +4199,17 @@ function EmployeesModule({ farmId }) {
                   <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
                   <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
                     {emp.poste || 'Poste non renseigné'}
+                    {emp.telephone && ` · ${emp.telephone}`}
                     {emp.email && ` · ${emp.email}`}
+                    {emp.compteEmail && ` · Connexion : ${emp.compteEmail}`}
                     {emp.role && ` · ${roleLabels[emp.role] || emp.role}`}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{emp.presence}</span>
+                  <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
+                    <Settings2 size={15} />
+                  </button>
                   <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
                     <Trash2 size={15} />
                   </button>
@@ -3666,46 +4219,101 @@ function EmployeesModule({ farmId }) {
           </div>
         )}
       </Card>
+
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEmployee}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'employé</div>
+              <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+
+            {editError && (
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={saveEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+                <Field label="Nom" placeholder="Nom" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
+                <Field label="Prénom" placeholder="Prénom" value={editForm.prenom} onChange={e => setEditForm({ ...editForm, prenom: e.target.value })} required />
+                <Field label="Poste" placeholder="Poste" value={editForm.poste} onChange={e => setEditForm({ ...editForm, poste: e.target.value })} />
+                <Field label="Date d'embauche" type="date" value={editForm.dateEmbauche} onChange={e => setEditForm({ ...editForm, dateEmbauche: e.target.value })} />
+                <Field label="Salaire" type="number" placeholder="Salaire" value={editForm.salaire} onChange={e => setEditForm({ ...editForm, salaire: e.target.value })} />
+                <Select label="Présence" value={editForm.presence} onChange={e => setEditForm({ ...editForm, presence: e.target.value })}>
+                  <option>Présent</option>
+                  <option>Absent</option>
+                  <option>Congé</option>
+                </Select>
+                <Field label="Avances" type="number" placeholder="0" value={editForm.avances} onChange={e => setEditForm({ ...editForm, avances: e.target.value })} />
+                <Field label="Congés" type="number" placeholder="0" value={editForm.conges} onChange={e => setEditForm({ ...editForm, conges: e.target.value })} />
+                <Field label="Email personnel" type="email" placeholder="email@exemple.com" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
+                <Field label="Téléphone" type="tel" placeholder="Téléphone" value={editForm.telephone} onChange={e => setEditForm({ ...editForm, telephone: e.target.value })} />
+                <Field label="Adresse" placeholder="Adresse" value={editForm.adresse} onChange={e => setEditForm({ ...editForm, adresse: e.target.value })} />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Button type="submit" variant="green" disabled={editSubmitting}>
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                </Button>
+                <Button type="button" onClick={cancelEditEmployee}>Annuler</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function NotificationsModule({ farmId }) {
+function NotificationsModule({ farmId, activated }) {
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     (async () => {
-      const [parcelles, stocks, livraisons, clients] = await Promise.all([
-        storageGet(`cultures-parcelles-${farmId}`, DEFAULT_PARCELLES),
-        storageGet(`poulailler-stocks-${farmId}`, DEFAULT_STOCKS),
-        storageGet(`poulailler-livraisons-${farmId}`, []),
-        storageGet(`poulailler-clients-${farmId}`, []),
-      ]);
+      try {
+        const [parcellesData, stocksData, livraisonsData, devisData] = await Promise.all([
+          activated?.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
+          activated?.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+          activated?.poulailler ? getPoulaillerLivraisons() : Promise.resolve({ livraisons: [] }),
+          getDevisListe(),
+        ]);
 
-      const items = [];
-      stocks.filter(item => item.quantite <= (item.seuil || 0)).forEach(item => {
-        items.push({ id: `stock-${item.id}`, icon: '🔴', title: 'Stock faible', message: `${item.nom} est en dessous du seuil (${item.quantite} ${item.unite || ''})` });
-      });
+        const parcelles = parcellesData.parcelles || [];
+        const stocks = stocksData.stocks || [];
+        const livraisons = livraisonsData.livraisons || [];
+        const devisListe = devisData.devis || [];
 
-      parcelles.filter(p => p.temperature > 33).forEach(p => {
-        items.push({ id: `temp-${p.id}`, icon: '⚠️', title: 'Température trop élevée', message: `${p.nom} dépasse ${p.temperature}°C` });
-      });
+        const items = [];
+        stocks.filter(item => item.quantite <= (item.seuil || 0)).forEach(item => {
+          items.push({ id: `stock-${item.id}`, icon: '🔴', title: 'Stock faible', message: `${item.nom} est en dessous du seuil (${item.quantite} ${item.unite || ''})` });
+        });
 
-      parcelles.filter(p => p.humidite < p.seuil).forEach(p => {
-        items.push({ id: `soil-${p.id}`, icon: '💧', title: 'Sol sec', message: `${p.nom} nécessite un arrosage` });
-      });
+        parcelles.filter(p => p.temperature > 33).forEach(p => {
+          items.push({ id: `temp-${p.id}`, icon: '⚠️', title: 'Température trop élevée', message: `${p.nom} dépasse ${p.temperature}°C` });
+        });
 
-      livraisons.filter(l => l.statut === 'En attente').forEach(l => {
-        items.push({ id: `delivery-${l.id}`, icon: '🚚', title: 'Livraison prévue aujourd’hui', message: `${l.produit} à livrer à ${l.client}` });
-      });
+        parcelles.filter(p => p.humidite < p.seuil).forEach(p => {
+          items.push({ id: `soil-${p.id}`, icon: '💧', title: 'Sol sec', message: `${p.nom} nécessite un arrosage` });
+        });
 
-      clients.filter(c => c.detteRestante > 0).forEach(c => {
-        items.push({ id: `client-${c.id}`, icon: '💰', title: 'Client n’a pas payé', message: `${c.prenom} ${c.nom} a une dette de ${c.detteRestante.toLocaleString('fr-FR')} FCFA` });
-      });
+        livraisons.filter(l => l.statut === 'En attente').forEach(l => {
+          items.push({ id: `delivery-${l.id}`, icon: '🚚', title: 'Livraison prévue aujourd’hui', message: `${l.produit} à livrer à ${l.client}` });
+        });
 
-      setNotifications(items);
+        devisListe.filter(d => ['Non payé', 'Payé partiellement'].includes(d.statut)).forEach(d => {
+          const nomClient = [d.clientPrenom, d.clientNom].filter(Boolean).join(' ') || 'Client';
+          items.push({ id: `client-${d.id}`, icon: '💰', title: 'Facture en attente de paiement', message: `${nomClient} — ${d.numero} (${Number(d.total).toLocaleString('fr-FR')} FCFA, ${d.statut})` });
+        });
+
+        setNotifications(items);
+      } catch (err) {
+        console.error('[NotificationsModule]', err);
+        setNotifications([]);
+      }
     })();
-  }, [farmId]);
+  }, [farmId, activated]);
 
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -3737,8 +4345,11 @@ function ClientsModule() {
   const [apiError, setApiError] = useState('');
   const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '' };
   const [form, setForm]         = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null); // null = mode ajout, sinon id du client en cours d'édition
   const [query, setQuery]       = useState('');
+
+  const [editingId, setEditingId] = useState(null); // null = fenêtre de modification fermée, sinon id du client en cours d'édition
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editSaving, setEditSaving] = useState(false);
 
   const selectedClient = clients.find(c => c.id === selectedId) || null;
 
@@ -3757,24 +4368,17 @@ function ClientsModule() {
     })();
   }, []);
 
-  // Soumet le formulaire : crée un nouveau client, ou met à jour celui en cours d'édition
+  // Soumet le formulaire d'ajout d'un nouveau client
   const submitForm = async (e) => {
     e.preventDefault();
     if (!form.nom) return;
     setSaving(true);
     setApiError('');
     try {
-      if (editingId) {
-        const { client } = await updateClient(editingId, form);
-        setClients(prev => prev.map(c => c.id === editingId ? client : c));
-        notifySuccess('Client mis à jour.');
-      } else {
-        const { client } = await createClient(form);
-        setClients(prev => [client, ...prev]);
-        setSelectedId(client.id);
-      }
+      const { client } = await createClient(form);
+      setClients(prev => [client, ...prev]);
+      setSelectedId(client.id);
       setForm(emptyForm);
-      setEditingId(null);
     } catch (err) {
       setApiError(err.message || "Erreur lors de l'enregistrement.");
     } finally {
@@ -3782,10 +4386,10 @@ function ClientsModule() {
     }
   };
 
-  // Prépare le formulaire pour modifier un client existant
+  // Ouvre la fenêtre de modification d'un client existant
   const startEdit = (client) => {
     setEditingId(client.id);
-    setForm({
+    setEditForm({
       nom: client.nom || '',
       prenom: client.prenom || '',
       telephone: client.telephone || '',
@@ -3797,7 +4401,24 @@ function ClientsModule() {
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    setEditForm(emptyForm);
+  };
+
+  const submitEditForm = async (e) => {
+    e.preventDefault();
+    if (!editForm.nom) return;
+    setEditSaving(true);
+    setApiError('');
+    try {
+      const { client } = await updateClient(editingId, editForm);
+      setClients(prev => prev.map(c => c.id === editingId ? client : c));
+      notifySuccess('Client mis à jour.');
+      cancelEdit();
+    } catch (err) {
+      setApiError(err.message || "Erreur lors de l'enregistrement.");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const removeClient = async (id, nom) => {
@@ -3833,7 +4454,7 @@ function ClientsModule() {
       )}
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          {editingId ? 'Modifier le client' : 'Ajouter un client'}
+          Ajouter un client
         </div>
         <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label="Nom" placeholder="Ex: Diallo" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
@@ -3844,11 +4465,8 @@ function ClientsModule() {
           <Field label="SIRET (optionnel)" placeholder="Si société" value={form.siret} onChange={e => setForm({ ...form, siret: e.target.value })} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button type="submit" variant="green" disabled={saving}>
-              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {editingId ? 'Mettre à jour' : 'Ajouter'}
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
             </Button>
-            {editingId && (
-              <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
-            )}
           </div>
         </form>
       </Card>
@@ -3874,7 +4492,7 @@ function ClientsModule() {
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={(ev) => { ev.stopPropagation(); startEdit(client); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
-                      <PencilLine size={14} />
+                      <Settings2 size={14} />
                     </button>
                     <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id, client.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                       <Trash2 size={14} />
@@ -3911,6 +4529,30 @@ function ClientsModule() {
           )}
         </div>
       )}
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le client</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+              <Field label="Nom" placeholder="Ex: Diallo" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
+              <Field label="Prénom" placeholder="Ex: Amadou" value={editForm.prenom} onChange={e => setEditForm({ ...editForm, prenom: e.target.value })} />
+              <Field label="Téléphone" placeholder="+223..." value={editForm.telephone} onChange={e => setEditForm({ ...editForm, telephone: e.target.value })} />
+              <Field label="Email" type="email" placeholder="email@exemple.com" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
+              <Field label="Adresse" placeholder="Ville / quartier" value={editForm.adresse} onChange={e => setEditForm({ ...editForm, adresse: e.target.value })} />
+              <Field label="SIRET (optionnel)" placeholder="Si société" value={editForm.siret} onChange={e => setEditForm({ ...editForm, siret: e.target.value })} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button type="submit" variant="green" disabled={editSaving}>
+                  {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Enregistrer
+                </Button>
+                <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3923,8 +4565,11 @@ function FournisseursModule() {
   const [apiError, setApiError] = useState('');
   const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '' };
   const [form, setForm]         = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
   const [query, setQuery]       = useState('');
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editSaving, setEditSaving] = useState(false);
 
   const selectedFournisseur = fournisseurs.find(f => f.id === selectedId) || null;
 
@@ -3949,17 +4594,10 @@ function FournisseursModule() {
     setSaving(true);
     setApiError('');
     try {
-      if (editingId) {
-        const { fournisseur } = await updateFournisseur(editingId, form);
-        setFournisseurs(prev => prev.map(f => f.id === editingId ? fournisseur : f));
-        notifySuccess('Fournisseur mis à jour.');
-      } else {
-        const { fournisseur } = await createFournisseur(form);
-        setFournisseurs(prev => [fournisseur, ...prev]);
-        setSelectedId(fournisseur.id);
-      }
+      const { fournisseur } = await createFournisseur(form);
+      setFournisseurs(prev => [fournisseur, ...prev]);
+      setSelectedId(fournisseur.id);
       setForm(emptyForm);
-      setEditingId(null);
     } catch (err) {
       setApiError(err.message || "Erreur lors de l'enregistrement.");
     } finally {
@@ -3969,7 +4607,7 @@ function FournisseursModule() {
 
   const startEdit = (fournisseur) => {
     setEditingId(fournisseur.id);
-    setForm({
+    setEditForm({
       nom: fournisseur.nom || '',
       prenom: fournisseur.prenom || '',
       telephone: fournisseur.telephone || '',
@@ -3981,7 +4619,24 @@ function FournisseursModule() {
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    setEditForm(emptyForm);
+  };
+
+  const submitEditForm = async (e) => {
+    e.preventDefault();
+    if (!editForm.nom) return;
+    setEditSaving(true);
+    setApiError('');
+    try {
+      const { fournisseur } = await updateFournisseur(editingId, editForm);
+      setFournisseurs(prev => prev.map(f => f.id === editingId ? fournisseur : f));
+      notifySuccess('Fournisseur mis à jour.');
+      cancelEdit();
+    } catch (err) {
+      setApiError(err.message || "Erreur lors de l'enregistrement.");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const removeFournisseur = async (id, nom) => {
@@ -4017,7 +4672,7 @@ function FournisseursModule() {
       )}
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          {editingId ? 'Modifier le fournisseur' : 'Ajouter un fournisseur'}
+          Ajouter un fournisseur
         </div>
         <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label="Nom" placeholder="Ex: Traoré" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
@@ -4028,11 +4683,8 @@ function FournisseursModule() {
           <Field label="SIRET (optionnel)" placeholder="Si société" value={form.siret} onChange={e => setForm({ ...form, siret: e.target.value })} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button type="submit" variant="ochre" disabled={saving}>
-              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {editingId ? 'Mettre à jour' : 'Ajouter'}
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
             </Button>
-            {editingId && (
-              <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
-            )}
           </div>
         </form>
       </Card>
@@ -4058,7 +4710,7 @@ function FournisseursModule() {
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={(ev) => { ev.stopPropagation(); startEdit(f); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
-                      <PencilLine size={14} />
+                      <Settings2 size={14} />
                     </button>
                     <button onClick={(ev) => { ev.stopPropagation(); removeFournisseur(f.id, f.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                       <Trash2 size={14} />
@@ -4081,6 +4733,30 @@ function FournisseursModule() {
               </div>
             </Card>
           )}
+        </div>
+      )}
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le fournisseur</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+              <Field label="Nom" placeholder="Ex: Traoré" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
+              <Field label="Prénom" placeholder="Ex: Ibrahim" value={editForm.prenom} onChange={e => setEditForm({ ...editForm, prenom: e.target.value })} />
+              <Field label="Téléphone" placeholder="+223..." value={editForm.telephone} onChange={e => setEditForm({ ...editForm, telephone: e.target.value })} />
+              <Field label="Email" type="email" placeholder="email@exemple.com" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
+              <Field label="Adresse" placeholder="Ville / quartier" value={editForm.adresse} onChange={e => setEditForm({ ...editForm, adresse: e.target.value })} />
+              <Field label="SIRET (optionnel)" placeholder="Si société" value={editForm.siret} onChange={e => setEditForm({ ...editForm, siret: e.target.value })} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button type="submit" variant="green" disabled={editSaving}>
+                  {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Enregistrer
+                </Button>
+                <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
@@ -4168,6 +4844,7 @@ export default function App() {
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('admin');
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [activated, setActivated] = useState({ cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
   const [tab, setTab] = useState(null);
   const [initLoaded, setInitLoaded] = useState(false);
@@ -4247,6 +4924,7 @@ export default function App() {
   const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
   setUser(authResult.user.email);
   setRole(uiRole);
+  setIsPlatformAdmin(authResult.user.isPlatformAdmin === true);
   await checkOnboardingNeeded(uiRole);
   setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
   if (!selectedConfig.permissions.includes('modules')) {
@@ -4322,6 +5000,8 @@ export default function App() {
     activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark, category: 'finance' },
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell, category: 'operations' },
     { id: 'observations', label: 'Observations', icon: ClipboardList, category: 'operations' },
+    { id: 'feedback', label: 'Feedback', icon: MessageSquare, category: null },
+    { id: 'aide', label: 'Aide', icon: HelpCircle, category: null },
     { id: 'profil', label: 'Profil', icon: Settings, category: null },
   ].filter(Boolean);
 
@@ -4341,6 +5021,7 @@ export default function App() {
         const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
         setUser(user.email);
         setRole(uiRole);
+        setIsPlatformAdmin(user.isPlatformAdmin === true);
         await checkOnboardingNeeded(uiRole);
         setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
         if (!selectedConfig.permissions.includes('modules')) {
@@ -4391,7 +5072,7 @@ export default function App() {
               <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {roleConfig.label}
               </span>
-              <button onClick={() => { clearToken(); setScreen('login'); setUser(null); setRole('admin'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+              <button onClick={() => { clearToken(); setScreen('login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                 <LogOut size={17} />
               </button>
             </div>
@@ -4512,8 +5193,10 @@ export default function App() {
           {tab === 'fournisseurs' && <FournisseursModule farmId={user} />}
           {tab === 'employees' && <EmployeesModule farmId={user} />}
           {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
-          {tab === 'notifications' && <NotificationsModule farmId={user} />}
+          {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
           {tab === 'observations' && <ObservationListView />}
+          {tab === 'feedback' && <FeedbackModule isPlatformAdmin={isPlatformAdmin} />}
+          {tab === 'aide' && <HelpModule />}
           {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
         </div>
       )}
