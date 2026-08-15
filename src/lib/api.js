@@ -182,6 +182,37 @@ export async function deleteCulturesStock(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Équipements (inventaire matériel)
+// ─────────────────────────────────────────────────────────────────────
+export async function getEquipements() {
+  return request('/equipements');
+}
+
+export async function createEquipement(payload) {
+  return safeRequest('/equipements', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateEquipement(id, payload) {
+  return safeRequest(`/equipements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteEquipement(id) {
+  return safeRequest(`/equipements/${id}`, { method: 'DELETE' });
+}
+
+export async function getEquipementMaintenance(id) {
+  return request(`/equipements/${id}/maintenance`);
+}
+
+export async function createEquipementMaintenance(id, payload) {
+  return safeRequest(`/equipements/${id}/maintenance`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteEquipementMaintenance(maintenanceId) {
+  return safeRequest(`/equipements/maintenance/${maintenanceId}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Poulailler — Ventes / Achats
 // ─────────────────────────────────────────────────────────────────────
 export async function getPoulaillerMouvements(type) {
@@ -333,6 +364,45 @@ export async function updateSalarie(id, payload) {
 
 export async function deleteSalarie(id) {
   return request(`/salaries/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Salariés — RH enrichie (présences / congés / avances)
+// ─────────────────────────────────────────────────────────────────────
+export async function getSalariePresences(salarieId) {
+  return request(`/salaries/${salarieId}/presences`);
+}
+
+export async function upsertSalariePresence(salarieId, payload) {
+  return request(`/salaries/${salarieId}/presences`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getSalarieConges(salarieId) {
+  return request(`/salaries/${salarieId}/conges`);
+}
+
+export async function createSalarieConge(salarieId, payload) {
+  return request(`/salaries/${salarieId}/conges`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateSalarieCongeStatut(congeId, statut) {
+  return request(`/salaries/conges/${congeId}`, { method: 'PUT', body: JSON.stringify({ statut }) });
+}
+
+export async function deleteSalarieConge(congeId) {
+  return request(`/salaries/conges/${congeId}`, { method: 'DELETE' });
+}
+
+export async function getSalarieAvances(salarieId) {
+  return request(`/salaries/${salarieId}/avances`);
+}
+
+export async function createSalarieAvance(salarieId, payload) {
+  return request(`/salaries/${salarieId}/avances`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteSalarieAvance(avanceId) {
+  return request(`/salaries/avances/${avanceId}`, { method: 'DELETE' });
 }
 
 // ─────────────────────────────────────────────────────────────────────

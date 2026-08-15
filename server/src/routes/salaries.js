@@ -246,4 +246,188 @@ router.delete('/:id', authRequired, requireRole('admin'), async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════
+//  RH enrichie — présences / congés / avances (historiques réels,
+//  en complément des champs plats presence/avances/conges ci-dessus)
+// ═══════════════════════════════════════════════════════════
+
+const PRESENCE_COLUMNS = `id, salarie_id AS "salarieId", date, statut, notes, created_at AS "createdAt"`;
+const CONGE_COLUMNS = `
+  id, salarie_id AS "salarieId", date_debut AS "dateDebut", date_fin AS "dateFin",
+  motif, statut, decided_by AS "decidedBy", decided_at AS "decidedAt", created_at AS "createdAt"
+`;
+const AVANCE_COLUMNS = `id, salarie_id AS "salarieId", date, montant::float8 AS montant, motif, created_at AS "createdAt"`;
+
+async function findOwnedSalarie(id, entrepriseId) {
+  const result = await pool.query(
+    'SELECT id FROM salaries WHERE id = $1 AND entreprise_id = $2',
+    [id, entrepriseId]
+  );
+  return result.rows[0] || null;
+}
+
+// ─── Présences ───────────────────────────────────────────────
+router.get('/:id/presences', authRequired, async (req, res) => {
+  try {
+    const owned = await findOwnedSalarie(req.params.id, req.user.entrepriseId);
+    if (!owned) return res.status(404).json({ error: 'Salarié introuvable.' });
+    const result = await pool.query(
+      `SELECT ${PRESENCE_COLUMNS} FROM salaries_presences WHERE salarie_id = $1 ORDER BY date DESC`,
+      [req.params.id]
+    );
+    return res.json({ presences: result.rows });
+  } catch (err) {
+    console.error('[GET /salaries/:id/presences]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des présences.' });
+  }
+});
+
+router.post('/:id/presences', authRequired, requireRole('admin'), async (req, res) => {
+  const { date, statut, notes } = req.body;
+  if (!date || !statut) {
+    return res.status(400).json({ error: 'Date et statut requis.' });
+  }
+  try {
+    const owned = await findOwnedSalarie(req.params.id, req.user.entrepriseId);
+    if (!owned) return res.status(404).json({ error: 'Salarié introuvable.' });
+    const result = await pool.query(
+      `INSERT INTO salaries_presences (salarie_id, date, statut, notes)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (salarie_id, date) DO UPDATE SET statut = $3, notes = $4
+       RETURNING ${PRESENCE_COLUMNS}`,
+      [req.params.id, date, statut, notes || null]
+    );
+    return res.status(201).json({ presence: result.rows[0] });
+  } catch (err) {
+    console.error('[POST /salaries/:id/presences]', err);
+    return res.status(500).json({ error: "Erreur lors de l'enregistrement de la présence." });
+  }
+});
+
+// ─── Congés ──────────────────────────────────────────────────
+router.get('/:id/conges', authRequired, async (req, res) => {
+  try {
+    const owned = await findOwnedSalarie(req.params.id, req.user.entrepriseId);
+    if (!owned) return res.status(404).json({ error: 'Salarié introuvable.' });
+    const result = await pool.query(
+      `SELECT ${CONGE_COLUMNS} FROM salaries_conges WHERE salarie_id = $1 ORDER BY date_debut DESC`,
+      [req.params.id]
+    );
+    return res.json({ conges: result.rows });
+  } catch (err) {
+    console.error('[GET /salaries/:id/conges]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des congés.' });
+  }
+});
+
+router.post('/:id/conges', authRequired, requireRole('admin'), async (req, res) => {
+  const { dateDebut, dateFin, motif } = req.body;
+  if (!dateDebut || !dateFin) {
+    return res.status(400).json({ error: 'Dates de début et de fin requises.' });
+  }
+  try {
+    const owned = await findOwnedSalarie(req.params.id, req.user.entrepriseId);
+    if (!owned) return res.status(404).json({ error: 'Salarié introuvable.' });
+    const result = await pool.query(
+      `INSERT INTO salaries_conges (salarie_id, date_debut, date_fin, motif, statut)
+       VALUES ($1, $2, $3, $4, 'Demandé') RETURNING ${CONGE_COLUMNS}`,
+      [req.params.id, dateDebut, dateFin, motif || null]
+    );
+    return res.status(201).json({ conge: result.rows[0] });
+  } catch (err) {
+    console.error('[POST /salaries/:id/conges]', err);
+    return res.status(500).json({ error: "Erreur lors de la création de la demande de congé." });
+  }
+});
+
+router.put('/conges/:congeId', authRequired, requireRole('admin'), async (req, res) => {
+  const { statut } = req.body;
+  if (!['Approuvé', 'Refusé', 'Demandé'].includes(statut)) {
+    return res.status(400).json({ error: 'Statut invalide.' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE salaries_conges c SET statut = $1, decided_by = $2, decided_at = NOW()
+       FROM salaries s
+       WHERE c.id = $3 AND c.salarie_id = s.id AND s.entreprise_id = $4
+       RETURNING c.id, c.salarie_id AS "salarieId", c.date_debut AS "dateDebut", c.date_fin AS "dateFin",
+                 c.motif, c.statut, c.decided_by AS "decidedBy", c.decided_at AS "decidedAt", c.created_at AS "createdAt"`,
+      [statut, req.user.sub, req.params.congeId, req.user.entrepriseId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Demande de congé introuvable.' });
+    return res.json({ conge: result.rows[0] });
+  } catch (err) {
+    console.error('[PUT /salaries/conges/:id]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour du congé.' });
+  }
+});
+
+router.delete('/conges/:congeId', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM salaries_conges c
+       USING salaries s
+       WHERE c.id = $1 AND c.salarie_id = s.id AND s.entreprise_id = $2`,
+      [req.params.congeId, req.user.entrepriseId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Demande de congé introuvable.' });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /salaries/conges/:id]', err);
+    return res.status(500).json({ error: 'Erreur lors de la suppression du congé.' });
+  }
+});
+
+// ─── Avances ─────────────────────────────────────────────────
+router.get('/:id/avances', authRequired, async (req, res) => {
+  try {
+    const owned = await findOwnedSalarie(req.params.id, req.user.entrepriseId);
+    if (!owned) return res.status(404).json({ error: 'Salarié introuvable.' });
+    const result = await pool.query(
+      `SELECT ${AVANCE_COLUMNS} FROM salaries_avances WHERE salarie_id = $1 ORDER BY date DESC`,
+      [req.params.id]
+    );
+    return res.json({ avances: result.rows });
+  } catch (err) {
+    console.error('[GET /salaries/:id/avances]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des avances.' });
+  }
+});
+
+router.post('/:id/avances', authRequired, requireRole('admin'), async (req, res) => {
+  const { date, montant, motif } = req.body;
+  if (!montant) {
+    return res.status(400).json({ error: 'Montant requis.' });
+  }
+  try {
+    const owned = await findOwnedSalarie(req.params.id, req.user.entrepriseId);
+    if (!owned) return res.status(404).json({ error: 'Salarié introuvable.' });
+    const result = await pool.query(
+      `INSERT INTO salaries_avances (salarie_id, date, montant, motif)
+       VALUES ($1, COALESCE($2, CURRENT_DATE), $3, $4) RETURNING ${AVANCE_COLUMNS}`,
+      [req.params.id, date || null, Number(montant), motif || null]
+    );
+    return res.status(201).json({ avance: result.rows[0] });
+  } catch (err) {
+    console.error('[POST /salaries/:id/avances]', err);
+    return res.status(500).json({ error: "Erreur lors de l'enregistrement de l'avance." });
+  }
+});
+
+router.delete('/avances/:avanceId', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM salaries_avances a
+       USING salaries s
+       WHERE a.id = $1 AND a.salarie_id = s.id AND s.entreprise_id = $2`,
+      [req.params.avanceId, req.user.entrepriseId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Avance introuvable.' });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /salaries/avances/:id]', err);
+    return res.status(500).json({ error: "Erreur lors de la suppression de l'avance." });
+  }
+});
+
 export default router;

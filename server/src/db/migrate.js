@@ -291,6 +291,92 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_entreprise_id ON feedback(entreprise_id);
+
+-- ═══════════════ Inventaire matériel (équipements) ═══════════════
+CREATE TABLE IF NOT EXISTS equipements (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  nom               TEXT NOT NULL,
+  categorie         TEXT NOT NULL DEFAULT 'Autre',
+  etat              TEXT NOT NULL DEFAULT 'Fonctionnel',
+  date_acquisition  DATE,
+  valeur            NUMERIC(12, 2),
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_equipements_entreprise_id ON equipements(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS equipements_maintenance (
+  id             SERIAL PRIMARY KEY,
+  equipement_id  INTEGER NOT NULL REFERENCES equipements(id) ON DELETE CASCADE,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  date           DATE NOT NULL DEFAULT CURRENT_DATE,
+  description    TEXT NOT NULL,
+  cout           NUMERIC(12, 2),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_equipements_maintenance_equipement_id ON equipements_maintenance(equipement_id);
+
+-- ═══════════════ Salariés (table pré-existante, jamais créée par migrate.js — même
+-- trou que poulailler_stocks.entreprise_id documenté plus haut : une base fraîche
+-- plantait dessus dès le premier appel à /api/salaries). Reproduit le schéma déjà
+-- en place en prod à l'identique (IF NOT EXISTS, donc sans effet sur une base existante).
+CREATE TABLE IF NOT EXISTS salaries (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  nom            VARCHAR(100) NOT NULL,
+  prenom         VARCHAR(100) NOT NULL,
+  poste          VARCHAR(100),
+  date_embauche  DATE,
+  salaire        NUMERIC(10, 2),
+  statut         VARCHAR(20) DEFAULT 'Actif',
+  created_at     TIMESTAMP DEFAULT NOW(),
+  presence       VARCHAR(20) DEFAULT 'Présent',
+  avances        NUMERIC(10, 2) DEFAULT 0,
+  conges         NUMERIC(10, 2) DEFAULT 0,
+  email          TEXT,
+  telephone      TEXT,
+  adresse        TEXT
+);
+
+-- ═══════════════ RH enrichie — historiques réels (présences/congés/avances),
+-- en complément des champs plats ci-dessus (presence/avances/conges), volontairement
+-- conservés tels quels pour ne rien casser côté formulaire employé existant.
+CREATE TABLE IF NOT EXISTS salaries_presences (
+  id          SERIAL PRIMARY KEY,
+  salarie_id  INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  date        DATE NOT NULL,
+  statut      TEXT NOT NULL DEFAULT 'Présent',
+  notes       TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (salarie_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_salaries_presences_salarie_id ON salaries_presences(salarie_id);
+
+CREATE TABLE IF NOT EXISTS salaries_conges (
+  id           SERIAL PRIMARY KEY,
+  salarie_id   INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  date_debut   DATE NOT NULL,
+  date_fin     DATE NOT NULL,
+  motif        TEXT,
+  statut       TEXT NOT NULL DEFAULT 'Demandé',
+  decided_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decided_at   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_salaries_conges_salarie_id ON salaries_conges(salarie_id);
+
+CREATE TABLE IF NOT EXISTS salaries_avances (
+  id          SERIAL PRIMARY KEY,
+  salarie_id  INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  date        DATE NOT NULL DEFAULT CURRENT_DATE,
+  montant     NUMERIC(12, 2) NOT NULL,
+  motif       TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_salaries_avances_salarie_id ON salaries_avances(salarie_id);
 `;
 
 async function migrate() {

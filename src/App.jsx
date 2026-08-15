@@ -6,7 +6,7 @@ import {
   TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home,
   Search, Printer, FileText, Download, Users, Briefcase, Landmark, Bell,
-  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle
+  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench
 } from 'lucide-react';
 import {
   clearToken, createClient, createFinance, deleteClient, deleteFinance,
@@ -36,6 +36,8 @@ import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContaine
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
 import { FeedbackModule } from './components/FeedbackModule';
 import { HelpModule } from './components/HelpModule';
+import { EquipementsModule } from './components/EquipementsModule';
+import { EmployeeRhModal } from './components/EmployeeRhModal';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi, mapUiRoleToBackend } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
 import { FinancesModule, BanquesModule } from './modules/finances.jsx';
@@ -56,6 +58,15 @@ const COLORS = {
   red: '#E53E3E', // Rouge d'alerte plus vif et standard
   redSoft: '#FED7D7',
 };
+
+// Regroupement de la sidebar — même taxonomie que le champ `category` d'availableTabs.
+const NAV_CATEGORIES = [
+  { id: 'operations', label: 'Opérations', color: COLORS.green },
+  { id: 'analyse', label: 'Analyse', color: COLORS.blue },
+  { id: 'commercial', label: 'Commercial', color: COLORS.ochre },
+  { id: 'finance', label: 'Finance', color: COLORS.red },
+  { id: 'rh', label: 'RH', color: '#9B6BD6' },
+];
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
 
@@ -3969,10 +3980,12 @@ function HomeOverview({ farmId, activated }) {
   );
 }
 
-function EmployeesModule({ farmId }) {
+function EmployeesModule({ farmId, role }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [rhEmployee, setRhEmployee] = useState(null);
+  const canManageRh = role === 'admin';
 
   const emptyForm = {
     nom: '', prenom: '', poste: '', dateEmbauche: '', salaire: '',
@@ -4207,6 +4220,9 @@ function EmployeesModule({ farmId }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{emp.presence}</span>
+                  <button onClick={() => setRhEmployee(emp)} title="Fiche RH" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                    <ClipboardList size={15} />
+                  </button>
                   <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
                     <Settings2 size={15} />
                   </button>
@@ -4262,6 +4278,10 @@ function EmployeesModule({ farmId }) {
             </form>
           </div>
         </div>
+      )}
+
+      {rhEmployee && (
+        <EmployeeRhModal employee={rhEmployee} canManage={canManageRh} onClose={() => setRhEmployee(null)} />
       )}
     </div>
   );
@@ -4839,6 +4859,75 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
   );
 }
 
+function SidebarNav({ tabs, activeTab, onSelect, top }) {
+  const [collapsed, setCollapsed] = useState({});
+  const pinned = tabs.filter(t => !t.category);
+  const toggleGroup = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
+
+  const itemStyle = (active, indent) => ({
+    display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+    padding: `7px 10px 7px ${indent}px`, borderRadius: 8,
+    fontSize: 13, fontWeight: active ? 700 : 500, textAlign: 'left',
+    border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+    background: active ? COLORS.greenSoft : 'transparent',
+    color: active ? COLORS.green : COLORS.inkSoft,
+  });
+
+  return (
+    <nav className="sidebar-nav" style={{
+      width: 224, flexShrink: 0, borderRight: `1px solid ${COLORS.border}`,
+      padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 2,
+      position: 'sticky', top, alignSelf: 'flex-start',
+      maxHeight: top ? `calc(100vh - ${top}px)` : '100vh', overflowY: 'auto',
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${COLORS.border}` }}>
+        {pinned.map(t => {
+          const Icon = t.icon;
+          const active = activeTab === t.id;
+          return (
+            <button key={t.id} className="sidebar-item" onClick={() => onSelect(t.id)} style={itemStyle(active, 10)}>
+              <Icon size={15} /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {NAV_CATEGORIES.map(cat => {
+        const items = tabs.filter(t => t.category === cat.id);
+        if (items.length === 0) return null;
+        const isCollapsed = !!collapsed[cat.id];
+        return (
+          <div key={cat.id} style={{ marginTop: 4 }}>
+            <button onClick={() => toggleGroup(cat.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none',
+              padding: '6px 10px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color, flexShrink: 0 }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft, flex: 1 }}>
+                {cat.label}
+              </span>
+              <ChevronRight size={12} style={{ color: COLORS.inkSoft, transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
+            </button>
+            {!isCollapsed && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {items.map(t => {
+                  const Icon = t.icon;
+                  const active = activeTab === t.id;
+                  return (
+                    <button key={t.id} className="sidebar-item" onClick={() => onSelect(t.id)} style={itemStyle(active, 26)}>
+                      <Icon size={14} /> {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState('login');
   const [isOnboarding, setIsOnboarding] = useState(false);
@@ -4851,6 +4940,17 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [lastSync, setLastSync] = useState(typeof window !== 'undefined' ? localStorage.getItem('agri-last-sync') : null);
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  useEffect(() => {
+    if (!headerRef.current || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(entries => {
+      setHeaderHeight(entries[0].contentRect.height);
+    });
+    observer.observe(headerRef.current);
+    return () => observer.disconnect();
+  }, [screen]);
 
   useEffect(() => {
     (async () => {
@@ -5000,6 +5100,7 @@ export default function App() {
     activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark, category: 'finance' },
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell, category: 'operations' },
     { id: 'observations', label: 'Observations', icon: ClipboardList, category: 'operations' },
+    roleConfig.permissions.includes('equipements') && { id: 'equipements', label: 'Équipements', icon: Wrench, category: 'operations' },
     { id: 'feedback', label: 'Feedback', icon: MessageSquare, category: null },
     { id: 'aide', label: 'Aide', icon: HelpCircle, category: null },
     { id: 'profil', label: 'Profil', icon: Settings, category: null },
@@ -5042,16 +5143,21 @@ export default function App() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .app-shell { max-width: 1500px; margin: 0 auto; }
         .topbar { background: #FFFFFF; box-shadow: 0 6px 24px rgba(20,35,24,0.06); }
-        .dashboard-shell { max-width: 1500px; margin: 0 auto; }
-        .nav-chip { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .nav-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20,35,24,0.08); }
+        .dashboard-layout { max-width: 1500px; margin: 0 auto; display: flex; align-items: flex-start; }
+        .dashboard-shell { flex: 1; min-width: 0; }
+        .sidebar-item:hover { background: ${COLORS.surfaceAlt}; }
+        @media (max-width: 760px) {
+          .sidebar-nav { position: static !important; width: 100% !important; max-height: none !important;
+            border-right: none !important; border-bottom: 1px solid ${COLORS.border}; }
+          .dashboard-layout { flex-direction: column; }
+        }
         input:focus, select:focus { border-color: ${COLORS.green} !important; box-shadow: 0 0 0 3px ${COLORS.greenSoft}; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 3px; }
       `}</style>
 
       {screen !== 'login' && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: COLORS.bg }}>
+        <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 20, background: COLORS.bg }}>
           <div className="topbar" style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
             padding: '14px 22px', borderBottom: `1px solid ${COLORS.border}`
@@ -5085,25 +5191,6 @@ export default function App() {
               {pendingSyncCount > 0 ? `${pendingSyncCount} modification(s) à synchroniser` : lastSync ? `Dernière synchronisation : ${new Date(lastSync).toLocaleString('fr-FR')}` : 'Aucune synchronisation enregistrée'}
             </span>
           </div>
-          {screen === 'dashboard' && availableTabs.length > 1 && (
-            <div style={{ padding: '10px 22px 16px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', rowGap: 8, maxWidth: '100%', overflowX: 'auto' }}>
-              {availableTabs.map(t => {
-                const Icon = t.icon;
-                const active = tab === t.id;
-                return (
-                  <button key={t.id} onClick={() => setTab(t.id)} className="nav-chip" style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 15.5, fontWeight: 700,
-                    padding: '12px 24px', minHeight: 46, borderRadius: 12, cursor: 'pointer', whiteSpace: 'nowrap',
-                    border: `1px solid ${active ? COLORS.ink : COLORS.border}`,
-                    background: active ? COLORS.ink : COLORS.surface, color: active ? '#fff' : COLORS.ink,
-                    boxShadow: active ? '0 4px 10px rgba(20,35,24,0.08)' : 'none'
-                  }}>
-                    <Icon size={15} /> {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 
@@ -5180,24 +5267,30 @@ export default function App() {
 )}
 
       {screen === 'dashboard' && (
-        <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
-          {tab === 'accueil' && <HomeOverview farmId={user} activated={activated} />}
-          {tab === 'calendar' && <AgriculturalCalendarModule farmId={user} />}
-          {tab === 'recoltes' && <HarvestsModule farmId={user} />}
-          {tab === 'assistant' && <AIAssistantModule farmId={user} activated={activated} />}
-          {tab === 'forecasting' && <ForecastingModule farmId={user} activated={activated} />}
-          {tab === 'reports' && <ReportsModule farmId={user} activated={activated} />}
-          {tab === 'cultures' && <CulturesModule farmId={user} />}
-          {tab === 'poulailler' && <PoulaillerModule farmId={user} />}
-          {tab === 'clients' && <ClientsModule farmId={user} />}
-          {tab === 'fournisseurs' && <FournisseursModule farmId={user} />}
-          {tab === 'employees' && <EmployeesModule farmId={user} />}
-          {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
-          {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
-          {tab === 'observations' && <ObservationListView />}
-          {tab === 'feedback' && <FeedbackModule isPlatformAdmin={isPlatformAdmin} />}
-          {tab === 'aide' && <HelpModule />}
-          {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
+        <div className="dashboard-layout">
+          {availableTabs.length > 1 && (
+            <SidebarNav tabs={availableTabs} activeTab={tab} onSelect={setTab} top={headerHeight} />
+          )}
+          <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
+            {tab === 'accueil' && <HomeOverview farmId={user} activated={activated} />}
+            {tab === 'calendar' && <AgriculturalCalendarModule farmId={user} />}
+            {tab === 'recoltes' && <HarvestsModule farmId={user} />}
+            {tab === 'assistant' && <AIAssistantModule farmId={user} activated={activated} />}
+            {tab === 'forecasting' && <ForecastingModule farmId={user} activated={activated} />}
+            {tab === 'reports' && <ReportsModule farmId={user} activated={activated} />}
+            {tab === 'cultures' && <CulturesModule farmId={user} />}
+            {tab === 'poulailler' && <PoulaillerModule farmId={user} />}
+            {tab === 'clients' && <ClientsModule farmId={user} />}
+            {tab === 'fournisseurs' && <FournisseursModule farmId={user} />}
+            {tab === 'employees' && <EmployeesModule farmId={user} role={role} />}
+            {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
+            {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
+            {tab === 'observations' && <ObservationListView />}
+            {tab === 'equipements' && <EquipementsModule canManage={['admin', 'directeur', 'gestionnaire'].includes(role)} />}
+            {tab === 'feedback' && <FeedbackModule isPlatformAdmin={isPlatformAdmin} />}
+            {tab === 'aide' && <HelpModule />}
+            {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
+          </div>
         </div>
       )}
     </div>
