@@ -684,6 +684,24 @@ function DevisModule({ clientsListe }) {
     })();
   }, []);
 
+  // Catalogue produit : un devis n'est pas rattaché à un module (contrairement à un
+  // achat), donc les suggestions combinent les stocks Cultures ET Poulailler.
+  const [catalogItems, setCatalogItems] = useState([]);
+  const catalogDatalistId = 'devis-catalog';
+  useEffect(() => {
+    (async () => {
+      try {
+        const [cultures, poulailler] = await Promise.all([
+          getCulturesStocks().catch(() => ({ stocks: [] })),
+          getPoulaillerStocks().catch(() => ({ stocks: [] })),
+        ]);
+        setCatalogItems([...(cultures.stocks || []), ...(poulailler.stocks || [])]);
+      } catch (err) {
+        console.error('[DevisModule catalog]', err);
+      }
+    })();
+  }, []);
+
   // Ajoute une ligne de produit vide au formulaire
   const addLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
 
@@ -926,6 +944,9 @@ function DevisModule({ clientsListe }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <datalist id={catalogDatalistId}>
+        {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
+      </datalist>
       {apiError && (
         <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
@@ -951,7 +972,14 @@ function DevisModule({ clientsListe }) {
             {form.lignes.map((ligne, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                  <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
+                  <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                    const value = e.target.value;
+                    updateLigne(i, 'produit', value);
+                    const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                    if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
+                      updateLigne(i, 'prixUnitaire', String(match.prixDefaut));
+                    }
+                  }} />
                   <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
                   <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
                   <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateLigne(i, 'remise', e.target.value)} />
@@ -1228,7 +1256,14 @@ function DevisModule({ clientsListe }) {
                 {editForm.lignes.map((ligne, i) => (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                      <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} />
+                      <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                        const value = e.target.value;
+                        updateEditLigne(i, 'produit', value);
+                        const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                        if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
+                          updateEditLigne(i, 'prixUnitaire', String(match.prixDefaut));
+                        }
+                      }} />
                       <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
                       <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} />
                       <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateEditLigne(i, 'remise', e.target.value)} />
@@ -1312,6 +1347,22 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
   const [editSubmitting, setEditSubmitting] = useState(false);
+
+  // Catalogue produit : les articles de stock du module servent de suggestions (avec
+  // préremplissage du prix par défaut) pour le champ "Produit" — pas une liste fermée,
+  // du texte libre reste possible pour un article non suivi en stock.
+  const [catalogItems, setCatalogItems] = useState([]);
+  const catalogDatalistId = `achat-catalog-${moduleType}`;
+  useEffect(() => {
+    (async () => {
+      try {
+        const { stocks } = moduleType === 'Cultures' ? await getCulturesStocks() : await getPoulaillerStocks();
+        setCatalogItems(stocks || []);
+      } catch (err) {
+        console.error('[AchatModule catalog]', err);
+      }
+    })();
+  }, [moduleType]);
 
   const loadDocs = useCallback(async () => {
     try {
@@ -1587,6 +1638,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <datalist id={catalogDatalistId}>
+        {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
+      </datalist>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
           Nouvel achat multi-lignes
@@ -1608,7 +1662,14 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes d’achat</div>
             {form.lignes.map((ligne, index) => (
               <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                <Field placeholder="Produit" value={ligne.produit} onChange={e => updateLigne(index, 'produit', e.target.value)} />
+                <Field placeholder="Produit" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                  const value = e.target.value;
+                  updateLigne(index, 'produit', value);
+                  const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                  if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
+                    updateLigne(index, 'prixUnitaire', String(match.prixDefaut));
+                  }
+                }} />
                 <Field type="number" placeholder="Qté" value={ligne.quantite} onChange={e => updateLigne(index, 'quantite', e.target.value)} />
                 <Field type="number" placeholder="Prix U." value={ligne.prixUnitaire} onChange={e => updateLigne(index, 'prixUnitaire', e.target.value)} />
                 <button type="button" onClick={() => removeLigne(index)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '8px 0' }}>
@@ -1732,7 +1793,14 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes d’achat</div>
                 {editForm.lignes.map((ligne, index) => (
                   <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                    <Field placeholder="Produit" value={ligne.produit} onChange={e => updateEditLigne(index, 'produit', e.target.value)} />
+                    <Field placeholder="Produit" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                      const value = e.target.value;
+                      updateEditLigne(index, 'produit', value);
+                      const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                      if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
+                        updateEditLigne(index, 'prixUnitaire', String(match.prixDefaut));
+                      }
+                    }} />
                     <Field type="number" placeholder="Qté" value={ligne.quantite} onChange={e => updateEditLigne(index, 'quantite', e.target.value)} />
                     <Field type="number" placeholder="Prix U." value={ligne.prixUnitaire} onChange={e => updateEditLigne(index, 'prixUnitaire', e.target.value)} />
                     <button type="button" onClick={() => removeEditLigne(index)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '8px 0' }}>
@@ -1796,10 +1864,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
 
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+  const [form, setForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+  const [editForm, setEditForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   useEffect(() => {
@@ -1834,6 +1902,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
     try {
       const { stock } = await api.create({
         nom: form.nom, categorie: form.categorie, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
+        prixDefaut: form.prixDefaut === '' ? null : Number(form.prixDefaut),
       });
       if (stock) {
         setStocks(s => [...s, stock]);
@@ -1843,7 +1912,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
       console.error('[StocksTab add]', err);
       notifyError(err, "Impossible d'ajouter l'article.");
     }
-    setForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+    setForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
   };
   const remove = async (id, nom) => {
     if (!window.confirm(`Supprimer « ${nom} » du stock ?`)) return;
@@ -1859,11 +1928,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setEditForm({ nom: s.nom, categorie: s.categorie, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil) });
+    setEditForm({ nom: s.nom, categorie: s.categorie, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '' });
   };
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '' });
+    setEditForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
   };
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -1872,6 +1941,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
     try {
       const { stock } = await api.update(editingId, {
         nom: editForm.nom, categorie: editForm.categorie, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
+        prixDefaut: editForm.prixDefaut === '' ? null : Number(editForm.prixDefaut),
       });
       if (stock) {
         setStocks(s => s.map(r => r.id === editingId ? stock : r));
@@ -1909,6 +1979,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
           <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
           <Field label="Unité" placeholder="kg, sacs…" value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
           <Field label="Seuil d'alerte" type="number" placeholder="0" value={form.seuil} onChange={e => setForm({ ...form, seuil: e.target.value })} />
+          <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
           <Button variant="ochre" type="submit"><Plus size={15} /> Ajouter</Button>
         </form>
       </Card>
@@ -1924,12 +1995,13 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
               <th>Catégorie</th>
               <th>Quantité</th>
               <th>Seuil</th>
+              <th>Prix par défaut</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {stocks.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun article en stock pour l'instant.</td></tr>
+              <tr><td colSpan={6} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun article en stock pour l'instant.</td></tr>
             ) : stocks.map(s => (
               <tr key={s.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                 <td style={{ padding: '12px 16px', fontWeight: 500 }}>{s.nom}</td>
@@ -1940,6 +2012,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
                     ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><AlertTriangle size={13} /> Stock bas ({s.seuil})</span>
                     : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
                 </td>
+                <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? `${Number(s.prixDefaut).toLocaleString('fr-FR')} FCFA` : '—'}</td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button onClick={() => startEdit(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
@@ -1972,6 +2045,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
                 <Field label="Quantité" type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
                 <Field label="Unité" placeholder="kg, sacs…" value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
                 <Field label="Seuil d'alerte" type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
+                <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={editForm.prixDefaut} onChange={e => setEditForm({ ...editForm, prixDefaut: e.target.value })} />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>

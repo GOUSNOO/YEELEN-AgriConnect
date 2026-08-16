@@ -2,6 +2,7 @@ import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import { syncAchatDocumentFinance, updateAchatDocumentFinance, removeFinanceEntry } from '../utils/financeSync.js';
+import { applyAchatLignesToStock, reverseAchatLignesFromStock } from '../utils/stockSync.js';
 
 const router = express.Router();
 
@@ -128,6 +129,7 @@ router.post('/', authRequired, async (req, res) => {
     await syncAchatDocumentFinance(req.user.entrepriseId, req.user.sub, {
       module, total, fournisseurNom: fournisseurNom || null, documentId,
     });
+    await applyAchatLignesToStock(req.user.entrepriseId, module, lignes);
     const document = await getDocumentComplete(documentId, req.user.entrepriseId);
     return res.status(201).json({ document });
   } catch (err) {
@@ -155,13 +157,19 @@ router.put('/:id', authRequired, async (req, res) => {
   try {
     await client.query('BEGIN');
     const check = await client.query(
-      'SELECT id FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
+      'SELECT id, module FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
       [req.params.id, req.user.entrepriseId]
     );
     if (check.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Document d\'achat introuvable.' });
     }
+    const oldModule = check.rows[0].module;
+    const oldLignesResult = await client.query(
+      'SELECT produit, quantite::float8 AS quantite FROM achats_lignes WHERE document_id = $1',
+      [req.params.id]
+    );
+    const oldLignes = oldLignesResult.rows;
 
     const total = lignes.reduce((sum, ligne) => sum + (Number(ligne.quantite) || 0) * (Number(ligne.prixUnitaire) || 0), 0);
 
@@ -185,6 +193,8 @@ router.put('/:id', authRequired, async (req, res) => {
     await updateAchatDocumentFinance(req.user.entrepriseId, module, req.params.id, {
       total, fournisseurNom: fournisseurNom || null,
     });
+    await reverseAchatLignesFromStock(req.user.entrepriseId, oldModule, oldLignes);
+    await applyAchatLignesToStock(req.user.entrepriseId, module, lignes);
     const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
     return res.json({ document });
   } catch (err) {
@@ -206,9 +216,11 @@ router.delete('/:id', authRequired, async (req, res) => {
     if (check.rows.length === 0) {
       return res.status(404).json({ error: 'Document d\'achat introuvable.' });
     }
+    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite FROM achats_lignes WHERE document_id = $1', [req.params.id]);
     await pool.query('DELETE FROM achats_lignes WHERE document_id = $1', [req.params.id]);
     await pool.query('DELETE FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     await removeFinanceEntry(req.user.entrepriseId, check.rows[0].module, req.params.id);
+    await reverseAchatLignesFromStock(req.user.entrepriseId, check.rows[0].module, lignesResult.rows);
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /achats/:id]', err);

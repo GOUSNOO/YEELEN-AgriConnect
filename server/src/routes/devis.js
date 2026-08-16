@@ -5,6 +5,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import { pool } from '../db.js';
 import { sendDevisEmail } from '../services/mailer.js';
 import { syncDevisPaiement } from '../utils/financeSync.js';
+import { applyVenteLignesToStock, reverseVenteLignesToStock } from '../utils/stockSync.js';
 import { streamDevisPdf } from '../utils/devisPdf.js';
 
 const router = express.Router();
@@ -270,6 +271,7 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
     );
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    await applyVenteLignesToStock(req.user.entrepriseId, devis.lignes);
     return res.json({ devis });
   } catch (err) {
     console.error('[POST /devis/:id/valider-manuel]', err);
@@ -317,7 +319,7 @@ router.post('/public/:token/signer', async (req, res) => {
     return res.status(400).json({ error: 'La signature et le nom du signataire sont requis.' });
   }
   try {
-    const check = await pool.query(`SELECT id, statut FROM devis WHERE token_public = $1`, [req.params.token]);
+    const check = await pool.query(`SELECT id, statut, entreprise_id AS "entrepriseId" FROM devis WHERE token_public = $1`, [req.params.token]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
     if (check.rows[0].statut === 'Signé' || check.rows[0].statut === 'Facturé') {
       return res.status(400).json({ error: 'Ce devis a déjà été signé.' });
@@ -327,6 +329,8 @@ router.post('/public/:token/signer', async (req, res) => {
       `UPDATE devis SET statut = 'Signé', signature_data = $1, signataire_nom = $2, date_signature = now() WHERE token_public = $3`,
       [signatureData, signataireNom, req.params.token]
     );
+    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite FROM devis_lignes WHERE devis_id = $1', [check.rows[0].id]);
+    await applyVenteLignesToStock(check.rows[0].entrepriseId, lignesResult.rows);
     return res.json({ success: true });
   } catch (err) {
     console.error('[POST /devis/public/signer]', err);
@@ -429,6 +433,11 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
 
 // Annule la facturation et remet le devis en brouillon : supprime les échéances
 // et les entrées Finances liées, réinitialise le mode/modalité de paiement.
+// Statuts atteignables seulement après le passage à "Signé" — c'est à ce moment-là que
+// le stock a été décrémenté (voir applyVenteLignesToStock), donc c'est le signal pour
+// savoir s'il faut le restituer ici.
+const STATUTS_APRES_SIGNATURE = ['Signé', 'Facturé', 'Non payé', 'Payé partiellement', 'Payé'];
+
 router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async (req, res) => {
   const client = await pool.connect();
   try {
@@ -437,6 +446,7 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
       client.release();
       return res.status(404).json({ error: 'Devis introuvable.' });
     }
+    const statutAvant = check.rows[0].statut;
 
     await client.query('BEGIN');
 
@@ -453,6 +463,11 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     );
 
     await client.query('COMMIT');
+
+    if (STATUTS_APRES_SIGNATURE.includes(statutAvant)) {
+      const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
+      await reverseVenteLignesToStock(req.user.entrepriseId, lignesResult.rows);
+    }
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });

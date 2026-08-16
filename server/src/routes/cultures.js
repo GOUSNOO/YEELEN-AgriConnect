@@ -29,7 +29,7 @@ const MOUVEMENT_COLUMNS = `
   created_at AS "createdAt"
 `;
 
-const STOCK_COLUMNS = `id, nom, categorie, quantite::float8 AS quantite, unite, seuil::float8 AS seuil, created_at AS "createdAt"`;
+const STOCK_COLUMNS = `id, nom, categorie, quantite::float8 AS quantite, unite, seuil::float8 AS seuil, prix_defaut::float8 AS "prixDefaut", created_at AS "createdAt"`;
 
 // ═══════════════════════════════════════════════════════════
 //  PARCELLES
@@ -316,13 +316,13 @@ router.get('/stocks', authRequired, async (req, res) => {
 });
 
 router.post('/stocks', authRequired, async (req, res) => {
-  const { nom, categorie = 'Semences', quantite = 0, unite = '', seuil = 0 } = req.body;
+  const { nom, categorie = 'Semences', quantite = 0, unite = '', seuil = 0, prixDefaut } = req.body;
   if (!nom) return res.status(400).json({ error: 'Le nom est requis.' });
   try {
     const result = await pool.query(
-      `INSERT INTO cultures_stocks (entreprise_id, user_id, nom, categorie, quantite, unite, seuil)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${STOCK_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, nom, categorie, Number(quantite) || 0, unite, Number(seuil) || 0]
+      `INSERT INTO cultures_stocks (entreprise_id, user_id, nom, categorie, quantite, unite, seuil, prix_defaut)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${STOCK_COLUMNS}`,
+      [req.user.entrepriseId, req.user.sub, nom, categorie, Number(quantite) || 0, unite, Number(seuil) || 0, prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut)]
     );
     return res.status(201).json({ stock: result.rows[0] });
   } catch (err) {
@@ -332,7 +332,7 @@ router.post('/stocks', authRequired, async (req, res) => {
 });
 
 router.put('/stocks/:id', authRequired, async (req, res) => {
-  const { nom, categorie, quantite, unite, seuil } = req.body;
+  const { nom, categorie, quantite, unite, seuil, prixDefaut } = req.body;
   try {
     const result = await pool.query(
       `UPDATE cultures_stocks SET
@@ -340,10 +340,11 @@ router.put('/stocks/:id', authRequired, async (req, res) => {
          categorie = COALESCE($2, categorie),
          quantite = COALESCE($3, quantite),
          unite = COALESCE($4, unite),
-         seuil = COALESCE($5, seuil)
-       WHERE id = $6 AND entreprise_id = $7
+         seuil = COALESCE($5, seuil),
+         prix_defaut = $6
+       WHERE id = $7 AND entreprise_id = $8
        RETURNING ${STOCK_COLUMNS}`,
-      [nom, categorie, quantite, unite, seuil, req.params.id, req.user.entrepriseId]
+      [nom, categorie, quantite, unite, seuil, prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut), req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Stock introuvable.' });

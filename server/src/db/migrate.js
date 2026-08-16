@@ -377,6 +377,13 @@ CREATE TABLE IF NOT EXISTS salaries_avances (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_salaries_avances_salarie_id ON salaries_avances(salarie_id);
+
+-- ═══════════════ Catalogue produit minimal — prix par défaut sur les articles de stock
+-- déjà existants (pas de nouvelle table produits séparée : un article de stock EST déjà
+-- un produit réutilisable, il ne lui manquait qu'un prix par défaut à préremplir dans
+-- les formulaires Achats/Devis). Voir la section "Catalogue produit" de CLAUDE.md.
+ALTER TABLE cultures_stocks ADD COLUMN IF NOT EXISTS prix_defaut NUMERIC(12, 2);
+ALTER TABLE poulailler_stocks ADD COLUMN IF NOT EXISTS prix_defaut NUMERIC(12, 2);
 `;
 
 async function migrate() {
