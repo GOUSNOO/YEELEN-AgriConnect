@@ -144,49 +144,46 @@ export async function deleteCulturesMouvement(id, payload) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Poulailler — Stocks
+// Produits (Cultures + Poulailler unifiés, 2026-08-18 — remplace les anciens
+// get/create/update/deletePoulaillerStock(s)/CulturesStock(s) séparés)
 // ─────────────────────────────────────────────────────────────────────
-export async function getPoulaillerStocks() {
-  return request('/poulailler/stocks');
+export async function getProduits(module) {
+  return request(module ? `/produits?module=${encodeURIComponent(module)}` : '/produits');
 }
 
-export async function createPoulaillerStock(payload) {
-  return safeRequest('/poulailler/stocks', { method: 'POST', body: JSON.stringify(payload) });
+export async function createProduit(payload) {
+  return safeRequest('/produits', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function updatePoulaillerStock(id, payload) {
-  return safeRequest(`/poulailler/stocks/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+export async function updateProduit(id, payload) {
+  return safeRequest(`/produits/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 }
 
-export async function deletePoulaillerStock(id) {
-  return safeRequest(`/poulailler/stocks/${id}`, { method: 'DELETE' });
+export async function deleteProduit(id) {
+  return safeRequest(`/produits/${id}`, { method: 'DELETE' });
 }
 
-export async function getPoulaillerStockMouvements(id) {
-  return request(`/poulailler/stocks/${id}/mouvements`);
+export async function getProduitMouvements(id) {
+  return request(`/produits/${id}/mouvements`);
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Cultures — Stocks
+// Catégories de produits (par entreprise, par module)
 // ─────────────────────────────────────────────────────────────────────
-export async function getCulturesStocks() {
-  return request('/cultures/stocks');
+export async function getProduitCategories(module) {
+  return request(module ? `/produit-categories?module=${encodeURIComponent(module)}` : '/produit-categories');
 }
 
-export async function createCulturesStock(payload) {
-  return safeRequest('/cultures/stocks', { method: 'POST', body: JSON.stringify(payload) });
+export async function createProduitCategorie(payload) {
+  return safeRequest('/produit-categories', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function updateCulturesStock(id, payload) {
-  return safeRequest(`/cultures/stocks/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+export async function updateProduitCategorie(id, payload) {
+  return safeRequest(`/produit-categories/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 }
 
-export async function deleteCulturesStock(id) {
-  return safeRequest(`/cultures/stocks/${id}`, { method: 'DELETE' });
-}
-
-export async function getCulturesStockMouvements(id) {
-  return request(`/cultures/stocks/${id}/mouvements`);
+export async function deleteProduitCategorie(id) {
+  return safeRequest(`/produit-categories/${id}`, { method: 'DELETE' });
 }
 
 // ─────────────────────────────────────────────────────────────────────

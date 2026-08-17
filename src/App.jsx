@@ -14,8 +14,8 @@ import {
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
-  getPoulaillerStocks, createPoulaillerStock, updatePoulaillerStock, deletePoulaillerStock, getPoulaillerStockMouvements,
-  getCulturesStocks, createCulturesStock, updateCulturesStock, deleteCulturesStock, getCulturesStockMouvements,
+  getProduits, createProduit, updateProduit, deleteProduit, getProduitMouvements,
+  getProduitCategories, createProduitCategorie, updateProduitCategorie, deleteProduitCategorie,
   getPoulaillerMouvements, createPoulaillerMouvement, updatePoulaillerMouvement, deletePoulaillerMouvement,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
@@ -687,20 +687,16 @@ function DevisModule({ clientsListe }) {
   }, []);
 
   // Catalogue produit : un devis n'est pas rattaché à un module (contrairement à un
-  // achat), donc les suggestions combinent les stocks Cultures ET Poulailler.
+  // achat), donc les suggestions combinent les produits Cultures ET Poulailler — un seul
+  // appel depuis la fusion produits (2026-08-18), chaque item porte déjà son propre
+  // `module` (plus besoin de le retagger manuellement en _stockModule).
   const [catalogItems, setCatalogItems] = useState([]);
   const catalogDatalistId = 'devis-catalog';
   useEffect(() => {
     (async () => {
       try {
-        const [cultures, poulailler] = await Promise.all([
-          getCulturesStocks().catch(() => ({ stocks: [] })),
-          getPoulaillerStocks().catch(() => ({ stocks: [] })),
-        ]);
-        setCatalogItems([
-          ...(cultures.stocks || []).map(item => ({ ...item, _stockModule: 'Cultures' })),
-          ...(poulailler.stocks || []).map(item => ({ ...item, _stockModule: 'Poulailler' })),
-        ]);
+        const { stocks } = await getProduits();
+        setCatalogItems(stocks || []);
       } catch (err) {
         console.error('[DevisModule catalog]', err);
       }
@@ -733,7 +729,7 @@ function DevisModule({ clientsListe }) {
   // existe, sinon le prix par défaut de l'article — jamais l'inverse.
   const prixPourMatch = (match, prixMap) => {
     if (!match) return null;
-    const negocie = prixMap[`${match._stockModule}:${match.id}`];
+    const negocie = prixMap[`${match.module}:${match.id}`];
     return negocie != null ? negocie : match.prixDefaut;
   };
 
@@ -984,7 +980,7 @@ function DevisModule({ clientsListe }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <datalist id={catalogDatalistId}>
-        {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
+        {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
       {apiError && (
         <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1016,7 +1012,7 @@ function DevisModule({ clientsListe }) {
                     updateLigne(i, 'produit', value);
                     const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                     updateLigne(i, 'stockId', match ? match.id : null);
-                    updateLigne(i, 'stockModule', match ? match._stockModule : null);
+                    updateLigne(i, 'stockModule', match ? match.module : null);
                     const prix = prixPourMatch(match, clientPrixMap);
                     if (prix != null && !ligne.prixUnitaire) {
                       updateLigne(i, 'prixUnitaire', String(prix));
@@ -1303,7 +1299,7 @@ function DevisModule({ clientsListe }) {
                         updateEditLigne(i, 'produit', value);
                         const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                         updateEditLigne(i, 'stockId', match ? match.id : null);
-                        updateEditLigne(i, 'stockModule', match ? match._stockModule : null);
+                        updateEditLigne(i, 'stockModule', match ? match.module : null);
                         const prix = prixPourMatch(match, editClientPrixMap);
                         if (prix != null && !ligne.prixUnitaire) {
                           updateEditLigne(i, 'prixUnitaire', String(prix));
@@ -1401,7 +1397,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   useEffect(() => {
     (async () => {
       try {
-        const { stocks } = moduleType === 'Cultures' ? await getCulturesStocks() : await getPoulaillerStocks();
+        const { stocks } = await getProduits(moduleType);
         setCatalogItems(stocks || []);
       } catch (err) {
         console.error('[AchatModule catalog]', err);
@@ -1911,18 +1907,14 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   );
 }
 
-const STOCK_CATS = ['Aliment', 'Œufs', 'Volailles vivantes', 'Autre'];
-const CULTURES_STOCK_CATS = ['Semences', 'Engrais', 'Produits phytosanitaires', 'Autre'];
+// Données de démarrage Poulailler uniquement (Cultures démarre volontairement vide plutôt
+// que d'inventer des données agricoles) — categorie ici est un nom à faire correspondre
+// aux catégories réellement chargées au moment du seed, voir StocksTab plus bas.
 const DEFAULT_STOCKS = [
-  { id: 1, nom: 'Aliment ponte', categorie: 'Aliment', quantite: 12, unite: 'sacs 50kg', seuil: 5 },
-  { id: 2, nom: 'Œufs frais', categorie: 'Œufs', quantite: 340, unite: 'unités', seuil: 100 },
-  { id: 3, nom: 'Poulets de chair', categorie: 'Volailles vivantes', quantite: 180, unite: 'têtes', seuil: 20 },
+  { nom: 'Aliment ponte', categorie: 'Aliment', quantite: 12, unite: 'sacs 50kg', seuil: 5 },
+  { nom: 'Œufs frais', categorie: 'Œufs', quantite: 340, unite: 'unités', seuil: 100 },
+  { nom: 'Poulets de chair', categorie: 'Volailles vivantes', quantite: 180, unite: 'têtes', seuil: 20 },
 ];
-
-const STOCK_API = {
-  Poulailler: { get: getPoulaillerStocks, create: createPoulaillerStock, update: updatePoulaillerStock, remove: deletePoulaillerStock, mouvements: getPoulaillerStockMouvements },
-  Cultures: { get: getCulturesStocks, create: createCulturesStock, update: updateCulturesStock, remove: deleteCulturesStock, mouvements: getCulturesStockMouvements },
-};
 
 const MOUVEMENT_RAISON_LABEL = {
   achat_reception: 'Achat reçu',
@@ -1953,16 +1945,55 @@ function useTable(farmId, key, defaults) {
 }
 
 function StocksTab({ farmId, moduleType = 'Poulailler' }) {
-  const api = STOCK_API[moduleType];
-  const cats = moduleType === 'Cultures' ? CULTURES_STOCK_CATS : STOCK_CATS;
-  const defaultCat = cats[0];
+  const api = {
+    get: () => getProduits(moduleType),
+    create: (payload) => createProduit({ ...payload, module: moduleType }),
+    update: (id, payload) => updateProduit(id, payload),
+    remove: deleteProduit,
+    mouvements: getProduitMouvements,
+  };
+
+  // Catégories : vraie ressource CRUD par entreprise depuis la fusion produits
+  // (2026-08-18), inspirée d'un compte Odoo réel (Inventaire > Configuration >
+  // Catégories de produits) — plus une liste figée dans le code.
+  const [categories, setCategories] = useState([]);
+  const defaultCategorieId = categories[0]?.id ?? '';
+  const [catManagerOpen, setCatManagerOpen] = useState(false);
+  const [newCatNom, setNewCatNom] = useState('');
+  const [catSubmitting, setCatSubmitting] = useState(false);
+
+  const addCategorie = async (e) => {
+    e.preventDefault();
+    if (!newCatNom.trim()) return;
+    setCatSubmitting(true);
+    try {
+      const { categorie } = await createProduitCategorie({ module: moduleType, nom: newCatNom.trim(), ordre: categories.length });
+      if (categorie) setCategories(c => [...c, categorie]);
+      setNewCatNom('');
+    } catch (err) {
+      console.error('[StocksTab addCategorie]', err);
+      notifyError(err, "Impossible d'ajouter la catégorie.");
+    } finally {
+      setCatSubmitting(false);
+    }
+  };
+  const removeCategorie = async (id, nom) => {
+    if (!window.confirm(`Supprimer la catégorie « ${nom} » ?`)) return;
+    try {
+      await deleteProduitCategorie(id);
+      setCategories(c => c.filter(cat => cat.id !== id));
+    } catch (err) {
+      console.error('[StocksTab removeCategorie]', err);
+      notifyError(err, 'Impossible de supprimer cette catégorie (peut-être encore utilisée par un article).');
+    }
+  };
 
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
+  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '' });
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
+  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [historiqueArticle, setHistoriqueArticle] = useState(null);
@@ -1985,15 +2016,24 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
   };
   const closeHistorique = () => { setHistoriqueArticle(null); setHistoriqueMouvements([]); };
 
+  // Catégories puis stocks, dans le même effet (pas deux effets séparés) pour que le
+  // seed Poulailler ci-dessous puisse résoudre un categorieId à partir du nom de
+  // catégorie avant de créer les articles de démarrage.
   useEffect(() => {
     (async () => {
       try {
+        const { categories: fetchedCats } = await getProduitCategories(moduleType);
+        setCategories(fetchedCats || []);
+        setForm(f => ({ ...f, categorieId: f.categorieId || fetchedCats?.[0]?.id || '' }));
+
         const { stocks: fetched } = await api.get();
         if (fetched.length === 0 && moduleType === 'Poulailler') {
           const seeded = [];
           for (const s of DEFAULT_STOCKS) {
+            const cat = (fetchedCats || []).find(c => c.nom === s.categorie);
+            if (!cat) continue;
             try {
-              const { stock } = await api.create({ nom: s.nom, categorie: s.categorie, quantite: s.quantite, unite: s.unite, seuil: s.seuil });
+              const { stock } = await api.create({ nom: s.nom, categorieId: cat.id, quantite: s.quantite, unite: s.unite, seuil: s.seuil });
               if (stock) seeded.push(stock);
             } catch (err) {
               console.error('[StocksTab seed]', err);
@@ -2016,7 +2056,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
     if (!form.nom || form.quantite === '') return;
     try {
       const { stock } = await api.create({
-        nom: form.nom, categorie: form.categorie, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
+        nom: form.nom, categorieId: form.categorieId, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
         prixDefaut: form.prixDefaut === '' ? null : Number(form.prixDefaut),
       });
       if (stock) {
@@ -2027,7 +2067,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
       console.error('[StocksTab add]', err);
       notifyError(err, "Impossible d'ajouter l'article.");
     }
-    setForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
+    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '' });
   };
   const remove = async (id, nom) => {
     if (!window.confirm(`Supprimer « ${nom} » du stock ?`)) return;
@@ -2043,11 +2083,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setEditForm({ nom: s.nom, categorie: s.categorie, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '' });
+    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '' });
   };
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
+    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '' });
   };
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -2055,7 +2095,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
     setEditSubmitting(true);
     try {
       const { stock } = await api.update(editingId, {
-        nom: editForm.nom, categorie: editForm.categorie, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
+        nom: editForm.nom, categorieId: editForm.categorieId, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
         prixDefaut: editForm.prixDefaut === '' ? null : Number(editForm.prixDefaut),
       });
       if (stock) {
@@ -2088,8 +2128,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
       <Card>
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label="Article" placeholder="Ex: Maïs concassé" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
-          <Select label="Catégorie" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
-            {cats.map(c => <option key={c}>{c}</option>)}
+          <Select label="Catégorie" value={form.categorieId} onChange={e => setForm({ ...form, categorieId: Number(e.target.value) })}>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
           </Select>
           <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
           <Field label="Unité" placeholder="kg, sacs…" value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
@@ -2097,6 +2137,27 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
           <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
           <Button variant="ochre" type="submit"><Plus size={15} /> Ajouter</Button>
         </form>
+        <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12.5, padding: 0, marginTop: 10 }}>
+          {catManagerOpen ? 'Masquer les catégories' : 'Gérer les catégories'}
+        </button>
+        {catManagerOpen && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {categories.map(c => (
+              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                <span>{c.nom}</span>
+                <button type="button" onClick={() => removeCategorie(c.id, c.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            <form onSubmit={addCategorie} style={{ display: 'flex', gap: 8 }}>
+              <Field placeholder="Nouvelle catégorie" value={newCatNom} onChange={e => setNewCatNom(e.target.value)} />
+              <Button type="submit" disabled={catSubmitting} style={{ whiteSpace: 'nowrap' }}>
+                {catSubmitting ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Ajouter
+              </Button>
+            </form>
+          </div>
+        )}
       </Card>
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Évolution du stock</div>
@@ -2157,8 +2218,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
             <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
                 <Field label="Article" placeholder="Ex: Maïs concassé" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
-                <Select label="Catégorie" value={editForm.categorie} onChange={e => setEditForm({ ...editForm, categorie: e.target.value })}>
-                  {cats.map(c => <option key={c}>{c}</option>)}
+                <Select label="Catégorie" value={editForm.categorieId} onChange={e => setEditForm({ ...editForm, categorieId: Number(e.target.value) })}>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                 </Select>
                 <Field label="Quantité" type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
                 <Field label="Unité" placeholder="kg, sacs…" value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
@@ -3703,7 +3764,7 @@ function AIAssistantModule({ farmId, activated }) {
       try {
         const [parcellesData, stocksData, ventesData, financesData] = await Promise.all([
           activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
-          activated.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+          activated.poulailler ? getProduits('Poulailler') : Promise.resolve({ stocks: [] }),
           getVentesLedger(),
           getFinances(),
         ]);
@@ -3837,7 +3898,7 @@ function ForecastingModule({ farmId, activated }) {
         const [parcellesData, harvestsData, stocksData, ventesData, financesData] = await Promise.all([
           activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
           getRecoltes(),
-          activated.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+          activated.poulailler ? getProduits('Poulailler') : Promise.resolve({ stocks: [] }),
           getVentesLedger(),
           getFinances(),
         ]);
@@ -4102,7 +4163,7 @@ function HomeOverview({ farmId, activated }) {
       const [culturesParcelles, poulaillerLivraisons, stokages, financesData, culturesVentes, poulaillerVentes] = await Promise.all([
         activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
         activated.poulailler ? getPoulaillerLivraisons() : Promise.resolve({ livraisons: [] }),
-        activated.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+        activated.poulailler ? getProduits('Poulailler') : Promise.resolve({ stocks: [] }),
         getFinances(),
         activated.cultures ? getCulturesMouvements('vente') : Promise.resolve({ mouvements: [] }),
         activated.poulailler ? getPoulaillerMouvements('vente') : Promise.resolve({ mouvements: [] }),
@@ -4520,7 +4581,7 @@ function NotificationsModule({ farmId, activated }) {
       try {
         const [parcellesData, stocksData, livraisonsData, devisData] = await Promise.all([
           activated?.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
-          activated?.poulailler ? getPoulaillerStocks() : Promise.resolve({ stocks: [] }),
+          activated?.poulailler ? getProduits('Poulailler') : Promise.resolve({ stocks: [] }),
           activated?.poulailler ? getPoulaillerLivraisons() : Promise.resolve({ livraisons: [] }),
           getDevisListe(),
         ]);
@@ -4610,14 +4671,8 @@ function ClientPrixSection({ clientId }) {
   useEffect(() => {
     (async () => {
       try {
-        const [cultures, poulailler] = await Promise.all([
-          getCulturesStocks().catch(() => ({ stocks: [] })),
-          getPoulaillerStocks().catch(() => ({ stocks: [] })),
-        ]);
-        setCatalogItems([
-          ...(cultures.stocks || []).map(item => ({ ...item, _stockModule: 'Cultures' })),
-          ...(poulailler.stocks || []).map(item => ({ ...item, _stockModule: 'Poulailler' })),
-        ]);
+        const { stocks } = await getProduits();
+        setCatalogItems(stocks || []);
       } catch (err) {
         console.error('[ClientPrixSection catalog]', err);
       }
@@ -4653,14 +4708,14 @@ function ClientPrixSection({ clientId }) {
   return (
     <Card>
       <datalist id={datalistId}>
-        {catalogItems.map(item => <option key={`${item._stockModule}-${item.id}`} value={item.nom} />)}
+        {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Prix négociés pour ce client</div>
       <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 12 }}>
         <Field label="Article" placeholder="Nom exact d'un article en stock" list={datalistId} value={form.produit} onChange={e => {
           const value = e.target.value;
           const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-          setForm({ ...form, produit: value, stockId: match ? match.id : null, stockModule: match ? match._stockModule : null });
+          setForm({ ...form, produit: value, stockId: match ? match.id : null, stockModule: match ? match.module : null });
         }} />
         <Field label="Prix (FCFA)" type="number" placeholder="0" value={form.prix} onChange={e => setForm({ ...form, prix: e.target.value })} />
         <Button type="submit" variant="ochre" small><Plus size={14} /> Ajouter</Button>

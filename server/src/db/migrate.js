@@ -677,7 +677,212 @@ CREATE TABLE IF NOT EXISTS client_prix (
   UNIQUE (client_id, stock_module, stock_id)
 );
 CREATE INDEX IF NOT EXISTS idx_client_prix_client_id ON client_prix(client_id);
+
+-- ═══════════════ Produits unifiés (fusion cultures_stocks / poulailler_stocks) ═══════════════
+-- Remplace les deux tables stocks séparées par une seule table produits + une vraie ressource
+-- de catégories par entreprise (au lieu du texte libre non validé qu'était categorie). Voir
+-- mergeStocksIntoProduits() plus bas pour la fusion effective des données existantes et le
+-- repointage des tables qui référençaient cultures_stocks/poulailler_stocks par stock_id.
+CREATE TABLE IF NOT EXISTS produit_categories (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  module         TEXT NOT NULL CHECK (module IN ('Cultures', 'Poulailler')),
+  nom            TEXT NOT NULL,
+  ordre          INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (entreprise_id, module, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_produit_categories_entreprise_id ON produit_categories(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS produits (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  module         TEXT NOT NULL CHECK (module IN ('Cultures', 'Poulailler')),
+  nom            TEXT NOT NULL,
+  categorie_id   INTEGER NOT NULL REFERENCES produit_categories(id),
+  quantite       NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  unite          TEXT,
+  seuil          NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  prix_defaut    NUMERIC(12, 2),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Provenance de la fusion (cultures_stocks/poulailler_stocks + ancien id) : sert à la fois
+  -- de trace d'audit et de clé de correspondance pour repointer achats_lignes/devis_lignes/
+  -- stock_mouvements/client_prix vers les nouveaux ids en une seule passe. NULL pour tout
+  -- produit créé après la fusion.
+  legacy_table   TEXT,
+  legacy_id      INTEGER,
+  UNIQUE (legacy_table, legacy_id)
+);
+CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id);
 `;
+
+// Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre
+// que les valeurs DEFAULT historiques de cultures_stocks.categorie/poulailler_stocks.categorie
+// ('Semences' / 'Aliment') — préserve les 7 libellés déjà utilisés dans toute l'app (StocksTab
+// notamment) pour qu'aucune donnée existante ne se retrouve sans catégorie après la fusion.
+const CATEGORIES_PAR_DEFAUT = [
+  { module: 'Cultures', nom: 'Semences', ordre: 0 },
+  { module: 'Cultures', nom: 'Engrais', ordre: 1 },
+  { module: 'Cultures', nom: 'Produits phytosanitaires', ordre: 2 },
+  { module: 'Cultures', nom: 'Autre', ordre: 3 },
+  { module: 'Poulailler', nom: 'Aliment', ordre: 0 },
+  { module: 'Poulailler', nom: 'Œufs', ordre: 1 },
+  { module: 'Poulailler', nom: 'Volailles vivantes', ordre: 2 },
+  { module: 'Poulailler', nom: 'Autre', ordre: 3 },
+];
+
+// Fusionne cultures_stocks/poulailler_stocks dans produits, repointe les 4 tables qui
+// référençaient l'une ou l'autre par (stock_module, stock_id), puis renomme (ne supprime pas)
+// les anciennes tables comme filet de sécurité. Idempotent par construction : si
+// cultures_stocks n'existe plus (déjà fusionnée), sort immédiatement sans rien faire. Toute
+// la fusion tourne dans sa propre transaction explicite (contrairement au bloc SQL principal
+// ci-dessus, qui n'en a pas) car une fusion de données réelles doit pouvoir s'annuler
+// intégralement en cas de problème — voir le plan d'implémentation pour le détail des
+// vérifications effectuées avant COMMIT.
+async function mergeStocksIntoProduits() {
+  // Idempotence basée sur l'existence d'une table *_legacy_<date> plutôt que sur
+  // l'existence de cultures_stocks elle-même : le bloc SQL principal ci-dessus (CREATE
+  // TABLE IF NOT EXISTS) ne sait pas qu'une fusion a déjà eu lieu et recrée sans le
+  // vouloir une coquille cultures_stocks/poulailler_stocks vide à chaque relance de
+  // migrate.js une fois la vraie fusion faite — bug réel trouvé en répétant la migration
+  // sur une copie de sauvegarde avant de l'appliquer en production (2026-08-18).
+  const { rows: [{ already }] } = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'cultures_stocks_legacy_%'
+    ) AS already
+  `);
+  if (already) {
+    // Coquilles vides recréées par le bloc SQL principal (garanties vides puisque la
+    // vraie fusion a déjà eu lieu et déplacé toutes les données réelles) — supprimées
+    // immédiatement plutôt que laissées traîner sans rien y référencer.
+    await client.query('DROP TABLE IF EXISTS cultures_stocks');
+    await client.query('DROP TABLE IF EXISTS poulailler_stocks');
+    console.log('ℹ️  produits : fusion déjà effectuée — coquilles vides nettoyées, étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ cs, ps, ps_orphan }] } = await client.query(`
+      SELECT (SELECT COUNT(*) FROM cultures_stocks) AS cs,
+             (SELECT COUNT(*) FROM poulailler_stocks WHERE entreprise_id IS NOT NULL) AS ps,
+             (SELECT COUNT(*) FROM poulailler_stocks WHERE entreprise_id IS NULL) AS ps_orphan
+    `);
+    if (Number(ps_orphan) > 0) {
+      console.warn(`⚠️  produits : ${ps_orphan} ligne(s) poulailler_stocks sans entreprise_id — exclues de la fusion.`);
+    }
+
+    // Une entreprise par ligne, pas de doublon (matérialise la liste des entreprises ayant
+    // au moins un article dans l'une ou l'autre table, avant de créer leurs catégories).
+    const { rows: entreprises } = await client.query(`
+      SELECT DISTINCT entreprise_id FROM (
+        SELECT entreprise_id FROM cultures_stocks
+        UNION
+        SELECT entreprise_id FROM poulailler_stocks WHERE entreprise_id IS NOT NULL
+      ) e
+    `);
+    for (const { entreprise_id } of entreprises) {
+      for (const cat of CATEGORIES_PAR_DEFAUT) {
+        await client.query(
+          `INSERT INTO produit_categories (entreprise_id, module, nom, ordre) VALUES ($1, $2, $3, $4)
+           ON CONFLICT (entreprise_id, module, nom) DO NOTHING`,
+          [entreprise_id, cat.module, cat.nom, cat.ordre]
+        );
+      }
+    }
+
+    await client.query(`
+      INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, seuil, prix_defaut, created_at, legacy_table, legacy_id)
+      SELECT cs.entreprise_id, cs.user_id, 'Cultures', cs.nom,
+             COALESCE(
+               (SELECT id FROM produit_categories WHERE entreprise_id = cs.entreprise_id AND module = 'Cultures' AND nom = cs.categorie),
+               (SELECT id FROM produit_categories WHERE entreprise_id = cs.entreprise_id AND module = 'Cultures' AND nom = 'Autre')
+             ),
+             cs.quantite, cs.unite, cs.seuil, cs.prix_defaut, cs.created_at, 'cultures_stocks', cs.id
+      FROM cultures_stocks cs
+      ON CONFLICT (legacy_table, legacy_id) DO NOTHING
+    `);
+
+    await client.query(`
+      INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, seuil, prix_defaut, created_at, legacy_table, legacy_id)
+      SELECT ps.entreprise_id, ps.user_id, 'Poulailler', ps.nom,
+             COALESCE(
+               (SELECT id FROM produit_categories WHERE entreprise_id = ps.entreprise_id AND module = 'Poulailler' AND nom = ps.categorie),
+               (SELECT id FROM produit_categories WHERE entreprise_id = ps.entreprise_id AND module = 'Poulailler' AND nom = 'Autre')
+             ),
+             ps.quantite, ps.unite, ps.seuil, ps.prix_defaut, ps.created_at, 'poulailler_stocks', ps.id
+      FROM poulailler_stocks ps
+      WHERE ps.entreprise_id IS NOT NULL
+      ON CONFLICT (legacy_table, legacy_id) DO NOTHING
+    `);
+
+    // Repointage : pour chaque table référente, on retrouve le produit correspondant via
+    // (legacy_table, legacy_id) — le module d'origine de la ligne indique quelle ancienne
+    // table cibler (achats_documents.module pour achats_lignes, stock_module pour les autres).
+    await client.query(`
+      UPDATE achats_lignes al SET stock_id = p.id
+      FROM achats_documents ad, produits p
+      WHERE al.document_id = ad.id AND al.stock_id IS NOT NULL
+        AND p.legacy_table = CASE ad.module WHEN 'Cultures' THEN 'cultures_stocks' ELSE 'poulailler_stocks' END
+        AND p.legacy_id = al.stock_id
+    `);
+
+    await client.query(`
+      UPDATE devis_lignes dl SET stock_id = p.id
+      FROM produits p
+      WHERE dl.stock_id IS NOT NULL AND dl.stock_module IS NOT NULL
+        AND p.legacy_table = CASE dl.stock_module WHEN 'Cultures' THEN 'cultures_stocks' ELSE 'poulailler_stocks' END
+        AND p.legacy_id = dl.stock_id
+    `);
+
+    await client.query(`
+      UPDATE stock_mouvements sm SET stock_id = p.id
+      FROM produits p
+      WHERE sm.stock_id IS NOT NULL
+        AND p.legacy_table = CASE sm.stock_module WHEN 'Cultures' THEN 'cultures_stocks' ELSE 'poulailler_stocks' END
+        AND p.legacy_id = sm.stock_id
+    `);
+
+    await client.query(`
+      UPDATE client_prix cp SET stock_id = p.id
+      FROM produits p
+      WHERE p.legacy_table = CASE cp.stock_module WHEN 'Cultures' THEN 'cultures_stocks' ELSE 'poulailler_stocks' END
+        AND p.legacy_id = cp.stock_id
+    `);
+
+    // Vérification en transaction — throw ici annule tout (ROLLBACK dans le catch ci-dessous),
+    // les tables cultures_stocks/poulailler_stocks restent intactes en cas de problème.
+    const { rows: [r] } = await client.query(`
+      SELECT
+        (SELECT COUNT(*) FROM produits WHERE legacy_table = 'cultures_stocks') AS p_cs,
+        (SELECT COUNT(*) FROM produits WHERE legacy_table = 'poulailler_stocks') AS p_ps,
+        (SELECT COUNT(*) FROM achats_lignes WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = achats_lignes.stock_id)) AS orphan_al,
+        (SELECT COUNT(*) FROM devis_lignes WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = devis_lignes.stock_id)) AS orphan_dl,
+        (SELECT COUNT(*) FROM stock_mouvements WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = stock_mouvements.stock_id)) AS orphan_sm,
+        (SELECT COUNT(*) FROM client_prix WHERE NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = client_prix.stock_id)) AS orphan_cp
+    `);
+    const problemes = [];
+    if (Number(r.p_cs) !== Number(cs)) problemes.push(`cultures_stocks ${cs} ≠ produits(legacy=cultures_stocks) ${r.p_cs}`);
+    if (Number(r.p_ps) !== Number(ps)) problemes.push(`poulailler_stocks ${ps} ≠ produits(legacy=poulailler_stocks) ${r.p_ps}`);
+    for (const k of ['orphan_al', 'orphan_dl', 'orphan_sm', 'orphan_cp']) {
+      if (Number(r[k]) > 0) problemes.push(`${k} = ${r[k]}`);
+    }
+    if (problemes.length) {
+      throw new Error(`Vérification post-fusion échouée : ${problemes.join(' | ')}`);
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    await client.query(`ALTER TABLE cultures_stocks RENAME TO cultures_stocks_legacy_${stamp}`);
+    await client.query(`ALTER TABLE poulailler_stocks RENAME TO poulailler_stocks_legacy_${stamp}`);
+
+    await client.query('COMMIT');
+    console.log(`✅ produits : fusion réussie (${r.p_cs} Cultures + ${r.p_ps} Poulailler). Anciennes tables renommées *_legacy_${stamp}.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
 
 // Toute la variable SQL ci-dessus est envoyée en un seul `query()` — PostgreSQL exécute
 // les instructions séparées par `;` dans l'ordre au sein d'une même requête multi-instructions
@@ -692,6 +897,7 @@ async function migrate() {
     console.log('✅ Connecté à PostgreSQL');
     await client.query(SQL);
     console.log('✅ Tables Cultures + Poulailler créées, et cloisonnement par utilisateur (user_id) appliqué partout.');
+    await mergeStocksIntoProduits();
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);

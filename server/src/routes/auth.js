@@ -17,6 +17,24 @@ import { logAuditEvent, getAuditLog } from '../utils/auditLog.js';
 
 const router = express.Router();
 
+// Catégories de produits par défaut créées pour toute nouvelle entreprise — même liste
+// que CATEGORIES_PAR_DEFAUT dans server/src/db/migrate.js (qui ne l'applique, elle, qu'aux
+// entreprises qui avaient déjà du stock au moment de la fusion cultures_stocks/
+// poulailler_stocks → produits du 2026-08-18) : sans ce seed ici, une entreprise inscrite
+// après la fusion n'aurait aucune catégorie et ne pourrait ajouter aucun article de stock
+// tant qu'un admin n'en crée pas une à la main via "Gérer les catégories" — bug réel trouvé
+// en répétant la migration sur une copie de sauvegarde avant de l'appliquer en production.
+const CATEGORIES_PRODUITS_PAR_DEFAUT = [
+  { module: 'Cultures', nom: 'Semences', ordre: 0 },
+  { module: 'Cultures', nom: 'Engrais', ordre: 1 },
+  { module: 'Cultures', nom: 'Produits phytosanitaires', ordre: 2 },
+  { module: 'Cultures', nom: 'Autre', ordre: 3 },
+  { module: 'Poulailler', nom: 'Aliment', ordre: 0 },
+  { module: 'Poulailler', nom: 'Œufs', ordre: 1 },
+  { module: 'Poulailler', nom: 'Volailles vivantes', ordre: 2 },
+  { module: 'Poulailler', nom: 'Autre', ordre: 3 },
+];
+
 // ─── POST /api/auth/register ───────────────────────────────────────────────
 // Crée en une seule transaction : le compte utilisateur, sa nouvelle entreprise, et le
 // lien entre les deux avec le rôle 'admin' — celui qui s'inscrit est toujours admin de
@@ -77,6 +95,14 @@ router.post('/register', async (req, res) => {
        VALUES ($1, $2, $3, 'Actif')`,
       [entreprise.id, user.id, 'admin']
     );
+
+    for (const cat of CATEGORIES_PRODUITS_PAR_DEFAUT) {
+      await client.query(
+        `INSERT INTO produit_categories (entreprise_id, module, nom, ordre) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (entreprise_id, module, nom) DO NOTHING`,
+        [entreprise.id, cat.module, cat.nom, cat.ordre]
+      );
+    }
 
     await client.query('COMMIT');
 

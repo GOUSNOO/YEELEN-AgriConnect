@@ -7,15 +7,11 @@ import { pool } from '../db.js';
 
 const router = express.Router();
 
-// Même limite de conception que stockSync.js : un article peut être dans l'une ou
-// l'autre table selon le module, donc pas de vraie FK PostgreSQL possible sur stock_id —
-// validé côté application (stockCheck plus bas) au lieu d'une contrainte en base.
-const STOCK_TABLES = { Cultures: 'cultures_stocks', Poulailler: 'poulailler_stocks' };
-
-// Liste les prix négociés d'un client — jointure faite table par table (pas de FK
-// unique possible entre cultures_stocks/poulailler_stocks, voir migrate.js) ; un article
-// depuis supprimé disparaît silencieusement de la liste (jointure INNER), cohérent avec
-// le principe "vient en complément" : rien à afficher pour un article qui n'existe plus.
+// Liste les prix négociés d'un client — depuis la fusion produits du 2026-08-18, une
+// seule jointure suffit (avant, il fallait boucler sur cultures_stocks/poulailler_stocks
+// séparément, voir l'historique git de ce fichier). Un article depuis supprimé disparaît
+// silencieusement de la liste (jointure INNER), cohérent avec le principe "vient en
+// complément" : rien à afficher pour un article qui n'existe plus.
 router.get('/', authRequired, async (req, res) => {
   const { clientId } = req.query;
   if (!clientId) return res.status(400).json({ error: 'clientId est requis.' });
@@ -23,18 +19,14 @@ router.get('/', authRequired, async (req, res) => {
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1 AND entreprise_id = $2', [clientId, req.user.entrepriseId]);
     if (clientCheck.rows.length === 0) return res.status(404).json({ error: 'Client introuvable.' });
 
-    const rows = [];
-    for (const [module, table] of Object.entries(STOCK_TABLES)) {
-      const result = await pool.query(
-        `SELECT cp.id, cp.stock_module AS "stockModule", cp.stock_id AS "stockId", cp.prix::float8 AS prix, s.nom AS "stockNom"
-         FROM client_prix cp JOIN ${table} s ON s.id = cp.stock_id
-         WHERE cp.client_id = $1 AND cp.entreprise_id = $2 AND cp.stock_module = $3
-         ORDER BY s.nom ASC`,
-        [clientId, req.user.entrepriseId, module]
-      );
-      rows.push(...result.rows);
-    }
-    return res.json({ prix: rows });
+    const result = await pool.query(
+      `SELECT cp.id, cp.stock_module AS "stockModule", cp.stock_id AS "stockId", cp.prix::float8 AS prix, p.nom AS "stockNom"
+       FROM client_prix cp JOIN produits p ON p.id = cp.stock_id
+       WHERE cp.client_id = $1 AND cp.entreprise_id = $2
+       ORDER BY p.nom ASC`,
+      [clientId, req.user.entrepriseId]
+    );
+    return res.json({ prix: result.rows });
   } catch (err) {
     console.error('[GET /prix-client]', err);
     return res.status(500).json({ error: 'Erreur lors de la récupération des prix négociés.' });
@@ -46,13 +38,13 @@ router.get('/', authRequired, async (req, res) => {
 // au lieu de le dupliquer.
 router.post('/', authRequired, async (req, res) => {
   const { clientId, stockId, stockModule, prix } = req.body;
-  if (!clientId || !stockId || !STOCK_TABLES[stockModule] || prix == null || prix === '') {
+  if (!clientId || !stockId || !['Cultures', 'Poulailler'].includes(stockModule) || prix == null || prix === '') {
     return res.status(400).json({ error: 'Client, article et prix sont requis.' });
   }
   try {
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1 AND entreprise_id = $2', [clientId, req.user.entrepriseId]);
     if (clientCheck.rows.length === 0) return res.status(404).json({ error: 'Client introuvable.' });
-    const stockCheck = await pool.query(`SELECT id, nom FROM ${STOCK_TABLES[stockModule]} WHERE id = $1 AND entreprise_id = $2`, [stockId, req.user.entrepriseId]);
+    const stockCheck = await pool.query('SELECT id, nom FROM produits WHERE id = $1 AND entreprise_id = $2 AND module = $3', [stockId, req.user.entrepriseId, stockModule]);
     if (stockCheck.rows.length === 0) return res.status(404).json({ error: 'Article introuvable.' });
 
     const result = await pool.query(

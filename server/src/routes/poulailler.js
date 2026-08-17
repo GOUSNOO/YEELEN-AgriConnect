@@ -6,7 +6,6 @@ import { logMouvementHistorique, getMouvementHistorique, getAllMouvementHistoriq
 
 const router = express.Router();
 
-const STOCK_COLUMNS = `id, nom, categorie, quantite::float8 AS quantite, unite, seuil::float8 AS seuil, prix_defaut::float8 AS "prixDefaut", created_at AS "createdAt"`;
 const MOUVEMENT_COLUMNS = `
   id, type, date, partenaire, produit,
   quantite::float8 AS quantite,
@@ -17,88 +16,8 @@ const MOUVEMENT_COLUMNS = `
 const LIVRAISON_COLUMNS = `id, date, client, produit, quantite::float8 AS quantite, statut, created_at AS "createdAt"`;
 const SUIVI_COLUMNS = `id, date, type, quantite::float8 AS quantite, detail, created_at AS "createdAt"`;
 
-// ═══════════════════════════════════════════════════════════
-//  STOCKS
-// ═══════════════════════════════════════════════════════════
-
-router.get('/stocks', authRequired, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT ${STOCK_COLUMNS} FROM poulailler_stocks WHERE entreprise_id = $1 ORDER BY id ASC`, [req.user.entrepriseId]);
-    return res.json({ stocks: result.rows });
-  } catch (err) {
-    console.error('[GET /poulailler/stocks]', err);
-    return res.status(500).json({ error: 'Erreur lors de la récupération des stocks.' });
-  }
-});
-
-router.post('/stocks', authRequired, async (req, res) => {
-  const { nom, categorie = 'Aliment', quantite = 0, unite = '', seuil = 0, prixDefaut } = req.body;
-  if (!nom) return res.status(400).json({ error: 'Le nom est requis.' });
-  try {
-    const result = await pool.query(
-      `INSERT INTO poulailler_stocks (entreprise_id, user_id, nom, categorie, quantite, unite, seuil, prix_defaut)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${STOCK_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, nom, categorie, Number(quantite) || 0, unite, Number(seuil) || 0, prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut)]
-    );
-    return res.status(201).json({ stock: result.rows[0] });
-  } catch (err) {
-    console.error('[POST /poulailler/stocks]', err);
-    return res.status(500).json({ error: 'Erreur lors de la création du stock.' });
-  }
-});
-
-router.put('/stocks/:id', authRequired, async (req, res) => {
-  const { nom, categorie, quantite, unite, seuil, prixDefaut } = req.body;
-  try {
-    const result = await pool.query(
-      `UPDATE poulailler_stocks SET
-         nom = COALESCE($1, nom),
-         categorie = COALESCE($2, categorie),
-         quantite = COALESCE($3, quantite),
-         unite = COALESCE($4, unite),
-         seuil = COALESCE($5, seuil),
-         prix_defaut = $6
-       WHERE id = $7 AND entreprise_id = $8
-       RETURNING ${STOCK_COLUMNS}`,
-      [nom, categorie, quantite, unite, seuil, prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut), req.params.id, req.user.entrepriseId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Stock introuvable.' });
-    }
-    return res.json({ stock: result.rows[0] });
-  } catch (err) {
-    console.error('[PUT /poulailler/stocks]', err);
-    return res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
-  }
-});
-
-router.delete('/stocks/:id', authRequired, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM poulailler_stocks WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('[DELETE /poulailler/stocks]', err);
-    return res.status(500).json({ error: 'Erreur lors de la suppression.' });
-  }
-});
-
-// Historique des mouvements (achats/ventes) qui ont fait varier ce stock — journal
-// append-only, voir server/src/utils/stockSync.js.
-router.get('/stocks/:id/mouvements', authRequired, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT id, delta::float8 AS delta, raison, document_type AS "documentType", document_id AS "documentId", created_at AS "createdAt"
-       FROM stock_mouvements
-       WHERE entreprise_id = $1 AND stock_module = 'Poulailler' AND stock_id = $2
-       ORDER BY created_at DESC`,
-      [req.user.entrepriseId, req.params.id]
-    );
-    return res.json({ mouvements: result.rows });
-  } catch (err) {
-    console.error('[GET /poulailler/stocks/:id/mouvements]', err);
-    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
-  }
-});
+// Stocks : voir routes/produits.js (fusionné avec Cultures dans la table produits,
+// 2026-08-18 — historiquement /poulailler/stocks* vivait ici).
 
 // ═══════════════════════════════════════════════════════════
 //  VENTES / ACHATS (mouvements)

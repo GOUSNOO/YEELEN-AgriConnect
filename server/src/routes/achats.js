@@ -20,18 +20,18 @@ const LIGNE_COLUMNS = `
   id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", ordre, stock_id AS "stockId"
 `;
 
-const STOCK_TABLES = { Cultures: 'cultures_stocks', Poulailler: 'poulailler_stocks' };
-
-// Ne garde qu'un stockId qui appartient réellement à l'entreprise appelante (isolation
-// multi-tenant, même précaution que validerRecolteIds dans devis.js) — stocke null sinon
+// Ne garde qu'un stockId qui appartient réellement à l'entreprise appelante ET au bon
+// module (isolation multi-tenant, même précaution que validerRecolteIds dans devis.js —
+// le filtre module est devenu nécessaire depuis la fusion produits du 2026-08-18 : un id
+// valide mais du mauvais module doit être rejeté, ce qui ne pouvait pas arriver avant
+// puisqu'un id n'existait alors que dans une seule des deux tables) — stocke null sinon
 // plutôt que de rejeter, pour ne jamais bloquer un achat sur un id de stock invalide.
 async function validerStockIds(client, module, lignes, entrepriseId) {
-  const table = STOCK_TABLES[module];
   const ids = [...new Set(lignes.map(l => l.stockId).filter(Boolean))];
-  if (!table || ids.length === 0) return new Set();
+  if (!['Cultures', 'Poulailler'].includes(module) || ids.length === 0) return new Set();
   const result = await client.query(
-    `SELECT id FROM ${table} WHERE id = ANY($1::int[]) AND entreprise_id = $2`,
-    [ids, entrepriseId]
+    'SELECT id FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
+    [ids, entrepriseId, module]
   );
   return new Set(result.rows.map(r => r.id));
 }

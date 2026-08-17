@@ -29,25 +29,24 @@ async function validerRecolteIds(dbClient, lignes, entrepriseId) {
   return new Set(result.rows.map(r => r.id));
 }
 
-const STOCK_TABLES = { Cultures: 'cultures_stocks', Poulailler: 'poulailler_stocks' };
-
 // Un devis n'est rattaché à aucun module (contrairement à un achat) : chaque ligne porte
-// son propre stockModule, donc la validation d'appartenance se fait table par table.
+// son propre stockModule, donc la validation d'appartenance se fait module par module
+// (nécessaire depuis la fusion produits du 2026-08-18 : un id valide mais du mauvais
+// module doit être rejeté — voir la même note dans routes/achats.js:validerStockIds).
 async function validerStockLigneIds(dbClient, lignes, entrepriseId) {
-  const parTable = {};
-  for (const table of Object.values(STOCK_TABLES)) parTable[table] = new Set();
-  for (const [module, table] of Object.entries(STOCK_TABLES)) {
+  const parModule = { Cultures: new Set(), Poulailler: new Set() };
+  for (const module of Object.keys(parModule)) {
     const ids = [...new Set(lignes.filter(l => l.stockModule === module && l.stockId).map(l => l.stockId))];
     if (ids.length === 0) continue;
     const result = await dbClient.query(
-      `SELECT id FROM ${table} WHERE id = ANY($1::int[]) AND entreprise_id = $2`,
-      [ids, entrepriseId]
+      'SELECT id FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
+      [ids, entrepriseId, module]
     );
-    parTable[table] = new Set(result.rows.map(r => r.id));
+    parModule[module] = new Set(result.rows.map(r => r.id));
   }
   return (ligne) => {
-    const table = STOCK_TABLES[ligne.stockModule];
-    return table && ligne.stockId && parTable[table].has(ligne.stockId);
+    const valides = parModule[ligne.stockModule];
+    return Boolean(valides) && Boolean(ligne.stockId) && valides.has(ligne.stockId);
   };
 }
 
