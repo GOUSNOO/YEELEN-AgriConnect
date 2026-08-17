@@ -1,4 +1,9 @@
-import { pool } from '../db.js';
+// Utilisé uniquement par routes/planning.js (POST /api/planning). Comme cultureService.js
+// dont il dépend, ce service reste au stade placeholder : les commentaires "SIMULATION"
+// et "ICI DOIT VENIR LA LOGIQUE COMPLEXE" ci-dessous sont d'origine, pas ajoutés ici —
+// ils indiquent que le calcul de dates réel (saisonnalité, disponibilité des ressources)
+// n'a jamais été implémenté, seul le calendrier générique de cultureService.js l'est.
+import { pool } from '../db.js'; // Non utilisé dans ce fichier — importé mais jamais appelé (aucune requête SQL directe ici, tout passe par cultureService.js).
 // Importation des services nécessaires (ex: banques, mailer si besoin)
 import { getCulturePlanDetails } from './cultureService.js'; // <-- SIMULATED IMPORT FOR BEHAVIOR
 /**
@@ -58,4 +63,3 @@ export async function generatePlan(entrepriseId, cultureId) {
 }
 
 // On pourrait exporter d'autres fonctions ici, par exemple pour valider ou sauvegarder un plan.
-

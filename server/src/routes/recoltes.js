@@ -1,3 +1,8 @@
+// Table `recoltes` — réutilise une table pré-existante qui était orpheline (jamais
+// requêtée par aucune route avant ce module), plutôt que d'en créer une nouvelle en
+// doublon — voir CLAUDE.md, section "Calendrier & Récoltes". `parcelle` (texte libre)
+// est conservée en plus de `parcelle_id` (FK) pour l'affichage/repli — voir la
+// validation d'appartenance de parcelleId ci-dessous, section "Traçabilité".
 import express from "express";
 import { pool } from "../db.js";
 import { authRequired } from "../middleware/auth.js";
@@ -39,6 +44,11 @@ router.post("/", authRequired, async (req, res) => {
     }
 
     try {
+        // Vérifie que la parcelle référencée appartient bien à l'entreprise de l'appelant
+        // avant de stocker le lien — sinon stocke null silencieusement plutôt que de
+        // renvoyer une erreur, pour ne jamais faire échouer la création d'une récolte à
+        // cause d'un id de parcelle invalide/étranger (même logique de défense que
+        // validerRecolteIds dans devis.js pour le sens inverse recolte_id).
         let validParcelleId = null;
         if (parcelleId) {
             const parcelleCheck = await pool.query(

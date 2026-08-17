@@ -1,5 +1,12 @@
+// Toutes les émissions d'email de l'app passent par ce fichier (aucun autre fichier
+// n'appelle nodemailer directement) : codes MFA, création de compte employé, envoi de
+// devis au client. Dépend d'EMAIL_USER/EMAIL_PASS (identifiants Gmail) — sans eux
+// configurés, chaque sendXxxEmail échoue silencieusement côté appelant (voir devis.js,
+// où l'échec d'envoi est un problème produit déjà documenté séparément).
 import nodemailer from 'nodemailer';
 
+// Un seul transporteur Gmail partagé pour toute l'app — pas de compte SMTP par
+// entreprise, l'email part toujours depuis le même compte technique.
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -8,6 +15,9 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Envoie le code à usage unique de la double authentification (MFA par email/SMS,
+// distinct de la méthode TOTP qui n'a pas besoin d'email) — le code lui-même est
+// généré et sa durée de vie vérifiée côté appelant (routes/mfa.js), pas ici.
 export async function sendMfaCodeEmail(to, code) {
   await transporter.sendMail({
     from: `"YEELEN AgriConnect" <${process.env.EMAIL_USER}>`,
@@ -24,6 +34,9 @@ export async function sendMfaCodeEmail(to, code) {
   });
 }
 
+// Envoyé quand un admin crée un compte de connexion pour un employé (EmployeesModule,
+// option "Créer un compte de connexion") — communique le mot de passe temporaire en
+// clair par email, à charge pour l'employé de le changer à la première connexion.
 export async function sendWelcomeEmail(to, tempPassword, prenom) {
   await transporter.sendMail({
     from: `"YEELEN AgriConnect" <${process.env.EMAIL_USER}>`,
@@ -42,6 +55,8 @@ export async function sendWelcomeEmail(to, tempPassword, prenom) {
 }
 
 // Envoie un email au client avec un lien vers son devis, pour consultation et signature
+// — le lien pointe vers la route publique /devis/public/:token (pas d'authentification
+// requise côté client, uniquement le token dans l'URL le protège).
 export async function sendDevisEmail(to, clientNom, entrepriseNom, numero, lienConsultation) {
   await transporter.sendMail({
     from: `"${entrepriseNom}" <${process.env.EMAIL_USER}>`,

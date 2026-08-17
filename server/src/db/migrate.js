@@ -4,11 +4,13 @@
  * (humidité, température, vanne...) et ajoute l'historique des vannes
  * ainsi que les ventes/achats du module Cultures.
  *
- * Ne touche PAS aux tables users / clients / finances / cultures /
- * poulaillers / lots_volailles / production_oeufs déjà existantes.
- * `recoltes` (table orpheline pré-existante, jamais requêtée) est étendue
- * plus bas pour porter le module Récoltes, avec calendar_events (nouvelle)
- * pour le module Calendrier.
+ * Le tout premier bloc (entreprises/users/entreprise_utilisateurs/banques/clients/
+ * fournisseurs/parcelles/cultures/recoltes/poulaillers/lots_volailles/production_oeufs/
+ * devis/devis_lignes/echeances_paiement/finances/mouvements_historique) recrée le socle
+ * qui n'avait jamais été capturé nulle part (amorcé à la main tout au début du projet) —
+ * corrigé 2026-08-17 après avoir constaté qu'une base neuve n'aurait jamais pu démarrer.
+ * `recoltes` était en plus une table orpheline (jamais requêtée avant le module Récoltes) ;
+ * elle porte maintenant aussi ce module, avec calendar_events (nouvelle) pour le Calendrier.
  *
  * Lancer avec : node src/db/migrate.js (depuis le dossier server/)
  */
@@ -18,11 +20,17 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Ce script tourne en dehors du serveur Express (invoqué directement via `node
+// src/db/migrate.js`), donc db.js (qui charge son propre .env via un chemin relatif
+// différent) n'est pas utilisé ici — chemin explicite vers le .env à la racine de server/,
+// résolu depuis l'emplacement réel de ce fichier (pas depuis le répertoire d'exécution).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const { Client } = pg;
 
+// Un `Client` simple (une seule connexion), pas un `Pool` comme dans db.js — ce script
+// s'exécute une fois puis se termine, inutile de gérer un pool de connexions.
 const client = new Client({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT),
@@ -32,6 +40,243 @@ const client = new Client({
 });
 
 const SQL = `
+-- ═══════════════ Socle jamais créé par ce script (amorcé à la main très tôt dans le projet,
+-- jamais capturé nulle part) — sur une base neuve (nouveau volume Postgres, ex. premier
+-- déploiement réel), aucune des tables ci-dessous n'existait et ce script plantait dès la
+-- première ALTER TABLE le supposant (parcelles/finances/clients/recoltes/entreprises/users
+-- plus bas, ainsi que cultures_mouvements juste après ce bloc). Reproduites ici à l'identique
+-- du schéma de production (vérifié via \\d sur la base réelle). Placées en tout premier pour
+-- que toute ALTER TABLE plus bas les trouve déjà créées. Sans effet sur une base déjà migrée
+-- (CREATE TABLE IF NOT EXISTS).
+CREATE TABLE IF NOT EXISTS entreprises (
+  id                    SERIAL PRIMARY KEY,
+  nom                   VARCHAR(255) NOT NULL,
+  siret                 VARCHAR(20),
+  adresse               TEXT,
+  secteur               VARCHAR(100),
+  created_at            TIMESTAMP DEFAULT now(),
+  type_compte           VARCHAR(20) NOT NULL DEFAULT 'entreprise' CHECK (type_compte IN ('entreprise', 'particulier')),
+  banque_principale_id  INTEGER,
+  banque_non_requise    BOOLEAN NOT NULL DEFAULT FALSE,
+  salarie_non_requis    BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id                 SERIAL PRIMARY KEY,
+  email              VARCHAR(255) NOT NULL UNIQUE,
+  password           VARCHAR(255) NOT NULL,
+  role               VARCHAR(50) NOT NULL,
+  created_at         TIMESTAMP DEFAULT now(),
+  mfa_secret         VARCHAR(64),
+  mfa_enabled        BOOLEAN NOT NULL DEFAULT FALSE,
+  is_platform_admin  BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));
+
+CREATE TABLE IF NOT EXISTS entreprise_utilisateurs (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role           VARCHAR(30) NOT NULL DEFAULT 'Salarié',
+  statut         VARCHAR(20) NOT NULL DEFAULT 'Actif',
+  created_at     TIMESTAMP DEFAULT now(),
+  UNIQUE (entreprise_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS banques (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom_banque     VARCHAR(100) NOT NULL,
+  iban           VARCHAR(34),
+  type_compte    VARCHAR(50),
+  solde          NUMERIC(12, 2) DEFAULT 0,
+  created_at     TIMESTAMP DEFAULT now()
+);
+
+-- Dépendance circulaire entreprises <-> banques (banque_principale_id) : la FK ne peut être
+-- posée qu'une fois les deux tables créées. Pas de "ADD CONSTRAINT IF NOT EXISTS" natif en
+-- Postgres, d'où le bloc DO qui avale l'erreur "existe déjà" sur une base déjà migrée.
+DO $$
+BEGIN
+  ALTER TABLE entreprises ADD CONSTRAINT entreprises_banque_principale_id_fkey
+    FOREIGN KEY (banque_principale_id) REFERENCES banques(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS clients (
+  id             SERIAL PRIMARY KEY,
+  nom            VARCHAR(255) NOT NULL,
+  telephone      VARCHAR(50),
+  adresse        TEXT,
+  created_at     TIMESTAMP DEFAULT now(),
+  user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id),
+  prenom         VARCHAR(150),
+  email          VARCHAR(150),
+  siret          VARCHAR(30)
+);
+CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id);
+
+CREATE TABLE IF NOT EXISTS fournisseurs (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id        INTEGER REFERENCES users(id),
+  nom            VARCHAR(150) NOT NULL,
+  prenom         VARCHAR(150),
+  telephone      VARCHAR(30),
+  email          VARCHAR(150),
+  siret          VARCHAR(30),
+  adresse        TEXT,
+  created_at     TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS parcelles (
+  id             SERIAL PRIMARY KEY,
+  nom            VARCHAR(100) NOT NULL,
+  superficie     NUMERIC(10, 2),
+  localisation   TEXT,
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  culture        TEXT,
+  humidite       NUMERIC(5, 2) NOT NULL DEFAULT 50,
+  temperature    NUMERIC(5, 2) NOT NULL DEFAULT 25,
+  mode           TEXT NOT NULL DEFAULT 'auto',
+  vanne_ouverte  BOOLEAN NOT NULL DEFAULT FALSE,
+  seuil          NUMERIC(5, 2) NOT NULL DEFAULT 35,
+  pos_x          NUMERIC(5, 2) NOT NULL DEFAULT 50,
+  pos_y          NUMERIC(5, 2) NOT NULL DEFAULT 50,
+  user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id)
+);
+CREATE INDEX IF NOT EXISTS idx_parcelles_user_id ON parcelles(user_id);
+
+CREATE TABLE IF NOT EXISTS cultures (
+  id                   SERIAL PRIMARY KEY,
+  parcelle_id          INTEGER REFERENCES parcelles(id) ON DELETE CASCADE,
+  nom                  VARCHAR(100) NOT NULL,
+  date_semis           DATE,
+  date_recolte_prevue  DATE,
+  surface              NUMERIC(10, 2),
+  statut               VARCHAR(50) DEFAULT 'En cours',
+  created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  entreprise_id        INTEGER NOT NULL REFERENCES entreprises(id)
+);
+
+CREATE TABLE IF NOT EXISTS recoltes (
+  id             SERIAL PRIMARY KEY,
+  culture_id     INTEGER REFERENCES cultures(id) ON DELETE CASCADE,
+  date_recolte   DATE,
+  quantite       NUMERIC(10, 2),
+  unite          VARCHAR(20),
+  observations   TEXT,
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id),
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  parcelle       TEXT,
+  culture        TEXT,
+  qualite        TEXT,
+  destination    TEXT,
+  parcelle_id    INTEGER REFERENCES parcelles(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recoltes_entreprise_id ON recoltes(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_recoltes_parcelle_id ON recoltes(parcelle_id);
+
+CREATE TABLE IF NOT EXISTS poulaillers (
+  id             SERIAL PRIMARY KEY,
+  nom            VARCHAR(100),
+  capacite       INTEGER,
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id)
+);
+
+CREATE TABLE IF NOT EXISTS lots_volailles (
+  id             SERIAL PRIMARY KEY,
+  poulailler_id  INTEGER REFERENCES poulaillers(id) ON DELETE CASCADE,
+  type_volaille  VARCHAR(50),
+  quantite       INTEGER,
+  date_entree    DATE,
+  statut         VARCHAR(50) DEFAULT 'Actif',
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id)
+);
+
+CREATE TABLE IF NOT EXISTS production_oeufs (
+  id               SERIAL PRIMARY KEY,
+  lot_id           INTEGER REFERENCES lots_volailles(id) ON DELETE CASCADE,
+  date_production  DATE,
+  quantite         INTEGER,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  entreprise_id    INTEGER NOT NULL REFERENCES entreprises(id)
+);
+
+CREATE TABLE IF NOT EXISTS devis (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id            INTEGER REFERENCES users(id),
+  client_id          INTEGER REFERENCES clients(id),
+  numero             VARCHAR(30) NOT NULL,
+  statut             VARCHAR(20) NOT NULL DEFAULT 'Brouillon',
+  date               DATE DEFAULT CURRENT_DATE,
+  date_signature     TIMESTAMP,
+  signature_data     TEXT,
+  signataire_nom     VARCHAR(150),
+  total              NUMERIC(14, 2) DEFAULT 0,
+  notes              TEXT,
+  token_public       VARCHAR(64) UNIQUE,
+  created_at         TIMESTAMP DEFAULT now(),
+  mode_paiement      VARCHAR(20),
+  modalite_paiement  VARCHAR(20)
+);
+
+CREATE TABLE IF NOT EXISTS devis_lignes (
+  id             SERIAL PRIMARY KEY,
+  devis_id       INTEGER NOT NULL REFERENCES devis(id) ON DELETE CASCADE,
+  produit        VARCHAR(150) NOT NULL,
+  quantite       NUMERIC(12, 2) NOT NULL,
+  prix_unitaire  NUMERIC(14, 2) NOT NULL,
+  ordre          INTEGER DEFAULT 0,
+  remise         NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  recolte_id     INTEGER REFERENCES recoltes(id) ON DELETE SET NULL,
+  stock_id       INTEGER,
+  stock_module   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS echeances_paiement (
+  id             SERIAL PRIMARY KEY,
+  devis_id       INTEGER NOT NULL REFERENCES devis(id) ON DELETE CASCADE,
+  montant        NUMERIC(14, 2) NOT NULL,
+  date_echeance  DATE NOT NULL,
+  statut         VARCHAR(20) NOT NULL DEFAULT 'En attente',
+  date_paiement  TIMESTAMP,
+  ordre          INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS finances (
+  id                   SERIAL PRIMARY KEY,
+  type                 VARCHAR(50) NOT NULL,
+  montant              NUMERIC(12, 2) NOT NULL,
+  description          TEXT,
+  created_at           TIMESTAMP DEFAULT now(),
+  user_id              INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  source_module        VARCHAR(20),
+  source_mouvement_id  INTEGER,
+  entreprise_id        INTEGER NOT NULL REFERENCES entreprises(id),
+  banque_id            INTEGER REFERENCES banques(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_finances_user_id ON finances(user_id);
+
+CREATE TABLE IF NOT EXISTS mouvements_historique (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id            INTEGER REFERENCES users(id),
+  module             VARCHAR(20) NOT NULL,
+  mouvement_id       INTEGER NOT NULL,
+  action             VARCHAR(20) NOT NULL,
+  raison             TEXT NOT NULL,
+  anciennes_valeurs  JSONB,
+  nouvelles_valeurs  JSONB,
+  created_at         TIMESTAMP DEFAULT now()
+);
+
 -- Étend la table parcelles existante (nom, superficie, localisation)
 -- avec les colonnes nécessaires au suivi capteurs / irrigation.
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS culture       TEXT;
@@ -52,8 +297,6 @@ CREATE TABLE IF NOT EXISTS parcelles_historique (
 );
 
 -- Ventes et achats du module Cultures (mutualisés dans une seule table)
-ALTER TABLE cultures_mouvements ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
-
 CREATE TABLE IF NOT EXISTS cultures_mouvements (
   id            SERIAL PRIMARY KEY,
   type          TEXT NOT NULL CHECK (type IN ('vente', 'achat')),
@@ -106,7 +349,6 @@ ALTER TABLE poulailler_stocks ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REF
 CREATE INDEX IF NOT EXISTS idx_poulailler_stocks_entreprise_id ON poulailler_stocks(entreprise_id);
 
 -- Ventes et achats du module Poulailler (mutualisés dans une seule table)
-ALTER TABLE poulailler_mouvements ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS poulailler_mouvements (
   id            SERIAL PRIMARY KEY,
   type          TEXT NOT NULL CHECK (type IN ('vente', 'achat')),
@@ -270,11 +512,6 @@ CREATE INDEX IF NOT EXISTS idx_observations_entreprise_id ON observations(entrep
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS banque_non_requise BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS salarie_non_requis BOOLEAN NOT NULL DEFAULT FALSE;
 
--- ═══════════════ Coordonnées personnelles du salarié (distinct de l'email du compte de connexion) ═══════════════
-ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email     TEXT;
-ALTER TABLE salaries ADD COLUMN IF NOT EXISTS telephone TEXT;
-ALTER TABLE salaries ADD COLUMN IF NOT EXISTS adresse   TEXT;
-
 -- ═══════════════ Forum de feedback (retours des clients sur l'app elle-même) ═══════════════
 -- is_platform_admin distingue "propriétaire de la plateforme" (voit le feedback de
 -- toutes les entreprises) des rôles admin/directeur existants (cloisonnés à leur
@@ -336,6 +573,7 @@ CREATE TABLE IF NOT EXISTS salaries (
   presence       VARCHAR(20) DEFAULT 'Présent',
   avances        NUMERIC(10, 2) DEFAULT 0,
   conges         NUMERIC(10, 2) DEFAULT 0,
+  -- Coordonnées personnelles du salarié, distinctes de l'email du compte de connexion (users.email).
   email          TEXT,
   telephone      TEXT,
   adresse        TEXT
@@ -384,8 +622,70 @@ CREATE INDEX IF NOT EXISTS idx_salaries_avances_salarie_id ON salaries_avances(s
 -- les formulaires Achats/Devis). Voir la section "Catalogue produit" de CLAUDE.md.
 ALTER TABLE cultures_stocks ADD COLUMN IF NOT EXISTS prix_defaut NUMERIC(12, 2);
 ALTER TABLE poulailler_stocks ADD COLUMN IF NOT EXISTS prix_defaut NUMERIC(12, 2);
+
+-- ═══════════════ Rapprochement stock par identifiant + historique des mouvements ═══════════════
+-- Le rapprochement stock↔achats/ventes se faisait uniquement par nom (insensible à la
+-- casse) : une faute de frappe ou un renommage cassait silencieusement le lien. stock_id
+-- (rempli automatiquement côté formulaire quand le produit tapé correspond exactement à
+-- un article du catalogue) fiabilise le rapprochement ; le nom reste utilisé en repli pour
+-- les lignes plus anciennes ou les produits non catalogués. Pas de contrainte FK stricte :
+-- stock_id peut pointer vers cultures_stocks OU poulailler_stocks selon le module, deux
+-- tables distinctes qu'une seule colonne ne peut pas référencer conditionnellement en SQL.
+ALTER TABLE achats_lignes ADD COLUMN IF NOT EXISTS stock_id INTEGER;
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS stock_id INTEGER;
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS stock_module TEXT;
+
+CREATE TABLE IF NOT EXISTS stock_mouvements (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  stock_module   TEXT NOT NULL,
+  stock_id       INTEGER,
+  stock_nom      TEXT NOT NULL,
+  delta          NUMERIC(12, 2) NOT NULL,
+  raison         TEXT NOT NULL,
+  document_type  TEXT NOT NULL,
+  document_id    INTEGER NOT NULL,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_stock_mouvements_entreprise_id ON stock_mouvements(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_stock_mouvements_stock ON stock_mouvements(stock_module, stock_id);
+
+-- ═══════════════ Cycle de vie des achats (Brouillon → Commandé → Reçu) ═══════════════
+-- Jusqu'ici un achat était toujours "déjà arrivé" (créé = stock/finance synchronisés
+-- immédiatement), contrairement aux devis qui ont un vrai cycle de vie. Le stock et la
+-- finance ne se synchronisent désormais qu'au passage à "Reçu" (voir routes/achats.js).
+-- DEFAULT 'Reçu' pour que les lignes déjà existantes (déjà synchronisées avant ce
+-- changement) reflètent leur état réel — les nouvelles créations démarrent explicitement
+-- en 'Brouillon' côté route, ce DEFAULT ne s'applique qu'aux lignes historiques.
+ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS statut TEXT NOT NULL DEFAULT 'Reçu';
+ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS date_reception TIMESTAMPTZ;
+
+-- ═══════════════ Listes de prix par client ═══════════════
+-- Prix négocié pour un client précis sur un article précis, en complément du prix par
+-- défaut de l'article (jamais à la place) : une vente sans règle spécifique continue
+-- d'utiliser le prix par défaut habituel. Pas de FK stricte sur stock_id, même raison
+-- que partout ailleurs dans ce fichier (cultures_stocks vs poulailler_stocks).
+CREATE TABLE IF NOT EXISTS client_prix (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  stock_module   TEXT NOT NULL,
+  stock_id       INTEGER NOT NULL,
+  prix           NUMERIC(12, 2) NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (client_id, stock_module, stock_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_prix_client_id ON client_prix(client_id);
 `;
 
+// Toute la variable SQL ci-dessus est envoyée en un seul `query()` — PostgreSQL exécute
+// les instructions séparées par `;` dans l'ordre au sein d'une même requête multi-instructions
+// (pas de vraie transaction globale explicite ici : une instruction en échec arrête tout,
+// mais celles déjà exécutées avant elle restent appliquées, sans rollback automatique).
+// Idempotent par construction (IF NOT EXISTS / ADD COLUMN IF NOT EXISTS partout) : peut
+// être relancé sans risque sur une base déjà à jour, ce qui en fait le seul mécanisme de
+// migration du projet (pas de système de versions/migrations numérotées séparées).
 async function migrate() {
   try {
     await client.connect();

@@ -82,6 +82,24 @@ router.delete('/stocks/:id', authRequired, async (req, res) => {
   }
 });
 
+// Historique des mouvements (achats/ventes) qui ont fait varier ce stock — journal
+// append-only, voir server/src/utils/stockSync.js.
+router.get('/stocks/:id/mouvements', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, delta::float8 AS delta, raison, document_type AS "documentType", document_id AS "documentId", created_at AS "createdAt"
+       FROM stock_mouvements
+       WHERE entreprise_id = $1 AND stock_module = 'Poulailler' AND stock_id = $2
+       ORDER BY created_at DESC`,
+      [req.user.entrepriseId, req.params.id]
+    );
+    return res.json({ mouvements: result.rows });
+  } catch (err) {
+    console.error('[GET /poulailler/stocks/:id/mouvements]', err);
+    return res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════
 //  VENTES / ACHATS (mouvements)
 // ═══════════════════════════════════════════════════════════

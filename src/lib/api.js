@@ -162,6 +162,10 @@ export async function deletePoulaillerStock(id) {
   return safeRequest(`/poulailler/stocks/${id}`, { method: 'DELETE' });
 }
 
+export async function getPoulaillerStockMouvements(id) {
+  return request(`/poulailler/stocks/${id}/mouvements`);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Cultures — Stocks
 // ─────────────────────────────────────────────────────────────────────
@@ -179,6 +183,10 @@ export async function updateCulturesStock(id, payload) {
 
 export async function deleteCulturesStock(id) {
   return safeRequest(`/cultures/stocks/${id}`, { method: 'DELETE' });
+}
+
+export async function getCulturesStockMouvements(id) {
+  return request(`/cultures/stocks/${id}/mouvements`);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -491,6 +499,33 @@ export async function updateAchatDocument(id, payload) {
 
 export async function deleteAchatDocument(id) {
   return request(`/achats/${id}`, { method: 'DELETE' });
+}
+
+export async function commanderAchatDocument(id) {
+  return request(`/achats/${id}/commander`, { method: 'POST' });
+}
+
+export async function recevoirAchatDocument(id) {
+  return request(`/achats/${id}/recevoir`, { method: 'POST' });
+}
+
+export async function annulerReceptionAchatDocument(id) {
+  return request(`/achats/${id}/annuler-reception`, { method: 'POST' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Prix négociés par client
+// ─────────────────────────────────────────────────────────────────────
+export async function getPrixClient(clientId) {
+  return request(`/prix-client?clientId=${encodeURIComponent(clientId)}`);
+}
+
+export async function createPrixClient(payload) {
+  return request('/prix-client', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deletePrixClient(id) {
+  return request(`/prix-client/${id}`, { method: 'DELETE' });
 }
 
 // Modifie une fiche client existante (coordonnées mises à jour)

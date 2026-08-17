@@ -1,3 +1,12 @@
+// Journal d'audit des mouvements ventes/achats — table `mouvements_historique`, distincte
+// de `audit_log` (utils/auditLog.js), qui elle trace des événements sans avant/après
+// (connexions, création de compte...). Historiquement écrit par MovementTab (le flux
+// cultures_mouvements/poulailler_mouvements), qui est aujourd'hui du code mort — voir
+// CLAUDE.md, section "Achats never synced to Finances" : ni les achats via AchatModule
+// (achats_documents/achats_lignes) ni les ventes via DevisModule (devis/devis_lignes) ne
+// journalisent leurs modifications/suppressions ici. Le bouton "Historique des
+// modifications et suppressions" dans ComptabiliteTab lit toujours cette table mais elle
+// reste donc vide dans les faits pour tout achat/vente créé après l'ancien flux.
 import { pool } from '../db.js';
 
 // Enregistre une action (modification ou suppression) sur un mouvement (vente/achat)
@@ -31,7 +40,9 @@ export async function getMouvementHistorique(entrepriseId, module, mouvementId) 
 }
 
 // Récupère tout l'historique (modifications ET suppressions) d'un module entier,
-// utile pour un journal global consultable depuis Comptabilité
+// utile pour un journal global consultable depuis Comptabilité. Plafonné à 100 lignes
+// (pas de pagination) — suffisant tant que la table reste peu alimentée, voir la note
+// en tête de fichier sur le fait qu'elle ne l'est plus vraiment aujourd'hui.
 export async function getAllMouvementHistorique(entrepriseId, module) {
   const result = await pool.query(
     `SELECT mh.id, mh.mouvement_id AS "mouvementId", mh.action, mh.raison,

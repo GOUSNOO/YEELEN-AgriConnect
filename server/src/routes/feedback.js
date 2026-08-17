@@ -1,3 +1,7 @@
+// Forum de feedback (MVP minimal — un simple formulaire + triage, pas un vrai forum
+// public avec fils de discussion) : la seule route de tout le projet où la lecture
+// (GET, ci-dessous) traverse volontairement toutes les entreprises au lieu d'être
+// cloisonnée — voir CLAUDE.md, section "Forum de feedback", pour la justification.
 import express from 'express';
 import { pool } from '../db.js';
 import { authRequired } from '../middleware/auth.js';

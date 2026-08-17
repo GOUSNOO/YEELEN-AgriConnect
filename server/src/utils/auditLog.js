@@ -1,12 +1,27 @@
+// Journal d'audit générique — table `audit_log`, distincte de `mouvements_historique`
+// (qui trace uniquement les modifications/suppressions de mouvements ventes/achats
+// avec des valeurs avant/après). Pensé pour des événements qui n'ont pas forcément de
+// ligne "avant/après" à comparer : connexions, création/désactivation de compte, etc.
+// `entrepriseId`/`userId` sont nullable exprès : une tentative de connexion avec un
+// email inconnu n'a ni l'un ni l'autre.
 import { pool } from '../db.js';
 
 // Enregistre un événement du journal d'audit (connexions, puis actions sensibles
-// à venir) sans jamais faire échouer l'appelant si l'écriture échoue.
+// à venir) sans jamais faire échouer l'appelant si l'écriture échoue — le journal
+// d'audit est un outil de diagnostic, pas une dépendance critique du chemin
+// fonctionnel (ex: une connexion réussie ne doit jamais échouer à cause d'un souci
+// d'écriture dans `audit_log`).
 export async function logAuditEvent({ entrepriseId = null, userId = null, email = null, action, req, details = null }) {
   try {
+    // x-forwarded-for peut contenir plusieurs IP séparées par des virgules (proxys en
+    // chaîne) — on ne garde que la première, celle du client d'origine. `req?.ip` sert
+    // de repli quand l'en-tête n'est pas présent (connexion directe, sans proxy).
     const ipAddress = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || null;
     const userAgent = req?.headers?.['user-agent'] || null;
 
+    // `details` est stocké en JSONB : on sérialise nous-mêmes en JSON.stringify plutôt
+    // que de laisser `pg` le faire, pour distinguer explicitement "pas de détails" (null)
+    // de "détails vides" (objet/array vide) transmis par l'appelant.
     await pool.query(
       `INSERT INTO audit_log (entreprise_id, user_id, email, action, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -17,7 +32,9 @@ export async function logAuditEvent({ entrepriseId = null, userId = null, email 
   }
 }
 
-// Récupère le journal d'audit d'une entreprise, du plus récent au plus ancien
+// Récupère le journal d'audit d'une entreprise, du plus récent au plus ancien.
+// Utilisé par GET /api/auth/audit-log (réservé aux admins) — `limit` évite de charger
+// un historique potentiellement énorme d'un coup.
 export async function getAuditLog(entrepriseId, { limit = 100 } = {}) {
   const result = await pool.query(
     `SELECT id, action, email, ip_address AS "ipAddress", user_agent AS "userAgent",

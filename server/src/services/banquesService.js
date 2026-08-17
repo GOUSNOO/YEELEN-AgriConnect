@@ -1,5 +1,13 @@
+// CRUD des comptes bancaires (banques), utilisé par routes/banques.js — routes/entreprise.js
+// lit aussi directement la table `banques` pour le compte bancaire principal de l'entreprise,
+// sans passer par ce service.
 import { pool } from '../db.js';
 
+// Non appelée ailleurs dans le code actuellement (routes/banques.js fait son propre
+// SELECT inline pour la liste) — gardée telle quelle mais son alias `nom_banque AS
+// nomBanque` (sans guillemets) est probablement un bug latent : sans guillemets,
+// PostgreSQL renvoie la colonne en minuscules ("nombanque"), pas en camelCase comme
+// createBanque/updateBanque juste en dessous, qui eux utilisent `AS "nomBanque"`.
 async function getBanque(id, entrepriseId) {
   const query = `
     SELECT b.id, b.nom_banque AS nomBanque, b.iban, b.type_compte AS typeCompte, b.solde
@@ -10,6 +18,7 @@ async function getBanque(id, entrepriseId) {
   return result.rows.length > 0 ? result.rows[0] : null;
 }
 
+// Appelée depuis POST /banques — crée un compte rattaché à l'entreprise de l'appelant.
 async function createBanque(nomBanque, iban, typeCompte, solde, entrepriseId) {
   const query = `
     INSERT INTO banques (entreprise_id, nom_banque, iban, type_compte, solde)
@@ -20,6 +29,8 @@ async function createBanque(nomBanque, iban, typeCompte, solde, entrepriseId) {
   return result.rows[0];
 }
 
+// COALESCE sur chaque champ : un appelant peut passer `undefined`/`null` pour ne
+// modifier qu'un sous-ensemble des colonnes sans écraser les autres avec `null`.
 async function updateBanque(id, nomBanque, iban, typeCompte, solde, entrepriseId) {
   const query = `
     UPDATE banques b
@@ -34,6 +45,9 @@ async function updateBanque(id, nomBanque, iban, typeCompte, solde, entrepriseId
   return result.rows.length > 0 ? result.rows[0] : null;
 }
 
+// Transaction explicite même pour une suppression simple : garde la même forme que les
+// autres opérations d'écriture de ce service, prêt à accueillir une suppression en
+// cascade future (ex: mouvements liés) sans changer la structure de la fonction.
 async function deleteBanque(id, entrepriseId) {
   const client = await pool.connect();
   try {

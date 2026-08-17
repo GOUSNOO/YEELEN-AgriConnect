@@ -1,3 +1,8 @@
+// Calendrier agricole partagé — backé par la table calendar_events (voir CLAUDE.md,
+// section "Calendrier & Récoltes"), remplace l'ancien stockage 100% localStorage qui
+// isolait chaque utilisateur au lieu de partager les événements au niveau entreprise.
+// Pas de DELETE : aucun besoin exprimé côté UI pour supprimer un événement, seulement
+// le corriger (PUT).
 import express from "express";
 import { pool } from "../db.js";
 import { authRequired } from "../middleware/auth.js";

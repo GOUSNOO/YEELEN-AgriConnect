@@ -1,4 +1,13 @@
-import { pool } from '../db.js'; 
+// Code mort confirmé — rien n'importe ce fichier (voir CLAUDE.md, section
+// "Backend structure"). La logique réellement utilisée par /api/observations est
+// écrite directement dans routes/observations.js, scopée par entreprise_id comme
+// toutes les autres routes — contrairement à ce que le commentaire de ce fichier
+// prétendait plus bas, elle n'a pas besoin d'un `companyId` séparé pour ça.
+// Conservé tel quel (pas supprimé) : pas de risque à le laisser en l'état puisqu'il
+// n'est exécuté par personne, et il documente une tentative d'architecture
+// controller/route jamais généralisée au reste du projet (chaque route inline ses
+// propres requêtes SQL, voir "Backend structure" dans CLAUDE.md).
+import { pool } from '../db.js';
 
 /**
  * Middleware de gestion des erreurs standard pour les fonctions CRUD.

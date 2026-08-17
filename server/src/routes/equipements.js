@@ -1,3 +1,7 @@
+// Inventaire matériel (Should-have MVP) : équipements + un historique de maintenance
+// par équipement, deux tables liées par equipement_id (equipements_maintenance n'a pas
+// son propre entreprise_id, la portée multi-tenant est vérifiée via findOwnedEquipement
+// avant tout accès à une intervention de maintenance).
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
@@ -15,6 +19,9 @@ const MAINTENANCE_COLUMNS = `
   cout::float8 AS cout, created_at AS "createdAt"
 `;
 
+// Vérifie qu'un équipement existe ET appartient à l'entreprise appelante — utilisé
+// avant toute lecture/écriture de maintenance, puisque equipements_maintenance n'a pas
+// sa propre colonne entreprise_id pour se cloisonner directement.
 async function findOwnedEquipement(id, entrepriseId) {
   const result = await pool.query(
     'SELECT id FROM equipements WHERE id = $1 AND entreprise_id = $2',
@@ -23,6 +30,9 @@ async function findOwnedEquipement(id, entrepriseId) {
   return result.rows[0] || null;
 }
 
+// Liste tous les équipements de l'entreprise — accessible à tout rôle authentifié
+// (contrairement à la création/modification/suppression, réservées aux rôles de
+// gestion ci-dessous).
 router.get('/', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
@@ -54,6 +64,11 @@ router.post('/', authRequired, requireRole('admin', 'directeur', 'gestionnaire')
   }
 });
 
+// COALESCE sur nom/categorie/etat (mise à jour partielle possible), mais date_acquisition
+// /valeur/notes sont écrasés directement — un appelant doit renvoyer leur valeur actuelle
+// s'il ne veut pas les effacer (incohérence mineure avec le reste du fichier, non corrigée
+// puisqu'aucun bug concret n'en découle : le formulaire d'édition frontend envoie toujours
+// tous les champs).
 router.put('/:id', authRequired, requireRole('admin', 'directeur', 'gestionnaire'), async (req, res) => {
   const { nom, categorie, etat, dateAcquisition, valeur, notes } = req.body;
   try {
@@ -93,6 +108,8 @@ router.delete('/:id', authRequired, requireRole('admin', 'directeur', 'gestionna
   }
 });
 
+// Historique des interventions de maintenance d'un équipement précis — accessible à
+// tout rôle authentifié, comme la liste des équipements elle-même.
 router.get('/:id/maintenance', authRequired, async (req, res) => {
   try {
     const owned = await findOwnedEquipement(req.params.id, req.user.entrepriseId);
@@ -132,6 +149,10 @@ router.post('/:id/maintenance', authRequired, requireRole('admin', 'directeur', 
   }
 });
 
+// Suppression d'une intervention — jointure (USING) vers equipements pour vérifier le
+// cloisonnement par entreprise en une seule requête, plutôt qu'un appel séparé à
+// findOwnedEquipement suivi d'un DELETE (ici on ne connaît que l'id de la maintenance,
+// pas celui de l'équipement parent, donc il faut de toute façon remonter par la jointure).
 router.delete('/maintenance/:maintenanceId', authRequired, requireRole('admin', 'directeur', 'gestionnaire'), async (req, res) => {
   try {
     const result = await pool.query(

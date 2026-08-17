@@ -1,3 +1,7 @@
+// CRUD des comptes bancaires — la liste (GET) fait sa propre requête inline (avec un
+// alias camelCase soigné, BANQUE_COLUMNS), tandis que POST/PUT/DELETE délèguent à
+// banquesService.js. getBanque (dans le service) n'est jamais appelé ici : la lecture
+// passe uniquement par ce GET / inline.
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
@@ -5,11 +9,15 @@ import banquesService from '../services/banquesService.js';
 
 const router = express.Router();
 
+// Alias explicitement entre guillemets pour préserver le camelCase attendu par le
+// frontend (sans guillemets, PostgreSQL renvoie les alias en minuscules).
 const BANQUE_COLUMNS = `
   id, nom_banque AS "nomBanque", iban, type_compte AS "typeCompte",
   solde::float8 AS solde, created_at AS "createdAt"
 `;
 
+// Liste toutes les banques de l'entreprise de l'appelant — pas de pagination, le
+// nombre de comptes bancaires d'une entreprise reste toujours faible.
 router.get('/', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
@@ -37,6 +45,11 @@ router.post('/', authRequired, async (req, res) => {
   }
 });
 
+// Non exercée depuis l'UI actuellement (updateBanque n'a pas encore d'appelant côté
+// frontend — voir CLAUDE.md) : son RETURNING renvoie les colonnes en snake_case brut
+// (nom_banque, type_compte), pas en camelCase — inoffensif tant que rien ne consomme
+// updatedBanque, mais à corriger dans banquesService.js si un formulaire d'édition de
+// compte bancaire est construit un jour dessus.
 router.put('/:id', authRequired, async (req, res) => {
   const { nomBanque, iban, typeCompte, solde } = req.body;
   try {

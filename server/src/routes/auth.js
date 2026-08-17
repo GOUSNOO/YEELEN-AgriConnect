@@ -1,4 +1,10 @@
+// Cycle de vie complet d'un compte : inscription (register), connexion (login, avec
+// étape MFA optionnelle), profil courant (me), et lecture du journal d'audit des
+// connexions (audit-log, admin uniquement). Toutes les routes ci-dessous, sauf
+// /register et /login (forcément publiques), sont protégées par authRequired.
 import { createRequire } from 'module';
+// otplib est un module CommonJS — createRequire permet de l'importer avec require()
+// depuis ce fichier ESM (import/export), au lieu d'un import ESM classique.
 const require = createRequire(import.meta.url);
 import express from 'express';
 import bcrypt from 'bcryptjs';
@@ -12,6 +18,10 @@ import { logAuditEvent, getAuditLog } from '../utils/auditLog.js';
 const router = express.Router();
 
 // ─── POST /api/auth/register ───────────────────────────────────────────────
+// Crée en une seule transaction : le compte utilisateur, sa nouvelle entreprise, et le
+// lien entre les deux avec le rôle 'admin' — celui qui s'inscrit est toujours admin de
+// la toute nouvelle entreprise qu'il vient de créer (pas de rejoindre une entreprise
+// existante depuis cette route).
 router.post('/register', async (req, res) => {
   const { email, password, nomEntreprise, typeCompte, siret } = req.body;
 
@@ -19,6 +29,9 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Email et mot de passe requis.' });
   }
 
+  // Deux types de comptes possibles : 'entreprise' (avec SIRET optionnel) ou
+  // 'particulier' — tout ce qui n'est pas explicitement 'particulier' est traité
+  // comme 'entreprise' par défaut.
   const compteType = typeCompte === 'particulier' ? 'particulier' : 'entreprise';
 
   const client = await pool.connect();
@@ -33,6 +46,9 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Transaction explicite : les 3 INSERT (user, entreprise, lien) doivent réussir
+    // ensemble ou pas du tout — un utilisateur sans entreprise, ou une entreprise sans
+    // admin, laisserait l'app dans un état incohérent.
     await client.query('BEGIN');
 
     const userResult = await client.query(
@@ -43,6 +59,8 @@ router.post('/register', async (req, res) => {
     );
     const user = userResult.rows[0];
 
+    // Nom d'entreprise par défaut si non fourni — dépend du type de compte pour rester
+    // cohérent ("Espace de x@y.com" pour un particulier, "Entreprise de x@y.com" sinon).
     const entrepriseResult = await client.query(
       `INSERT INTO entreprises (nom, siret, type_compte)
        VALUES ($1, $2, $3) RETURNING id, nom, siret, type_compte`,
@@ -62,6 +80,9 @@ router.post('/register', async (req, res) => {
 
     await client.query('COMMIT');
 
+    // isPlatformAdmin toujours false ici : ce flag ne peut être activé que
+    // manuellement en base (voir requirePlatformAdmin.js) — une inscription normale
+    // ne peut jamais produire un propriétaire de plateforme.
     const token = jwt.sign(
       { sub: user.id, email: user.email, entrepriseId: entreprise.id, role: 'admin', isPlatformAdmin: false },
       env.JWT_SECRET,
@@ -83,6 +104,9 @@ router.post('/register', async (req, res) => {
 });
 
 // ─── POST /api/auth/login ──────────────────────────────────────────────────
+// Chaque branche (email inconnu, mauvais mot de passe, MFA requis/échoué, pas
+// d'entreprise, succès) journalise son propre événement dans audit_log — voir
+// CLAUDE.md, section "Jalon 1", pour la liste complète des actions tracées.
 router.post('/login', async (req, res) => {
   const { email, password, mfaCode } = req.body;
 
@@ -98,6 +122,9 @@ router.post('/login', async (req, res) => {
 
     if (result.rows.length === 0) {
       await logAuditEvent({ email, action: 'login_failed_unknown_email', req });
+      // Message générique volontaire ("Identifiants invalides", pas "email inconnu") :
+      // ne pas révéler si l'email existe ou non, pour ne pas faciliter l'énumération
+      // de comptes valides par un tiers.
       return res.status(401).json({ error: 'Identifiants invalides.' });
     }
 
@@ -121,7 +148,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Identifiants invalides.' });
     }
 
-    // Étape MFA si activée sur le compte
+    // Étape MFA si activée sur le compte — TOTP (Google Authenticator-like) via otplib,
+    // distinct du MFA par email/SMS (voir mailer.js/sendMfaCodeEmail). Si aucun code
+    // n'est fourni, on répond 200 (pas 401) avec mfaRequired:true : c'est une étape
+    // intermédiaire normale du flux, pas un échec d'authentification.
     if (user.mfa_enabled) {
       if (!mfaCode) {
         await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'login_mfa_required', req });
@@ -135,6 +165,9 @@ router.post('/login', async (req, res) => {
       }
     }
 
+    // Un compte valide sans rattachement actif à aucune entreprise ne peut pas se
+    // connecter (ex: employé désactivé — voir la logique de statut miroir entre
+    // salaries.statut et entreprise_utilisateurs.statut documentée dans CLAUDE.md).
     if (rattachement.rows.length === 0) {
       await logAuditEvent({ userId: user.id, email: user.email, action: 'login_failed_no_entreprise', req });
       return res.status(403).json({ error: 'Aucune entreprise associée à ce compte.' });
@@ -143,6 +176,9 @@ router.post('/login', async (req, res) => {
     const { role, entreprise_nom: entrepriseNom } = rattachement.rows[0];
     const isPlatformAdmin = user.is_platform_admin === true;
 
+    // Le JWT porte entrepriseId/role/isPlatformAdmin en dur : une bascule de rôle ou du
+    // flag is_platform_admin en base ne prend effet qu'à la prochaine connexion, pas en
+    // temps réel sur un token déjà émis (voir requirePlatformAdmin.js).
     const token = jwt.sign(
       { sub: user.id, email: user.email, entrepriseId, role, isPlatformAdmin },
       env.JWT_SECRET,
@@ -163,6 +199,9 @@ router.post('/login', async (req, res) => {
 });
 
 // ─── GET /api/auth/me ──────────────────────────────────────────────────────
+// Relit l'état actuel en base (contrairement au JWT, qui est figé au moment de sa
+// signature) — utile pour rafraîchir l'affichage frontend sans forcer une reconnexion,
+// même si le rôle/flag effectivement appliqué aux permissions reste celui du JWT en cours.
 router.get('/me', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
@@ -190,6 +229,8 @@ return res.json({
 });
 
 // ─── GET /api/auth/audit-log — journal des connexions (admin uniquement) ──
+// Scopé par entreprise (req.user.entrepriseId), donc un admin ne voit que les
+// tentatives de connexion liées à sa propre entreprise, pas celles des autres.
 router.get('/audit-log', authRequired, requireRole('admin'), async (req, res) => {
   try {
     const historique = await getAuditLog(req.user.entrepriseId);

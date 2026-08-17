@@ -29,6 +29,28 @@ async function validerRecolteIds(dbClient, lignes, entrepriseId) {
   return new Set(result.rows.map(r => r.id));
 }
 
+const STOCK_TABLES = { Cultures: 'cultures_stocks', Poulailler: 'poulailler_stocks' };
+
+// Un devis n'est rattaché à aucun module (contrairement à un achat) : chaque ligne porte
+// son propre stockModule, donc la validation d'appartenance se fait table par table.
+async function validerStockLigneIds(dbClient, lignes, entrepriseId) {
+  const parTable = {};
+  for (const table of Object.values(STOCK_TABLES)) parTable[table] = new Set();
+  for (const [module, table] of Object.entries(STOCK_TABLES)) {
+    const ids = [...new Set(lignes.filter(l => l.stockModule === module && l.stockId).map(l => l.stockId))];
+    if (ids.length === 0) continue;
+    const result = await dbClient.query(
+      `SELECT id FROM ${table} WHERE id = ANY($1::int[]) AND entreprise_id = $2`,
+      [ids, entrepriseId]
+    );
+    parTable[table] = new Set(result.rows.map(r => r.id));
+  }
+  return (ligne) => {
+    const table = STOCK_TABLES[ligne.stockModule];
+    return table && ligne.stockId && parTable[table].has(ligne.stockId);
+  };
+}
+
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
 async function genererNumero(entrepriseId) {
   const year = new Date().getFullYear();
@@ -49,7 +71,8 @@ async function getDevisComplet(devisId, entrepriseId) {
   );
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
-    `SELECT id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise, recolte_id AS "recolteId"
+    `SELECT id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise,
+            recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
@@ -139,12 +162,17 @@ router.post('/', authRequired, async (req, res) => {
     );
     const devisId = devisResult.rows[0].id;
     const recolteIdsValides = await validerRecolteIds(client, lignes, req.user.entrepriseId);
+    const stockLigneValide = await validerStockLigneIds(client, lignes, req.user.entrepriseId);
 
     for (let i = 0; i < lignes.length; i++) {
       const l = lignes[i];
+      const stockOk = stockLigneValide(l);
       await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [devisId, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i, recolteIdsValides.has(l.recolteId) ? l.recolteId : null]
+        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id, stock_id, stock_module)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [devisId, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i,
+         recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
+         stockOk ? l.stockId : null, stockOk ? l.stockModule : null]
       );
     }
 
@@ -188,11 +216,16 @@ router.put('/:id', authRequired, async (req, res) => {
     if (Array.isArray(lignes)) {
       await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
       const recolteIdsValides = await validerRecolteIds(client, lignes, req.user.entrepriseId);
+      const stockLigneValide = await validerStockLigneIds(client, lignes, req.user.entrepriseId);
       for (let i = 0; i < lignes.length; i++) {
         const l = lignes[i];
+        const stockOk = stockLigneValide(l);
         await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [req.params.id, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i, recolteIdsValides.has(l.recolteId) ? l.recolteId : null]
+          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id, stock_id, stock_module)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [req.params.id, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i,
+           recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
+           stockOk ? l.stockId : null, stockOk ? l.stockModule : null]
         );
       }
     }
@@ -271,7 +304,9 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
     );
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
-    await applyVenteLignesToStock(req.user.entrepriseId, devis.lignes);
+    await applyVenteLignesToStock(req.user.entrepriseId, devis.lignes, {
+      userId: req.user.sub, documentType: 'devis', documentId: Number(req.params.id), raison: 'devis_signature',
+    });
     return res.json({ devis });
   } catch (err) {
     console.error('[POST /devis/:id/valider-manuel]', err);
@@ -329,8 +364,13 @@ router.post('/public/:token/signer', async (req, res) => {
       `UPDATE devis SET statut = 'Signé', signature_data = $1, signataire_nom = $2, date_signature = now() WHERE token_public = $3`,
       [signatureData, signataireNom, req.params.token]
     );
-    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite FROM devis_lignes WHERE devis_id = $1', [check.rows[0].id]);
-    await applyVenteLignesToStock(check.rows[0].entrepriseId, lignesResult.rows);
+    const lignesResult = await pool.query(
+      'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
+      [check.rows[0].id]
+    );
+    await applyVenteLignesToStock(check.rows[0].entrepriseId, lignesResult.rows, {
+      userId: null, documentType: 'devis', documentId: check.rows[0].id, raison: 'devis_signature',
+    });
     return res.json({ success: true });
   } catch (err) {
     console.error('[POST /devis/public/signer]', err);
@@ -465,8 +505,13 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     await client.query('COMMIT');
 
     if (STATUTS_APRES_SIGNATURE.includes(statutAvant)) {
-      const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
-      await reverseVenteLignesToStock(req.user.entrepriseId, lignesResult.rows);
+      const lignesResult = await pool.query(
+        'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
+        [req.params.id]
+      );
+      await reverseVenteLignesToStock(req.user.entrepriseId, lignesResult.rows, {
+        userId: req.user.sub, documentType: 'devis', documentId: Number(req.params.id), raison: 'devis_remise_en_brouillon',
+      });
     }
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);

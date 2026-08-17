@@ -1,9 +1,31 @@
+// Point unique de synchronisation automatique vers la table `finances` : chaque vente,
+// achat ou paiement de facture enregistré ailleurs dans l'app (Cultures, Poulailler,
+// Devis, Achats) passe par une des fonctions de ce fichier pour se refléter dans
+// Finances. Il n'existe aucun trigger PostgreSQL pour ça — la cohérence financière
+// entre modules dépend entièrement du fait que chaque route appelle bien la bonne
+// fonction ici au bon moment.
+//
+// Convention de signe pour `montant` : positif pour une vente/un paiement reçu, négatif
+// pour un achat — c'est ce signe (et non `categorie`, qui vaut toujours "Banque" ou
+// "Caisse" ici) qui distingue une dépense d'un revenu pour les entrées auto-synchronisées.
+// Différent de la convention des lignes saisies manuellement dans Finances, où `montant`
+// est toujours positif et c'est `categorie` qui porte l'information dépense/revenu — voir
+// `isDepenseEntry` dans src/modules/finances.jsx, qui doit gérer les deux conventions à
+// la fois pour classer correctement l'affichage.
+//
+// Toutes les fonctions ci-dessous avalent leurs erreurs (try/catch + console.error sans
+// relancer) : un échec de synchronisation financière ne doit jamais faire échouer
+// l'opération métier principale (créer l'achat/la vente reste prioritaire), mais cela
+// signifie aussi qu'un échec silencieux peut désynchroniser Finances sans que personne
+// ne le remarque — pas d'alerte automatique en place à ce jour.
 import { pool } from '../db.js';
 
 // Crée automatiquement une entrée dans "finances" pour une vente ou un achat
-// enregistré depuis Poulailler ou Cultures. L'argent est désormais versé
-// directement sur le compte bancaire principal de l'entreprise (défini par
-// l'admin), au lieu d'aller systématiquement en Caisse.
+// enregistré depuis Poulailler ou Cultures (mécanisme ligne-par-ligne, via
+// cultures_mouvements/poulailler_mouvements — voir syncAchatDocumentFinance
+// ci-dessous pour l'équivalent "document multi-lignes" utilisé par AchatModule).
+// L'argent est désormais versé directement sur le compte bancaire principal de
+// l'entreprise (défini par l'admin), au lieu d'aller systématiquement en Caisse.
 export async function syncFinanceEntry(entrepriseId, userId, { type, module, produit, partenaire, quantite, prixUnitaire, remise, mouvementId }) {
   const total = Math.max(0, Number(quantite) * Number(prixUnitaire) - (Number(remise) || 0));
   const montant = type === 'vente' ? total : -total;
@@ -34,6 +56,8 @@ export async function syncFinanceEntry(entrepriseId, userId, { type, module, pro
 
 // Met à jour l'entrée "finances" existante liée à un mouvement (vente/achat)
 // déjà corrigé, au lieu de la supprimer et recréer — préserve l'historique.
+// Retrouve la ligne via le couple (source_module, source_mouvement_id), pas par
+// un id propre à `finances` : c'est cette paire qui fait office de clé de rapprochement.
 export async function updateFinanceEntry(entrepriseId, module, mouvementId, { type, produit, partenaire, quantite, prixUnitaire, remise }) {
   const total = Math.max(0, Number(quantite) * Number(prixUnitaire) - (Number(remise) || 0));
   const montant = type === 'vente' ? total : -total;
@@ -52,7 +76,9 @@ export async function updateFinanceEntry(entrepriseId, module, mouvementId, { ty
 
 // Version "document multi-lignes" de syncFinanceEntry, pour les achats enregistrés via
 // AchatModule (achats_documents/achats_lignes) — le montant est déjà le total du document,
-// pas à recalculer depuis une seule ligne quantite/prixUnitaire.
+// pas à recalculer depuis une seule ligne quantite/prixUnitaire (un document peut avoir
+// plusieurs lignes de produits différents, il n'y a donc pas de quantite/prixUnitaire
+// unique à ce niveau).
 export async function syncAchatDocumentFinance(entrepriseId, userId, { module, total, fournisseurNom, documentId }) {
   const montant = -Math.max(0, Number(total) || 0);
   const description = `Achat — ${fournisseurNom || 'Fournisseur'} (${module})`;
@@ -75,6 +101,9 @@ export async function syncAchatDocumentFinance(entrepriseId, userId, { module, t
   }
 }
 
+// Pendant de updateFinanceEntry pour le flux "document multi-lignes" : appelée quand un
+// achats_documents existant est modifié (PUT /api/achats/:id), pour garder l'entrée
+// finances correspondante en phase avec le nouveau total plutôt que de la dupliquer.
 export async function updateAchatDocumentFinance(entrepriseId, module, documentId, { total, fournisseurNom }) {
   const montant = -Math.max(0, Number(total) || 0);
   const description = `Achat — ${fournisseurNom || 'Fournisseur'} (${module})`;
@@ -90,6 +119,10 @@ export async function updateAchatDocumentFinance(entrepriseId, module, documentI
   }
 }
 
+// Supprime l'entrée finances liée à un mouvement/document quand celui-ci est
+// lui-même supprimé (DELETE achat/vente) — sert aussi bien au flux ligne-par-ligne
+// qu'au flux document multi-lignes, la clé de rapprochement (module + mouvementId)
+// étant la même dans les deux cas.
 export async function removeFinanceEntry(entrepriseId, module, mouvementId) {
   try {
     await pool.query(
@@ -103,12 +136,15 @@ export async function removeFinanceEntry(entrepriseId, module, mouvementId) {
 
 // Enregistre le paiement d'une échéance de devis dans Finances, au moment où elle est
 // effectivement réglée (pas à la facturation), pour rester cohérent avec la logique
-// de trésorerie déjà utilisée dans l'application.
+// de trésorerie déjà utilisée dans l'application — une facture "Facturé échelonné" non
+// encore payée ne doit pas apparaître comme un revenu déjà encaissé.
 export async function syncDevisPaiement(entrepriseId, userId, { montant, modePaiement, numero, clientNom, devisId, echeanceId }) {
   try {
     let categorie = 'Caisse';
     let banqueId = null;
 
+    // Seul un paiement en espèces reste en "Caisse" — tout autre mode (virement,
+    // chèque, etc.) est considéré comme passant par le compte bancaire principal.
     if (modePaiement !== 'Espèces') {
       categorie = 'Banque';
       const entrepriseResult = await pool.query('SELECT banque_principale_id FROM entreprises WHERE id = $1', [entrepriseId]);
@@ -117,6 +153,9 @@ export async function syncDevisPaiement(entrepriseId, userId, { montant, modePai
 
     const description = `Facture ${numero} — ${clientNom} (${modePaiement})`;
 
+    // source_mouvement_id pointe ici sur l'id de l'échéance (pas du devis) : un devis
+    // "Facturé échelonné" a plusieurs échéances, chacune doit produire sa propre
+    // entrée finances au moment de son propre paiement.
     await pool.query(
       `INSERT INTO finances (entreprise_id, user_id, type, montant, description, source_module, source_mouvement_id, banque_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,

@@ -6,7 +6,7 @@ import {
   TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home,
   Search, Printer, FileText, Download, Users, Briefcase, Landmark, Bell,
-  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench
+  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History
 } from 'lucide-react';
 import {
   clearToken, createClient, createFinance, deleteClient, deleteFinance,
@@ -14,8 +14,8 @@ import {
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
-  getPoulaillerStocks, createPoulaillerStock, updatePoulaillerStock, deletePoulaillerStock,
-  getCulturesStocks, createCulturesStock, updateCulturesStock, deleteCulturesStock,
+  getPoulaillerStocks, createPoulaillerStock, updatePoulaillerStock, deletePoulaillerStock, getPoulaillerStockMouvements,
+  getCulturesStocks, createCulturesStock, updateCulturesStock, deleteCulturesStock, getCulturesStockMouvements,
   getPoulaillerMouvements, createPoulaillerMouvement, updatePoulaillerMouvement, deletePoulaillerMouvement,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
@@ -27,6 +27,8 @@ import {
   getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
   getPoulaillerHistorique, getCulturesHistorique,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger,
+  commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
+  getPrixClient, createPrixClient, deletePrixClient,
   getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
@@ -641,7 +643,7 @@ function DevisModule({ clientsListe }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '', recolteId: '' };
+  const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '', recolteId: '', stockId: null, stockModule: null };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
   const [saving, setSaving] = useState(false);
   const [recoltes, setRecoltes] = useState([]);
@@ -695,12 +697,45 @@ function DevisModule({ clientsListe }) {
           getCulturesStocks().catch(() => ({ stocks: [] })),
           getPoulaillerStocks().catch(() => ({ stocks: [] })),
         ]);
-        setCatalogItems([...(cultures.stocks || []), ...(poulailler.stocks || [])]);
+        setCatalogItems([
+          ...(cultures.stocks || []).map(item => ({ ...item, _stockModule: 'Cultures' })),
+          ...(poulailler.stocks || []).map(item => ({ ...item, _stockModule: 'Poulailler' })),
+        ]);
       } catch (err) {
         console.error('[DevisModule catalog]', err);
       }
     })();
   }, []);
+
+  // Prix négociés du client sélectionné (formulaire d'ajout et fenêtre de modification
+  // peuvent porter sur deux clients différents en même temps, donc deux cartes séparées,
+  // clé "module:id" pour matcher directement un article du catalogue).
+  const [clientPrixMap, setClientPrixMap] = useState({});
+  const [editClientPrixMap, setEditClientPrixMap] = useState({});
+
+  const loadClientPrixMap = async (clientId, setter) => {
+    if (!clientId) { setter({}); return; }
+    try {
+      const { prix } = await getPrixClient(clientId);
+      const map = {};
+      (prix || []).forEach(p => { map[`${p.stockModule}:${p.stockId}`] = p.prix; });
+      setter(map);
+    } catch (err) {
+      console.error('[DevisModule prix client]', err);
+      setter({});
+    }
+  };
+
+  useEffect(() => { loadClientPrixMap(form.clientId, setClientPrixMap); }, [form.clientId]);
+  useEffect(() => { loadClientPrixMap(editForm.clientId, setEditClientPrixMap); }, [editForm.clientId]);
+
+  // Prix à préremplir pour un article catalogué : le prix négocié pour ce client s'il
+  // existe, sinon le prix par défaut de l'article — jamais l'inverse.
+  const prixPourMatch = (match, prixMap) => {
+    if (!match) return null;
+    const negocie = prixMap[`${match._stockModule}:${match.id}`];
+    return negocie != null ? negocie : match.prixDefaut;
+  };
 
   // Ajoute une ligne de produit vide au formulaire
   const addLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
@@ -740,6 +775,8 @@ function DevisModule({ clientsListe }) {
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remise: Number(l.remise) || 0,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
+          stockId: l.stockId || null,
+          stockModule: l.stockModule || null,
         })),
       };
       await createDevis(payload);
@@ -777,7 +814,7 @@ function DevisModule({ clientsListe }) {
       setEditForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '', recolteId: l.recolteId || '' })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
     } catch (err) {
       setApiError(err.message);
@@ -802,6 +839,8 @@ function DevisModule({ clientsListe }) {
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remise: Number(l.remise) || 0,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
+          stockId: l.stockId || null,
+          stockModule: l.stockModule || null,
         })),
       };
       await updateDevis(editingId, payload);
@@ -976,8 +1015,11 @@ function DevisModule({ clientsListe }) {
                     const value = e.target.value;
                     updateLigne(i, 'produit', value);
                     const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                    if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
-                      updateLigne(i, 'prixUnitaire', String(match.prixDefaut));
+                    updateLigne(i, 'stockId', match ? match.id : null);
+                    updateLigne(i, 'stockModule', match ? match._stockModule : null);
+                    const prix = prixPourMatch(match, clientPrixMap);
+                    if (prix != null && !ligne.prixUnitaire) {
+                      updateLigne(i, 'prixUnitaire', String(prix));
                     }
                   }} />
                   <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
@@ -1260,8 +1302,11 @@ function DevisModule({ clientsListe }) {
                         const value = e.target.value;
                         updateEditLigne(i, 'produit', value);
                         const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                        if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
-                          updateEditLigne(i, 'prixUnitaire', String(match.prixDefaut));
+                        updateEditLigne(i, 'stockId', match ? match.id : null);
+                        updateEditLigne(i, 'stockModule', match ? match._stockModule : null);
+                        const prix = prixPourMatch(match, editClientPrixMap);
+                        if (prix != null && !ligne.prixUnitaire) {
+                          updateEditLigne(i, 'prixUnitaire', String(prix));
                         }
                       }} />
                       <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
@@ -1339,13 +1384,13 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const [docs, setDocs] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [useRemote, setUseRemote] = useState(true);
-  const [form, setForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+  const [form, setForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
   const [error, setError] = useState('');
   const [detailDoc, setDetailDoc] = useState(null);
   const key = `${storageKey}-${farmId}`;
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+  const [editForm, setEditForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   // Catalogue produit : les articles de stock du module servent de suggestions (avec
@@ -1408,7 +1453,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
   const addLigne = () => setForm(f => ({
     ...f,
-    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '' }],
+    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '', stockId: null }],
   }));
 
   const removeLigne = (index) => setForm(f => ({
@@ -1426,7 +1471,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const totalForm = form.lignes.reduce((sum, ligne) => sum + (Number(ligne.quantite) || 0) * (Number(ligne.prixUnitaire) || 0), 0);
 
   const resetForm = () => {
-    setForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+    setForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
     setError('');
   };
 
@@ -1450,6 +1495,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         produit: l.produit,
         quantite: Number(l.quantite),
         prixUnitaire: Number(l.prixUnitaire),
+        stockId: l.stockId || null,
       })),
     };
 
@@ -1481,7 +1527,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   // Ligne d'achat — version formulaire de modification (fenêtre séparée)
   const addEditLigne = () => setEditForm(f => ({
     ...f,
-    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '' }],
+    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '', stockId: null }],
   }));
   const removeEditLigne = (index) => setEditForm(f => ({
     ...f,
@@ -1500,7 +1546,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '' }] });
+    setEditForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
   };
 
   const startEdit = async (doc) => {
@@ -1521,7 +1567,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       fournisseurId: source.fournisseurId ? String(source.fournisseurId) : '__autre__',
       fournisseurNom: source.fournisseurId ? '' : source.fournisseurNom,
       notes: source.notes || '',
-      lignes: source.lignes.map(l => ({ produit: l.produit, quantite: String(l.quantite), prixUnitaire: String(l.prixUnitaire) })),
+      lignes: source.lignes.map(l => ({ produit: l.produit, quantite: String(l.quantite), prixUnitaire: String(l.prixUnitaire), stockId: l.stockId || null })),
     });
   };
 
@@ -1545,6 +1591,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         produit: l.produit,
         quantite: Number(l.quantite),
         prixUnitaire: Number(l.prixUnitaire),
+        stockId: l.stockId || null,
       })),
     };
 
@@ -1588,6 +1635,22 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       return;
     }
     setDocs(docs => docs.filter(doc => doc.id !== id));
+  };
+
+  const changerStatutDoc = async (id, action, confirmMessage) => {
+    if (confirmMessage && !window.confirm(confirmMessage)) return;
+    try {
+      const api = { commander: commanderAchatDocument, recevoir: recevoirAchatDocument, annulerReception: annulerReceptionAchatDocument }[action];
+      await api(id);
+      await loadDocs();
+      notifySuccess({
+        commander: 'Achat commandé.',
+        recevoir: 'Achat marqué comme reçu — stock et finances mis à jour.',
+        annulerReception: 'Réception annulée.',
+      }[action]);
+    } catch (err) {
+      notifyError(err, "Impossible de mettre à jour le statut de l'achat.");
+    }
   };
 
   const openDetail = async (doc) => {
@@ -1666,6 +1729,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                   const value = e.target.value;
                   updateLigne(index, 'produit', value);
                   const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                  updateLigne(index, 'stockId', match ? match.id : null);
                   if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
                     updateLigne(index, 'prixUnitaire', String(match.prixDefaut));
                   }
@@ -1703,27 +1767,46 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
               <th style={{ padding: '12px 16px' }}>Date</th>
               <th>Fournisseur</th>
+              <th>Statut</th>
               <th>Total</th>
               <th style={{ textAlign: 'right', paddingRight: 16 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {docs.length === 0 ? (
-              <tr><td colSpan={4} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
-            ) : docs.map(doc => (
+              <tr><td colSpan={5} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
+            ) : docs.map(doc => {
+              const statut = doc.statut || 'Reçu';
+              const modifiable = ['Brouillon', 'Commandé'].includes(statut);
+              return (
               <tr key={doc.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                 <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(doc.date)}</td>
                 <td>{doc.fournisseurNom}</td>
+                <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{statut}</Badge></td>
                 <td style={{ fontWeight: 600 }}>{doc.total.toLocaleString('fr-FR')} FCFA</td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+                    {statut === 'Brouillon' && (
+                      <Button small variant="outline" onClick={() => changerStatutDoc(doc.id, 'commander')}>Commander</Button>
+                    )}
+                    {statut === 'Commandé' && (
+                      <Button small variant="green" onClick={() => changerStatutDoc(doc.id, 'recevoir')}>Marquer reçu</Button>
+                    )}
+                    {statut === 'Reçu' && (
+                      <Button small variant="ghost" onClick={() => changerStatutDoc(doc.id, 'annulerReception', 'Annuler la réception ? Le stock et les finances liés à cet achat seront retirés.')}>Annuler réception</Button>
+                    )}
                     <button onClick={() => openDetail(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><ChevronRight size={15} /></button>
-                    <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
-                    <button onClick={() => removeDoc(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
+                    {modifiable && (
+                      <>
+                        <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
+                        <button onClick={() => removeDoc(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -1797,6 +1880,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                       const value = e.target.value;
                       updateEditLigne(index, 'produit', value);
                       const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                      updateEditLigne(index, 'stockId', match ? match.id : null);
                       if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
                         updateEditLigne(index, 'prixUnitaire', String(match.prixDefaut));
                       }
@@ -1836,8 +1920,19 @@ const DEFAULT_STOCKS = [
 ];
 
 const STOCK_API = {
-  Poulailler: { get: getPoulaillerStocks, create: createPoulaillerStock, update: updatePoulaillerStock, remove: deletePoulaillerStock },
-  Cultures: { get: getCulturesStocks, create: createCulturesStock, update: updateCulturesStock, remove: deleteCulturesStock },
+  Poulailler: { get: getPoulaillerStocks, create: createPoulaillerStock, update: updatePoulaillerStock, remove: deletePoulaillerStock, mouvements: getPoulaillerStockMouvements },
+  Cultures: { get: getCulturesStocks, create: createCulturesStock, update: updateCulturesStock, remove: deleteCulturesStock, mouvements: getCulturesStockMouvements },
+};
+
+const MOUVEMENT_RAISON_LABEL = {
+  achat_reception: 'Achat reçu',
+  achat_annulation_reception: 'Réception d\'achat annulée',
+  // Raisons historiques (achats enregistrés avant l'ajout du cycle Brouillon→Commandé→Reçu) :
+  achat_creation: 'Achat enregistré',
+  achat_modification: 'Achat modifié',
+  achat_suppression: 'Achat supprimé',
+  devis_signature: 'Vente (devis signé)',
+  devis_remise_en_brouillon: 'Vente annulée (devis remis en brouillon)',
 };
 
 function useTable(farmId, key, defaults) {
@@ -1869,6 +1964,26 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ nom: '', categorie: defaultCat, quantite: '', unite: '', seuil: '', prixDefaut: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const [historiqueArticle, setHistoriqueArticle] = useState(null);
+  const [historiqueMouvements, setHistoriqueMouvements] = useState([]);
+  const [historiqueLoading, setHistoriqueLoading] = useState(false);
+
+  const openHistorique = async (stock) => {
+    setHistoriqueArticle(stock);
+    setHistoriqueLoading(true);
+    try {
+      const { mouvements } = await api.mouvements(stock.id);
+      setHistoriqueMouvements(mouvements || []);
+    } catch (err) {
+      console.error('[StocksTab historique]', err);
+      notifyError(err, "Impossible de charger l'historique.");
+      setHistoriqueMouvements([]);
+    } finally {
+      setHistoriqueLoading(false);
+    }
+  };
+  const closeHistorique = () => { setHistoriqueArticle(null); setHistoriqueMouvements([]); };
 
   useEffect(() => {
     (async () => {
@@ -2015,6 +2130,9 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
                 <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? `${Number(s.prixDefaut).toLocaleString('fr-FR')} FCFA` : '—'}</td>
                 <td style={{ textAlign: 'right', paddingRight: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={() => openHistorique(s)} title="Historique des mouvements" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                      <History size={15} />
+                    </button>
                     <button onClick={() => startEdit(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
                       <Settings2 size={15} />
                     </button>
@@ -2054,6 +2172,39 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
                 <Button type="button" onClick={cancelEdit}>Annuler</Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {historiqueArticle && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeHistorique}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 520, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{historiqueArticle.nom}</div>
+                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Historique des mouvements</div>
+              </div>
+              <button onClick={closeHistorique} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            {historiqueLoading ? (
+              <div style={{ color: COLORS.inkSoft }}>Chargement…</div>
+            ) : historiqueMouvements.length === 0 ? (
+              <div style={{ color: COLORS.inkSoft }}>Aucun mouvement enregistré pour cet article.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {historiqueMouvements.map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{MOUVEMENT_RAISON_LABEL[m.raison] || m.raison}</div>
+                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{formatDateTimeFr(m.createdAt)}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: m.delta >= 0 ? COLORS.green : COLORS.red }}>
+                      {m.delta >= 0 ? '+' : ''}{m.delta}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4431,6 +4582,110 @@ function NotificationsModule({ farmId, activated }) {
 
 
 
+// Prix négociés pour un client précis, en complément du prix par défaut de chaque
+// article (jamais à la place) — mirroir léger du datalist-catalogue déjà utilisé dans
+// AchatModule/DevisModule, réutilisé ici pour choisir l'article dont on fixe le prix.
+function ClientPrixSection({ clientId }) {
+  const [prixListe, setPrixListe] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [catalogItems, setCatalogItems] = useState([]);
+  const [form, setForm] = useState({ produit: '', stockId: null, stockModule: null, prix: '' });
+  const datalistId = `client-prix-catalog-${clientId}`;
+
+  const loadPrix = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { prix } = await getPrixClient(clientId);
+      setPrixListe(prix || []);
+    } catch (err) {
+      console.error('[ClientPrixSection load]', err);
+      setPrixListe([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId]);
+
+  useEffect(() => { loadPrix(); }, [loadPrix]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [cultures, poulailler] = await Promise.all([
+          getCulturesStocks().catch(() => ({ stocks: [] })),
+          getPoulaillerStocks().catch(() => ({ stocks: [] })),
+        ]);
+        setCatalogItems([
+          ...(cultures.stocks || []).map(item => ({ ...item, _stockModule: 'Cultures' })),
+          ...(poulailler.stocks || []).map(item => ({ ...item, _stockModule: 'Poulailler' })),
+        ]);
+      } catch (err) {
+        console.error('[ClientPrixSection catalog]', err);
+      }
+    })();
+  }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.stockId || form.prix === '') {
+      notifyError(null, 'Choisissez un article du catalogue et un prix.');
+      return;
+    }
+    try {
+      await createPrixClient({ clientId, stockId: form.stockId, stockModule: form.stockModule, prix: Number(form.prix) });
+      notifySuccess('Prix négocié enregistré.');
+      setForm({ produit: '', stockId: null, stockModule: null, prix: '' });
+      await loadPrix();
+    } catch (err) {
+      notifyError(err, "Impossible d'enregistrer le prix.");
+    }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Supprimer ce prix négocié ?')) return;
+    try {
+      await deletePrixClient(id);
+      setPrixListe(list => list.filter(p => p.id !== id));
+    } catch (err) {
+      notifyError(err, 'Impossible de supprimer ce prix.');
+    }
+  };
+
+  return (
+    <Card>
+      <datalist id={datalistId}>
+        {catalogItems.map(item => <option key={`${item._stockModule}-${item.id}`} value={item.nom} />)}
+      </datalist>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Prix négociés pour ce client</div>
+      <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 12 }}>
+        <Field label="Article" placeholder="Nom exact d'un article en stock" list={datalistId} value={form.produit} onChange={e => {
+          const value = e.target.value;
+          const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+          setForm({ ...form, produit: value, stockId: match ? match.id : null, stockModule: match ? match._stockModule : null });
+        }} />
+        <Field label="Prix (FCFA)" type="number" placeholder="0" value={form.prix} onChange={e => setForm({ ...form, prix: e.target.value })} />
+        <Button type="submit" variant="ochre" small><Plus size={14} /> Ajouter</Button>
+      </form>
+      {loading ? (
+        <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Chargement…</div>
+      ) : prixListe.length === 0 ? (
+        <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun prix négocié — cet article utilisera son prix par défaut.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {prixListe.map(p => (
+            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13 }}>
+              <span>{p.stockNom}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontWeight: 700 }}>{Number(p.prix).toLocaleString('fr-FR')} FCFA</span>
+                <button onClick={() => remove(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ClientsModule() {
   const [clients, setClients]   = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -4621,6 +4876,7 @@ function ClientsModule() {
               </div>
             </Card>
           )}
+          {selectedClient && <ClientPrixSection clientId={selectedClient.id} />}
         </div>
       )}
       {editingId && (
