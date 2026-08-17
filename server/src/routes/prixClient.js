@@ -16,7 +16,7 @@ router.get('/', authRequired, async (req, res) => {
   const { clientId } = req.query;
   if (!clientId) return res.status(400).json({ error: 'clientId est requis.' });
   try {
-    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1 AND entreprise_id = $2', [clientId, req.user.entrepriseId]);
+    const clientCheck = await pool.query('SELECT id FROM contacts WHERE id = $1 AND entreprise_id = $2 AND est_client = true', [clientId, req.user.entrepriseId]);
     if (clientCheck.rows.length === 0) return res.status(404).json({ error: 'Client introuvable.' });
 
     const result = await pool.query(
@@ -42,7 +42,7 @@ router.post('/', authRequired, async (req, res) => {
     return res.status(400).json({ error: 'Client, article et prix sont requis.' });
   }
   try {
-    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1 AND entreprise_id = $2', [clientId, req.user.entrepriseId]);
+    const clientCheck = await pool.query('SELECT id FROM contacts WHERE id = $1 AND entreprise_id = $2 AND est_client = true', [clientId, req.user.entrepriseId]);
     if (clientCheck.rows.length === 0) return res.status(404).json({ error: 'Client introuvable.' });
     const stockCheck = await pool.query('SELECT id, nom FROM produits WHERE id = $1 AND entreprise_id = $2 AND module = $3', [stockId, req.user.entrepriseId, stockModule]);
     if (stockCheck.rows.length === 0) return res.status(404).json({ error: 'Article introuvable.' });

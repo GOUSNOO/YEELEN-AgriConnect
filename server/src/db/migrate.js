@@ -714,6 +714,39 @@ CREATE TABLE IF NOT EXISTS produits (
   UNIQUE (legacy_table, legacy_id)
 );
 CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id);
+
+-- ═══════════════ Contacts unifiés (fusion clients / fournisseurs) ═══════════════
+-- Deuxième étape de l'alignement structurel Odoo (après produits) : remplace deux tables
+-- séparées par une seule, inspirée de res.partner — contrairement à produits.module (un
+-- article de stock ne peut être que Cultures OU Poulailler), un contact réel peut être à
+-- la fois client ET fournisseur, d'où deux booléens indépendants plutôt qu'un enum.
+-- Voir mergeClientsFournisseursIntoContacts() plus bas pour la fusion effective, y compris
+-- le rapprochement automatique des fiches qui représentent déjà la même entité des deux
+-- côtés (même SIRET, ou même nom sans ambiguïté).
+CREATE TABLE IF NOT EXISTS contacts (
+  id                    SERIAL PRIMARY KEY,
+  entreprise_id         INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id               INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  nom                   VARCHAR(255) NOT NULL,
+  prenom                VARCHAR(150),
+  telephone             VARCHAR(50),
+  email                 VARCHAR(150),
+  siret                 VARCHAR(30),
+  adresse               TEXT,
+  est_client            BOOLEAN NOT NULL DEFAULT false,
+  est_fournisseur       BOOLEAN NOT NULL DEFAULT false,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Provenance de la fusion : contrairement à produits.legacy_table/legacy_id (une seule
+  -- origine possible par ligne), un contact issu d'un rapprochement provient des DEUX
+  -- tables source à la fois — d'où deux colonnes nullables séparées plutôt qu'un couple
+  -- table/id générique.
+  legacy_client_id      INTEGER,
+  legacy_fournisseur_id INTEGER,
+  CHECK (est_client OR est_fournisseur),
+  UNIQUE (legacy_client_id),
+  UNIQUE (legacy_fournisseur_id)
+);
+CREATE INDEX IF NOT EXISTS idx_contacts_entreprise_id ON contacts(entreprise_id);
 `;
 
 // Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre
@@ -884,6 +917,218 @@ async function mergeStocksIntoProduits() {
   }
 }
 
+// Retrouve dynamiquement le nom d'une contrainte FK plutôt que de le supposer — aucune
+// des contraintes clients/fournisseurs du schéma actuel n'a de nom explicite, donc
+// Postgres a choisi le nom par défaut (`<table>_<colonne>_fkey`), mais on interroge
+// pg_constraint au lieu de le coder en dur, plus robuste si ça change un jour.
+async function findForeignKeyName(table, column) {
+  const { rows } = await client.query(
+    `SELECT con.conname
+     FROM pg_constraint con
+     JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = ANY(con.conkey)
+     WHERE con.conrelid = $1::regclass AND con.contype = 'f' AND att.attname = $2`,
+    [table, column]
+  );
+  if (rows.length === 0) throw new Error(`Contrainte FK introuvable sur ${table}.${column}`);
+  return rows[0].conname;
+}
+
+// Fusionne clients/fournisseurs dans contacts, avec un rapprochement automatique des
+// paires qui représentent déjà la même entité des deux côtés (décision explicite de
+// l'utilisateur, malgré le risque plus élevé que la fusion produits — voir le plan
+// d'implémentation pour la discussion complète) :
+//   - Tier 1 (confiance haute) : SIRET identique non vide des deux côtés.
+//   - Tier 2 (confiance moyenne) : nom+prénom identiques (insensible à la casse/espaces),
+//     au moins un SIRET vide, ET correspondance non ambiguë (un seul candidat de chaque
+//     côté) — sinon on ne devine pas, les fiches restent séparées.
+// Contrairement à mergeStocksIntoProduits (stock_id sans FK stricte), devis.client_id/
+// client_prix.client_id/achats_documents.fournisseur_id sont de vraies contraintes FK :
+// il faut les supprimer avant de repointer les colonnes (sinon l'UPDATE viole la
+// contrainte existante), puis en recréer de nouvelles vers contacts(id).
+async function mergeClientsFournisseursIntoContacts() {
+  const { rows: [{ already }] } = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'clients_legacy_%'
+    ) AS already
+  `);
+  if (already) {
+    await client.query('DROP TABLE IF EXISTS clients');
+    await client.query('DROP TABLE IF EXISTS fournisseurs');
+    console.log('ℹ️  contacts : fusion déjà effectuée — coquilles vides nettoyées, étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ cl, fo }] } = await client.query(`
+      SELECT (SELECT COUNT(*) FROM clients) AS cl, (SELECT COUNT(*) FROM fournisseurs) AS fo
+    `);
+
+    // Paires rapprochées : tier 1 (SIRET) en premier, puis tier 2 (nom non ambigu) en
+    // excluant tout client/fournisseur déjà apparié au tier 1.
+    const paires = await client.query(`
+      WITH tier1 AS (
+        SELECT cl.id AS client_id, fo.id AS fournisseur_id, cl.nom AS client_nom, fo.nom AS fournisseur_nom, 'siret' AS critere
+        FROM clients cl JOIN fournisseurs fo
+          ON cl.entreprise_id = fo.entreprise_id
+          AND LOWER(TRIM(cl.siret)) = LOWER(TRIM(fo.siret))
+          AND NULLIF(TRIM(cl.siret), '') IS NOT NULL AND NULLIF(TRIM(fo.siret), '') IS NOT NULL
+      ),
+      tier2_candidats AS (
+        SELECT cl.id AS client_id, fo.id AS fournisseur_id, cl.nom AS client_nom, fo.nom AS fournisseur_nom,
+               COUNT(*) OVER (PARTITION BY cl.id) AS n_cote_client,
+               COUNT(*) OVER (PARTITION BY fo.id) AS n_cote_fournisseur
+        FROM clients cl JOIN fournisseurs fo
+          ON cl.entreprise_id = fo.entreprise_id
+          AND LOWER(TRIM(cl.nom)) = LOWER(TRIM(fo.nom))
+          AND COALESCE(LOWER(TRIM(cl.prenom)), '') = COALESCE(LOWER(TRIM(fo.prenom)), '')
+          AND (NULLIF(TRIM(cl.siret), '') IS NULL OR NULLIF(TRIM(fo.siret), '') IS NULL)
+        WHERE cl.id NOT IN (SELECT client_id FROM tier1) AND fo.id NOT IN (SELECT fournisseur_id FROM tier1)
+      ),
+      tier2 AS (
+        SELECT client_id, fournisseur_id, client_nom, fournisseur_nom, 'nom' AS critere
+        FROM tier2_candidats WHERE n_cote_client = 1 AND n_cote_fournisseur = 1
+      )
+      SELECT * FROM tier1 UNION ALL SELECT * FROM tier2
+    `);
+    for (const p of paires.rows) {
+      console.log(`ℹ️  contacts : rapprochement (${p.critere}) — client #${p.client_id} "${p.client_nom}" ↔ fournisseur #${p.fournisseur_id} "${p.fournisseur_nom}"`);
+    }
+    console.log(`ℹ️  contacts : ${paires.rows.length} paire(s) rapprochée(s) sur ${cl} client(s) / ${fo} fournisseur(s).`);
+
+    // Contacts fusionnés (les deux rôles) — clients en priorité, fournisseurs en complément
+    // uniquement sur les champs vides côté client, jamais d'écrasement d'une valeur déjà là.
+    await client.query(`
+      INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, email, siret, adresse,
+                             est_client, est_fournisseur, created_at, legacy_client_id, legacy_fournisseur_id)
+      SELECT cl.entreprise_id, cl.user_id,
+             cl.nom, COALESCE(NULLIF(cl.prenom, ''), fo.prenom),
+             COALESCE(NULLIF(cl.telephone, ''), fo.telephone),
+             COALESCE(NULLIF(cl.email, ''), fo.email),
+             COALESCE(NULLIF(cl.siret, ''), fo.siret),
+             COALESCE(NULLIF(cl.adresse, ''), fo.adresse),
+             true, true, cl.created_at, cl.id, fo.id
+      FROM clients cl
+      JOIN (
+        SELECT cl2.id AS client_id, fo2.id AS fournisseur_id
+        FROM clients cl2 JOIN fournisseurs fo2
+          ON cl2.entreprise_id = fo2.entreprise_id
+          AND LOWER(TRIM(cl2.siret)) = LOWER(TRIM(fo2.siret))
+          AND NULLIF(TRIM(cl2.siret), '') IS NOT NULL AND NULLIF(TRIM(fo2.siret), '') IS NOT NULL
+      ) m ON m.client_id = cl.id
+      JOIN fournisseurs fo ON fo.id = m.fournisseur_id
+    `);
+    // La requête ci-dessus ne couvre que le tier 1 (SIRET) pour rester simple à relire —
+    // le tier 2 (nom non ambigu) est fusionné séparément juste après avec la même logique
+    // COALESCE, en réutilisant exactement la CTE de détection utilisée pour le log plus haut.
+    await client.query(`
+      WITH tier1_deja_fait AS (
+        SELECT cl.id AS client_id, fo.id AS fournisseur_id
+        FROM clients cl JOIN fournisseurs fo
+          ON cl.entreprise_id = fo.entreprise_id
+          AND LOWER(TRIM(cl.siret)) = LOWER(TRIM(fo.siret))
+          AND NULLIF(TRIM(cl.siret), '') IS NOT NULL AND NULLIF(TRIM(fo.siret), '') IS NOT NULL
+      ),
+      tier2_candidats AS (
+        SELECT cl.id AS client_id, fo.id AS fournisseur_id,
+               COUNT(*) OVER (PARTITION BY cl.id) AS n_cote_client,
+               COUNT(*) OVER (PARTITION BY fo.id) AS n_cote_fournisseur
+        FROM clients cl JOIN fournisseurs fo
+          ON cl.entreprise_id = fo.entreprise_id
+          AND LOWER(TRIM(cl.nom)) = LOWER(TRIM(fo.nom))
+          AND COALESCE(LOWER(TRIM(cl.prenom)), '') = COALESCE(LOWER(TRIM(fo.prenom)), '')
+          AND (NULLIF(TRIM(cl.siret), '') IS NULL OR NULLIF(TRIM(fo.siret), '') IS NULL)
+        WHERE cl.id NOT IN (SELECT client_id FROM tier1_deja_fait) AND fo.id NOT IN (SELECT fournisseur_id FROM tier1_deja_fait)
+      ),
+      tier2 AS (
+        SELECT client_id, fournisseur_id FROM tier2_candidats WHERE n_cote_client = 1 AND n_cote_fournisseur = 1
+      )
+      INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, email, siret, adresse,
+                             est_client, est_fournisseur, created_at, legacy_client_id, legacy_fournisseur_id)
+      SELECT cl.entreprise_id, cl.user_id,
+             cl.nom, COALESCE(NULLIF(cl.prenom, ''), fo.prenom),
+             COALESCE(NULLIF(cl.telephone, ''), fo.telephone),
+             COALESCE(NULLIF(cl.email, ''), fo.email),
+             COALESCE(NULLIF(cl.siret, ''), fo.siret),
+             COALESCE(NULLIF(cl.adresse, ''), fo.adresse),
+             true, true, cl.created_at, cl.id, fo.id
+      FROM tier2 t JOIN clients cl ON cl.id = t.client_id JOIN fournisseurs fo ON fo.id = t.fournisseur_id
+    `);
+
+    // Clients non rapprochés → contact client seul.
+    await client.query(`
+      INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, email, siret, adresse,
+                             est_client, est_fournisseur, created_at, legacy_client_id)
+      SELECT entreprise_id, user_id, nom, prenom, telephone, email, siret, adresse, true, false, created_at, id
+      FROM clients cl WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.legacy_client_id = cl.id)
+    `);
+    // Fournisseurs non rapprochés → contact fournisseur seul.
+    await client.query(`
+      INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, email, siret, adresse,
+                             est_client, est_fournisseur, created_at, legacy_fournisseur_id)
+      SELECT entreprise_id, user_id, nom, prenom, telephone, email, siret, adresse, false, true, created_at, id
+      FROM fournisseurs fo WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.legacy_fournisseur_id = fo.id)
+    `);
+
+    // Les 3 FK réelles vers clients/fournisseurs doivent être supprimées avant le
+    // repointage (sinon l'UPDATE ci-dessous viole la contrainte existante), puis
+    // recréées vers contacts(id) avec les mêmes ON DELETE qu'aujourd'hui.
+    const devisFk = await findForeignKeyName('devis', 'client_id');
+    const prixFk = await findForeignKeyName('client_prix', 'client_id');
+    const achatsFk = await findForeignKeyName('achats_documents', 'fournisseur_id');
+    await client.query(`ALTER TABLE devis DROP CONSTRAINT ${devisFk}`);
+    await client.query(`ALTER TABLE client_prix DROP CONSTRAINT ${prixFk}`);
+    await client.query(`ALTER TABLE achats_documents DROP CONSTRAINT ${achatsFk}`);
+
+    await client.query(`
+      UPDATE devis d SET client_id = c.id FROM contacts c
+      WHERE d.client_id IS NOT NULL AND c.legacy_client_id = d.client_id
+    `);
+    await client.query(`
+      UPDATE client_prix cp SET client_id = c.id FROM contacts c
+      WHERE c.legacy_client_id = cp.client_id
+    `);
+    await client.query(`
+      UPDATE achats_documents ad SET fournisseur_id = c.id FROM contacts c
+      WHERE ad.fournisseur_id IS NOT NULL AND c.legacy_fournisseur_id = ad.fournisseur_id
+    `);
+
+    await client.query(`ALTER TABLE devis ADD CONSTRAINT devis_client_id_fkey FOREIGN KEY (client_id) REFERENCES contacts(id)`);
+    await client.query(`ALTER TABLE client_prix ADD CONSTRAINT client_prix_client_id_fkey FOREIGN KEY (client_id) REFERENCES contacts(id) ON DELETE CASCADE`);
+    await client.query(`ALTER TABLE achats_documents ADD CONSTRAINT achats_documents_fournisseur_id_fkey FOREIGN KEY (fournisseur_id) REFERENCES contacts(id) ON DELETE SET NULL`);
+
+    // Vérification en transaction avant COMMIT — throw ici annule tout, clients/fournisseurs
+    // restent intacts en cas de problème.
+    const { rows: [r] } = await client.query(`
+      SELECT
+        (SELECT COUNT(*) FROM contacts) AS total,
+        (SELECT COUNT(*) FROM devis WHERE client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = devis.client_id)) AS orphan_devis,
+        (SELECT COUNT(*) FROM client_prix WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = client_prix.client_id)) AS orphan_prix,
+        (SELECT COUNT(*) FROM achats_documents WHERE fournisseur_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = achats_documents.fournisseur_id)) AS orphan_achats
+    `);
+    const attendu = Number(cl) + Number(fo) - paires.rows.length;
+    const problemes = [];
+    if (Number(r.total) !== attendu) problemes.push(`contacts ${r.total} ≠ attendu ${attendu} (${cl} clients + ${fo} fournisseurs − ${paires.rows.length} rapprochement(s))`);
+    for (const k of ['orphan_devis', 'orphan_prix', 'orphan_achats']) {
+      if (Number(r[k]) > 0) problemes.push(`${k} = ${r[k]}`);
+    }
+    if (problemes.length) {
+      throw new Error(`Vérification post-fusion échouée : ${problemes.join(' | ')}`);
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    await client.query(`ALTER TABLE clients RENAME TO clients_legacy_${stamp}`);
+    await client.query(`ALTER TABLE fournisseurs RENAME TO fournisseurs_legacy_${stamp}`);
+
+    await client.query('COMMIT');
+    console.log(`✅ contacts : fusion réussie (${r.total} contacts, dont ${paires.rows.length} rapprochement(s)). Anciennes tables renommées *_legacy_${stamp}.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
+
 // Toute la variable SQL ci-dessus est envoyée en un seul `query()` — PostgreSQL exécute
 // les instructions séparées par `;` dans l'ordre au sein d'une même requête multi-instructions
 // (pas de vraie transaction globale explicite ici : une instruction en échec arrête tout,
@@ -898,6 +1143,7 @@ async function migrate() {
     await client.query(SQL);
     console.log('✅ Tables Cultures + Poulailler créées, et cloisonnement par utilisateur (user_id) appliqué partout.');
     await mergeStocksIntoProduits();
+    await mergeClientsFournisseursIntoContacts();
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);

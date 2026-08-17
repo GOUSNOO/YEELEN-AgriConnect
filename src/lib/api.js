@@ -69,18 +69,22 @@ export async function getMe() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Clients
+// Contacts (clients + fournisseurs unifiés, 2026-08-18)
 // ─────────────────────────────────────────────────────────────────────
-export async function getClients() {
-  return request('/business/clients');
+export async function getContacts(type) {
+  return request(type ? `/contacts?type=${encodeURIComponent(type)}` : '/contacts');
 }
 
-export async function createClient(payload) {
-  return request('/business/clients', { method: 'POST', body: JSON.stringify(payload) });
+export async function createContact(payload) {
+  return request('/contacts', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function deleteClient(id) {
-  return request(`/business/clients/${id}`, { method: 'DELETE' });
+export async function updateContact(id, payload) {
+  return request(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteContact(id) {
+  return request(`/contacts/${id}`, { method: 'DELETE' });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -454,26 +458,6 @@ export async function updateOnboardingStatus(payload) {
   return request('/entreprise/onboarding-status', { method: 'PUT', body: JSON.stringify(payload) });
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// FOURNISSEURS
-// ─────────────────────────────────────────────────────────────────────
-
-export async function getFournisseurs() {
-  return request('/business/fournisseurs', { method: 'GET' });
-}
-
-export async function createFournisseur(payload) {
-  return request('/business/fournisseurs', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export async function updateFournisseur(id, payload) {
-  return request(`/business/fournisseurs/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-}
-
-export async function deleteFournisseur(id) {
-  return request(`/business/fournisseurs/${id}`, { method: 'DELETE' });
-}
-
 export async function getAchatsDocuments(module) {
   return request(`/achats?module=${encodeURIComponent(module)}`, { method: 'GET' });
 }
@@ -526,10 +510,6 @@ export async function deletePrixClient(id) {
 }
 
 // Modifie une fiche client existante (coordonnées mises à jour)
-export async function updateClient(id, payload) {
-  return request(`/business/clients/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-}
-
 export async function updatePoulaillerMouvement(id, payload) {
   return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 }

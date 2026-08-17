@@ -9,8 +9,9 @@ import {
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History
 } from 'lucide-react';
 import {
-  clearToken, createClient, createFinance, deleteClient, deleteFinance,
-  getClients, getFinances, getMe, getToken, login, register, setToken,
+  clearToken, createFinance, deleteFinance,
+  getFinances, getMe, getToken, login, register, setToken,
+  getContacts, createContact, updateContact, deleteContact,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
@@ -22,8 +23,6 @@ import {
   setupMfa, verifyMfa, disableMfa,
   getMfaCompanyMethod, setMfaCompanyMethod,
   getSalaries, createSalarie, updateSalarie, deleteSalarie,
-  getFournisseurs, createFournisseur, updateFournisseur, deleteFournisseur,
-  updateClient,
   getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
   getPoulaillerHistorique, getCulturesHistorique,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger,
@@ -232,12 +231,9 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
     if (!partnerType) return;
     (async () => {
       try {
-        if (partnerType === 'client') {
-          const { clients } = await getClients();
-          setPartners(clients || []);
-        } else if (partnerType === 'fournisseur') {
-          const { fournisseurs } = await getFournisseurs();
-          setPartners(fournisseurs || []);
+        if (partnerType === 'client' || partnerType === 'fournisseur') {
+          const { contacts } = await getContacts(partnerType);
+          setPartners(contacts || []);
         }
       } catch (err) {
         console.error('[MovementTab partners load]', err);
@@ -1352,8 +1348,8 @@ function VentesWithDevis() {
   useEffect(() => {
     (async () => {
       try {
-        const { clients } = await getClients();
-        setClientsListe(clients || []);
+        const { contacts } = await getContacts('client');
+        setClientsListe(contacts || []);
       } catch (err) {
         console.error('[VentesWithDevis clients]', err);
       }
@@ -1426,8 +1422,8 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   useEffect(() => {
     (async () => {
       try {
-        const { fournisseurs } = await getFournisseurs();
-        setFournisseurs(fournisseurs || []);
+        const { contacts } = await getContacts('fournisseur');
+        setFournisseurs(contacts || []);
       } catch (err) {
         console.error('[AchatModule fournisseurs]', err);
       }
@@ -4741,47 +4737,64 @@ function ClientPrixSection({ clientId }) {
   );
 }
 
-function ClientsModule() {
-  const [clients, setClients]   = useState([]);
+// Config par type pour ContactsTab — un même contact réel peut être client ET
+// fournisseur (est_client/est_fournisseur indépendants côté backend, voir contacts.js) ;
+// ce composant unifie ce qui était ClientsModule/FournisseursModule (quasi identiques
+// octet pour octet avant cette fusion), même principe que StocksTab({ moduleType }).
+const CONTACT_TYPE_CONFIG = {
+  client: { label: 'client', labelPluriel: 'clients', Labelcap: 'Client', accent: COLORS.green, autre: 'fournisseur', nomPlaceholder: 'Ex: Diallo', prenomPlaceholder: 'Ex: Amadou' },
+  fournisseur: { label: 'fournisseur', labelPluriel: 'fournisseurs', Labelcap: 'Fournisseur', accent: COLORS.ochre, autre: 'client', nomPlaceholder: 'Ex: Traoré', prenomPlaceholder: 'Ex: Ibrahim' },
+};
+
+function ContactsTab({ type }) {
+  const cfg = CONTACT_TYPE_CONFIG[type];
+  const [contacts, setContacts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [apiError, setApiError] = useState('');
-  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '' };
+  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false };
   const [form, setForm]         = useState(emptyForm);
   const [query, setQuery]       = useState('');
 
-  const [editingId, setEditingId] = useState(null); // null = fenêtre de modification fermée, sinon id du client en cours d'édition
+  const [editingId, setEditingId] = useState(null); // null = fenêtre de modification fermée, sinon id du contact en cours d'édition
   const [editForm, setEditForm] = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
 
-  const selectedClient = clients.find(c => c.id === selectedId) || null;
+  const selectedContact = contacts.find(c => c.id === selectedId) || null;
+  const autreFlagKey = type === 'client' ? 'estFournisseur' : 'estClient';
+
+  const buildPayload = (f) => ({
+    nom: f.nom, prenom: f.prenom, telephone: f.telephone, adresse: f.adresse, email: f.email, siret: f.siret,
+    estClient: type === 'client' ? true : f.estAutre,
+    estFournisseur: type === 'fournisseur' ? true : f.estAutre,
+  });
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const { clients: loaded } = await getClients();
-        setClients(loaded || []);
+        const { contacts: loaded } = await getContacts(type);
+        setContacts(loaded || []);
         if (loaded && loaded.length > 0) setSelectedId(loaded[0].id);
       } catch (err) {
-        setApiError(err.message || 'Impossible de charger les clients.');
+        setApiError(err.message || `Impossible de charger les ${cfg.labelPluriel}.`);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [type]);
 
-  // Soumet le formulaire d'ajout d'un nouveau client
+  // Soumet le formulaire d'ajout d'un nouveau contact
   const submitForm = async (e) => {
     e.preventDefault();
     if (!form.nom) return;
     setSaving(true);
     setApiError('');
     try {
-      const { client } = await createClient(form);
-      setClients(prev => [client, ...prev]);
-      setSelectedId(client.id);
+      const { contact } = await createContact(buildPayload(form));
+      setContacts(prev => [contact, ...prev]);
+      setSelectedId(contact.id);
       setForm(emptyForm);
     } catch (err) {
       setApiError(err.message || "Erreur lors de l'enregistrement.");
@@ -4790,16 +4803,17 @@ function ClientsModule() {
     }
   };
 
-  // Ouvre la fenêtre de modification d'un client existant
-  const startEdit = (client) => {
-    setEditingId(client.id);
+  // Ouvre la fenêtre de modification d'un contact existant
+  const startEdit = (contact) => {
+    setEditingId(contact.id);
     setEditForm({
-      nom: client.nom || '',
-      prenom: client.prenom || '',
-      telephone: client.telephone || '',
-      adresse: client.adresse || '',
-      email: client.email || '',
-      siret: client.siret || '',
+      nom: contact.nom || '',
+      prenom: contact.prenom || '',
+      telephone: contact.telephone || '',
+      adresse: contact.adresse || '',
+      email: contact.email || '',
+      siret: contact.siret || '',
+      estAutre: Boolean(contact[autreFlagKey]),
     });
   };
 
@@ -4814,9 +4828,9 @@ function ClientsModule() {
     setEditSaving(true);
     setApiError('');
     try {
-      const { client } = await updateClient(editingId, editForm);
-      setClients(prev => prev.map(c => c.id === editingId ? client : c));
-      notifySuccess('Client mis à jour.');
+      const { contact } = await updateContact(editingId, buildPayload(editForm));
+      setContacts(prev => prev.map(c => c.id === editingId ? contact : c));
+      notifySuccess(`${cfg.Labelcap} mis à jour.`);
       cancelEdit();
     } catch (err) {
       setApiError(err.message || "Erreur lors de l'enregistrement.");
@@ -4825,27 +4839,42 @@ function ClientsModule() {
     }
   };
 
-  const removeClient = async (id, nom) => {
-    if (!window.confirm(`Supprimer le client « ${nom} » ? Cette action est irréversible.`)) return;
+  const removeContact = async (id, nom) => {
+    if (!window.confirm(`Supprimer le ${cfg.label} « ${nom} » ? Cette action est irréversible.`)) return;
     setApiError('');
     try {
-      await deleteClient(id);
-      setClients(prev => prev.filter(c => c.id !== id));
+      await deleteContact(id);
+      setContacts(prev => prev.filter(c => c.id !== id));
       if (selectedId === id) setSelectedId(null);
-      notifySuccess('Client supprimé.');
+      notifySuccess(`${cfg.Labelcap} supprimé.`);
     } catch (err) {
       setApiError(err.message || 'Erreur lors de la suppression.');
     }
   };
 
-  const filtered = clients.filter(c =>
+  const filtered = contacts.filter(c =>
     `${c.nom} ${c.prenom || ''} ${c.telephone || ''} ${c.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
   );
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
-      <Loader2 size={18} className="spin" /> Chargement des clients...
+      <Loader2 size={18} className="spin" /> Chargement des {cfg.labelPluriel}...
     </div>
+  );
+
+  const renderFields = (f, setF) => (
+    <>
+      <Field label="Nom" placeholder={cfg.nomPlaceholder} value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required />
+      <Field label="Prénom" placeholder={cfg.prenomPlaceholder} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })} />
+      <Field label="Téléphone" placeholder="+223..." value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })} />
+      <Field label="Email" type="email" placeholder="email@exemple.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
+      <Field label="Adresse" placeholder="Ville / quartier" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+      <Field label="SIRET (optionnel)" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft, paddingBottom: 9 }}>
+        <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
+        Est aussi {cfg.autre}
+      </label>
+    </>
   );
 
   return (
@@ -4858,17 +4887,12 @@ function ClientsModule() {
       )}
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          Ajouter un client
+          Ajouter un {cfg.label}
         </div>
         <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom" placeholder="Ex: Diallo" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
-          <Field label="Prénom" placeholder="Ex: Amadou" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} />
-          <Field label="Téléphone" placeholder="+223..." value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
-          <Field label="Email" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <Field label="Adresse" placeholder="Ville / quartier" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
-          <Field label="SIRET (optionnel)" placeholder="Si société" value={form.siret} onChange={e => setForm({ ...form, siret: e.target.value })} />
+          {renderFields(form, setForm)}
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button type="submit" variant="green" disabled={saving}>
+            <Button type="submit" variant={type === 'client' ? 'green' : 'ochre'} disabled={saving}>
               {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
             </Button>
           </div>
@@ -4876,284 +4900,74 @@ function ClientsModule() {
       </Card>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
         <Search size={14} color={COLORS.inkSoft} />
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un client..." style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher un ${cfg.label}...`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
       </label>
       {filtered.length === 0 ? (
-        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun client trouve.</div></Card>
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun {cfg.label} trouvé.</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {filtered.map(client => (
+            {filtered.map(contact => (
               <Card
-                key={client.id}
-                style={{ border: selectedClient && selectedClient.id === client.id ? `2px solid ${COLORS.green}` : `1px solid ${COLORS.border}`, cursor: 'pointer', padding: '14px 16px' }}
-                onClick={() => setSelectedId(client.id)}
+                key={contact.id}
+                style={{ border: selectedContact && selectedContact.id === contact.id ? `2px solid ${cfg.accent}` : `1px solid ${COLORS.border}`, cursor: 'pointer', padding: '14px 16px' }}
+                onClick={() => setSelectedId(contact.id)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 700 }}>{client.prenom} {client.nom}</div>
-                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{client.telephone || 'Pas de telephone'}</div>
+                    <div style={{ fontWeight: 700 }}>{contact.prenom} {contact.nom}</div>
+                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{contact.telephone || 'Pas de telephone'}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={(ev) => { ev.stopPropagation(); startEdit(client); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
+                    <button onClick={(ev) => { ev.stopPropagation(); startEdit(contact); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
                       <Settings2 size={14} />
                     </button>
-                    <button onClick={(ev) => { ev.stopPropagation(); removeClient(client.id, client.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                    <button onClick={(ev) => { ev.stopPropagation(); removeContact(contact.id, contact.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{client.adresse || 'Aucune adresse renseignee'}</div>
+                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || 'Aucune adresse renseignee'}</div>
               </Card>
             ))}
           </div>
-          {selectedClient && (
+          {selectedContact && (
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedClient.prenom} {selectedClient.nom}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedContact.prenom} {selectedContact.nom}</div>
               <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>Tel : {selectedClient.telephone || 'Non renseigne'}</span>
-                <span>Email : {selectedClient.email || 'Non renseigne'}</span>
-                <span>Adresse : {selectedClient.adresse || 'Non renseignee'}</span>
-                {selectedClient.siret && <span>SIRET : {selectedClient.siret}</span>}
-                <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedClient.id}</span>
+                <span>Tel : {selectedContact.telephone || 'Non renseigne'}</span>
+                <span>Email : {selectedContact.email || 'Non renseigne'}</span>
+                <span>Adresse : {selectedContact.adresse || 'Non renseignee'}</span>
+                {selectedContact.siret && <span>SIRET : {selectedContact.siret}</span>}
+                {selectedContact[autreFlagKey] && <span style={{ color: cfg.accent, fontWeight: 600 }}>Est aussi {cfg.autre}</span>}
+                <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedContact.id}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                 <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
                   <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>Enregistre le</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: COLORS.green }}>
-                    {selectedClient.created_at ? new Date(selectedClient.created_at).toLocaleDateString('fr-FR') : '-'}
+                    {selectedContact.createdAt ? new Date(selectedContact.createdAt).toLocaleDateString('fr-FR') : '-'}
                   </div>
                 </Card>
                 <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>Total clients</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{clients.length}</div>
+                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>Total {cfg.labelPluriel}</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{contacts.length}</div>
                 </Card>
               </div>
             </Card>
           )}
-          {selectedClient && <ClientPrixSection clientId={selectedClient.id} />}
+          {type === 'client' && selectedContact && <ClientPrixSection clientId={selectedContact.id} />}
         </div>
       )}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le client</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le {cfg.label}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-              <Field label="Nom" placeholder="Ex: Diallo" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
-              <Field label="Prénom" placeholder="Ex: Amadou" value={editForm.prenom} onChange={e => setEditForm({ ...editForm, prenom: e.target.value })} />
-              <Field label="Téléphone" placeholder="+223..." value={editForm.telephone} onChange={e => setEditForm({ ...editForm, telephone: e.target.value })} />
-              <Field label="Email" type="email" placeholder="email@exemple.com" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
-              <Field label="Adresse" placeholder="Ville / quartier" value={editForm.adresse} onChange={e => setEditForm({ ...editForm, adresse: e.target.value })} />
-              <Field label="SIRET (optionnel)" placeholder="Si société" value={editForm.siret} onChange={e => setEditForm({ ...editForm, siret: e.target.value })} />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button type="submit" variant="green" disabled={editSaving}>
-                  {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Enregistrer
-                </Button>
-                <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FournisseursModule() {
-  const [fournisseurs, setFournisseurs] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [apiError, setApiError] = useState('');
-  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '' };
-  const [form, setForm]         = useState(emptyForm);
-  const [query, setQuery]       = useState('');
-
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState(emptyForm);
-  const [editSaving, setEditSaving] = useState(false);
-
-  const selectedFournisseur = fournisseurs.find(f => f.id === selectedId) || null;
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { fournisseurs: loaded } = await getFournisseurs();
-        setFournisseurs(loaded || []);
-        if (loaded && loaded.length > 0) setSelectedId(loaded[0].id);
-      } catch (err) {
-        setApiError(err.message || 'Impossible de charger les fournisseurs.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const submitForm = async (e) => {
-    e.preventDefault();
-    if (!form.nom) return;
-    setSaving(true);
-    setApiError('');
-    try {
-      const { fournisseur } = await createFournisseur(form);
-      setFournisseurs(prev => [fournisseur, ...prev]);
-      setSelectedId(fournisseur.id);
-      setForm(emptyForm);
-    } catch (err) {
-      setApiError(err.message || "Erreur lors de l'enregistrement.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const startEdit = (fournisseur) => {
-    setEditingId(fournisseur.id);
-    setEditForm({
-      nom: fournisseur.nom || '',
-      prenom: fournisseur.prenom || '',
-      telephone: fournisseur.telephone || '',
-      adresse: fournisseur.adresse || '',
-      email: fournisseur.email || '',
-      siret: fournisseur.siret || '',
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm(emptyForm);
-  };
-
-  const submitEditForm = async (e) => {
-    e.preventDefault();
-    if (!editForm.nom) return;
-    setEditSaving(true);
-    setApiError('');
-    try {
-      const { fournisseur } = await updateFournisseur(editingId, editForm);
-      setFournisseurs(prev => prev.map(f => f.id === editingId ? fournisseur : f));
-      notifySuccess('Fournisseur mis à jour.');
-      cancelEdit();
-    } catch (err) {
-      setApiError(err.message || "Erreur lors de l'enregistrement.");
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
-  const removeFournisseur = async (id, nom) => {
-    if (!window.confirm(`Supprimer le fournisseur « ${nom} » ? Cette action est irréversible.`)) return;
-    setApiError('');
-    try {
-      await deleteFournisseur(id);
-      setFournisseurs(prev => prev.filter(f => f.id !== id));
-      if (selectedId === id) setSelectedId(null);
-      notifySuccess('Fournisseur supprimé.');
-    } catch (err) {
-      setApiError(err.message || 'Erreur lors de la suppression.');
-    }
-  };
-
-  const filtered = fournisseurs.filter(f =>
-    `${f.nom} ${f.prenom || ''} ${f.telephone || ''} ${f.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
-  );
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
-      <Loader2 size={18} className="spin" /> Chargement des fournisseurs...
-    </div>
-  );
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <AlertTriangle size={15} /> {apiError}
-          <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
-        </div>
-      )}
-      <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          Ajouter un fournisseur
-        </div>
-        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom" placeholder="Ex: Traoré" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
-          <Field label="Prénom" placeholder="Ex: Ibrahim" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} />
-          <Field label="Téléphone" placeholder="+223..." value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
-          <Field label="Email" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <Field label="Adresse" placeholder="Ville / quartier" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
-          <Field label="SIRET (optionnel)" placeholder="Si société" value={form.siret} onChange={e => setForm({ ...form, siret: e.target.value })} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button type="submit" variant="ochre" disabled={saving}>
-              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
-            </Button>
-          </div>
-        </form>
-      </Card>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
-        <Search size={14} color={COLORS.inkSoft} />
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un fournisseur..." style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
-      </label>
-      {filtered.length === 0 ? (
-        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun fournisseur trouve.</div></Card>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {filtered.map(f => (
-              <Card
-                key={f.id}
-                style={{ border: selectedFournisseur && selectedFournisseur.id === f.id ? `2px solid ${COLORS.ochre}` : `1px solid ${COLORS.border}`, cursor: 'pointer', padding: '14px 16px' }}
-                onClick={() => setSelectedId(f.id)}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{f.prenom} {f.nom}</div>
-                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{f.telephone || 'Pas de telephone'}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={(ev) => { ev.stopPropagation(); startEdit(f); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
-                      <Settings2 size={14} />
-                    </button>
-                    <button onClick={(ev) => { ev.stopPropagation(); removeFournisseur(f.id, f.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{f.adresse || 'Aucune adresse renseignee'}</div>
-              </Card>
-            ))}
-          </div>
-          {selectedFournisseur && (
-            <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedFournisseur.prenom} {selectedFournisseur.nom}</div>
-              <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>Tel : {selectedFournisseur.telephone || 'Non renseigne'}</span>
-                <span>Email : {selectedFournisseur.email || 'Non renseigne'}</span>
-                <span>Adresse : {selectedFournisseur.adresse || 'Non renseignee'}</span>
-                {selectedFournisseur.siret && <span>SIRET : {selectedFournisseur.siret}</span>}
-                <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedFournisseur.id}</span>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-      {editingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le fournisseur</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
-            </div>
-            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-              <Field label="Nom" placeholder="Ex: Traoré" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
-              <Field label="Prénom" placeholder="Ex: Ibrahim" value={editForm.prenom} onChange={e => setEditForm({ ...editForm, prenom: e.target.value })} />
-              <Field label="Téléphone" placeholder="+223..." value={editForm.telephone} onChange={e => setEditForm({ ...editForm, telephone: e.target.value })} />
-              <Field label="Email" type="email" placeholder="email@exemple.com" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
-              <Field label="Adresse" placeholder="Ville / quartier" value={editForm.adresse} onChange={e => setEditForm({ ...editForm, adresse: e.target.value })} />
-              <Field label="SIRET (optionnel)" placeholder="Si société" value={editForm.siret} onChange={e => setEditForm({ ...editForm, siret: e.target.value })} />
+              {renderFields(editForm, setEditForm)}
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button type="submit" variant="green" disabled={editSaving}>
                   {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Enregistrer
@@ -5665,8 +5479,8 @@ export default function App() {
             {tab === 'reports' && <ReportsModule farmId={user} activated={activated} />}
             {tab === 'cultures' && <CulturesModule farmId={user} />}
             {tab === 'poulailler' && <PoulaillerModule farmId={user} />}
-            {tab === 'clients' && <ClientsModule farmId={user} />}
-            {tab === 'fournisseurs' && <FournisseursModule farmId={user} />}
+            {tab === 'clients' && <ContactsTab type="client" />}
+            {tab === 'fournisseurs' && <ContactsTab type="fournisseur" />}
             {tab === 'employees' && <EmployeesModule farmId={user} role={role} />}
             {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}

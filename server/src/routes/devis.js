@@ -65,7 +65,7 @@ async function genererNumero(entrepriseId) {
 async function getDevisComplet(devisId, entrepriseId) {
   const devisResult = await pool.query(
     `SELECT ${DEVIS_COLUMNS}, d.mode_paiement AS "modePaiement", d.modalite_paiement AS "modalitePaiement"
-     FROM devis d LEFT JOIN clients c ON c.id = d.client_id WHERE d.id = $1 AND d.entreprise_id = $2`,
+     FROM devis d LEFT JOIN contacts c ON c.id = d.client_id WHERE d.id = $1 AND d.entreprise_id = $2`,
     [devisId, entrepriseId]
   );
   if (devisResult.rows.length === 0) return null;
@@ -89,7 +89,7 @@ async function getDevisComplet(devisId, entrepriseId) {
 router.get('/', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN clients c ON c.id = d.client_id
+      `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.entreprise_id = $1 ORDER BY d.id DESC`,
       [req.user.entrepriseId]
     );
@@ -114,7 +114,7 @@ router.get('/ledger', authRequired, async (req, res) => {
               dl.prix_unitaire::float8 AS "prixUnitaire"
        FROM devis_lignes dl
        JOIN devis d ON d.id = dl.devis_id
-       LEFT JOIN clients c ON c.id = d.client_id
+       LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.entreprise_id = $1 AND d.statut != 'Brouillon'
        ORDER BY d.date DESC, dl.ordre ASC`,
       [req.user.entrepriseId]
@@ -323,7 +323,7 @@ router.get('/public/:token', async (req, res) => {
       `SELECT d.id, d.numero, d.statut, d.date, d.total::float8 AS total, d.notes, d.signature_data AS "signatureData",
               c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom"
        FROM devis d
-       LEFT JOIN clients c ON c.id = d.client_id
+       LEFT JOIN contacts c ON c.id = d.client_id
        LEFT JOIN entreprises e ON e.id = d.entreprise_id
        WHERE d.token_public = $1`,
       [req.params.token]
@@ -399,7 +399,7 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
   try {
     const check = await client.query(
       `SELECT d.statut, d.total, d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom"
-       FROM devis d LEFT JOIN clients c ON c.id = d.client_id
+       FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
     );
@@ -528,7 +528,7 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
   try {
     const devisResult = await pool.query(
       `SELECT d.mode_paiement AS "modePaiement", d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom"
-       FROM devis d LEFT JOIN clients c ON c.id = d.client_id
+       FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
     );
@@ -582,7 +582,7 @@ router.get('/public/:token/pdf', async (req, res) => {
               d.signature_data AS "signatureData", d.signataire_nom AS "signataireNom", d.date_signature AS "dateSignature",
               c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom"
        FROM devis d
-       LEFT JOIN clients c ON c.id = d.client_id
+       LEFT JOIN contacts c ON c.id = d.client_id
        LEFT JOIN entreprises e ON e.id = d.entreprise_id
        WHERE d.token_public = $1`,
       [req.params.token]
