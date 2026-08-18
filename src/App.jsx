@@ -27,7 +27,7 @@ import {
   getPoulaillerHistorique, getCulturesHistorique,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
-  getPrixClient, createPrixClient, deletePrixClient,
+  getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
   getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
@@ -699,18 +699,20 @@ function DevisModule({ clientsListe }) {
     })();
   }, []);
 
-  // Prix négociés du client sélectionné (formulaire d'ajout et fenêtre de modification
-  // peuvent porter sur deux clients différents en même temps, donc deux cartes séparées,
-  // clé "module:id" pour matcher directement un article du catalogue).
+  // Prix effectifs (liste de prix assignée) du client sélectionné — formulaire d'ajout
+  // et fenêtre de modification peuvent porter sur deux clients différents en même temps,
+  // donc deux cartes séparées. Clé stockId seul (les ids produits sont non-ambigus depuis
+  // la fusion produits, plus besoin du composite "module:id" qu'utilisait l'ancien
+  // client_prix, conçue avant cette fusion).
   const [clientPrixMap, setClientPrixMap] = useState({});
   const [editClientPrixMap, setEditClientPrixMap] = useState({});
 
   const loadClientPrixMap = async (clientId, setter) => {
     if (!clientId) { setter({}); return; }
     try {
-      const { prix } = await getPrixClient(clientId);
+      const { prix } = await getContactPrixEffectifs(clientId);
       const map = {};
-      (prix || []).forEach(p => { map[`${p.stockModule}:${p.stockId}`] = p.prix; });
+      (prix || []).forEach(p => { map[p.stockId] = p.prix; });
       setter(map);
     } catch (err) {
       console.error('[DevisModule prix client]', err);
@@ -721,11 +723,11 @@ function DevisModule({ clientsListe }) {
   useEffect(() => { loadClientPrixMap(form.clientId, setClientPrixMap); }, [form.clientId]);
   useEffect(() => { loadClientPrixMap(editForm.clientId, setEditClientPrixMap); }, [editForm.clientId]);
 
-  // Prix à préremplir pour un article catalogué : le prix négocié pour ce client s'il
-  // existe, sinon le prix par défaut de l'article — jamais l'inverse.
+  // Prix à préremplir pour un article catalogué : le prix de la liste assignée au client
+  // s'il existe, sinon le prix par défaut de l'article — jamais l'inverse.
   const prixPourMatch = (match, prixMap) => {
     if (!match) return null;
-    const negocie = prixMap[`${match.module}:${match.id}`];
+    const negocie = prixMap[match.id];
     return negocie != null ? negocie : match.prixDefaut;
   };
 
@@ -4639,30 +4641,37 @@ function NotificationsModule({ farmId, activated }) {
 
 
 
-// Prix négociés pour un client précis, en complément du prix par défaut de chaque
-// article (jamais à la place) — mirroir léger du datalist-catalogue déjà utilisé dans
-// AchatModule/DevisModule, réutilisé ici pour choisir l'article dont on fixe le prix.
-function ClientPrixSection({ clientId }) {
-  const [prixListe, setPrixListe] = useState([]);
+// Gère les listes de prix nommées et réutilisables de l'entreprise (remplace
+// ClientPrixSection, 2026-08-18) — contrairement à l'ancien prix négocié client+article
+// (une ligne = un override non réutilisable), une liste peut être assignée à plusieurs
+// contacts à la fois (via le sélecteur "Liste de prix" dans ContactsTab). Ne dépend
+// d'aucun contact sélectionné : gère toutes les listes de l'entreprise d'un coup, même
+// esprit que "Gérer les catégories" dans StocksTab (panneau repliable).
+function ListesPrixManager() {
+  const [listes, setListes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [newNom, setNewNom] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const [lignesParListe, setLignesParListe] = useState({});
   const [catalogItems, setCatalogItems] = useState([]);
-  const [form, setForm] = useState({ produit: '', stockId: null, stockModule: null, prix: '' });
-  const datalistId = `client-prix-catalog-${clientId}`;
+  const [ligneForm, setLigneForm] = useState({ produit: '', stockId: null, prix: '' });
+  const datalistId = 'listes-prix-catalog';
 
-  const loadPrix = useCallback(async () => {
+  const loadListes = useCallback(async () => {
     setLoading(true);
     try {
-      const { prix } = await getPrixClient(clientId);
-      setPrixListe(prix || []);
+      const { listes: loaded } = await getListesPrix();
+      setListes(loaded || []);
     } catch (err) {
-      console.error('[ClientPrixSection load]', err);
-      setPrixListe([]);
+      console.error('[ListesPrixManager load]', err);
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, []);
 
-  useEffect(() => { loadPrix(); }, [loadPrix]);
+  useEffect(() => { loadListes(); }, [loadListes]);
 
   useEffect(() => {
     (async () => {
@@ -4670,34 +4679,77 @@ function ClientPrixSection({ clientId }) {
         const { stocks } = await getProduits();
         setCatalogItems(stocks || []);
       } catch (err) {
-        console.error('[ClientPrixSection catalog]', err);
+        console.error('[ListesPrixManager catalog]', err);
       }
     })();
   }, []);
 
-  const submit = async (e) => {
+  const createListe = async (e) => {
     e.preventDefault();
-    if (!form.stockId || form.prix === '') {
+    if (!newNom.trim()) return;
+    setCreating(true);
+    try {
+      await createListePrix({ nom: newNom.trim() });
+      setNewNom('');
+      notifySuccess('Liste créée.');
+      await loadListes();
+    } catch (err) {
+      notifyError(err, 'Impossible de créer la liste.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const removeListe = async (id, nom) => {
+    if (!window.confirm(`Supprimer la liste « ${nom} » ? Les contacts qui l'utilisent perdront leurs prix négociés.`)) return;
+    try {
+      await deleteListePrix(id);
+      setListes(l => l.filter(x => x.id !== id));
+      if (expandedId === id) setExpandedId(null);
+      notifySuccess('Liste supprimée.');
+    } catch (err) {
+      notifyError(err, 'Impossible de supprimer la liste.');
+    }
+  };
+
+  const toggleExpand = async (id) => {
+    if (expandedId === id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    if (!lignesParListe[id]) {
+      try {
+        const { lignes } = await getListePrixLignes(id);
+        setLignesParListe(m => ({ ...m, [id]: lignes || [] }));
+      } catch (err) {
+        console.error('[ListesPrixManager lignes]', err);
+      }
+    }
+  };
+
+  const addLigne = async (e, listeId) => {
+    e.preventDefault();
+    if (!ligneForm.stockId || ligneForm.prix === '') {
       notifyError(null, 'Choisissez un article du catalogue et un prix.');
       return;
     }
     try {
-      await createPrixClient({ clientId, stockId: form.stockId, stockModule: form.stockModule, prix: Number(form.prix) });
-      notifySuccess('Prix négocié enregistré.');
-      setForm({ produit: '', stockId: null, stockModule: null, prix: '' });
-      await loadPrix();
+      await createListePrixLigne(listeId, { stockId: ligneForm.stockId, prix: Number(ligneForm.prix) });
+      const { lignes } = await getListePrixLignes(listeId);
+      setLignesParListe(m => ({ ...m, [listeId]: lignes || [] }));
+      setListes(l => l.map(x => x.id === listeId ? { ...x, nombreLignes: lignes.length } : x));
+      setLigneForm({ produit: '', stockId: null, prix: '' });
     } catch (err) {
-      notifyError(err, "Impossible d'enregistrer le prix.");
+      notifyError(err, "Impossible d'enregistrer la ligne.");
     }
   };
 
-  const remove = async (id) => {
-    if (!window.confirm('Supprimer ce prix négocié ?')) return;
+  const removeLigne = async (ligneId, listeId) => {
+    if (!window.confirm('Supprimer cette ligne ?')) return;
     try {
-      await deletePrixClient(id);
-      setPrixListe(list => list.filter(p => p.id !== id));
+      await deleteListePrixLigne(ligneId);
+      setLignesParListe(m => ({ ...m, [listeId]: (m[listeId] || []).filter(l => l.id !== ligneId) }));
+      setListes(l => l.map(x => x.id === listeId ? { ...x, nombreLignes: Math.max(0, x.nombreLignes - 1) } : x));
     } catch (err) {
-      notifyError(err, 'Impossible de supprimer ce prix.');
+      notifyError(err, 'Impossible de supprimer cette ligne.');
     }
   };
 
@@ -4706,29 +4758,56 @@ function ClientPrixSection({ clientId }) {
       <datalist id={datalistId}>
         {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Prix négociés pour ce client</div>
-      <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 12 }}>
-        <Field label="Article" placeholder="Nom exact d'un article en stock" list={datalistId} value={form.produit} onChange={e => {
-          const value = e.target.value;
-          const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-          setForm({ ...form, produit: value, stockId: match ? match.id : null, stockModule: match ? match.module : null });
-        }} />
-        <Field label="Prix (FCFA)" type="number" placeholder="0" value={form.prix} onChange={e => setForm({ ...form, prix: e.target.value })} />
-        <Button type="submit" variant="ochre" small><Plus size={14} /> Ajouter</Button>
-      </form>
-      {loading ? (
-        <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Chargement…</div>
-      ) : prixListe.length === 0 ? (
-        <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun prix négocié — cet article utilisera son prix par défaut.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {prixListe.map(p => (
-            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13 }}>
-              <span>{p.stockNom}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontWeight: 700 }}>{Number(p.prix).toLocaleString('fr-FR')} FCFA</span>
-                <button onClick={() => remove(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 13, padding: 0, fontWeight: 600 }}>
+        {open ? 'Masquer les listes de prix' : 'Gérer les listes de prix'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <form onSubmit={createListe} style={{ display: 'flex', gap: 8 }}>
+            <Field placeholder="Nouvelle liste (ex: Prix Gros)" value={newNom} onChange={e => setNewNom(e.target.value)} />
+            <Button type="submit" variant="ochre" disabled={creating} style={{ whiteSpace: 'nowrap' }}>
+              {creating ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Créer
+            </Button>
+          </form>
+          {loading ? (
+            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Chargement…</div>
+          ) : listes.length === 0 ? (
+            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucune liste de prix pour l'instant.</div>
+          ) : listes.map(liste => (
+            <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(liste.id)}>
+                <div>
+                  <span style={{ fontWeight: 700 }}>{liste.nom}</span>
+                  <span style={{ color: COLORS.inkSoft, fontSize: 12, marginLeft: 8 }}>{liste.nombreLignes} article{liste.nombreLignes > 1 ? 's' : ''}</span>
+                </div>
+                <button onClick={(ev) => { ev.stopPropagation(); removeListe(liste.id, liste.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                  <Trash2 size={14} />
+                </button>
               </div>
+              {expandedId === liste.id && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                    <Field label="Article" placeholder="Nom exact d'un article en stock" list={datalistId} value={ligneForm.produit} onChange={e => {
+                      const value = e.target.value;
+                      const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                      setLigneForm({ ...ligneForm, produit: value, stockId: match ? match.id : null });
+                    }} />
+                    <Field label="Prix (FCFA)" type="number" placeholder="0" value={ligneForm.prix} onChange={e => setLigneForm({ ...ligneForm, prix: e.target.value })} />
+                    <Button type="submit" small><Plus size={14} /> Ajouter</Button>
+                  </form>
+                  {(lignesParListe[liste.id] || []).length === 0 ? (
+                    <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>Aucun article dans cette liste.</div>
+                  ) : (lignesParListe[liste.id] || []).map(l => (
+                    <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13 }}>
+                      <span>{l.stockNom}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontWeight: 700 }}>{Number(l.prix).toLocaleString('fr-FR')} FCFA</span>
+                        <button onClick={() => removeLigne(l.id, liste.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -4753,13 +4832,26 @@ function ContactsTab({ type }) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [apiError, setApiError] = useState('');
-  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false };
+  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false, listePrixId: null };
   const [form, setForm]         = useState(emptyForm);
   const [query, setQuery]       = useState('');
 
   const [editingId, setEditingId] = useState(null); // null = fenêtre de modification fermée, sinon id du contact en cours d'édition
   const [editForm, setEditForm] = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
+
+  const [listesPrix, setListesPrix] = useState([]);
+  useEffect(() => {
+    if (type !== 'client') return;
+    (async () => {
+      try {
+        const { listes } = await getListesPrix();
+        setListesPrix(listes || []);
+      } catch (err) {
+        console.error('[ContactsTab listesPrix]', err);
+      }
+    })();
+  }, [type]);
 
   const selectedContact = contacts.find(c => c.id === selectedId) || null;
   const autreFlagKey = type === 'client' ? 'estFournisseur' : 'estClient';
@@ -4768,6 +4860,7 @@ function ContactsTab({ type }) {
     nom: f.nom, prenom: f.prenom, telephone: f.telephone, adresse: f.adresse, email: f.email, siret: f.siret,
     estClient: type === 'client' ? true : f.estAutre,
     estFournisseur: type === 'fournisseur' ? true : f.estAutre,
+    ...(type === 'client' ? { listePrixId: f.listePrixId } : {}),
   });
 
   useEffect(() => {
@@ -4814,6 +4907,7 @@ function ContactsTab({ type }) {
       email: contact.email || '',
       siret: contact.siret || '',
       estAutre: Boolean(contact[autreFlagKey]),
+      listePrixId: contact.listePrixId ?? null,
     });
   };
 
@@ -4874,6 +4968,12 @@ function ContactsTab({ type }) {
         <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
         Est aussi {cfg.autre}
       </label>
+      {type === 'client' && (
+        <Select label="Liste de prix" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
+          <option value="">Aucune</option>
+          {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
+        </Select>
+      )}
     </>
   );
 
@@ -4898,6 +4998,7 @@ function ContactsTab({ type }) {
           </div>
         </form>
       </Card>
+      {type === 'client' && <ListesPrixManager />}
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
         <Search size={14} color={COLORS.inkSoft} />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher un ${cfg.label}...`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
@@ -4940,6 +5041,9 @@ function ContactsTab({ type }) {
                 <span>Adresse : {selectedContact.adresse || 'Non renseignee'}</span>
                 {selectedContact.siret && <span>SIRET : {selectedContact.siret}</span>}
                 {selectedContact[autreFlagKey] && <span style={{ color: cfg.accent, fontWeight: 600 }}>Est aussi {cfg.autre}</span>}
+                {type === 'client' && (
+                  <span>Liste de prix : {listesPrix.find(l => l.id === selectedContact.listePrixId)?.nom || 'Aucune'}</span>
+                )}
                 <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedContact.id}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
@@ -4956,7 +5060,6 @@ function ContactsTab({ type }) {
               </div>
             </Card>
           )}
-          {type === 'client' && selectedContact && <ClientPrixSection clientId={selectedContact.id} />}
         </div>
       )}
       {editingId && (

@@ -661,23 +661,6 @@ CREATE INDEX IF NOT EXISTS idx_stock_mouvements_stock ON stock_mouvements(stock_
 ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS statut TEXT NOT NULL DEFAULT 'Reçu';
 ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS date_reception TIMESTAMPTZ;
 
--- ═══════════════ Listes de prix par client ═══════════════
--- Prix négocié pour un client précis sur un article précis, en complément du prix par
--- défaut de l'article (jamais à la place) : une vente sans règle spécifique continue
--- d'utiliser le prix par défaut habituel. Pas de FK stricte sur stock_id, même raison
--- que partout ailleurs dans ce fichier (cultures_stocks vs poulailler_stocks).
-CREATE TABLE IF NOT EXISTS client_prix (
-  id             SERIAL PRIMARY KEY,
-  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
-  client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  stock_module   TEXT NOT NULL,
-  stock_id       INTEGER NOT NULL,
-  prix           NUMERIC(12, 2) NOT NULL,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (client_id, stock_module, stock_id)
-);
-CREATE INDEX IF NOT EXISTS idx_client_prix_client_id ON client_prix(client_id);
-
 -- ═══════════════ Produits unifiés (fusion cultures_stocks / poulailler_stocks) ═══════════════
 -- Remplace les deux tables stocks séparées par une seule table produits + une vraie ressource
 -- de catégories par entreprise (au lieu du texte libre non validé qu'était categorie). Voir
@@ -715,6 +698,32 @@ CREATE TABLE IF NOT EXISTS produits (
 );
 CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id);
 
+-- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
+-- Troisième étape de l'alignement structurel Odoo : remplace le prix négocié client+article
+-- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,
+-- assignable à plusieurs contacts à la fois — comme le champ "Liste de prix" d'une commande
+-- Odoo. Toujours en complément du prix par défaut de l'article, jamais à la place : un contact
+-- sans liste assignée (contacts.liste_prix_id NULL, colonne ajoutée plus bas) continue
+-- d'utiliser prix_defaut. Pas de stock_module ici (contrairement à l'ancienne client_prix,
+-- conçue avant la fusion produits) — stock_id seul est non-ambigu depuis cette fusion.
+CREATE TABLE IF NOT EXISTS listes_prix (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom            TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_listes_prix_entreprise_id ON listes_prix(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS listes_prix_lignes (
+  id             SERIAL PRIMARY KEY,
+  liste_prix_id  INTEGER NOT NULL REFERENCES listes_prix(id) ON DELETE CASCADE,
+  stock_id       INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  prix           NUMERIC(12, 2) NOT NULL,
+  UNIQUE (liste_prix_id, stock_id)
+);
+CREATE INDEX IF NOT EXISTS idx_listes_prix_lignes_liste_prix_id ON listes_prix_lignes(liste_prix_id);
+
 -- ═══════════════ Contacts unifiés (fusion clients / fournisseurs) ═══════════════
 -- Deuxième étape de l'alignement structurel Odoo (après produits) : remplace deux tables
 -- séparées par une seule, inspirée de res.partner — contrairement à produits.module (un
@@ -747,6 +756,11 @@ CREATE TABLE IF NOT EXISTS contacts (
   UNIQUE (legacy_fournisseur_id)
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_entreprise_id ON contacts(entreprise_id);
+
+-- Assignation d'une liste de prix à un contact. Nullable : NULL = pas de liste, chaque
+-- article utilise son prix par défaut tel quel. ON DELETE SET NULL (pas CASCADE) :
+-- supprimer une liste détache les contacts qui l'utilisaient, ne les supprime pas.
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS liste_prix_id INTEGER REFERENCES listes_prix(id) ON DELETE SET NULL;
 `;
 
 // Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre
@@ -877,12 +891,21 @@ async function mergeStocksIntoProduits() {
         AND p.legacy_id = sm.stock_id
     `);
 
-    await client.query(`
-      UPDATE client_prix cp SET stock_id = p.id
-      FROM produits p
-      WHERE p.legacy_table = CASE cp.stock_module WHEN 'Cultures' THEN 'cultures_stocks' ELSE 'poulailler_stocks' END
-        AND p.legacy_id = cp.stock_id
-    `);
+    // client_prix a disparu depuis la fusion listes_prix (étape 3) sur une base déjà à jour
+    // — sur une base neuve, elle n'a même jamais existé (son CREATE TABLE a été retiré du
+    // bloc SQL principal). Repointage seulement si elle existe encore (ex: restauration d'un
+    // dump antérieur à l'étape 3, rejouée contre le migrate.js actuel).
+    const { rows: [{ exists: clientPrixExiste }] } = await client.query(
+      `SELECT to_regclass('public.client_prix') IS NOT NULL AS exists`
+    );
+    if (clientPrixExiste) {
+      await client.query(`
+        UPDATE client_prix cp SET stock_id = p.id
+        FROM produits p
+        WHERE p.legacy_table = CASE cp.stock_module WHEN 'Cultures' THEN 'cultures_stocks' ELSE 'poulailler_stocks' END
+          AND p.legacy_id = cp.stock_id
+      `);
+    }
 
     // Vérification en transaction — throw ici annule tout (ROLLBACK dans le catch ci-dessous),
     // les tables cultures_stocks/poulailler_stocks restent intactes en cas de problème.
@@ -892,15 +915,18 @@ async function mergeStocksIntoProduits() {
         (SELECT COUNT(*) FROM produits WHERE legacy_table = 'poulailler_stocks') AS p_ps,
         (SELECT COUNT(*) FROM achats_lignes WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = achats_lignes.stock_id)) AS orphan_al,
         (SELECT COUNT(*) FROM devis_lignes WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = devis_lignes.stock_id)) AS orphan_dl,
-        (SELECT COUNT(*) FROM stock_mouvements WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = stock_mouvements.stock_id)) AS orphan_sm,
-        (SELECT COUNT(*) FROM client_prix WHERE NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = client_prix.stock_id)) AS orphan_cp
+        (SELECT COUNT(*) FROM stock_mouvements WHERE stock_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = stock_mouvements.stock_id)) AS orphan_sm
     `);
+    const orphanCp = clientPrixExiste
+      ? Number((await client.query(`SELECT COUNT(*) FROM client_prix WHERE NOT EXISTS (SELECT 1 FROM produits p WHERE p.id = client_prix.stock_id)`)).rows[0].count)
+      : 0;
     const problemes = [];
     if (Number(r.p_cs) !== Number(cs)) problemes.push(`cultures_stocks ${cs} ≠ produits(legacy=cultures_stocks) ${r.p_cs}`);
     if (Number(r.p_ps) !== Number(ps)) problemes.push(`poulailler_stocks ${ps} ≠ produits(legacy=poulailler_stocks) ${r.p_ps}`);
-    for (const k of ['orphan_al', 'orphan_dl', 'orphan_sm', 'orphan_cp']) {
+    for (const k of ['orphan_al', 'orphan_dl', 'orphan_sm']) {
       if (Number(r[k]) > 0) problemes.push(`${k} = ${r[k]}`);
     }
+    if (orphanCp > 0) problemes.push(`orphan_cp = ${orphanCp}`);
     if (problemes.length) {
       throw new Error(`Vérification post-fusion échouée : ${problemes.join(' | ')}`);
     }
@@ -1071,31 +1097,44 @@ async function mergeClientsFournisseursIntoContacts() {
       FROM fournisseurs fo WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.legacy_fournisseur_id = fo.id)
     `);
 
-    // Les 3 FK réelles vers clients/fournisseurs doivent être supprimées avant le
-    // repointage (sinon l'UPDATE ci-dessous viole la contrainte existante), puis
-    // recréées vers contacts(id) avec les mêmes ON DELETE qu'aujourd'hui.
+    // Les FK réelles vers clients/fournisseurs doivent être supprimées avant le repointage
+    // (sinon l'UPDATE ci-dessous viole la contrainte existante), puis recréées vers
+    // contacts(id) avec les mêmes ON DELETE qu'aujourd'hui. client_prix a disparu depuis
+    // l'étape 3 (listes_prix) sur une base à jour — sur une base neuve elle n'a même jamais
+    // existé — donc traitée seulement si elle existe encore (ex: dump antérieur à l'étape 3
+    // rejoué contre le migrate.js actuel).
     const devisFk = await findForeignKeyName('devis', 'client_id');
-    const prixFk = await findForeignKeyName('client_prix', 'client_id');
     const achatsFk = await findForeignKeyName('achats_documents', 'fournisseur_id');
     await client.query(`ALTER TABLE devis DROP CONSTRAINT ${devisFk}`);
-    await client.query(`ALTER TABLE client_prix DROP CONSTRAINT ${prixFk}`);
     await client.query(`ALTER TABLE achats_documents DROP CONSTRAINT ${achatsFk}`);
+
+    const { rows: [{ exists: clientPrixExiste }] } = await client.query(
+      `SELECT to_regclass('public.client_prix') IS NOT NULL AS exists`
+    );
+    if (clientPrixExiste) {
+      const prixFk = await findForeignKeyName('client_prix', 'client_id');
+      await client.query(`ALTER TABLE client_prix DROP CONSTRAINT ${prixFk}`);
+    }
 
     await client.query(`
       UPDATE devis d SET client_id = c.id FROM contacts c
       WHERE d.client_id IS NOT NULL AND c.legacy_client_id = d.client_id
     `);
-    await client.query(`
-      UPDATE client_prix cp SET client_id = c.id FROM contacts c
-      WHERE c.legacy_client_id = cp.client_id
-    `);
+    if (clientPrixExiste) {
+      await client.query(`
+        UPDATE client_prix cp SET client_id = c.id FROM contacts c
+        WHERE c.legacy_client_id = cp.client_id
+      `);
+    }
     await client.query(`
       UPDATE achats_documents ad SET fournisseur_id = c.id FROM contacts c
       WHERE ad.fournisseur_id IS NOT NULL AND c.legacy_fournisseur_id = ad.fournisseur_id
     `);
 
     await client.query(`ALTER TABLE devis ADD CONSTRAINT devis_client_id_fkey FOREIGN KEY (client_id) REFERENCES contacts(id)`);
-    await client.query(`ALTER TABLE client_prix ADD CONSTRAINT client_prix_client_id_fkey FOREIGN KEY (client_id) REFERENCES contacts(id) ON DELETE CASCADE`);
+    if (clientPrixExiste) {
+      await client.query(`ALTER TABLE client_prix ADD CONSTRAINT client_prix_client_id_fkey FOREIGN KEY (client_id) REFERENCES contacts(id) ON DELETE CASCADE`);
+    }
     await client.query(`ALTER TABLE achats_documents ADD CONSTRAINT achats_documents_fournisseur_id_fkey FOREIGN KEY (fournisseur_id) REFERENCES contacts(id) ON DELETE SET NULL`);
 
     // Vérification en transaction avant COMMIT — throw ici annule tout, clients/fournisseurs
@@ -1104,15 +1143,18 @@ async function mergeClientsFournisseursIntoContacts() {
       SELECT
         (SELECT COUNT(*) FROM contacts) AS total,
         (SELECT COUNT(*) FROM devis WHERE client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = devis.client_id)) AS orphan_devis,
-        (SELECT COUNT(*) FROM client_prix WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = client_prix.client_id)) AS orphan_prix,
         (SELECT COUNT(*) FROM achats_documents WHERE fournisseur_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = achats_documents.fournisseur_id)) AS orphan_achats
     `);
+    const orphanPrix = clientPrixExiste
+      ? Number((await client.query(`SELECT COUNT(*) FROM client_prix WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.id = client_prix.client_id)`)).rows[0].count)
+      : 0;
     const attendu = Number(cl) + Number(fo) - paires.rows.length;
     const problemes = [];
     if (Number(r.total) !== attendu) problemes.push(`contacts ${r.total} ≠ attendu ${attendu} (${cl} clients + ${fo} fournisseurs − ${paires.rows.length} rapprochement(s))`);
-    for (const k of ['orphan_devis', 'orphan_prix', 'orphan_achats']) {
+    for (const k of ['orphan_devis', 'orphan_achats']) {
       if (Number(r[k]) > 0) problemes.push(`${k} = ${r[k]}`);
     }
+    if (orphanPrix > 0) problemes.push(`orphan_prix = ${orphanPrix}`);
     if (problemes.length) {
       throw new Error(`Vérification post-fusion échouée : ${problemes.join(' | ')}`);
     }
@@ -1123,6 +1165,93 @@ async function mergeClientsFournisseursIntoContacts() {
 
     await client.query('COMMIT');
     console.log(`✅ contacts : fusion réussie (${r.total} contacts, dont ${paires.rows.length} rapprochement(s)). Anciennes tables renommées *_legacy_${stamp}.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
+
+// Fusionne client_prix vers listes_prix/listes_prix_lignes (étape 3). Idempotence sur
+// l'existence de la table elle-même : contrairement aux deux fusions précédentes (qui
+// renomment en *_legacy_<date>), pas de données historiques à conserver sous cette forme
+// une fois converties — DROP direct. Couvre à la fois "déjà migrée" et "base neuve qui n'a
+// jamais créé client_prix" (son CREATE TABLE a été retiré du bloc SQL principal).
+async function migrateClientPrixToListesPrix() {
+  const { rows: [{ exists: clientPrixExiste }] } = await client.query(
+    `SELECT to_regclass('public.client_prix') IS NOT NULL AS exists`
+  );
+  if (!clientPrixExiste) {
+    console.log('ℹ️  listes_prix : client_prix déjà absente — étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ count }] } = await client.query('SELECT COUNT(*) FROM client_prix');
+
+    if (Number(count) === 0) {
+      // Chemin attendu (confirmé : zéro ligne en production au moment de cette étape) —
+      // rien à convertir.
+      await client.query('DROP TABLE client_prix');
+      await client.query('COMMIT');
+      console.log('✅ listes_prix : client_prix était vide — supprimée sans conversion.');
+      return;
+    }
+
+    // Chemin défensif, non exercé par les vraies données actuelles (couvre un autre
+    // environnement, ou une relance avant déploiement) : une liste par client concerné,
+    // nommée "Tarifs <nom>", dédoublonnée si ce nom existe déjà pour l'entreprise.
+    const { rows: clientsAvecPrix } = await client.query(`
+      SELECT DISTINCT cp.client_id, cp.entreprise_id, c.nom AS contact_nom
+      FROM client_prix cp JOIN contacts c ON c.id = cp.client_id
+    `);
+    for (const { client_id, entreprise_id, contact_nom } of clientsAvecPrix) {
+      let nomListe = `Tarifs ${contact_nom}`;
+      let n = 1;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { rows: [{ exists: nomPris }] } = await client.query(
+          `SELECT EXISTS (SELECT 1 FROM listes_prix WHERE entreprise_id = $1 AND nom = $2) AS exists`,
+          [entreprise_id, nomListe]
+        );
+        if (!nomPris) break;
+        n += 1;
+        nomListe = `Tarifs ${contact_nom} (${n})`;
+      }
+
+      const { rows: [{ id: listeId }] } = await client.query(
+        `INSERT INTO listes_prix (entreprise_id, nom) VALUES ($1, $2) RETURNING id`,
+        [entreprise_id, nomListe]
+      );
+
+      // stock_module abandonné — stock_id seul suffit depuis la fusion produits (étape 1).
+      await client.query(
+        `INSERT INTO listes_prix_lignes (liste_prix_id, stock_id, prix)
+         SELECT $1, cp.stock_id, cp.prix FROM client_prix cp WHERE cp.client_id = $2
+         ON CONFLICT (liste_prix_id, stock_id) DO NOTHING`,
+        [listeId, client_id]
+      );
+
+      await client.query(`UPDATE contacts SET liste_prix_id = $1 WHERE id = $2`, [listeId, client_id]);
+      console.log(`ℹ️  listes_prix : contact #${client_id} "${contact_nom}" → liste "${nomListe}" (id ${listeId}).`);
+    }
+
+    // Vérification avant COMMIT — throw ici annule tout.
+    const { rows: [{ orphan }] } = await client.query(`
+      SELECT COUNT(*) AS orphan FROM client_prix cp
+      WHERE NOT EXISTS (
+        SELECT 1 FROM listes_prix_lignes lpl JOIN contacts c ON c.liste_prix_id = lpl.liste_prix_id
+        WHERE c.id = cp.client_id AND lpl.stock_id = cp.stock_id AND lpl.prix = cp.prix
+      )
+    `);
+    if (Number(orphan) > 0) {
+      throw new Error(`Vérification post-conversion échouée : ${orphan} ligne(s) client_prix non retrouvée(s).`);
+    }
+
+    await client.query('DROP TABLE client_prix');
+    await client.query('COMMIT');
+    console.log(`✅ listes_prix : ${clientsAvecPrix.length} liste(s) créée(s) depuis client_prix (chemin défensif).`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -1144,6 +1273,7 @@ async function migrate() {
     console.log('✅ Tables Cultures + Poulailler créées, et cloisonnement par utilisateur (user_id) appliqué partout.');
     await mergeStocksIntoProduits();
     await mergeClientsFournisseursIntoContacts();
+    await migrateClientPrixToListesPrix();
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);

@@ -495,18 +495,35 @@ export async function annulerReceptionAchatDocument(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Prix négociés par client
+// Listes de prix nommées et réutilisables (remplace les anciens get/create/
+// deletePrixClient, 2026-08-18)
 // ─────────────────────────────────────────────────────────────────────
-export async function getPrixClient(clientId) {
-  return request(`/prix-client?clientId=${encodeURIComponent(clientId)}`);
+export async function getListesPrix() {
+  return request('/listes-prix');
 }
 
-export async function createPrixClient(payload) {
-  return request('/prix-client', { method: 'POST', body: JSON.stringify(payload) });
+export async function createListePrix(payload) {
+  return request('/listes-prix', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function deletePrixClient(id) {
-  return request(`/prix-client/${id}`, { method: 'DELETE' });
+export async function deleteListePrix(id) {
+  return request(`/listes-prix/${id}`, { method: 'DELETE' });
+}
+
+export async function getListePrixLignes(listeId) {
+  return request(`/listes-prix/${listeId}/lignes`);
+}
+
+export async function createListePrixLigne(listeId, payload) {
+  return request(`/listes-prix/${listeId}/lignes`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteListePrixLigne(ligneId) {
+  return request(`/listes-prix/lignes/${ligneId}`, { method: 'DELETE' });
+}
+
+export async function getContactPrixEffectifs(contactId) {
+  return request(`/contacts/${contactId}/prix-effectifs`);
 }
 
 // Modifie une fiche client existante (coordonnées mises à jour)

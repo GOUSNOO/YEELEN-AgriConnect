@@ -10,10 +10,19 @@ import { pool } from '../db.js';
 
 const router = express.Router();
 
+// Ne garde qu'un listePrixId qui appartient réellement à l'entreprise appelante — même
+// posture que partout ailleurs dans l'app (ex: validerStockIds dans achats.js) : renvoie
+// null silencieusement plutôt que de rejeter toute la requête sur un id invalide.
+async function resolveListePrixId(entrepriseId, listePrixId) {
+  if (listePrixId == null) return null;
+  const result = await pool.query('SELECT id FROM listes_prix WHERE id = $1 AND entreprise_id = $2', [listePrixId, entrepriseId]);
+  return result.rows[0]?.id ?? null;
+}
+
 const CONTACT_COLUMNS = `
   id, nom, prenom, telephone, email, siret, adresse,
   est_client AS "estClient", est_fournisseur AS "estFournisseur",
-  created_at AS "createdAt"
+  liste_prix_id AS "listePrixId", created_at AS "createdAt"
 `;
 
 router.get('/', authRequired, async (req, res) => {
@@ -35,7 +44,7 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.post('/', authRequired, async (req, res) => {
-  const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur } = req.body;
+  const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixId } = req.body;
   if (!nom) {
     return res.status(400).json({ error: 'Le nom du contact est requis.' });
   }
@@ -43,11 +52,12 @@ router.post('/', authRequired, async (req, res) => {
     return res.status(400).json({ error: 'Un contact doit être client, fournisseur, ou les deux.' });
   }
   try {
+    const listePrixValide = await resolveListePrixId(req.user.entrepriseId, listePrixId);
     const result = await pool.query(
-      `INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, adresse, email, siret, est_client, est_fournisseur)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, adresse, email, siret, est_client, est_fournisseur, liste_prix_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING ${CONTACT_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, nom, prenom || null, telephone || null, adresse || null, email || null, siret || null, Boolean(estClient), Boolean(estFournisseur)]
+      [req.user.entrepriseId, req.user.sub, nom, prenom || null, telephone || null, adresse || null, email || null, siret || null, Boolean(estClient), Boolean(estFournisseur), listePrixValide]
     );
     return res.status(201).json({ contact: result.rows[0] });
   } catch (err) {
@@ -61,7 +71,12 @@ router.put('/:id', authRequired, async (req, res) => {
   if (estClient === false && estFournisseur === false) {
     return res.status(400).json({ error: 'Un contact doit être client, fournisseur, ou les deux.' });
   }
+  // listePrixId a besoin de distinguer "non fourni" (ne pas toucher) de "fourni à null"
+  // (désassigner la liste) — un simple COALESCE($n, colonne) ne peut jamais écrire NULL,
+  // contrairement à tous les autres champs ci-dessous où cette nuance n'existe pas.
+  const listePrixFourni = Object.prototype.hasOwnProperty.call(req.body, 'listePrixId');
   try {
+    const listePrixValide = listePrixFourni ? await resolveListePrixId(req.user.entrepriseId, req.body.listePrixId) : null;
     const result = await pool.query(
       `UPDATE contacts SET
          nom = COALESCE($1, nom),
@@ -71,10 +86,11 @@ router.put('/:id', authRequired, async (req, res) => {
          email = COALESCE($5, email),
          siret = COALESCE($6, siret),
          est_client = COALESCE($7, est_client),
-         est_fournisseur = COALESCE($8, est_fournisseur)
-       WHERE id = $9 AND entreprise_id = $10
+         est_fournisseur = COALESCE($8, est_fournisseur),
+         liste_prix_id = CASE WHEN $9 THEN $10 ELSE liste_prix_id END
+       WHERE id = $11 AND entreprise_id = $12
        RETURNING ${CONTACT_COLUMNS}`,
-      [nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, req.params.id, req.user.entrepriseId]
+      [nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixFourni, listePrixValide, req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Contact introuvable.' });
@@ -87,6 +103,29 @@ router.put('/:id', authRequired, async (req, res) => {
     }
     console.error('[PUT /contacts]', err);
     return res.status(500).json({ error: 'Erreur lors de la mise à jour du contact.' });
+  }
+});
+
+// Prix effectifs d'un contact : les lignes de la liste de prix qui lui est assignée, s'il
+// en a une. Remplace l'ancien GET /prix-client?clientId=X — un contact sans liste
+// assignée renvoie une liste vide, laissant chaque article retomber sur son prix par défaut.
+router.get('/:id/prix-effectifs', authRequired, async (req, res) => {
+  try {
+    const contact = await pool.query('SELECT liste_prix_id FROM contacts WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (contact.rows.length === 0) return res.status(404).json({ error: 'Contact introuvable.' });
+    const listePrixId = contact.rows[0].liste_prix_id;
+    if (!listePrixId) return res.json({ prix: [] });
+    const result = await pool.query(
+      `SELECT lpl.id, lpl.stock_id AS "stockId", lpl.prix::float8 AS prix, p.nom AS "stockNom"
+       FROM listes_prix_lignes lpl JOIN produits p ON p.id = lpl.stock_id
+       WHERE lpl.liste_prix_id = $1
+       ORDER BY p.nom ASC`,
+      [listePrixId]
+    );
+    return res.json({ prix: result.rows });
+  } catch (err) {
+    console.error('[GET /contacts/:id/prix-effectifs]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des prix.' });
   }
 });
 
