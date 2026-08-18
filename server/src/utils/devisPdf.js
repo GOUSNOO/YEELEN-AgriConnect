@@ -59,7 +59,7 @@ export function streamDevisPdf(res, devis) {
   doc.text('Produit', 50, tableTop);
   doc.text('Qté', 250, tableTop);
   doc.text('Prix unitaire', 310, tableTop);
-  doc.text('Remise', 420, tableTop);
+  doc.text('Remise (%)', 420, tableTop);
   doc.text('Total', 490, tableTop, { width: 80, align: 'right' });
   doc.moveDown(0.5);
   doc.font('Helvetica');
@@ -68,11 +68,20 @@ export function streamDevisPdf(res, devis) {
   // produit très long (tronqué/débordant visuellement plutôt que redimensionné).
   let y = doc.y;
   (devis.lignes || []).forEach(l => {
-    const ligneTotal = (l.quantite * l.prixUnitaire) - (l.remise || 0);
+    if (l.type === 'section') {
+      // Une section n'a pas de quantité/prix — affichée en gras sur toute la largeur,
+      // pas de colonnes numériques.
+      doc.font('Helvetica-Bold').text(l.produit, 50, y, { width: 520 });
+      doc.font('Helvetica');
+      y += 22;
+      return;
+    }
+    const pct = Number(l.remisePourcentage) || 0;
+    const ligneTotal = (l.quantite * l.prixUnitaire) * (1 - pct / 100);
     doc.text(l.produit, 50, y, { width: 220 });
     doc.text(String(l.quantite), 250, y);
     doc.text(`${formatMontant(l.prixUnitaire)} FCFA`, 310, y);
-    doc.text(`${formatMontant(l.remise || 0)} FCFA`, 420, y);
+    doc.text(`${pct.toFixed(2)}%`, 420, y);
     doc.text(`${formatMontant(ligneTotal)} FCFA`, 490, y, { width: 80, align: 'right' });
     y += 20;
   });

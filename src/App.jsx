@@ -1,4 +1,4 @@
-import './App.css';
+﻿import './App.css';
 ﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
@@ -29,7 +29,7 @@ import {
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
   getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
-  openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon,
+  openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
   getOnboardingStatus, updateOnboardingStatus,
 } from './lib/api';
@@ -639,7 +639,8 @@ function DevisModule({ clientsListe }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', quantite: '', prixUnitaire: '', remise: '', recolteId: '', stockId: null, stockModule: null };
+  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', recolteId: '', stockId: null, stockModule: null };
+  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', recolteId: '', stockId: null, stockModule: null };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
   const [saving, setSaving] = useState(false);
   const [recoltes, setRecoltes] = useState([]);
@@ -651,6 +652,10 @@ function DevisModule({ clientsListe }) {
   const [detailId, setDetailId] = useState(null); // devis actuellement affiché en détail
   const [detailData, setDetailData] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  // Édition locale des quantités livrée/facturée par ligne (popup de détail) — clé
+  // ligne.id, initialisée depuis les valeurs serveur à chaque (ré)ouverture du détail.
+  const [quantitesEdit, setQuantitesEdit] = useState({});
+  const [quantitesSaving, setQuantitesSaving] = useState(false);
   // Popup demandant le mode et la modalité de paiement avant de valider la facturation
   const [paiementPopupOpen, setPaiementPopupOpen] = useState(false);
   const [paiementDevisId, setPaiementDevisId] = useState(null);
@@ -733,6 +738,8 @@ function DevisModule({ clientsListe }) {
 
   // Ajoute une ligne de produit vide au formulaire
   const addLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
+  // Ajoute une ligne de section (titre seul, sans quantité/prix — pur repère visuel dans le document)
+  const addSectionLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptySectionLigne }] }));
 
   // Supprime une ligne précise du formulaire (garde toujours au moins une ligne)
   const removeLigne = (index) => setForm(f => ({ ...f, lignes: f.lignes.filter((_, i) => i !== index) }));
@@ -744,8 +751,14 @@ function DevisModule({ clientsListe }) {
     }));
   };
 
-  const totalForm = form.lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
-  const totalEditForm = editForm.lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+  // Une section n'entre jamais dans le total (quantité/prix toujours à 0 pour ce type).
+  const ligneTotal = (l) => {
+    if (l.type === 'section') return 0;
+    const sousTotal = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0);
+    return sousTotal * (1 - (Number(l.remisePourcentage) || 0) / 100);
+  };
+  const totalForm = form.lignes.reduce((s, l) => s + ligneTotal(l), 0);
+  const totalEditForm = editForm.lignes.reduce((s, l) => s + ligneTotal(l), 0);
 
   const resetForm = () => {
     setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
@@ -753,7 +766,7 @@ function DevisModule({ clientsListe }) {
 
   const submitForm = async (e) => {
     e.preventDefault();
-    if (!form.clientId || form.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
+    if (!form.clientId || form.lignes.some(l => !l.produit || (l.type !== 'section' && (l.quantite === '' || l.prixUnitaire === '')))) {
       setApiError('Un client et toutes les lignes de produits (complètes) sont requis.');
       return;
     }
@@ -765,9 +778,10 @@ function DevisModule({ clientsListe }) {
         notes: form.notes,
         lignes: form.lignes.map(l => ({
           produit: l.produit,
+          type: l.type === 'section' ? 'section' : 'produit',
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
-          remise: Number(l.remise) || 0,
+          remisePourcentage: Number(l.remisePourcentage) || 0,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
           stockModule: l.stockModule || null,
@@ -786,6 +800,7 @@ function DevisModule({ clientsListe }) {
 
   // Ligne de produits — version formulaire de modification (fenêtre séparée)
   const addEditLigne = () => setEditForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
+  const addSectionEditLigne = () => setEditForm(f => ({ ...f, lignes: [...f.lignes, { ...emptySectionLigne }] }));
   const removeEditLigne = (index) => setEditForm(f => ({ ...f, lignes: f.lignes.filter((_, i) => i !== index) }));
   const updateEditLigne = (index, field, value) => {
     setEditForm(f => ({
@@ -808,7 +823,7 @@ function DevisModule({ clientsListe }) {
       setEditForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
     } catch (err) {
       setApiError(err.message);
@@ -817,7 +832,7 @@ function DevisModule({ clientsListe }) {
 
   const submitEditForm = async (e) => {
     e.preventDefault();
-    if (!editForm.clientId || editForm.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
+    if (!editForm.clientId || editForm.lignes.some(l => !l.produit || (l.type !== 'section' && (l.quantite === '' || l.prixUnitaire === '')))) {
       setApiError('Un client et toutes les lignes de produits (complètes) sont requis.');
       return;
     }
@@ -829,9 +844,10 @@ function DevisModule({ clientsListe }) {
         notes: editForm.notes,
         lignes: editForm.lignes.map(l => ({
           produit: l.produit,
+          type: l.type === 'section' ? 'section' : 'produit',
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
-          remise: Number(l.remise) || 0,
+          remisePourcentage: Number(l.remisePourcentage) || 0,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
           stockModule: l.stockModule || null,
@@ -853,8 +869,35 @@ function DevisModule({ clientsListe }) {
     try {
       const data = await getDevisDetail(id);
       setDetailData(data.devis);
+      const map = {};
+      (data.devis.lignes || []).forEach(l => {
+        if (l.type !== 'section') map[l.id] = { quantiteLivree: l.quantiteLivree || 0, quantiteFacturee: l.quantiteFacturee || 0 };
+      });
+      setQuantitesEdit(map);
     } catch (err) {
       setApiError(err.message);
+    }
+  };
+
+  const updateQuantiteEdit = (ligneId, field, value) => {
+    setQuantitesEdit(m => ({ ...m, [ligneId]: { ...m[ligneId], [field]: value } }));
+  };
+
+  const handleSaveQuantites = async () => {
+    setQuantitesSaving(true);
+    try {
+      const lignes = Object.entries(quantitesEdit).map(([id, q]) => ({
+        id: Number(id),
+        quantiteLivree: Number(q.quantiteLivree) || 0,
+        quantiteFacturee: Number(q.quantiteFacturee) || 0,
+      }));
+      await updateDevisLigneQuantites(detailData.id, lignes);
+      notifySuccess('Quantités livrée/facturée mises à jour.');
+      await openDetail(detailData.id);
+    } catch (err) {
+      notifyError(err, 'Impossible de mettre à jour les quantités.');
+    } finally {
+      setQuantitesSaving(false);
     }
   };
 
@@ -1004,36 +1047,52 @@ function DevisModule({ clientsListe }) {
             <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
             {form.lignes.map((ligne, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                  <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
-                    const value = e.target.value;
-                    updateLigne(i, 'produit', value);
-                    const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                    updateLigne(i, 'stockId', match ? match.id : null);
-                    updateLigne(i, 'stockModule', match ? match.module : null);
-                    const prix = prixPourMatch(match, clientPrixMap);
-                    if (prix != null && !ligne.prixUnitaire) {
-                      updateLigne(i, 'prixUnitaire', String(prix));
-                    }
-                  }} />
-                  <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
-                  <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
-                  <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateLigne(i, 'remise', e.target.value)} />
-                  <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
-                  <option value="">Aucune</option>
-                  {recoltes.map(r => (
-                    <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
-                  ))}
-                </Select>
+                {ligne.type === 'section' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'end' }}>
+                    <Field label={i === 0 ? 'Titre de section' : ''} placeholder="Ex: Matériel d'irrigation" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
+                    <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                      <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                        const value = e.target.value;
+                        updateLigne(i, 'produit', value);
+                        const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                        updateLigne(i, 'stockId', match ? match.id : null);
+                        updateLigne(i, 'stockModule', match ? match.module : null);
+                        const prix = prixPourMatch(match, clientPrixMap);
+                        if (prix != null && !ligne.prixUnitaire) {
+                          updateLigne(i, 'prixUnitaire', String(prix));
+                        }
+                      }} />
+                      <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
+                      <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
+                      <Field label={i === 0 ? 'Remise (%)' : ''} type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} />
+                      <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
+                      <option value="">Aucune</option>
+                      {recoltes.map(r => (
+                        <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
+                      ))}
+                    </Select>
+                  </>
+                )}
               </div>
             ))}
-            <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
-              <Plus size={14} /> Ajouter une ligne
-            </Button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
+                <Plus size={14} /> Ajouter une ligne
+              </Button>
+              <Button type="button" variant="ghost" onClick={addSectionLigne} style={{ alignSelf: 'flex-start' }}>
+                <Plus size={14} /> Ajouter une section
+              </Button>
+            </div>
           </div>
 
           <Field label="Notes (optionnel)" placeholder="Conditions, délais, remarques..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
@@ -1107,13 +1166,22 @@ function DevisModule({ clientsListe }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-                  <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>P.U.</th><th>Remise</th><th style={{ textAlign: 'right' }}>Total</th>
+                  <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>P.U.</th><th>Remise (%)</th><th>Livré</th><th>Facturé</th><th style={{ textAlign: 'right' }}>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {detailData.lignes.map(l => {
-                  const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0);
+                  if (l.type === 'section') {
+                    return (
+                      <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                        <td colSpan={7} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
+                      </tr>
+                    );
+                  }
+                  const pct = Number(l.remisePourcentage) || 0;
+                  const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
                   const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
+                  const qEdit = quantitesEdit[l.id] || { quantiteLivree: 0, quantiteFacturee: 0 };
                   return (
                     <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
                       <td style={{ padding: '6px 0' }}>
@@ -1126,13 +1194,30 @@ function DevisModule({ clientsListe }) {
                       </td>
                       <td>{l.quantite}</td>
                       <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
-                      <td>{(Number(l.remise) || 0).toLocaleString('fr-FR')}</td>
+                      <td>{pct.toLocaleString('fr-FR')}</td>
+                      <td>
+                        {detailData.statut !== 'Brouillon' ? (
+                          <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                        ) : '—'}
+                      </td>
+                      <td>
+                        {detailData.statut !== 'Brouillon' ? (
+                          <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                        ) : '—'}
+                      </td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{netLigne.toLocaleString('fr-FR')}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            {detailData.statut !== 'Brouillon' && (
+              <div style={{ textAlign: 'right', marginBottom: 10 }}>
+                <Button small variant="outline" onClick={handleSaveQuantites} disabled={quantitesSaving}>
+                  {quantitesSaving ? <Loader2 size={14} className="spin" /> : null} Enregistrer les quantités
+                </Button>
+              </div>
+            )}
             <div style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, marginBottom: 14 }}>
               Total : {detailData.total.toLocaleString('fr-FR')} FCFA
             </div>
@@ -1291,36 +1376,52 @@ function DevisModule({ clientsListe }) {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
                 {editForm.lignes.map((ligne, i) => (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                      <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
-                        const value = e.target.value;
-                        updateEditLigne(i, 'produit', value);
-                        const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                        updateEditLigne(i, 'stockId', match ? match.id : null);
-                        updateEditLigne(i, 'stockModule', match ? match.module : null);
-                        const prix = prixPourMatch(match, editClientPrixMap);
-                        if (prix != null && !ligne.prixUnitaire) {
-                          updateEditLigne(i, 'prixUnitaire', String(prix));
-                        }
-                      }} />
-                      <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
-                      <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} />
-                      <Field label={i === 0 ? 'Remise' : ''} type="number" placeholder="0" value={ligne.remise} onChange={e => updateEditLigne(i, 'remise', e.target.value)} />
-                      <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
-                      <option value="">Aucune</option>
-                      {recoltes.map(r => (
-                        <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
-                      ))}
-                    </Select>
+                    {ligne.type === 'section' ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'end' }}>
+                        <Field label={i === 0 ? 'Titre de section' : ''} placeholder="Ex: Matériel d'irrigation" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} />
+                        <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                          <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                            const value = e.target.value;
+                            updateEditLigne(i, 'produit', value);
+                            const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                            updateEditLigne(i, 'stockId', match ? match.id : null);
+                            updateEditLigne(i, 'stockModule', match ? match.module : null);
+                            const prix = prixPourMatch(match, editClientPrixMap);
+                            if (prix != null && !ligne.prixUnitaire) {
+                              updateEditLigne(i, 'prixUnitaire', String(prix));
+                            }
+                          }} />
+                          <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
+                          <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} />
+                          <Field label={i === 0 ? 'Remise (%)' : ''} type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} />
+                          <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
+                          <option value="">Aucune</option>
+                          {recoltes.map(r => (
+                            <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
+                          ))}
+                        </Select>
+                      </>
+                    )}
                   </div>
                 ))}
-                <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}>
-                  <Plus size={14} /> Ajouter une ligne
-                </Button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}>
+                    <Plus size={14} /> Ajouter une ligne
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={addSectionEditLigne} style={{ alignSelf: 'flex-start' }}>
+                    <Plus size={14} /> Ajouter une section
+                  </Button>
+                </div>
               </div>
 
               <Field label="Notes (optionnel)" placeholder="Conditions, délais, remarques..." value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />

@@ -50,6 +50,29 @@ async function validerStockLigneIds(dbClient, lignes, entrepriseId) {
   };
 }
 
+// Étape 4 (2026-08-18) : une ligne de section/note (type='section') ne porte aucune quantité/
+// prix/remise/lien stock réels — ces deux fonctions imposent cette invariante côté serveur
+// (défense en profondeur, indépendamment de ce qu'un client enverrait) plutôt que de faire
+// confiance au payload entrant.
+function normalizeLigne(l) {
+  const isSection = l.type === 'section';
+  return {
+    produit: l.produit,
+    type: isSection ? 'section' : 'produit',
+    quantite: isSection ? 0 : (Number(l.quantite) || 0),
+    prixUnitaire: isSection ? 0 : (Number(l.prixUnitaire) || 0),
+    remisePourcentage: isSection ? 0 : Math.min(100, Math.max(0, Number(l.remisePourcentage) || 0)),
+    recolteId: isSection ? null : l.recolteId,
+    stockId: isSection ? null : l.stockId,
+    stockModule: isSection ? null : l.stockModule,
+  };
+}
+function ligneTotal(l) {
+  if (l.type === 'section') return 0;
+  const sousTotal = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0);
+  return sousTotal * (1 - (Number(l.remisePourcentage) || 0) / 100);
+}
+
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
 async function genererNumero(entrepriseId) {
   const year = new Date().getFullYear();
@@ -70,7 +93,9 @@ async function getDevisComplet(devisId, entrepriseId) {
   );
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
-    `SELECT id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise,
+    `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+            remise_pourcentage::float8 AS "remisePourcentage",
+            quantite_livree::float8 AS "quantiteLivree", quantite_facturee::float8 AS "quantiteFacturee",
             recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
@@ -115,7 +140,7 @@ router.get('/ledger', authRequired, async (req, res) => {
        FROM devis_lignes dl
        JOIN devis d ON d.id = dl.devis_id
        LEFT JOIN contacts c ON c.id = d.client_id
-       WHERE d.entreprise_id = $1 AND d.statut != 'Brouillon'
+       WHERE d.entreprise_id = $1 AND d.statut != 'Brouillon' AND dl.type = 'produit'
        ORDER BY d.date DESC, dl.ordre ASC`,
       [req.user.entrepriseId]
     );
@@ -152,7 +177,8 @@ router.post('/', authRequired, async (req, res) => {
     await client.query('BEGIN');
 
     const numero = await genererNumero(req.user.entrepriseId);
-    const total = lignes.reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+    const lignesNormalisees = lignes.map(normalizeLigne);
+    const total = lignesNormalisees.reduce((s, l) => s + ligneTotal(l), 0);
 
     const devisResult = await client.query(
       `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes)
@@ -160,18 +186,18 @@ router.post('/', authRequired, async (req, res) => {
       [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null]
     );
     const devisId = devisResult.rows[0].id;
-    const recolteIdsValides = await validerRecolteIds(client, lignes, req.user.entrepriseId);
-    const stockLigneValide = await validerStockLigneIds(client, lignes, req.user.entrepriseId);
+    const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
+    const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, req.user.entrepriseId);
 
-    for (let i = 0; i < lignes.length; i++) {
-      const l = lignes[i];
+    for (let i = 0; i < lignesNormalisees.length; i++) {
+      const l = lignesNormalisees[i];
       const stockOk = stockLigneValide(l);
       await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id, stock_id, stock_module)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [devisId, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i,
+        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, ordre, recolte_id, stock_id, stock_module, type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, i,
          recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-         stockOk ? l.stockId : null, stockOk ? l.stockModule : null]
+         stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
       );
     }
 
@@ -205,7 +231,8 @@ router.put('/:id', authRequired, async (req, res) => {
 
     await client.query('BEGIN');
 
-    const total = (lignes || []).reduce((s, l) => s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) - (Number(l.remise) || 0), 0);
+    const lignesNormalisees = Array.isArray(lignes) ? lignes.map(normalizeLigne) : [];
+    const total = lignesNormalisees.reduce((s, l) => s + ligneTotal(l), 0);
 
     await client.query(
       `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes) WHERE id = $4`,
@@ -214,17 +241,17 @@ router.put('/:id', authRequired, async (req, res) => {
 
     if (Array.isArray(lignes)) {
       await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
-      const recolteIdsValides = await validerRecolteIds(client, lignes, req.user.entrepriseId);
-      const stockLigneValide = await validerStockLigneIds(client, lignes, req.user.entrepriseId);
-      for (let i = 0; i < lignes.length; i++) {
-        const l = lignes[i];
+      const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
+      const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, req.user.entrepriseId);
+      for (let i = 0; i < lignesNormalisees.length; i++) {
+        const l = lignesNormalisees[i];
         const stockOk = stockLigneValide(l);
         await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise, ordre, recolte_id, stock_id, stock_module)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [req.params.id, l.produit, Number(l.quantite) || 0, Number(l.prixUnitaire) || 0, Number(l.remise) || 0, i,
+          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, ordre, recolte_id, stock_id, stock_module, type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, i,
            recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-           stockOk ? l.stockId : null, stockOk ? l.stockModule : null]
+           stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
         );
       }
     }
@@ -332,7 +359,8 @@ router.get('/public/:token', async (req, res) => {
 
     const devis = devisResult.rows[0];
     const lignesResult = await pool.query(
-      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise, recolte_id AS "recolteId"
+      `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+              remise_pourcentage::float8 AS "remisePourcentage", recolte_id AS "recolteId"
        FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
       [devis.id]
     );
@@ -430,6 +458,13 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
     await client.query(
       `UPDATE devis SET statut = $1, mode_paiement = $2, modalite_paiement = $3 WHERE id = $4`,
       [statutInitial, modePaiement, modalitePaiement, req.params.id]
+    );
+
+    // Seul événement réel de facturation que l'app modélise — symétrique au mouvement
+    // de stock complet déjà déclenché à la signature.
+    await client.query(
+      `UPDATE devis_lignes SET quantite_facturee = quantite WHERE devis_id = $1 AND type = 'produit'`,
+      [req.params.id]
     );
 
     if (modalitePaiement === 'echelonne') {
@@ -591,7 +626,8 @@ router.get('/public/:token/pdf', async (req, res) => {
 
     const devis = devisResult.rows[0];
     const lignesResult = await pool.query(
-      `SELECT produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", remise::float8 AS remise, recolte_id AS "recolteId"
+      `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+              remise_pourcentage::float8 AS "remisePourcentage", recolte_id AS "recolteId"
        FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
       [devis.id]
     );
@@ -601,6 +637,42 @@ router.get('/public/:token/pdf', async (req, res) => {
   } catch (err) {
     console.error('[GET /devis/public/:token/pdf]', err);
     return res.status(500).json({ error: 'Erreur lors de la génération du PDF.' });
+  }
+});
+
+// Suivi manuel des quantités livrée/facturée par ligne — accessible à n'importe quel
+// statut (contrairement à PUT /:id, verrouillé en Brouillon), puisque ces champs n'ont
+// de sens qu'une fois le devis signé/facturé. Aucun verrou de statut ici : réinscriptible
+// même après l'auto-remplissage de POST /:id/facturer.
+router.patch('/:id/lignes-quantites', authRequired, requireRole('admin'), async (req, res) => {
+  const { lignes } = req.body;
+  if (!Array.isArray(lignes) || lignes.length === 0) {
+    return res.status(400).json({ error: 'Au moins une ligne est requise.' });
+  }
+  const client = await pool.connect();
+  try {
+    const check = await client.query('SELECT id FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Devis introuvable.' });
+    }
+    await client.query('BEGIN');
+    for (const l of lignes) {
+      await client.query(
+        `UPDATE devis_lignes SET quantite_livree = $1, quantite_facturee = $2
+         WHERE id = $3 AND devis_id = $4 AND type = 'produit'`,
+        [Number(l.quantiteLivree) || 0, Number(l.quantiteFacturee) || 0, l.id, req.params.id]
+      );
+    }
+    await client.query('COMMIT');
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PATCH /devis/:id/lignes-quantites]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour des quantités.' });
+  } finally {
+    client.release();
   }
 });
 

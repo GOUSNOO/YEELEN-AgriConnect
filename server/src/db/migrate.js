@@ -234,11 +234,31 @@ CREATE TABLE IF NOT EXISTS devis_lignes (
   quantite       NUMERIC(12, 2) NOT NULL,
   prix_unitaire  NUMERIC(14, 2) NOT NULL,
   ordre          INTEGER DEFAULT 0,
-  remise         NUMERIC(12, 2) NOT NULL DEFAULT 0,
   recolte_id     INTEGER REFERENCES recoltes(id) ON DELETE SET NULL,
   stock_id       INTEGER,
   stock_module   TEXT
 );
+
+-- Étape 4 (2026-08-18) : alignement structurel Odoo — remise en pourcentage, lignes de
+-- section/note, suivi manuel livré/facturé. Voir migrateRemiseToPourcentage() plus bas pour
+-- la conversion de l'ancienne colonne remise (montant fixe) vers remise_pourcentage.
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS remise_pourcentage NUMERIC(5, 2) NOT NULL DEFAULT 0;
+-- type est une énumération structurelle fermée (même choix que cultures_mouvements.type,
+-- CHECK (type IN ('vente','achat')) déjà en place) — contrairement à remise_pourcentage,
+-- une règle métier volontairement non contrainte en DB comme le reste du projet.
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'produit';
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS quantite_livree NUMERIC(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS quantite_facturee NUMERIC(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE devis_lignes DROP CONSTRAINT IF EXISTS devis_lignes_type_check;
+ALTER TABLE devis_lignes ADD CONSTRAINT devis_lignes_type_check CHECK (type IN ('produit', 'section'));
+
+-- Backfill de cohérence : un devis déjà Facturé/Non payé/Payé partiellement avant cette étape
+-- doit refléter que ses lignes ont bien été facturées (sinon incohérent avec la règle que
+-- POST /:id/facturer applique désormais pour toute future facturation). Idempotent par nature
+-- (réapplique la même valeur à chaque relance, sans effet une fois déjà appliqué).
+UPDATE devis_lignes dl SET quantite_facturee = dl.quantite
+FROM devis d
+WHERE d.id = dl.devis_id AND d.statut IN ('Facturé', 'Non payé', 'Payé partiellement') AND dl.type = 'produit';
 
 CREATE TABLE IF NOT EXISTS echeances_paiement (
   id             SERIAL PRIMARY KEY,
@@ -311,7 +331,10 @@ CREATE TABLE IF NOT EXISTS cultures_mouvements (
 
 CREATE INDEX IF NOT EXISTS idx_parcelles_historique_parcelle_id ON parcelles_historique(parcelle_id);
 CREATE INDEX IF NOT EXISTS idx_cultures_mouvements_type ON cultures_mouvements(type);
-ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS remise NUMERIC(12, 2) NOT NULL DEFAULT 0;
+-- L'ancien ADD COLUMN IF NOT EXISTS remise (retirée à l'étape 4, voir migrateRemiseToPourcentage
+-- plus bas) a été supprimé d'ici : la laisser aurait recréé la colonne à chaque relance de
+-- migrate.js une fois supprimée — même bug de fond que les tables client_prix/clients/
+-- fournisseurs/cultures_stocks déjà rencontré et corrigé aux étapes précédentes.
 
 -- Stocks du module Cultures (semences, engrais, produits phytosanitaires...)
 -- Même forme que poulailler_stocks, mais entreprise_id dès la création (voir
@@ -1258,6 +1281,72 @@ async function migrateClientPrixToListesPrix() {
   }
 }
 
+// Convertit devis_lignes.remise (montant fixe FCFA) en remise_pourcentage (%), étape 4.
+// Idempotence sur l'existence de la colonne remise elle-même (information_schema.columns,
+// pas to_regclass puisqu'on modifie une colonne et non une table) : si elle n'existe plus,
+// la conversion a déjà eu lieu.
+async function migrateRemiseToPourcentage() {
+  const { rows: [{ exists: remiseExiste }] } = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'devis_lignes' AND column_name = 'remise'
+    ) AS exists
+  `);
+  if (!remiseExiste) {
+    console.log('ℹ️  remise_pourcentage : colonne remise déjà absente — conversion déjà effectuée, étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ count: nbAConvertir }] } = await client.query(
+      `SELECT COUNT(*) FROM devis_lignes WHERE remise IS NOT NULL AND remise <> 0`
+    );
+
+    // Cas dégénéré (remise > 0 mais sous-total nul, donc aucun pourcentage équivalent
+    // n'existe) : journalisé, laissé à remise_pourcentage = 0 par défaut (le montant remise,
+    // non convertible, est perdu). Non exercé par les données réelles connues.
+    const { rows: aberrantes } = await client.query(`
+      SELECT id, devis_id, remise FROM devis_lignes
+      WHERE remise IS NOT NULL AND remise <> 0 AND (quantite * prix_unitaire) = 0
+    `);
+    if (aberrantes.length > 0) {
+      console.warn(`⚠️  remise_pourcentage : ${aberrantes.length} ligne(s) à sous-total nul, remise non convertible (restera à 0%) :`, aberrantes);
+    }
+
+    // Formule sans perte : remise_pourcentage = (remise / sous_total) * 100, arrondie à 2
+    // décimales (précision de NUMERIC(5,2)).
+    await client.query(`
+      UPDATE devis_lignes
+      SET remise_pourcentage = ROUND((remise / NULLIF(quantite * prix_unitaire, 0)) * 100, 2)
+      WHERE remise IS NOT NULL AND remise <> 0 AND (quantite * prix_unitaire) <> 0
+    `);
+
+    // Vérification avant COMMIT : reproduit le total ligne par ligne avec la nouvelle formule
+    // et compare à l'ancien. Tolérance 0.02 (pas 0) : la précision à 2 décimales de
+    // remise_pourcentage introduit un écart d'arrondi résiduel documenté (jusqu'à 0.01 FCFA
+    // sur une ligne réelle en production), inévitable pour un ratio non exactement décimal.
+    const { rows: [{ maxEcart }] } = await client.query(`
+      SELECT MAX(ABS(
+        (quantite * prix_unitaire - remise) -
+        (quantite * prix_unitaire * (1 - remise_pourcentage / 100))
+      )) AS "maxEcart"
+      FROM devis_lignes WHERE remise IS NOT NULL AND remise <> 0
+    `);
+    if (maxEcart !== null && Number(maxEcart) > 0.02) {
+      throw new Error(`Vérification post-conversion échouée : écart max ${maxEcart} > tolérance 0.02.`);
+    }
+
+    await client.query('ALTER TABLE devis_lignes DROP COLUMN remise');
+    await client.query('COMMIT');
+    console.log(`✅ remise_pourcentage : ${nbAConvertir} ligne(s) converties (écart max ${maxEcart || 0}). Colonne remise supprimée.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
+
 // Toute la variable SQL ci-dessus est envoyée en un seul `query()` — PostgreSQL exécute
 // les instructions séparées par `;` dans l'ordre au sein d'une même requête multi-instructions
 // (pas de vraie transaction globale explicite ici : une instruction en échec arrête tout,
@@ -1274,6 +1363,7 @@ async function migrate() {
     await mergeStocksIntoProduits();
     await mergeClientsFournisseursIntoContacts();
     await migrateClientPrixToListesPrix();
+    await migrateRemiseToPourcentage();
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);

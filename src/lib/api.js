@@ -596,6 +596,10 @@ export async function facturerDevis(id, payload) {
   return request(`/devis/${id}/facturer`, { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function updateDevisLigneQuantites(id, lignes) {
+  return request(`/devis/${id}/lignes-quantites`, { method: 'PATCH', body: JSON.stringify({ lignes }) });
+}
+
 
 // Ouvre le PDF d'un devis dans un nouvel onglet, avec authentification
 export async function openDevisPdf(id) {
