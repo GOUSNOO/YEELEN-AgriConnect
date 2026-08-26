@@ -5,7 +5,7 @@ import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, Sun, ToggleLeft, ToggleRight, Package, TrendingUp,
   TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
-  ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home,
+  ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, Printer, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History
 } from 'lucide-react';
@@ -727,6 +727,72 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
 // server/src/db/migrate.js et project_odoo_round2_kanban_chatter_activites). Composant
 // partagé, rattachable à n'importe quelle ressource via ressourceType/ressourceId — utilisé
 // ici par la popup de détail d'un devis et le panneau de détail d'un contact.
+// Marge d'un devis — total moins le coût de revient des lignes dont l'article est identifié
+// (stockId résolu vers un produit du catalogue ayant un coût renseigné). Les lignes sans
+// stockId (produit en texte libre) ou dont l'article n'a pas de coût renseigné ne contribuent
+// simplement pas au coût total, comme chez Odoo (une ligne de service sans coût n'entre pas
+// dans le calcul non plus) — retourne null si aucune ligne n'a de coût connu, pour ne rien
+// afficher plutôt qu'une marge trompeuse basée sur un total partiel.
+function computeMarge(devis, catalogItems) {
+  if (!devis || !Array.isArray(devis.lignes)) return null;
+  let coutTotal = 0;
+  let uneLigneAvecCout = false;
+  for (const l of devis.lignes) {
+    if (l.type === 'section' || !l.stockId) continue;
+    const produit = catalogItems.find(item => item.id === l.stockId);
+    if (!produit || produit.cout == null) continue;
+    uneLigneAvecCout = true;
+    coutTotal += Number(l.quantite) * Number(produit.cout);
+  }
+  if (!uneLigneAvecCout) return null;
+  const marge = devis.total - coutTotal;
+  const pourcentage = devis.total > 0 ? (marge / devis.total) * 100 : 0;
+  return { marge, pourcentage };
+}
+
+// Barre de statut en chevrons, inspirée du widget statusbar d'Odoo (voir
+// addons/web/static/src/views/fields/statusbar/statusbar_field.scss dans le clone local) —
+// version simplifiée en clip-path plutôt que la géométrie exacte avec compensation de
+// bordure qu'utilise Odoo, pour un effet visuel proche sans la complexité. Les statuts
+// post-facturation (Non payé/Payé partiellement/Payé) sont regroupés sous "Facturé" —
+// même principe de regroupement que les colonnes de DevisKanban plus haut.
+const DEVIS_STATUT_STEPS = [
+  { key: 'Brouillon', label: 'Brouillon', matches: ['Brouillon', 'Devis'] },
+  { key: 'Envoyé', label: 'Envoyé', matches: ['Envoyé'] },
+  { key: 'Signé', label: 'Signé', matches: ['Signé'] },
+  { key: 'Facturé', label: 'Facturé', matches: ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'] },
+];
+const CHEVRON_NOTCH = 12;
+
+function DevisStatusBar({ statut }) {
+  const activeIndex = DEVIS_STATUT_STEPS.findIndex(s => s.matches.includes(statut));
+  return (
+    <div style={{ display: 'flex' }}>
+      {DEVIS_STATUT_STEPS.map((step, i) => {
+        const isActive = i === activeIndex;
+        const isFirst = i === 0;
+        const isLast = i === DEVIS_STATUT_STEPS.length - 1;
+        let clipPath;
+        if (isFirst && isLast) clipPath = 'none';
+        else if (isFirst) clipPath = `polygon(0 0, calc(100% - ${CHEVRON_NOTCH}px) 0, 100% 50%, calc(100% - ${CHEVRON_NOTCH}px) 100%, 0 100%)`;
+        else if (isLast) clipPath = `polygon(0 0, 100% 0, 100% 100%, 0 100%, ${CHEVRON_NOTCH}px 50%)`;
+        else clipPath = `polygon(0 0, calc(100% - ${CHEVRON_NOTCH}px) 0, 100% 50%, calc(100% - ${CHEVRON_NOTCH}px) 100%, 0 100%, ${CHEVRON_NOTCH}px 50%)`;
+        return (
+          <div key={step.key} style={{
+            clipPath, marginLeft: isFirst ? 0 : -CHEVRON_NOTCH,
+            padding: `6px ${CHEVRON_NOTCH + 6}px`, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+            background: isActive ? COLORS.green : COLORS.surfaceAlt,
+            color: isActive ? '#fff' : COLORS.inkSoft,
+            position: 'relative', zIndex: isActive ? 2 : 1,
+          }}>
+            {step.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ActivitesSection({ ressourceType, ressourceId }) {
   const [activites, setActivites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -835,6 +901,8 @@ function DevisModule({ clientsListe }) {
   const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', recolteId: '', stockId: null, stockModule: null };
   const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', recolteId: '', stockId: null, stockModule: null };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+  const [draggedLigneIndex, setDraggedLigneIndex] = useState(null);
+  const [draggedEditLigneIndex, setDraggedEditLigneIndex] = useState(null);
   const [saving, setSaving] = useState(false);
   const [recoltes, setRecoltes] = useState([]);
 
@@ -932,6 +1000,21 @@ function DevisModule({ clientsListe }) {
   };
 
   // Ajoute une ligne de produit vide au formulaire
+  // Réordonnancement par glisser-déposer — la colonne `ordre` de devis_lignes existe déjà
+  // (attribuée depuis l'index du tableau au moment de la soumission), donc réordonner ici
+  // avant d'envoyer suffit, pas besoin d'API dédiée.
+  const moveLigne = (from, to) => setForm(f => {
+    const lignes = [...f.lignes];
+    const [moved] = lignes.splice(from, 1);
+    lignes.splice(to, 0, moved);
+    return { ...f, lignes };
+  });
+  const moveEditLigne = (from, to) => setEditForm(f => {
+    const lignes = [...f.lignes];
+    const [moved] = lignes.splice(from, 1);
+    lignes.splice(to, 0, moved);
+    return { ...f, lignes };
+  });
   const addLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptyLigne }] }));
   // Ajoute une ligne de section (titre seul, sans quantité/prix — pur repère visuel dans le document)
   const addSectionLigne = () => setForm(f => ({ ...f, lignes: [...f.lignes, { ...emptySectionLigne }] }));
@@ -1242,7 +1325,17 @@ function DevisModule({ clientsListe }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
             {form.lignes.map((ligne, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
+              <div
+                key={i}
+                draggable
+                onDragStart={() => setDraggedLigneIndex(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); if (draggedLigneIndex !== null && draggedLigneIndex !== i) moveLigne(draggedLigneIndex, i); setDraggedLigneIndex(null); }}
+                onDragEnd={() => setDraggedLigneIndex(null)}
+                style={{ display: 'flex', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}`, opacity: draggedLigneIndex === i ? 0.4 : 1 }}
+              >
+                <div style={{ cursor: 'grab', color: COLORS.inkSoft, paddingTop: 10 }}><GripVertical size={14} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                 {ligne.type === 'section' ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'end' }}>
                     <Field label={i === 0 ? 'Titre de section' : ''} placeholder="Ex: Matériel d'irrigation" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
@@ -1279,6 +1372,7 @@ function DevisModule({ clientsListe }) {
                     </Select>
                   </>
                 )}
+                </div>
               </div>
             ))}
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1374,9 +1468,14 @@ function DevisModule({ clientsListe }) {
       {detailId && detailData && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setDetailId(null); setDetailData(null); }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 560, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
               <div style={{ fontWeight: 700, fontSize: 17 }}>{detailData.numero}</div>
-              <Badge tone={statutTone[detailData.statut] || 'blue'}>{detailData.statut}</Badge>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {['Non payé', 'Payé partiellement', 'Payé'].includes(detailData.statut) && (
+                  <Badge tone={statutTone[detailData.statut] || 'blue'}>{detailData.statut}</Badge>
+                )}
+                <DevisStatusBar statut={detailData.statut} />
+              </div>
             </div>
             <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 14 }}>
               {detailData.clientPrenom} {detailData.clientNom} {detailData.clientEmail ? `· ${detailData.clientEmail}` : '(pas d\'email renseigné)'}
@@ -1437,9 +1536,18 @@ function DevisModule({ clientsListe }) {
                 </Button>
               </div>
             )}
-            <div style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, marginBottom: 14 }}>
+            <div style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
               Total : {detailData.total.toLocaleString('fr-FR')} FCFA
             </div>
+            {(() => {
+              const margeInfo = computeMarge(detailData, catalogItems);
+              if (!margeInfo) return null;
+              return (
+                <div style={{ textAlign: 'right', fontSize: 12.5, color: COLORS.inkSoft, marginBottom: 14 }}>
+                  Marge : {margeInfo.marge.toLocaleString('fr-FR')} FCFA ({margeInfo.pourcentage.toFixed(1)}%)
+                </div>
+              );
+            })()}
 
             {detailData.signataireNom && (
               <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 10 }}>
@@ -1615,7 +1723,17 @@ function DevisModule({ clientsListe }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
                 {editForm.lignes.map((ligne, i) => (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}` }}>
+                  <div
+                    key={i}
+                    draggable
+                    onDragStart={() => setDraggedEditLigneIndex(i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); if (draggedEditLigneIndex !== null && draggedEditLigneIndex !== i) moveEditLigne(draggedEditLigneIndex, i); setDraggedEditLigneIndex(null); }}
+                    onDragEnd={() => setDraggedEditLigneIndex(null)}
+                    style={{ display: 'flex', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}`, opacity: draggedEditLigneIndex === i ? 0.4 : 1 }}
+                  >
+                    <div style={{ cursor: 'grab', color: COLORS.inkSoft, paddingTop: 10 }}><GripVertical size={14} /></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                     {ligne.type === 'section' ? (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'end' }}>
                         <Field label={i === 0 ? 'Titre de section' : ''} placeholder="Ex: Matériel d'irrigation" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} />
@@ -1652,6 +1770,7 @@ function DevisModule({ clientsListe }) {
                         </Select>
                       </>
                     )}
+                    </div>
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -2329,10 +2448,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '' });
+  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '' });
+  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [historiqueArticle, setHistoriqueArticle] = useState(null);
@@ -2409,6 +2528,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       const { stock } = await api.create({
         nom: form.nom, categorieId: form.categorieId, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
         prixDefaut: form.prixDefaut === '' ? null : Number(form.prixDefaut),
+        cout: form.cout === '' ? null : Number(form.cout),
       });
       if (stock) {
         setStocks(s => [...s, stock]);
@@ -2418,7 +2538,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       console.error('[StocksTab add]', err);
       notifyError(err, "Impossible d'ajouter l'article.");
     }
-    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '' });
+    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
   };
   const remove = async (id, nom) => {
     if (!window.confirm(`Supprimer « ${nom} » du stock ?`)) return;
@@ -2434,11 +2554,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '' });
+    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '', cout: s.cout != null ? String(s.cout) : '' });
   };
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '' });
+    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
   };
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -2448,6 +2568,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       const { stock } = await api.update(editingId, {
         nom: editForm.nom, categorieId: editForm.categorieId, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
         prixDefaut: editForm.prixDefaut === '' ? null : Number(editForm.prixDefaut),
+        cout: editForm.cout === '' ? null : Number(editForm.cout),
       });
       if (stock) {
         setStocks(s => s.map(r => r.id === editingId ? stock : r));
@@ -2486,6 +2607,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           <Field label="Unité" placeholder="kg, sacs…" value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
           <Field label="Seuil d'alerte" type="number" placeholder="0" value={form.seuil} onChange={e => setForm({ ...form, seuil: e.target.value })} />
           <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
+          <Field label="Coût de revient (FCFA)" type="number" placeholder="Optionnel" value={form.cout} onChange={e => setForm({ ...form, cout: e.target.value })} />
           <Button variant="ochre" type="submit"><Plus size={15} /> Ajouter</Button>
         </form>
         <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12.5, padding: 0, marginTop: 10 }}>
@@ -2576,6 +2698,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 <Field label="Unité" placeholder="kg, sacs…" value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
                 <Field label="Seuil d'alerte" type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
                 <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={editForm.prixDefaut} onChange={e => setEditForm({ ...editForm, prixDefaut: e.target.value })} />
+                <Field label="Coût de revient (FCFA)" type="number" placeholder="Optionnel" value={editForm.cout} onChange={e => setEditForm({ ...editForm, cout: e.target.value })} />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>

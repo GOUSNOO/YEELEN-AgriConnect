@@ -710,6 +710,7 @@ CREATE TABLE IF NOT EXISTS produits (
   unite          TEXT,
   seuil          NUMERIC(12, 2) NOT NULL DEFAULT 0,
   prix_defaut    NUMERIC(12, 2),
+  cout           NUMERIC(12, 2),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Provenance de la fusion (cultures_stocks/poulailler_stocks + ancien id) : sert à la fois
   -- de trace d'audit et de clé de correspondance pour repointer achats_lignes/devis_lignes/
@@ -720,6 +721,11 @@ CREATE TABLE IF NOT EXISTS produits (
   UNIQUE (legacy_table, legacy_id)
 );
 CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id);
+-- cout : coût de revient de l'article, optionnel — sert uniquement au calcul de marge
+-- affiché sur un devis (total − Σ quantité×coût des lignes liées à un article). Ajouté après
+-- coup (colonne absente de la table produits déjà en production), d'où l'ALTER séparé plutôt
+-- que de compter sur le CREATE TABLE ci-dessus, qui ne s'applique qu'à une base neuve.
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS cout NUMERIC(12, 2);
 
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel Odoo : remplace le prix négocié client+article

@@ -15,6 +15,7 @@ const PRODUIT_COLUMNS = `
   p.categorie_id AS "categorieId", pc.nom AS categorie,
   p.quantite::float8 AS quantite, p.unite,
   p.seuil::float8 AS seuil, p.prix_defaut::float8 AS "prixDefaut",
+  p.cout::float8 AS cout,
   p.created_at AS "createdAt"
 `;
 
@@ -40,7 +41,7 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.post('/', authRequired, async (req, res) => {
-  const { module, nom, categorieId, quantite = 0, unite = '', seuil = 0, prixDefaut } = req.body;
+  const { module, nom, categorieId, quantite = 0, unite = '', seuil = 0, prixDefaut, cout } = req.body;
   if (!module || !['Cultures', 'Poulailler'].includes(module) || !nom || !categorieId) {
     return res.status(400).json({ error: 'module (Cultures/Poulailler), nom et categorieId sont requis.' });
   }
@@ -53,9 +54,11 @@ router.post('/', authRequired, async (req, res) => {
       return res.status(400).json({ error: 'categorieId invalide pour ce module.' });
     }
     const insert = await pool.query(
-      `INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, seuil, prix_defaut)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [req.user.entrepriseId, req.user.sub, module, nom, categorieId, Number(quantite) || 0, unite, Number(seuil) || 0, prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut)]
+      `INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, seuil, prix_defaut, cout)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [req.user.entrepriseId, req.user.sub, module, nom, categorieId, Number(quantite) || 0, unite, Number(seuil) || 0,
+       prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut),
+       cout === '' || cout == null ? null : Number(cout)]
     );
     const result = await pool.query(
       `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id WHERE p.id = $1`,
@@ -69,7 +72,7 @@ router.post('/', authRequired, async (req, res) => {
 });
 
 router.put('/:id', authRequired, async (req, res) => {
-  const { nom, categorieId, quantite, unite, seuil, prixDefaut } = req.body;
+  const { nom, categorieId, quantite, unite, seuil, prixDefaut, cout } = req.body;
   try {
     if (categorieId != null) {
       const owned = await pool.query(
@@ -94,10 +97,14 @@ router.put('/:id', authRequired, async (req, res) => {
          quantite = COALESCE($3, quantite),
          unite = COALESCE($4, unite),
          seuil = COALESCE($5, seuil),
-         prix_defaut = $6
-       WHERE id = $7 AND entreprise_id = $8
+         prix_defaut = $6,
+         cout = $7
+       WHERE id = $8 AND entreprise_id = $9
        RETURNING id`,
-      [nom, categorieId, quantite, unite, seuil, prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut), req.params.id, req.user.entrepriseId]
+      [nom, categorieId, quantite, unite, seuil,
+       prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut),
+       cout === '' || cout == null ? null : Number(cout),
+       req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Produit introuvable.' });
