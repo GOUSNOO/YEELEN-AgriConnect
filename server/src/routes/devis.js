@@ -112,12 +112,22 @@ async function getDevisComplet(devisId, entrepriseId) {
 // ═══════════════════════════════════════════════════════════
 
 router.get('/', authRequired, async (req, res) => {
+  const { clientId } = req.query;
   try {
-    const result = await pool.query(
-      `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
-       WHERE d.entreprise_id = $1 ORDER BY d.id DESC`,
-      [req.user.entrepriseId]
-    );
+    // clientId optionnel : alimente le bouton intelligent "Devis (N)" sur la
+    // fiche contact (ContactsTab) sans dupliquer cette route pour un
+    // sous-ensemble filtré.
+    const result = clientId
+      ? await pool.query(
+          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
+           WHERE d.entreprise_id = $1 AND d.client_id = $2 ORDER BY d.id DESC`,
+          [req.user.entrepriseId, clientId]
+        )
+      : await pool.query(
+          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
+           WHERE d.entreprise_id = $1 ORDER BY d.id DESC`,
+          [req.user.entrepriseId]
+        );
     return res.json({ devis: result.rows });
   } catch (err) {
     console.error('[GET /devis]', err);

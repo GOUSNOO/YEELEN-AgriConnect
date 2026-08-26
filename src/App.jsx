@@ -25,7 +25,7 @@ import {
   getSalaries, createSalarie, updateSalarie, deleteSalarie,
   getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
   getPoulaillerHistorique, getCulturesHistorique,
-  getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger,
+  getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
   getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
@@ -4980,6 +4980,41 @@ function ContactsTab({ type, highlightId }) {
   }, [type]);
 
   const selectedContact = contacts.find(c => c.id === selectedId) || null;
+
+  // Bouton intelligent façon Odoo ("Devis (3)" / "Achats (2)" sur une fiche) :
+  // charge la liste liée au contact sélectionné (devis pour un client, achats
+  // pour un fournisseur — un contact double-rôle n'a qu'une seule des deux vues
+  // active à la fois, selon la valeur de `type` sur cet onglet), affiche le
+  // compte tout de suite, et déplie une liste inline au clic plutôt que de
+  // naviguer ailleurs (DevisModule/AchatModule n'ont pas de filtre par contact).
+  const [relatedList, setRelatedList] = useState([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedOpen, setRelatedOpen] = useState(false);
+
+  useEffect(() => {
+    setRelatedOpen(false);
+    if (!selectedId) {
+      setRelatedList([]);
+      return;
+    }
+    setRelatedLoading(true);
+    (async () => {
+      try {
+        if (type === 'client') {
+          const { devis } = await getDevisListe(selectedId);
+          setRelatedList(devis || []);
+        } else {
+          const { documents } = await getAchatsParFournisseur(selectedId);
+          setRelatedList(documents || []);
+        }
+      } catch (err) {
+        console.error('[ContactsTab related]', err);
+        setRelatedList([]);
+      } finally {
+        setRelatedLoading(false);
+      }
+    })();
+  }, [selectedId, type]);
   const autreFlagKey = type === 'client' ? 'estFournisseur' : 'estClient';
 
   const buildPayload = (f) => ({
@@ -5198,6 +5233,37 @@ function ContactsTab({ type, highlightId }) {
                   <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>Total {cfg.labelPluriel}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{contacts.length}</div>
                 </Card>
+              </div>
+              <div>
+                <button
+                  onClick={() => setRelatedOpen(o => !o)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, background: COLORS.ochreSoft, color: COLORS.ochre,
+                    border: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  {type === 'client' ? 'Devis' : 'Achats'} ({relatedLoading ? '…' : relatedList.length})
+                  <ChevronRight size={14} style={{ transform: relatedOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                </button>
+                {relatedOpen && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                    {relatedList.length === 0 && !relatedLoading && (
+                      <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Aucun {type === 'client' ? 'devis' : 'achat'} pour ce contact.</div>
+                    )}
+                    {type === 'client' && relatedList.map(d => (
+                      <div key={d.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: 8 }}>
+                        <span>{d.numero} — {d.statut}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{Number(d.total).toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                    ))}
+                    {type === 'fournisseur' && relatedList.map(a => (
+                      <div key={a.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: 8 }}>
+                        <span>{a.module} — {new Date(a.date).toLocaleDateString('fr-FR')} ({a.statut})</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{Number(a.total).toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           )}

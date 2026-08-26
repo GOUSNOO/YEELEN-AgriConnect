@@ -469,6 +469,10 @@ export async function getAchatsDocuments(module) {
   return request(`/achats?module=${encodeURIComponent(module)}`, { method: 'GET' });
 }
 
+export async function getAchatsParFournisseur(fournisseurId) {
+  return request(`/achats?fournisseurId=${encodeURIComponent(fournisseurId)}`, { method: 'GET' });
+}
+
 export async function getAchatsLedger(module) {
   return request(`/achats/ledger?module=${encodeURIComponent(module)}`, { method: 'GET' });
 }
@@ -566,8 +570,8 @@ export async function getCulturesHistorique() {
 // DEVIS / FACTURES (documents multi-lignes, avec signature électronique)
 // ─────────────────────────────────────────────────────────────────────
 
-export async function getDevisListe() {
-  return request('/devis', { method: 'GET' });
+export async function getDevisListe(clientId) {
+  return request(clientId ? `/devis?clientId=${encodeURIComponent(clientId)}` : '/devis', { method: 'GET' });
 }
 
 export async function getVentesLedger() {

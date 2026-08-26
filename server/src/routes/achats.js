@@ -52,14 +52,28 @@ async function getDocumentComplete(documentId, entrepriseId) {
 }
 
 router.get('/', authRequired, async (req, res) => {
-  const { module } = req.query;
-  if (!module) {
+  const { module, fournisseurId } = req.query;
+  // fournisseurId alimente le bouton intelligent "Achats (N)" sur la fiche
+  // fournisseur (ContactsTab) : contrairement au reste de cette route, on veut
+  // alors les deux modules à la fois (un fournisseur n'est pas rattaché à un
+  // seul module), donc `module` devient optionnel dans ce seul cas.
+  if (!module && !fournisseurId) {
     return res.status(400).json({ error: 'Le module est requis (Cultures ou Poulailler).' });
   }
   try {
+    const conditions = ['entreprise_id = $1'];
+    const params = [req.user.entrepriseId];
+    if (module) {
+      params.push(module);
+      conditions.push(`module = $${params.length}`);
+    }
+    if (fournisseurId) {
+      params.push(fournisseurId);
+      conditions.push(`fournisseur_id = $${params.length}`);
+    }
     const result = await pool.query(
-      `SELECT ${DOCUMENT_COLUMNS} FROM achats_documents WHERE entreprise_id = $1 AND module = $2 ORDER BY date DESC, created_at DESC`,
-      [req.user.entrepriseId, module]
+      `SELECT ${DOCUMENT_COLUMNS} FROM achats_documents WHERE ${conditions.join(' AND ')} ORDER BY date DESC, created_at DESC`,
+      params
     );
     return res.json({ documents: result.rows });
   } catch (err) {
