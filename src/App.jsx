@@ -893,7 +893,7 @@ function ActivitesSection({ ressourceType, ressourceId }) {
   );
 }
 
-function DevisModule({ clientsListe }) {
+function DevisModule({ clientsListe, filtreStatut }) {
   const [devisListe, setDevisListe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
@@ -1297,6 +1297,10 @@ function DevisModule({ clientsListe }) {
     'Annulé': 'red',
   };
 
+  // "À facturer" (menu Odoo) n'est qu'un filtre sur la même liste, pas une ressource
+  // séparée — mêmes devis, juste restreints au statut concerné.
+  const devisAffiches = filtreStatut ? devisListe.filter(d => d.statut === filtreStatut) : devisListe;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <datalist id={catalogDatalistId}>
@@ -1309,7 +1313,9 @@ function DevisModule({ clientsListe }) {
         </div>
       )}
 
-      {/* Formulaire de création d'un devis, avec plusieurs lignes de produits */}
+      {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu Odoo
+          équivalent : une liste filtrée, pas un point de création) */}
+      {!filtreStatut && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
           Nouveau devis
@@ -1397,6 +1403,7 @@ function DevisModule({ clientsListe }) {
           </div>
         </form>
       </Card>
+      )}
 
       {/* Liste des devis existants */}
       <div style={{ display: 'flex', gap: 6 }}>
@@ -1411,7 +1418,7 @@ function DevisModule({ clientsListe }) {
           </div>
         ) : (
           <DevisKanban
-            devisListe={devisListe}
+            devisListe={devisAffiches}
             statutTone={statutTone}
             onEnvoyer={handleEnvoyer}
             onValiderManuel={handleValiderManuel}
@@ -1426,8 +1433,10 @@ function DevisModule({ clientsListe }) {
           <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
             <Loader2 size={16} className="spin" /> Chargement...
           </div>
-        ) : devisListe.length === 0 ? (
-          <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: 13 }}>Aucun devis pour l'instant.</div>
+        ) : devisAffiches.length === 0 ? (
+          <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: 13 }}>
+            {filtreStatut ? 'Aucun devis à facturer pour l\'instant.' : 'Aucun devis pour l\'instant.'}
+          </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
             <thead>
@@ -1440,7 +1449,7 @@ function DevisModule({ clientsListe }) {
               </tr>
             </thead>
             <tbody>
-              {devisListe.map(d => (
+              {devisAffiches.map(d => (
                 <tr key={d.id} style={{ borderTop: `1px solid ${COLORS.border}`, cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
                   <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{d.numero}</td>
                   <td>{d.clientPrenom} {d.clientNom}</td>
@@ -1827,9 +1836,86 @@ function DevisModule({ clientsListe }) {
   );
 }
 
-// Affiche le modèle de devis multi-lignes dans l'onglet Ventes.
-function VentesWithDevis() {
+// Sous-menu façon barre d'application Odoo (Ventes : Commandes/À facturer/Produits/
+// Analyse/Configuration) — mêmes 5 entrées, reliées à des fonctionnalités déjà
+// existantes plutôt qu'à de nouvelles pages : voir VentesWithDevis ci-dessous pour
+// le détail de ce que rend chaque entrée. Couleurs YEELEN conservées (vert plutôt que
+// le violet Odoo), seule la structure horizontale est reprise.
+const VENTES_SOUS_NAV = [
+  { id: 'commandes', label: 'Commandes' },
+  { id: 'a_facturer', label: 'À facturer' },
+  { id: 'produits', label: 'Produits' },
+  { id: 'analyse', label: 'Analyse' },
+  { id: 'configuration', label: 'Configuration' },
+];
+
+// Grand livre des ventes (devis signés/facturés), en lecture seule — équivalent
+// minimal du menu "Analyse" d'Odoo. Réutilise getVentesLedger, déjà la source de
+// vérité de ComptabiliteTab pour les mêmes données.
+function VentesAnalyseTab() {
+  const [mouvements, setMouvements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { mouvements } = await getVentesLedger();
+        setMouvements(mouvements || []);
+      } catch (err) {
+        console.error('[VentesAnalyseTab]', err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const total = mouvements.reduce((s, m) => s + Number(m.quantite) * Number(m.prixUnitaire), 0);
+
+  return (
+    <Card>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+        Analyse des ventes
+      </div>
+      {loading ? (
+        <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Loader2 size={15} className="spin" /> Chargement...
+        </div>
+      ) : mouvements.length === 0 ? (
+        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune vente enregistrée pour l'instant.</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
+            {mouvements.length} ligne(s) vendue(s) · Total : <strong style={{ color: COLORS.ink }}>{total.toLocaleString('fr-FR')} FCFA</strong>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+                <th style={{ padding: '6px 0' }}>Date</th><th>Produit</th><th>Client</th><th>Qté</th><th style={{ textAlign: 'right' }}>Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mouvements.map(m => (
+                <tr key={m.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                  <td style={{ padding: '6px 0' }}>{formatDateFr(m.date)}</td>
+                  <td>{m.produit}</td>
+                  <td>{m.partenaire}</td>
+                  <td>{m.quantite}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(m.quantite) * Number(m.prixUnitaire)).toLocaleString('fr-FR')} FCFA</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// Affiche le modèle de devis multi-lignes dans l'onglet Ventes, avec une barre de
+// sous-navigation façon Odoo au-dessus (voir VENTES_SOUS_NAV).
+function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
   const [clientsListe, setClientsListe] = useState([]);
+  const [sousNav, setSousNav] = useState('commandes');
 
   // Charge la liste des clients une seule fois, nécessaire au formulaire de devis
   useEffect(() => {
@@ -1845,15 +1931,60 @@ function VentesWithDevis() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-          Ventes via devis multi-lignes
-        </div>
-        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
-          Créez et modifiez un devis détaillé, puis envoyez-le ou facturez-le directement depuis cet onglet.
-        </div>
-      </Card>
-      <DevisModule clientsListe={clientsListe} />
+      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}` }}>
+        {VENTES_SOUS_NAV.map(item => (
+          <button
+            key={item.id}
+            onClick={() => setSousNav(item.id)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '10px 14px', fontSize: 13.5, fontWeight: 600,
+              color: sousNav === item.id ? COLORS.green : COLORS.inkSoft,
+              borderBottom: sousNav === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
+              marginBottom: -1,
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {sousNav === 'commandes' && (
+        <>
+          <Card>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+              Ventes via devis multi-lignes
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+              Créez et modifiez un devis détaillé, puis envoyez-le ou facturez-le directement depuis cet onglet.
+            </div>
+          </Card>
+          <DevisModule clientsListe={clientsListe} />
+        </>
+      )}
+      {sousNav === 'a_facturer' && (
+        <>
+          <Card>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+              Devis à facturer
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+              Devis déjà signés par le client, prêts à être facturés.
+            </div>
+          </Card>
+          <DevisModule clientsListe={clientsListe} filtreStatut="Signé" />
+        </>
+      )}
+      {sousNav === 'produits' && <StocksTab farmId={farmId} moduleType={moduleType} />}
+      {sousNav === 'analyse' && <VentesAnalyseTab />}
+      {sousNav === 'configuration' && (
+        <Card>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 12 }}>
+            Configuration des ventes
+          </div>
+          <ListesPrixManager />
+        </Card>
+      )}
     </div>
   );
 }
@@ -3618,7 +3749,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
 
       {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" highlightId={highlightProduitId} />}
-      {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
+      {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Cultures" />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
         remoteVentes={async () => (await getVentesLedger()).mouvements}
@@ -3651,7 +3782,7 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" highlightId={highlightProduitId} />}
-      {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
+      {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Poulailler" />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats" moduleType="Poulailler" />}
       {tab === 'livraisons' && <LivraisonsTab farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
