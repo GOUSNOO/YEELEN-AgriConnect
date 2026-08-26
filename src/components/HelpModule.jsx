@@ -23,20 +23,20 @@ const SECTIONS = [
     title: 'Cultures & irrigation',
     points: [
       "Parcelles : humidité et température du sol (capteurs simulés), seuil d'arrosage, mode automatique ou vanne manuelle.",
-      "Stocks : semences, engrais, produits phytosanitaires — quantités et seuils d'alerte.",
-      "Ventes / Achats : passent par les devis (module Ventes) et par le formulaire d'achat multi-lignes (module Achats). Chaque achat ou vente enregistré met automatiquement à jour vos Finances.",
+      "Stocks : semences, engrais, produits phytosanitaires — quantités, seuils d'alerte, catégories personnalisables, et un prix par défaut par article. Ce prix se propose automatiquement dès que vous tapez le nom de l'article dans un achat ou un devis.",
+      "Ventes / Achats : passent par les devis (module Ventes) et par le formulaire d'achat multi-lignes (module Achats — avec un vrai cycle Brouillon → Commandé → Reçu, le stock et les finances ne bougeant qu'à la réception). Chaque achat reçu ou vente signée met automatiquement à jour vos Finances et votre stock.",
       "Comptabilité : total des ventes et achats du module, et l'historique des modifications.",
     ],
   },
   {
     id: 'poulailler',
     title: 'Poulailler',
-    text: "Même logique que Cultures, appliquée à l'élevage : température/humidité du poulailler, stocks (aliments, œufs, volailles), ventes/achats/livraisons, et comptabilité automatique.",
+    text: "Même logique que Cultures, appliquée à l'élevage : température/humidité du poulailler, stocks (aliments, œufs, volailles) avec catalogue de prix, ventes/achats/livraisons, et comptabilité automatique.",
   },
   {
     id: 'clients-fournisseurs',
     title: 'Clients & Fournisseurs',
-    text: "Vos fiches contacts : coordonnées, historique des achats pour un client, historique des commandes pour un fournisseur. Cliquez sur une fiche dans la liste de gauche pour voir son détail à droite.",
+    text: "Une même fiche contact peut être client, fournisseur, ou les deux à la fois — cochez la case correspondante sur la fiche. Coordonnées, historique des achats pour un client, historique des commandes pour un fournisseur. Cliquez sur une fiche dans la liste de gauche pour voir son détail à droite, avec la liste de prix qui lui est éventuellement assignée.",
   },
   {
     id: 'finances',
@@ -46,12 +46,17 @@ const SECTIONS = [
   {
     id: 'devis',
     title: 'Devis & Factures',
-    text: "Créez un devis, ajoutez vos produits, puis envoyez-le au client (par email avec un lien de signature en ligne, ou validez-le manuellement si l'accord a été donné par téléphone). Une fois signé, transformez-le en facture avec paiement complet ou échéances. Chaque paiement d'échéance est reflété dans Finances.",
+    text: "Créez un devis en ajoutant des lignes de produit (remise en % possible) ou des lignes de section pour structurer le document, puis envoyez-le au client (par email avec un lien de signature en ligne, ou validez-le manuellement si l'accord a été donné par téléphone). Le prix d'un produit se préremplit automatiquement selon la liste de prix assignée au client (gérable depuis Clients), sinon son prix par défaut. Une fois signé, transformez-le en facture avec paiement complet ou échéances — chaque paiement est reflété dans Finances. Dans le détail d'un devis, vous pouvez aussi noter les quantités réellement livrées/facturées ligne par ligne.",
   },
   {
     id: 'salaries',
     title: 'Salariés',
-    text: "Fiches de vos employés : poste, salaire, présence, avances, congés, coordonnées personnelles. Un employé peut avoir un compte de connexion séparé (avec son propre rôle) — c'est différent de son email personnel.",
+    text: "Fiches de vos employés : poste, salaire, coordonnées personnelles. Ouvrez la « Fiche RH » d'un employé pour son suivi détaillé : présences jour par jour, demandes de congés (à approuver/refuser), et avances sur salaire. Un employé peut avoir un compte de connexion séparé (avec son propre rôle) — c'est différent de son email personnel.",
+  },
+  {
+    id: 'equipements',
+    title: 'Équipements',
+    text: "Inventaire de votre matériel : nom, catégorie, état, date d'acquisition, valeur. Chaque équipement garde un historique des interventions de maintenance (date, description, coût). Visible par tous, mais seuls admin/directeur/gestionnaire peuvent ajouter ou modifier.",
   },
   {
     id: 'observations',
