@@ -582,6 +582,29 @@ export async function getDevisDetail(id) {
   return request(`/devis/${id}`, { method: 'GET' });
 }
 
+export async function getDevisJournal(id) {
+  return request(`/devis/${id}/journal`, { method: 'GET' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Activités planifiées (rappel/tâche attaché à une ressource — devis, contact)
+// ─────────────────────────────────────────────────────────────────────
+export async function getActivites(ressourceType, ressourceId) {
+  return request(`/activites?ressourceType=${encodeURIComponent(ressourceType)}&ressourceId=${encodeURIComponent(ressourceId)}`, { method: 'GET' });
+}
+
+export async function createActivite(payload) {
+  return request('/activites', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateActivite(id, termine) {
+  return request(`/activites/${id}`, { method: 'PATCH', body: JSON.stringify({ termine }) });
+}
+
+export async function deleteActivite(id) {
+  return request(`/activites/${id}`, { method: 'DELETE' });
+}
+
 export async function createDevis(payload) {
   return request('/devis', { method: 'POST', body: JSON.stringify(payload) });
 }

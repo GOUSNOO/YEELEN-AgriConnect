@@ -29,7 +29,8 @@ import {
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
-  getDevisListe, getDevisDetail, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
+  getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
+  getActivites, createActivite, updateActivite, deleteActivite,
   openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
   getOnboardingStatus, updateOnboardingStatus,
@@ -636,6 +637,196 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
 
 // Module de gestion des devis/factures multi-lignes, avec envoi au client et signature électronique.
 // clientsListe : liste des clients existants (pour le sélecteur), transmise par le parent (Ventes)
+// Vue Kanban des devis — inspirée de crm_lead_views.xml chez Odoo (colonnes =
+// regroupement par statut, glisser une carte = changer le statut), mais
+// adaptée à notre vraie machine à états : contrairement au stage_id générique
+// d'Odoo (n'importe quel champ, n'importe quelle transition), nos statuts ont
+// des transitions précises portées par des routes dédiées (envoyer/valider-
+// manuel/facturer/remettre-brouillon), certaines n'existant même pas côté
+// admin (Envoyé → Signé ne se fait que via le lien public signé par le
+// client). Seules les colonnes de destination valides acceptent le dépôt —
+// isValidDevisTransition encode exactement les routes réellement disponibles,
+// voir server/src/routes/devis.js.
+function isValidDevisTransition(fromStatut, toColumn) {
+  if (toColumn === 'Brouillon') return fromStatut !== 'Brouillon';
+  if (toColumn === 'Envoyé') return ['Brouillon', 'Devis'].includes(fromStatut);
+  if (toColumn === 'Signé') return ['Brouillon', 'Devis'].includes(fromStatut);
+  if (toColumn === 'Facturé') return fromStatut === 'Signé';
+  return false;
+}
+
+const DEVIS_KANBAN_COLUMNS = [
+  { key: 'Brouillon', label: 'Brouillon', statuts: ['Brouillon', 'Devis'] },
+  { key: 'Envoyé', label: 'Envoyé', statuts: ['Envoyé'] },
+  { key: 'Signé', label: 'Signé', statuts: ['Signé'] },
+  { key: 'Facturé', label: 'Facturé', statuts: ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'] },
+];
+
+function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFacturer, onRemettreBrouillon, onOpenDetail }) {
+  const [draggedId, setDraggedId] = useState(null);
+  const draggedDevis = devisListe.find(d => d.id === draggedId) || null;
+
+  const handleDrop = (columnKey) => {
+    if (!draggedDevis || !isValidDevisTransition(draggedDevis.statut, columnKey)) return;
+    if (columnKey === 'Envoyé') onEnvoyer(draggedDevis.id);
+    else if (columnKey === 'Signé') onValiderManuel(draggedDevis.id);
+    else if (columnKey === 'Facturé') onFacturer(draggedDevis.id, draggedDevis.total);
+    else if (columnKey === 'Brouillon') onRemettreBrouillon(draggedDevis.id);
+  };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, alignItems: 'start' }}>
+      {DEVIS_KANBAN_COLUMNS.map(col => {
+        const items = devisListe.filter(d => col.statuts.includes(d.statut));
+        const isValidTarget = draggedDevis && isValidDevisTransition(draggedDevis.statut, col.key);
+        return (
+          <div
+            key={col.key}
+            onDragOver={(e) => { if (isValidTarget) e.preventDefault(); }}
+            onDrop={(e) => { e.preventDefault(); handleDrop(col.key); setDraggedId(null); }}
+            style={{
+              background: isValidTarget ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: 12, padding: 10,
+              minHeight: 120, border: `1.5px dashed ${isValidTarget ? COLORS.green : 'transparent'}`,
+              transition: 'background 0.15s ease, border-color 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+              <span>{col.label}</span><span>{items.length}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {items.map(d => (
+                <div
+                  key={d.id}
+                  draggable
+                  onDragStart={() => setDraggedId(d.id)}
+                  onDragEnd={() => setDraggedId(null)}
+                  onClick={() => onOpenDetail(d.id)}
+                  style={{
+                    background: '#fff', borderRadius: 10, padding: 10, cursor: 'grab',
+                    border: `1px solid ${COLORS.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                    opacity: draggedId === d.id ? 0.4 : 1,
+                  }}
+                >
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: COLORS.inkSoft }}>{d.numero}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0' }}>{d.clientPrenom} {d.clientNom}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Badge tone={statutTone[d.statut] || 'blue'}>{d.statut}</Badge>
+                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{Number(d.total).toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Activités planifiées — équivalent simplifié de mail.activity chez Odoo (voir
+// server/src/db/migrate.js et project_odoo_round2_kanban_chatter_activites). Composant
+// partagé, rattachable à n'importe quelle ressource via ressourceType/ressourceId — utilisé
+// ici par la popup de détail d'un devis et le panneau de détail d'un contact.
+function ActivitesSection({ ressourceType, ressourceId }) {
+  const [activites, setActivites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [titre, setTitre] = useState('');
+  const [dateEcheance, setDateEcheance] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const { activites: loaded } = await getActivites(ressourceType, ressourceId);
+        if (!cancelled) setActivites(loaded || []);
+      } catch (err) {
+        console.error('[ActivitesSection]', err);
+        if (!cancelled) setActivites([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ressourceType, ressourceId]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!titre.trim()) return;
+    setSaving(true);
+    try {
+      const { activite } = await createActivite({ ressourceType, ressourceId, titre: titre.trim(), dateEcheance: dateEcheance || null });
+      setActivites(a => [activite, ...a]);
+      setTitre('');
+      setDateEcheance('');
+    } catch (err) {
+      notifyError(err, "Impossible d'ajouter l'activité.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = async (activite) => {
+    try {
+      const { activite: updated } = await updateActivite(activite.id, !activite.termine);
+      setActivites(a => a.map(x => x.id === updated.id ? updated : x));
+    } catch (err) {
+      notifyError(err, "Impossible de mettre à jour l'activité.");
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await deleteActivite(id);
+      setActivites(a => a.filter(x => x.id !== id));
+    } catch (err) {
+      notifyError(err, "Impossible de supprimer l'activité.");
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Activités</div>
+      <form onSubmit={submit} style={{ display: 'flex', gap: 6 }}>
+        <input
+          placeholder="Ex : rappeler le client"
+          value={titre}
+          onChange={e => setTitre(e.target.value)}
+          style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif" }}
+        />
+        <input
+          type="date"
+          value={dateEcheance}
+          onChange={e => setDateEcheance(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif" }}
+        />
+        <Button small type="submit" variant="green" disabled={saving}>
+          {saving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}
+        </Button>
+      </form>
+      {loading ? (
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Chargement...</div>
+      ) : activites.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Aucune activité.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {activites.map(a => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, opacity: a.termine ? 0.5 : 1 }}>
+              <input type="checkbox" checked={a.termine} onChange={() => toggle(a)} style={{ cursor: 'pointer' }} />
+              <span style={{ flex: 1, textDecoration: a.termine ? 'line-through' : 'none' }}>{a.titre}</span>
+              {a.dateEcheance && <span style={{ color: COLORS.inkSoft, fontSize: 11.5 }}>{new Date(a.dateEcheance).toLocaleDateString('fr-FR')}</span>}
+              <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DevisModule({ clientsListe }) {
   const [devisListe, setDevisListe] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -653,6 +844,7 @@ function DevisModule({ clientsListe }) {
 
   const [detailId, setDetailId] = useState(null); // devis actuellement affiché en détail
   const [detailData, setDetailData] = useState(null);
+  const [journal, setJournal] = useState([]);
   const [actionBusy, setActionBusy] = useState(false);
   // Édition locale des quantités livrée/facturée par ligne (popup de détail) — clé
   // ligne.id, initialisée depuis les valeurs serveur à chaque (ré)ouverture du détail.
@@ -663,6 +855,7 @@ function DevisModule({ clientsListe }) {
   const [paiementDevisId, setPaiementDevisId] = useState(null);
   const emptyEcheance = { montant: '', dateEcheance: '' };
   const [paiementForm, setPaiementForm] = useState({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ ...emptyEcheance }] });
+  const [vueDevis, setVueDevis] = useState('liste');
 
   const loadDevis = async () => {
     setLoading(true);
@@ -879,6 +1072,7 @@ function DevisModule({ clientsListe }) {
     } catch (err) {
       setApiError(err.message);
     }
+    getDevisJournal(id).then(d => setJournal(d.changements || [])).catch(() => setJournal([]));
   };
 
   const updateQuantiteEdit = (ligneId, field, value) => {
@@ -1111,6 +1305,28 @@ function DevisModule({ clientsListe }) {
       </Card>
 
       {/* Liste des devis existants */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>Liste</Button>
+        <Button variant={vueDevis === 'kanban' ? 'default' : 'ghost'} small onClick={() => setVueDevis('kanban')}>Kanban</Button>
+      </div>
+
+      {vueDevis === 'kanban' ? (
+        loading ? (
+          <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
+            <Loader2 size={16} className="spin" /> Chargement...
+          </div>
+        ) : (
+          <DevisKanban
+            devisListe={devisListe}
+            statutTone={statutTone}
+            onEnvoyer={handleEnvoyer}
+            onValiderManuel={handleValiderManuel}
+            onFacturer={openPaiementPopup}
+            onRemettreBrouillon={handleRemettreBrouillon}
+            onOpenDetail={openDetail}
+          />
+        )
+      ) : (
       <Card style={{ padding: 0 }}>
         {loading ? (
           <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
@@ -1152,6 +1368,7 @@ function DevisModule({ clientsListe }) {
           </table>
         )}
       </Card>
+      )}
 
       {/* Popup de détail d'un devis, avec actions (envoyer, facturer) et aperçu de la signature */}
       {detailId && detailData && (
@@ -1281,10 +1498,31 @@ function DevisModule({ clientsListe }) {
                 </div>
               </div>
             )}
+
+            <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginBottom: 14 }}>
+              <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
+            </div>
+
+            {journal.length > 0 && (
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginBottom: 14, textAlign: 'left' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>Historique</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {journal.map(j => (
+                    <div key={j.id} style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                      {new Date(j.createdAt).toLocaleString('fr-FR')} — {j.userEmail || 'système'} :{' '}
+                      {j.changements.map((c, i) => (
+                        <span key={i}>{i > 0 && ', '}<strong>{c.champ}</strong> {c.ancienne ?? '—'} → {c.nouvelle ?? '—'}</span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
               <Button variant="outline" onClick={() => openDevisPdf(detailData.id)}>
                 <FileText size={14} /> Télécharger le PDF
               </Button>
-              <Button variant="ghost" onClick={() => { setDetailId(null); setDetailData(null); }}>Fermer</Button>
+              <Button variant="ghost" onClick={() => { setDetailId(null); setDetailData(null); setJournal([]); }}>Fermer</Button>
             </div>
           </div>
         </div>
@@ -5349,6 +5587,9 @@ function ContactsTab({ type, highlightId }) {
                     ))}
                   </div>
                 )}
+              </div>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 10 }}>
+                <ActivitesSection ressourceType="contact" ressourceId={selectedContact.id} />
               </div>
             </Card>
           )}

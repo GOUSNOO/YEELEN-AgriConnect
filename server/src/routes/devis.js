@@ -7,6 +7,7 @@ import { sendDevisEmail } from '../services/mailer.js';
 import { syncDevisPaiement } from '../utils/financeSync.js';
 import { applyVenteLignesToStock, reverseVenteLignesToStock } from '../utils/stockSync.js';
 import { streamDevisPdf } from '../utils/devisPdf.js';
+import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 
 const router = express.Router();
 
@@ -172,6 +173,20 @@ router.get('/:id', authRequired, async (req, res) => {
   }
 });
 
+// Journal des modifications (chatter) — voir server/src/utils/journalModifications.js.
+// Pas de vérification d'appartenance du devis ici au-delà du filtre entreprise_id : même
+// posture que le reste de cette route file, la ligne n'existe simplement pas si l'id
+// n'appartient pas à l'entreprise appelante.
+router.get('/:id/journal', authRequired, async (req, res) => {
+  try {
+    const changements = await getJournal('devis', Number(req.params.id), req.user.entrepriseId);
+    return res.json({ changements });
+  } catch (err) {
+    console.error('[GET /devis/:id/journal]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération du journal.' });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════
 //  CRÉATION (Brouillon, avec plusieurs lignes de produits)
 // ═══════════════════════════════════════════════════════════
@@ -233,7 +248,7 @@ router.put('/:id', authRequired, async (req, res) => {
 
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query('SELECT statut, total::float8 AS total FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
     if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
       return res.status(400).json({ error: 'Ce devis ne peut plus être modifié à ce stade.' });
@@ -248,6 +263,8 @@ router.put('/:id', authRequired, async (req, res) => {
       `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes) WHERE id = $4`,
       [clientId, total, notes, req.params.id]
     );
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { total: check.rows[0].total }, { total }, ['total']);
 
     if (Array.isArray(lignes)) {
       await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
@@ -306,6 +323,8 @@ router.post('/:id/envoyer', authRequired, async (req, res) => {
 
     const token = crypto.randomBytes(24).toString('hex');
     await pool.query(`UPDATE devis SET statut = 'Envoyé', token_public = $1 WHERE id = $2`, [token, req.params.id]);
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { statut: devis.statut }, { statut: 'Envoyé' }, ['statut']);
 
     const entrepriseResult = await pool.query('SELECT nom FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
     const entrepriseNom = entrepriseResult.rows[0]?.nom || 'Votre exploitant';
@@ -338,6 +357,8 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
       `UPDATE devis SET statut = 'Signé', signataire_nom = $1, date_signature = now() WHERE id = $2`,
       [`${confirmePar} (validation manuelle, sans signature)`, req.params.id]
     );
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { statut: check.rows[0].statut }, { statut: 'Signé' }, ['statut']);
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     await applyVenteLignesToStock(req.user.entrepriseId, devis.lignes, {
@@ -401,6 +422,8 @@ router.post('/public/:token/signer', async (req, res) => {
       `UPDATE devis SET statut = 'Signé', signature_data = $1, signataire_nom = $2, date_signature = now() WHERE token_public = $3`,
       [signatureData, signataireNom, req.params.token]
     );
+    await logFieldChanges(check.rows[0].entrepriseId, 'devis', check.rows[0].id, null,
+      { statut: check.rows[0].statut }, { statut: 'Signé' }, ['statut']);
     const lignesResult = await pool.query(
       'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
       [check.rows[0].id]
@@ -469,6 +492,8 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       `UPDATE devis SET statut = $1, mode_paiement = $2, modalite_paiement = $3 WHERE id = $4`,
       [statutInitial, modePaiement, modalitePaiement, req.params.id]
     );
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { statut: check.rows[0].statut }, { statut: statutInitial }, ['statut']);
 
     // Seul événement réel de facturation que l'app modélise — symétrique au mouvement
     // de stock complet déjà déclenché à la signature.
@@ -547,6 +572,8 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     );
 
     await client.query('COMMIT');
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { statut: statutAvant }, { statut: 'Brouillon' }, ['statut']);
 
     if (STATUTS_APRES_SIGNATURE.includes(statutAvant)) {
       const lignesResult = await pool.query(
@@ -572,7 +599,7 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
 router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin'), async (req, res) => {
   try {
     const devisResult = await pool.query(
-      `SELECT d.mode_paiement AS "modePaiement", d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom"
+      `SELECT d.mode_paiement AS "modePaiement", d.numero, d.statut, c.nom AS "clientNom", c.prenom AS "clientPrenom"
        FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
@@ -609,6 +636,8 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
     const nouveauStatut = toutesPayees ? 'Facturé' : auMoinsUnePayee ? 'Payé partiellement' : 'Non payé';
 
     await pool.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { statut: devisResult.rows[0].statut }, { statut: nouveauStatut }, ['statut']);
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });

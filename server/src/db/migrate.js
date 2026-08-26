@@ -784,6 +784,49 @@ CREATE INDEX IF NOT EXISTS idx_contacts_entreprise_id ON contacts(entreprise_id)
 -- article utilise son prix par défaut tel quel. ON DELETE SET NULL (pas CASCADE) :
 -- supprimer une liste détache les contacts qui l'utilisaient, ne les supprime pas.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS liste_prix_id INTEGER REFERENCES listes_prix(id) ON DELETE SET NULL;
+
+-- ═══════════════ Journal des modifications (chatter) + activités planifiées ═══════════════
+-- Round 2 de l'inspiration Odoo (après recherche globale/boutons intelligents/routage/nav
+-- adaptative/Kanban devis) : deux mécanismes génériques attachables à n'importe quelle
+-- ressource via (ressource_type, ressource_id), plutôt que deux tables dédiées aux devis
+-- (qui redeviendraient à refaire pour le prochain type de ressource). Pas de FK sur
+-- ressource_id (comme stock_id ailleurs dans ce fichier) : la ressource cible change selon
+-- ressource_type, une FK réelle nécessiterait une table polymorphe que Postgres ne sait pas
+-- exprimer nativement.
+--
+-- journal_modifications : version simplifiée du mail.tracking.value d'Odoo (une ligne par
+-- champ changé, liée à un message) — ici une seule ligne par mise à jour, la colonne
+-- changements listant tous les champs modifiés en JSON, suffisant pour l'usage (affichage
+-- en lecture seule) sans le mécanisme de messagerie complet d'Odoo.
+CREATE TABLE IF NOT EXISTS journal_modifications (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  ressource_type TEXT NOT NULL,
+  ressource_id   INTEGER NOT NULL,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  changements    JSONB NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_journal_modifications_ressource ON journal_modifications(ressource_type, ressource_id);
+
+-- activites : équivalent simplifié de mail.activity — un rappel/tâche avec échéance,
+-- attaché à une ressource. Contrairement à Odoo, ne se supprime pas automatiquement une
+-- fois terminée (terminee = TRUE, terminee_at renseignée) : reste visible comme historique
+-- plutôt que de se transformer en message de chatter, pour ne pas dépendre du même
+-- mécanisme de messagerie.
+CREATE TABLE IF NOT EXISTS activites (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  ressource_type TEXT NOT NULL,
+  ressource_id   INTEGER NOT NULL,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  titre          TEXT NOT NULL,
+  date_echeance  DATE,
+  termine        BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  terminee_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_activites_ressource ON activites(ressource_type, ressource_id);
 `;
 
 // Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre
