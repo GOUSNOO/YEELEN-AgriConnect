@@ -1,5 +1,6 @@
 ﻿import './App.css';
 ﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, Sun, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -2860,6 +2861,113 @@ function PoultryMonitoringTab({ farmId }) {
   );
 }
 
+// Bouton d'un onglet de ModuleTabBar — extrait pour être rendu deux fois
+// (couche de mesure invisible + rendu visible réel) sans dupliquer le JSX.
+function ModuleTabButton({ tab, active, onClick, accentColor }) {
+  const Icon = tab.icon;
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+      padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+      background: active ? accentColor : 'transparent', color: active ? '#fff' : COLORS.inkSoft,
+    }}>
+      <Icon size={14} /> {tab.label}
+    </button>
+  );
+}
+
+// Barre d'onglets horizontale adaptative — remplace le simple flexWrap qui
+// existait avant (fonctionnel mais provoque un retour à la ligne peu soigné
+// sur petit écran) par un repli des onglets en trop dans un menu "Plus",
+// inspiré de navbar.js dans le client web d'Odoo Community (adapt(), voir
+// project_odoo_ux_alignment.md). Mesure la largeur réelle des onglets via une
+// couche invisible avant de décider combien en afficher — même principe que
+// l'implémentation d'Odoo plutôt qu'un seuil de largeur codé en dur.
+function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
+  const containerRef = useRef(null);
+  const measureRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(tabs.length);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const measure = measureRef.current;
+    if (!container || !measure || typeof ResizeObserver === 'undefined') return;
+
+    const MORE_BUTTON_WIDTH = 90;
+    const GAP = 6;
+
+    const recompute = () => {
+      const available = container.clientWidth;
+      const itemEls = Array.from(measure.children);
+      let used = 0;
+      let count = 0;
+      for (let i = 0; i < itemEls.length; i++) {
+        const width = itemEls[i].getBoundingClientRect().width + (i > 0 ? GAP : 0);
+        const isLast = i === itemEls.length - 1;
+        const reserve = isLast ? 0 : MORE_BUTTON_WIDTH;
+        if (count > 0 && used + width + reserve > available) break;
+        used += width;
+        count++;
+      }
+      setVisibleCount(Math.max(count, 1));
+    };
+
+    recompute();
+    const observer = new ResizeObserver(recompute);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [tabs]);
+
+  const visibleTabs = tabs.slice(0, visibleCount);
+  const overflowTabs = tabs.slice(visibleCount);
+  const activeHiddenInOverflow = overflowTabs.some(t => t.id === activeTab);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', display: 'flex', gap: 6, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 10 }}>
+      <div ref={measureRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', display: 'flex', gap: 6, top: -9999, left: -9999 }}>
+        {tabs.map(t => <ModuleTabButton key={t.id} tab={t} active={false} onClick={() => {}} accentColor={accentColor} />)}
+      </div>
+      {visibleTabs.map(t => (
+        <ModuleTabButton key={t.id} tab={t} active={activeTab === t.id} onClick={() => onSelect(t.id)} accentColor={accentColor} />
+      ))}
+      {overflowTabs.length > 0 && (
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setMoreOpen(o => !o)} style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+            padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+            background: activeHiddenInOverflow ? accentColor : 'transparent',
+            color: activeHiddenInOverflow ? '#fff' : COLORS.inkSoft,
+          }}>
+            Plus <ChevronRight size={14} style={{ transform: moreOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
+          </button>
+          {moreOpen && (
+            <div style={{
+              position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: 10,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`, zIndex: 30,
+              display: 'flex', flexDirection: 'column', minWidth: 160, overflow: 'hidden',
+            }}>
+              {overflowTabs.map(t => {
+                const Icon = t.icon;
+                const active = activeTab === t.id;
+                return (
+                  <button key={t.id} onClick={() => { onSelect(t.id); setMoreOpen(false); }} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, textAlign: 'left',
+                    padding: '10px 14px', border: 'none', cursor: 'pointer',
+                    background: active ? COLORS.surfaceAlt : 'transparent', color: COLORS.ink,
+                  }}>
+                    <Icon size={14} /> {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CulturesModule({ farmId, highlightProduitId }) {
   const [tab, setTab] = useState('parcelles');
 
@@ -3024,28 +3132,19 @@ function CulturesModule({ farmId, highlightProduitId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 10 }}>
-        {[
+      <ModuleTabBar
+        tabs={[
           { id: 'parcelles', label: 'Parcelles', icon: Sprout },
           { id: 'carte', label: 'Carte', icon: Home },
           { id: 'stocks', label: 'Stocks', icon: Package },
           { id: 'ventes', label: 'Ventes', icon: TrendingUp },
           { id: 'achats', label: 'Achats', icon: ShoppingCart },
           { id: 'comptabilite', label: 'Comptabilité', icon: Wallet },
-        ].map(t => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-              padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
-              background: active ? COLORS.green : 'transparent', color: active ? '#fff' : COLORS.inkSoft
-            }}>
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={tab}
+        onSelect={setTab}
+        accentColor={COLORS.green}
+      />
 
       {tab === 'parcelles' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -3162,21 +3261,7 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 10 }}>
-        {tabs.map(t => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-              padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
-              background: active ? COLORS.ochre : 'transparent', color: active ? '#fff' : COLORS.inkSoft
-            }}>
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
+      <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} accentColor={COLORS.ochre} />
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" highlightId={highlightProduitId} />}
@@ -5437,14 +5522,47 @@ function SidebarNav({ tabs, activeTab, onSelect, top }) {
   );
 }
 
+// Route un nom d'écran interne vers un vrai chemin d'URL — Phase 1 du routage
+// (voir la mémoire project_odoo_ux_alignment) : seuls l'écran principal et
+// l'onglet de premier niveau sont dans l'URL pour l'instant. Les sous-onglets
+// (Cultures > Stocks) et la fiche sélectionnée (Clients/:id) restent en state
+// local, pas encore dans l'URL — Phase 2 potentielle, pas ce chantier-ci.
+function screenToPath(screenName, tabId) {
+  switch (screenName) {
+    case 'modules': return '/modules';
+    case 'onboarding-choice': return '/onboarding-choice';
+    case 'onboarding-banques': return '/onboarding-banques';
+    case 'onboarding-salaries': return '/onboarding-salaries';
+    case 'dashboard': return `/app/${tabId || 'accueil'}`;
+    default: return '/login';
+  }
+}
+
+function pathnameToScreen(pathname) {
+  if (pathname.startsWith('/app')) return 'dashboard';
+  if (pathname === '/modules') return 'modules';
+  if (pathname === '/onboarding-choice') return 'onboarding-choice';
+  if (pathname === '/onboarding-banques') return 'onboarding-banques';
+  if (pathname === '/onboarding-salaries') return 'onboarding-salaries';
+  return 'login';
+}
+
 export default function App() {
-  const [screen, setScreen] = useState('login');
+  const navigate = useNavigate();
+  const location = useLocation();
+  // screen/tab dérivés de l'URL plutôt que stockés en state : navigate(...)
+  // remplace tous les anciens setScreen/setTab de premier niveau — le bouton
+  // retour du navigateur, le rechargement de page et les liens partagés
+  // fonctionnent alors naturellement, sans logique supplémentaire à écrire.
+  const screen = pathnameToScreen(location.pathname);
+  const urlTab = location.pathname.startsWith('/app/') ? location.pathname.slice(5) : null;
+  const goToScreen = (screenName, tabId) => navigate(screenToPath(screenName, tabId));
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('admin');
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [activated, setActivated] = useState({ cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
-  const [tab, setTab] = useState(null);
+  const tab = screen === 'dashboard' ? (urlTab || 'accueil') : null;
   const [initLoaded, setInitLoaded] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -5476,10 +5594,10 @@ export default function App() {
   const handleSearchSelect = ({ kind, item }) => {
     setSearchOpen(false);
     if (kind === 'contact') {
-      setTab(item.estClient ? 'clients' : 'fournisseurs');
+      navigate(`/app/${item.estClient ? 'clients' : 'fournisseurs'}`);
       setHighlightContactId(item.id);
     } else if (kind === 'produit') {
-      setTab(item.module === 'Cultures' ? 'cultures' : 'poulailler');
+      navigate(`/app/${item.module === 'Cultures' ? 'cultures' : 'poulailler'}`);
       setHighlightProduit({ module: item.module, id: item.id });
     } else if (kind === 'devis') {
       // Un devis n'a pas d'écran dédié (voir DevisModule, imbriqué dans les
@@ -5487,7 +5605,7 @@ export default function App() {
       // on atterrit sur le contact client associé plutôt que de dupliquer la
       // logique de sous-onglet/modale de VentesWithDevis pour ce premier passage.
       if (item.clientId) {
-        setTab('clients');
+        navigate('/app/clients');
         setHighlightContactId(item.clientId);
       }
     }
@@ -5526,7 +5644,7 @@ export default function App() {
 
     const handleAuthExpired = () => {
       clearToken();
-      setScreen('login');
+      navigate('/login');
       setUser(null);
     };
 
@@ -5576,10 +5694,7 @@ export default function App() {
   setRole(uiRole);
   setIsPlatformAdmin(authResult.user.isPlatformAdmin === true);
   await checkOnboardingNeeded(uiRole);
-  setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-  if (!selectedConfig.permissions.includes('modules')) {
-    setTab('accueil');
-  }
+  goToScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
   return authResult;
 };
 
@@ -5592,24 +5707,23 @@ export default function App() {
   };
 
   const goToDashboard = () => {
-  setTab('accueil');
-  setScreen('dashboard');
+  goToScreen('dashboard', 'accueil');
   };
 
   // Après l'étape "modules", propose à l'utilisateur de configurer son entreprise
   // (banques, salariés) tout de suite, ou de le faire plus tard.
   const goToOnboardingChoice = () => {
-  setScreen('onboarding-choice');
+  goToScreen('onboarding-choice');
   };
 
   // Passe à l'étape "banques" du wizard de configuration
   const goToOnboardingBanques = () => {
-  setScreen('onboarding-banques');
+  goToScreen('onboarding-banques');
   };
 
   // Passe à l'étape "salariés" du wizard de configuration
   const goToOnboardingSalaries = () => {
-  setScreen('onboarding-salaries');
+  goToScreen('onboarding-salaries');
   };
 
   // Confirme explicitement (côté serveur) qu'une étape de l'assistant n'est pas nécessaire,
@@ -5657,11 +5771,23 @@ export default function App() {
   ].filter(Boolean);
 
   useEffect(() => {
-    if (tab && !availableTabs.some(t => t.id === tab)) {
-      setTab('accueil');
+    // initLoaded : sans cette garde, le premier rendu a `activated` encore à ses
+    // valeurs par défaut (false) avant la résolution de storageGet ci-dessus —
+    // un onglet pourtant valide (ex: /app/clients rechargé) semblerait absent
+    // de availableTabs le temps d'un rendu, et cet effet redirigerait à tort
+    // vers Accueil avant même que le module concerné ait fini de se charger.
+    if (screen === 'dashboard' && initLoaded && tab && !availableTabs.some(t => t.id === tab)) {
+      navigate('/app/accueil', { replace: true });
     }
-  }, [tab, availableTabs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, tab, availableTabs, initLoaded]);
 
+  // Vérifie le token au montage (ex: après un rechargement de page). Corrige
+  // l'URL uniquement si elle ne correspond à rien de valide pour ce rôle (ex:
+  // encore sur /login alors qu'un token valide existe, ou /modules pour un
+  // rôle qui n'a pas cette permission) — sinon on laisse l'utilisateur exactement
+  // où il était avant le rechargement, au lieu de le renvoyer systématiquement
+  // vers Accueil/Modules comme le faisait l'ancien code avec setScreen/setTab.
   useEffect(() => {
     (async () => {
       const token = getToken();
@@ -5674,14 +5800,18 @@ export default function App() {
         setRole(uiRole);
         setIsPlatformAdmin(user.isPlatformAdmin === true);
         await checkOnboardingNeeded(uiRole);
-        setScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-        if (!selectedConfig.permissions.includes('modules')) {
-          setTab('accueil');
+        const hasModulesAccess = selectedConfig.permissions.includes('modules');
+        const currentScreen = pathnameToScreen(location.pathname);
+        if (currentScreen === 'login') {
+          goToScreen(hasModulesAccess ? 'modules' : 'dashboard', 'accueil');
+        } else if (currentScreen === 'modules' && !hasModulesAccess) {
+          goToScreen('dashboard', 'accueil');
         }
       } catch {
         clearToken();
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -5720,7 +5850,7 @@ export default function App() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {screen === 'dashboard' && roleConfig.permissions.includes('modules') && (
-                <button onClick={() => { setIsOnboarding(false); setScreen('modules'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: COLORS.inkSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <button onClick={() => { setIsOnboarding(false); goToScreen('modules'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: COLORS.inkSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                   Gérer les options
                 </button>
               )}
@@ -5737,7 +5867,7 @@ export default function App() {
               <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {roleConfig.label}
               </span>
-              <button onClick={() => { clearToken(); setScreen('login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+              <button onClick={() => { clearToken(); navigate('/login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                 <LogOut size={17} />
               </button>
             </div>
@@ -5828,7 +5958,7 @@ export default function App() {
       {screen === 'dashboard' && (
         <div className="dashboard-layout">
           {availableTabs.length > 1 && (
-            <SidebarNav tabs={availableTabs} activeTab={tab} onSelect={setTab} top={headerHeight} />
+            <SidebarNav tabs={availableTabs} activeTab={tab} onSelect={(id) => navigate(`/app/${id}`)} top={headerHeight} />
           )}
           <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
             {tab === 'accueil' && <HomeOverview farmId={user} activated={activated} />}
