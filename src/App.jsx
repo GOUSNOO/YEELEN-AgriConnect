@@ -1465,176 +1465,201 @@ function DevisModule({ clientsListe }) {
       )}
 
       {/* Popup de détail d'un devis, avec actions (envoyer, facturer) et aperçu de la signature */}
-      {detailId && detailData && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setDetailId(null); setDetailData(null); }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 560, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 17 }}>{detailData.numero}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {['Non payé', 'Payé partiellement', 'Payé'].includes(detailData.statut) && (
-                  <Badge tone={statutTone[detailData.statut] || 'blue'}>{detailData.statut}</Badge>
-                )}
+      {detailId && detailData && (() => {
+        const margeInfo = computeMarge(detailData, catalogItems);
+        const closeDetailPopup = () => { setDetailId(null); setDetailData(null); setJournal([]); };
+        return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={closeDetailPopup}>
+          {/* Disposition à deux colonnes façon fiche Odoo (Order Lines + chatter à droite) — voir
+              project_odoo_devis_visual_alignment : même structure (barre d'action + chevrons en
+              haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
+              couleurs YEELEN conservées. */}
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1080, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
+            <button onClick={closeDetailPopup} aria-label="Fermer" style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
+
+            <div style={{ flex: '1 1 620px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 18, paddingRight: 26 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {detailData.statut === 'Brouillon' && detailData.clientEmail && (
+                    <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
+                      {actionBusy ? <Loader2 size={14} className="spin" /> : null} Envoyer au client
+                    </Button>
+                  )}
+                  {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
+                    <Button variant="outline" onClick={() => handleValiderManuel(detailData.id)} disabled={actionBusy}>
+                      {actionBusy ? <Loader2 size={14} className="spin" /> : null} Valider manuellement
+                    </Button>
+                  )}
+                  {detailData.statut === 'Signé' && (
+                    <Button variant="green" onClick={() => openPaiementPopup(detailData.id, detailData.total)} disabled={actionBusy}>
+                      Valider et facturer
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => openDevisPdf(detailData.id)}>
+                    <FileText size={14} /> PDF
+                  </Button>
+                </div>
                 <DevisStatusBar statut={detailData.statut} />
               </div>
-            </div>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 14 }}>
-              {detailData.clientPrenom} {detailData.clientNom} {detailData.clientEmail ? `· ${detailData.clientEmail}` : '(pas d\'email renseigné)'}
-            </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-                  <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>P.U.</th><th>Remise (%)</th><th>Livré</th><th>Facturé</th><th style={{ textAlign: 'right' }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detailData.lignes.map(l => {
-                  if (l.type === 'section') {
+              <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 16 }}>{detailData.numero}</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20, fontSize: 13 }}>
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>Client</div>
+                  <div style={{ fontWeight: 600 }}>{detailData.clientPrenom} {detailData.clientNom}</div>
+                  {detailData.clientEmail ? (
+                    <div style={{ color: COLORS.inkSoft }}>{detailData.clientEmail}</div>
+                  ) : (
+                    <div style={{ color: COLORS.inkSoft, fontStyle: 'italic' }}>Pas d'email renseigné</div>
+                  )}
+                  {detailData.clientTelephone && <div style={{ color: COLORS.inkSoft }}>{detailData.clientTelephone}</div>}
+                  {detailData.clientAdresse && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresse}</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>Détails</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                    <span style={{ color: COLORS.inkSoft }}>Date</span>
+                    <span>{new Date(detailData.date || detailData.createdAt).toLocaleDateString('fr-FR')}</span>
+                  </div>
+                  {detailData.signataireNom && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                      <span style={{ color: COLORS.inkSoft }}>Signé par</span>
+                      <span>{detailData.signataireNom} — {new Date(detailData.dateSignature).toLocaleDateString('fr-FR')}</span>
+                    </div>
+                  )}
+                  {detailData.modePaiement && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                      <span style={{ color: COLORS.inkSoft }}>Mode de paiement</span>
+                      <span>{detailData.modePaiement}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12, borderBottom: `2px solid ${COLORS.border}` }}>
+                    <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>Livré</th><th>Facturé</th><th>P.U.</th><th>Remise (%)</th><th style={{ textAlign: 'right' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailData.lignes.map(l => {
+                    if (l.type === 'section') {
+                      return (
+                        <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                          <td colSpan={7} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
+                        </tr>
+                      );
+                    }
+                    const pct = Number(l.remisePourcentage) || 0;
+                    const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+                    const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
+                    const qEdit = quantitesEdit[l.id] || { quantiteLivree: 0, quantiteFacturee: 0 };
                     return (
                       <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                        <td colSpan={7} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
+                        <td style={{ padding: '6px 0' }}>
+                          {l.produit}
+                          {recolteLiee && (
+                            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginTop: 2 }}>
+                              🌾 {recolteLiee.parcelle} — {formatDateFr(recolteLiee.date)}
+                            </div>
+                          )}
+                        </td>
+                        <td>{l.quantite}</td>
+                        <td>
+                          {detailData.statut !== 'Brouillon' ? (
+                            <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                          ) : '—'}
+                        </td>
+                        <td>
+                          {detailData.statut !== 'Brouillon' ? (
+                            <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                          ) : '—'}
+                        </td>
+                        <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
+                        <td>{pct.toLocaleString('fr-FR')}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{netLigne.toLocaleString('fr-FR')}</td>
                       </tr>
                     );
-                  }
-                  const pct = Number(l.remisePourcentage) || 0;
-                  const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
-                  const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
-                  const qEdit = quantitesEdit[l.id] || { quantiteLivree: 0, quantiteFacturee: 0 };
-                  return (
-                    <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                      <td style={{ padding: '6px 0' }}>
-                        {l.produit}
-                        {recolteLiee && (
-                          <div style={{ fontSize: 11, color: COLORS.inkSoft, marginTop: 2 }}>
-                            🌾 {recolteLiee.parcelle} — {formatDateFr(recolteLiee.date)}
-                          </div>
-                        )}
-                      </td>
-                      <td>{l.quantite}</td>
-                      <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
-                      <td>{pct.toLocaleString('fr-FR')}</td>
-                      <td>
-                        {detailData.statut !== 'Brouillon' ? (
-                          <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
-                        ) : '—'}
-                      </td>
-                      <td>
-                        {detailData.statut !== 'Brouillon' ? (
-                          <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
-                        ) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{netLigne.toLocaleString('fr-FR')}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {detailData.statut !== 'Brouillon' && (
-              <div style={{ textAlign: 'right', marginBottom: 10 }}>
-                <Button small variant="outline" onClick={handleSaveQuantites} disabled={quantitesSaving}>
-                  {quantitesSaving ? <Loader2 size={14} className="spin" /> : null} Enregistrer les quantités
-                </Button>
-              </div>
-            )}
-            <div style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
-              Total : {detailData.total.toLocaleString('fr-FR')} FCFA
-            </div>
-            {(() => {
-              const margeInfo = computeMarge(detailData, catalogItems);
-              if (!margeInfo) return null;
-              return (
-                <div style={{ textAlign: 'right', fontSize: 12.5, color: COLORS.inkSoft, marginBottom: 14 }}>
-                  Marge : {margeInfo.marge.toLocaleString('fr-FR')} FCFA ({margeInfo.pourcentage.toFixed(1)}%)
+                  })}
+                </tbody>
+              </table>
+              {detailData.statut !== 'Brouillon' && (
+                <div style={{ textAlign: 'right', marginBottom: 10 }}>
+                  <Button small variant="outline" onClick={handleSaveQuantites} disabled={quantitesSaving}>
+                    {quantitesSaving ? <Loader2 size={14} className="spin" /> : null} Enregistrer les quantités
+                  </Button>
                 </div>
-              );
-            })()}
+              )}
 
-            {detailData.signataireNom && (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 10 }}>
-                Signé par <strong>{detailData.signataireNom}</strong> le {new Date(detailData.dateSignature).toLocaleString('fr-FR')}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+                <div style={{ minWidth: 220 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
+                    <span>Total</span><span>{detailData.total.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  {margeInfo && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 }}>
+                      <span>Marge</span><span>{margeInfo.marge.toLocaleString('fr-FR')} FCFA ({margeInfo.pourcentage.toFixed(1)}%)</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {detailData.statut === 'Brouillon' && detailData.clientEmail && (
-                <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
-                  {actionBusy ? <Loader2 size={14} className="spin" /> : null} Envoyer au client
-                </Button>
-              )}
-              {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
-                <Button variant="outline" onClick={() => handleValiderManuel(detailData.id)} disabled={actionBusy}>
-                  {actionBusy ? <Loader2 size={14} className="spin" /> : null} Valider manuellement (téléphone)
-                </Button>
-              )}
-              {detailData.statut === 'Signé' && (
-                <Button variant="green" onClick={() => openPaiementPopup(detailData.id, detailData.total)} disabled={actionBusy}>
-                  Valider et facturer
-                </Button>
-              )}
-              {detailData.signataireNom && (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 10 }}>
-                Signé par <strong>{detailData.signataireNom}</strong> le {new Date(detailData.dateSignature).toLocaleString('fr-FR')}
-              </div>
-              )}
 
               {detailData.echeances && detailData.echeances.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                  Échéances {detailData.modePaiement && `· ${detailData.modePaiement}`}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {detailData.echeances.map(ech => (
-                    <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{ech.montant.toLocaleString('fr-FR')} FCFA</div>
-                        <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>Échéance : {new Date(ech.dateEcheance).toLocaleDateString('fr-FR')}</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                    Échéances {detailData.modePaiement && `· ${detailData.modePaiement}`}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {detailData.echeances.map(ech => (
+                      <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{ech.montant.toLocaleString('fr-FR')} FCFA</div>
+                          <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>Échéance : {new Date(ech.dateEcheance).toLocaleDateString('fr-FR')}</div>
+                        </div>
+                        {ech.statut === 'Payé' ? (
+                          <Badge tone="green">Payé le {new Date(ech.datePaiement).toLocaleDateString('fr-FR')}</Badge>
+                        ) : (
+                          <Button small variant="green" onClick={() => handlePayerEcheance(detailData.id, ech.id)} disabled={actionBusy}>
+                            Marquer comme payé
+                          </Button>
+                        )}
+                        {detailData.statut === 'Brouillon' && (
+                          <Button small variant="outline" onClick={() => handleRemettreBrouillon(detailData.id)} disabled={actionBusy}>
+                            Remettre en brouillon
+                          </Button>
+                        )}
                       </div>
-                      {ech.statut === 'Payé' ? (
-                        <Badge tone="green">Payé le {new Date(ech.datePaiement).toLocaleDateString('fr-FR')}</Badge>
-                      ) : (
-                        <Button small variant="green" onClick={() => handlePayerEcheance(detailData.id, ech.id)} disabled={actionBusy}>
-                          Marquer comme payé
-                        </Button>
-                      )}
-                      {detailData.statut === 'Brouillon' && (
-                        <Button small variant="outline" onClick={() => handleRemettreBrouillon(detailData.id)} disabled={actionBusy}>
-                          Remettre en brouillon
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginBottom: 14 }}>
-              <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
+              )}
             </div>
 
-            {journal.length > 0 && (
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginBottom: 14, textAlign: 'left' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>Historique</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {journal.map(j => (
-                    <div key={j.id} style={{ fontSize: 12, color: COLORS.inkSoft }}>
-                      {new Date(j.createdAt).toLocaleString('fr-FR')} — {j.userEmail || 'système'} :{' '}
-                      {j.changements.map((c, i) => (
-                        <span key={i}>{i > 0 && ', '}<strong>{c.champ}</strong> {c.ancienne ?? '—'} → {c.nouvelle ?? '—'}</span>
-                      ))}
-                    </div>
-                  ))}
+            {/* Panneau latéral façon chatter Odoo : activités planifiées + journal des modifications */}
+            <div style={{ flex: '0 0 300px', width: 300, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto' }}>
+              <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
+              {journal.length > 0 && (
+                <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginTop: 16, textAlign: 'left' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>Historique</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {journal.map(j => (
+                      <div key={j.id} style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                        {new Date(j.createdAt).toLocaleString('fr-FR')} — {j.userEmail || 'système'} :{' '}
+                        {j.changements.map((c, i) => (
+                          <span key={i}>{i > 0 && ', '}<strong>{c.champ}</strong> {c.ancienne ?? '—'} → {c.nouvelle ?? '—'}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-
-              <Button variant="outline" onClick={() => openDevisPdf(detailData.id)}>
-                <FileText size={14} /> Télécharger le PDF
-              </Button>
-              <Button variant="ghost" onClick={() => { setDetailId(null); setDetailData(null); setJournal([]); }}>Fermer</Button>
+              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
       {/* Popup demandant le mode et la modalité de paiement avant de facturer */}
       {paiementPopupOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
