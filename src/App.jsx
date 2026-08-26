@@ -38,6 +38,7 @@ import { ObservationListView } from './components/ObservationListView'; // Impor
 import { FeedbackModule } from './components/FeedbackModule';
 import { HelpModule } from './components/HelpModule';
 import { EquipementsModule } from './components/EquipementsModule';
+import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi, mapUiRoleToBackend } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
@@ -2043,7 +2044,7 @@ function useTable(farmId, key, defaults) {
   return [rows, setRows];
 }
 
-function StocksTab({ farmId, moduleType = 'Poulailler' }) {
+function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   const api = {
     get: () => getProduits(moduleType),
     create: (payload) => createProduit({ ...payload, module: moduleType }),
@@ -2114,6 +2115,18 @@ function StocksTab({ farmId, moduleType = 'Poulailler' }) {
     }
   };
   const closeHistorique = () => { setHistoriqueArticle(null); setHistoriqueMouvements([]); };
+
+  // Atterrissage depuis la recherche globale (Ctrl+K) sur un produit : une fois
+  // les stocks chargés, ouvre directement son historique — pas de vrai concept
+  // de "ligne sélectionnée" dans cet écran (liste + modales), donc l'historique
+  // en lecture seule est le landing le plus proche de ce qui existe déjà.
+  useEffect(() => {
+    if (highlightId && stocks.length > 0) {
+      const match = stocks.find(s => s.id === highlightId);
+      if (match) openHistorique(match);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightId, stocks]);
 
   // Catégories puis stocks, dans le même effet (pas deux effets séparés) pour que le
   // seed Poulailler ci-dessous puisse résoudre un categorieId à partir du nom de
@@ -2847,8 +2860,15 @@ function PoultryMonitoringTab({ farmId }) {
   );
 }
 
-function CulturesModule({ farmId }) {
+function CulturesModule({ farmId, highlightProduitId }) {
   const [tab, setTab] = useState('parcelles');
+
+  // Atterrissage depuis la recherche globale (Ctrl+K) sur un produit Cultures :
+  // bascule sur l'onglet Stocks dès qu'un id à surligner est fourni, que le
+  // module vienne d'être monté ou qu'il soit déjà affiché.
+  useEffect(() => {
+    if (highlightProduitId) setTab('stocks');
+  }, [highlightProduitId]);
   const [parcelles, setParcelles] = useState(DEFAULT_PARCELLES);
   const [historique, setHistorique] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -3112,7 +3132,7 @@ function CulturesModule({ farmId }) {
       )}
 
       {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
-      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" />}
+      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
@@ -3124,8 +3144,13 @@ function CulturesModule({ farmId }) {
   );
 }
 
-function PoulaillerModule({ farmId }) {
+function PoulaillerModule({ farmId, highlightProduitId }) {
   const [tab, setTab] = useState('environnement');
+
+  // Voir le commentaire équivalent dans CulturesModule.
+  useEffect(() => {
+    if (highlightProduitId) setTab('stocks');
+  }, [highlightProduitId]);
   const tabs = [
     { id: 'environnement', label: 'Ambiance', icon: Thermometer },
     { id: 'suivi', label: 'Suivi', icon: ClipboardList },
@@ -3154,7 +3179,7 @@ function PoulaillerModule({ farmId }) {
       </div>
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
-      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" />}
+      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats" moduleType="Poulailler" />}
       {tab === 'livraisons' && <LivraisonsTab farmId={farmId} />}
@@ -4926,7 +4951,7 @@ const CONTACT_TYPE_CONFIG = {
   fournisseur: { label: 'fournisseur', labelPluriel: 'fournisseurs', Labelcap: 'Fournisseur', accent: COLORS.ochre, autre: 'client', nomPlaceholder: 'Ex: Traoré', prenomPlaceholder: 'Ex: Ibrahim' },
 };
 
-function ContactsTab({ type }) {
+function ContactsTab({ type, highlightId }) {
   const cfg = CONTACT_TYPE_CONFIG[type];
   const [contacts, setContacts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -4970,14 +4995,29 @@ function ContactsTab({ type }) {
       try {
         const { contacts: loaded } = await getContacts(type);
         setContacts(loaded || []);
-        if (loaded && loaded.length > 0) setSelectedId(loaded[0].id);
+        if (loaded && loaded.length > 0) {
+          const wantedId = highlightId && loaded.some(c => c.id === highlightId) ? highlightId : loaded[0].id;
+          setSelectedId(wantedId);
+        }
       } catch (err) {
         setApiError(err.message || `Impossible de charger les ${cfg.labelPluriel}.`);
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
+
+  // Si l'onglet était déjà monté (l'utilisateur y était déjà) au moment d'un
+  // clic sur un résultat de recherche global, le montage ci-dessus ne se
+  // redéclenche pas — cet effet séparé rattrape ce cas en réagissant
+  // directement à highlightId sans refaire d'appel réseau.
+  useEffect(() => {
+    if (highlightId && contacts.some(c => c.id === highlightId)) {
+      setSelectedId(highlightId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightId]);
 
   // Soumet le formulaire d'ajout d'un nouveau contact
   const submitForm = async (e) => {
@@ -5346,6 +5386,47 @@ export default function App() {
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  // Recherche globale (Ctrl+K) — voir GlobalSearch.jsx. highlightContactId/
+  // highlightProduit ne servent qu'à faire atterrir l'utilisateur sur le bon
+  // élément après un clic sur un résultat ; ContactsTab/CulturesModule/
+  // PoulaillerModule/StocksTab les consomment puis les oublient (pas d'état
+  // persistant au-delà de la navigation qui suit le clic).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [highlightContactId, setHighlightContactId] = useState(null);
+  const [highlightProduit, setHighlightProduit] = useState(null);
+
+  useEffect(() => {
+    if (screen !== 'dashboard') return;
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [screen]);
+
+  const handleSearchSelect = ({ kind, item }) => {
+    setSearchOpen(false);
+    if (kind === 'contact') {
+      setTab(item.estClient ? 'clients' : 'fournisseurs');
+      setHighlightContactId(item.id);
+    } else if (kind === 'produit') {
+      setTab(item.module === 'Cultures' ? 'cultures' : 'poulailler');
+      setHighlightProduit({ module: item.module, id: item.id });
+    } else if (kind === 'devis') {
+      // Un devis n'a pas d'écran dédié (voir DevisModule, imbriqué dans les
+      // onglets Ventes de Cultures/Poulailler, sans notion de module propre) —
+      // on atterrit sur le contact client associé plutôt que de dupliquer la
+      // logique de sous-onglet/modale de VentesWithDevis pour ce premier passage.
+      if (item.clientId) {
+        setTab('clients');
+        setHighlightContactId(item.clientId);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!headerRef.current || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(entries => {
@@ -5577,6 +5658,15 @@ export default function App() {
                   Gérer les options
                 </button>
               )}
+              {screen === 'dashboard' && (
+                <button
+                  onClick={() => setSearchOpen(true)}
+                  title="Recherche globale (Ctrl+K)"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  <Search size={16} />
+                </button>
+              )}
               <span style={{ fontSize: 12.2, color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{user}</span>
               <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {roleConfig.label}
@@ -5681,10 +5771,20 @@ export default function App() {
             {tab === 'assistant' && <AIAssistantModule farmId={user} activated={activated} />}
             {tab === 'forecasting' && <ForecastingModule farmId={user} activated={activated} />}
             {tab === 'reports' && <ReportsModule farmId={user} activated={activated} />}
-            {tab === 'cultures' && <CulturesModule farmId={user} />}
-            {tab === 'poulailler' && <PoulaillerModule farmId={user} />}
-            {tab === 'clients' && <ContactsTab type="client" />}
-            {tab === 'fournisseurs' && <ContactsTab type="fournisseur" />}
+            {tab === 'cultures' && (
+              <CulturesModule
+                farmId={user}
+                highlightProduitId={highlightProduit?.module === 'Cultures' ? highlightProduit.id : null}
+              />
+            )}
+            {tab === 'poulailler' && (
+              <PoulaillerModule
+                farmId={user}
+                highlightProduitId={highlightProduit?.module === 'Poulailler' ? highlightProduit.id : null}
+              />
+            )}
+            {tab === 'clients' && <ContactsTab type="client" highlightId={highlightContactId} />}
+            {tab === 'fournisseurs' && <ContactsTab type="fournisseur" highlightId={highlightContactId} />}
             {tab === 'employees' && <EmployeesModule farmId={user} role={role} />}
             {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
@@ -5696,6 +5796,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />}
     </div>
   );
 }

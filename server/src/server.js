@@ -26,6 +26,7 @@ import produitsRoutes from "./routes/produits.js";
 import produitCategoriesRoutes from "./routes/produitCategories.js";
 import contactsRoutes from "./routes/contacts.js";
 import listesPrixRoutes from "./routes/listesPrix.js";
+import rechercheRoutes from "./routes/recherche.js";
 
 
 dotenv.config();
@@ -62,6 +63,7 @@ app.use("/api/produits", produitsRoutes);
 app.use("/api/produit-categories", produitCategoriesRoutes);
 app.use("/api/contacts", contactsRoutes);
 app.use("/api/listes-prix", listesPrixRoutes);
+app.use("/api/recherche", rechercheRoutes);
 
 // Route de bienvenue à la racine — sert surtout de vérification manuelle rapide
 // ("le backend répond-il ?"), pas utilisée par le frontend.

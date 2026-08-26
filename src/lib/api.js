@@ -88,6 +88,13 @@ export async function deleteContact(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Recherche globale (Ctrl+K)
+// ─────────────────────────────────────────────────────────────────────
+export async function rechercheGlobale(q) {
+  return request(`/recherche?q=${encodeURIComponent(q)}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Finances
 // ─────────────────────────────────────────────────────────────────────
 export async function getFinances() {
