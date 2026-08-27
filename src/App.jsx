@@ -865,14 +865,14 @@ function ActivitesSection({ ressourceType, ressourceId }) {
       <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Activités</div>
       <form onSubmit={submit} style={{ display: 'flex', gap: 6 }}>
         <input
-          className="odoo-flat-input"
+          className="flat-input"
           placeholder="Ex : rappeler le client"
           value={titre}
           onChange={e => setTitre(e.target.value)}
           style={{ flex: 1 }}
         />
         <input
-          className="odoo-flat-input"
+          className="flat-input"
           type="date"
           value={dateEcheance}
           onChange={e => setDateEcheance(e.target.value)}
@@ -1428,7 +1428,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 seule ("—") ici : ils n'ont de sens qu'une fois le devis créé et signé, voir la
                 popup de détail pour leur édition réelle. */}
             <div style={{ overflowX: 'auto' }}>
-            <table className="odoo-table">
+            <table className="data-table">
               <thead>
                 <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                   <th style={{ width: '3.5%' }}></th>
@@ -1569,7 +1569,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             {filtreStatut ? 'Aucun devis à facturer pour l\'instant.' : 'Aucun devis pour l\'instant.'}
           </div>
         ) : (
-          <table className="odoo-table">
+          <table className="data-table">
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                 <th>Numéro</th>
@@ -1756,11 +1756,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Conditions paiement</span>
-                        <input className="odoo-flat-input" value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, textAlign: 'right' }} />
+                        <input className="flat-input" value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, textAlign: 'right' }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Livraison promise</span>
-                        <input className="odoo-flat-input" type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ width: 'auto' }} />
+                        <input className="flat-input" type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ width: 'auto' }} />
                       </div>
                     </>
                   ) : (
@@ -1800,7 +1800,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </div>
               ) : (
               <>
-              <table className="odoo-table" style={{ marginBottom: 12 }}>
+              <table className="data-table" style={{ marginBottom: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                     <th style={{ width: '25%' }}>Produit</th><th style={{ width: '10%' }}>Qté</th><th style={{ width: '10%' }}>Livré</th><th style={{ width: '10%' }}>Facturé</th><th style={{ width: '6%' }}>Unité</th><th style={{ width: '10%' }}>P.U.</th><th style={{ width: '14%' }}>Taxe (%)</th><th style={{ width: '5%' }}>Remise (%)</th><th style={{ width: '10%', textAlign: 'right' }}>Total</th>
@@ -1834,12 +1834,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td>{l.quantite}</td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
-                            <input className="odoo-flat-input" type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56 }} />
+                            <input className="flat-input" type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56 }} />
                           ) : '—'}
                         </td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
-                            <input className="odoo-flat-input" type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56 }} />
+                            <input className="flat-input" type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56 }} />
                           ) : '—'}
                         </td>
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
@@ -1868,7 +1868,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
                     <span>Remise globale (%)</span>
                     {modifiable ? (
-                      <input className="odoo-flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
+                      <input className="flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
                     ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
                   </div>
                   {/* Taxe désormais définie par ligne (voir la colonne "Taxe (%)" du tableau
@@ -1934,7 +1934,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Messages</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input
-                    className="odoo-flat-input"
+                    className="flat-input"
                     value={nouveauMessage}
                     onChange={e => setNouveauMessage(e.target.value)}
                     placeholder="Écrire un message..."
@@ -2067,7 +2067,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
                 <div style={{ overflowX: 'auto' }}>
-                <table className="odoo-table">
+                <table className="data-table">
                   <thead>
                     <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                       <th style={{ width: '3.5%' }}></th>
@@ -2231,7 +2231,7 @@ function VentesAnalyseTab() {
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
             {mouvements.length} ligne(s) vendue(s) · Total : <strong style={{ color: COLORS.ink }}>{total.toLocaleString('fr-FR')} FCFA</strong>
           </div>
-          <table className="odoo-table">
+          <table className="data-table">
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                 <th>Date</th><th>Produit</th><th>Client</th><th>Qté</th><th style={{ textAlign: 'right' }}>Montant</th>
@@ -2716,7 +2716,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         </div>
       </Card>
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>Date</th>
@@ -2780,7 +2780,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             </div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Lignes</div>
-              <table className="odoo-table">
+              <table className="data-table">
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                     <th>Produit</th>
@@ -3137,7 +3137,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <MiniChart data={stockEvolution} color={COLORS.blue} />
       </Card>
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>Article</th>
@@ -3409,7 +3409,7 @@ function LivraisonsTab({ farmId }) {
         </form>
       </Card>
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>Date</th><th>Client</th><th>Produit</th><th>Qté</th><th>Statut</th><th></th>
@@ -3517,7 +3517,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       )}
 
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>Date</th><th>Type</th><th>Détail</th><th style={{ textAlign: 'right' }}>Montant</th>
@@ -3695,7 +3695,7 @@ function PoultryMonitoringTab({ farmId }) {
       </div>
 
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>Date</th>
@@ -4789,7 +4789,7 @@ function HarvestsModule({ farmId }) {
       </div>
 
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>Date</th>
@@ -6027,7 +6027,7 @@ function ContactTagsManager({ tags, onChange }) {
             {tags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>Aucun tag pour l'instant.</span>}
           </div>
           <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input className="odoo-flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: VIP, B2B..." style={{ flex: 1 }} />
+            <input className="flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: VIP, B2B..." style={{ flex: 1 }} />
             <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: 6, cursor: 'pointer' }} />
             <Button small type="submit" variant="outline" disabled={creating}>{creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}</Button>
           </form>
@@ -6356,52 +6356,52 @@ function ContactsTab({ type, highlightId }) {
 
         {/* Groupe étiquette/valeur façon Odoo (.o_inner_group) : plus de champ encadré
             individuellement — juste une bordure discrète au survol/focus (classe
-            .odoo-flat-input, voir App.css) et une étiquette à gauche sur la même ligne
+            .flat-input, voir App.css) et une étiquette à gauche sur la même ligne
             que la valeur, comme dans la vraie fiche contact d'Odoo. */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
-          <div className="odoo-group">
+          <div className="field-group">
             {!f.isCompany && (
               <>
-                <div className="odoo-group-label">Société</div>
-                <select className="odoo-flat-input" value={f.parentId ?? ''} onChange={e => setF({ ...f, parentId: e.target.value === '' ? null : Number(e.target.value) })}>
+                <div className="field-group-label">Société</div>
+                <select className="flat-input" value={f.parentId ?? ''} onChange={e => setF({ ...f, parentId: e.target.value === '' ? null : Number(e.target.value) })}>
                   <option value="">Aucune</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                 </select>
               </>
             )}
-            <div className="odoo-group-label">Adresse</div>
+            <div className="field-group-label">Adresse</div>
             <div>
-              <input className="odoo-flat-input" placeholder="Rue..." value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
-              <input className="odoo-flat-input" placeholder="Rue 2..." value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
+              <input className="flat-input" placeholder="Rue..." value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
+              <input className="flat-input" placeholder="Rue 2..." value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
               <div style={{ display: 'flex' }}>
-                <input className="odoo-flat-input" style={{ flex: '0 0 38%' }} placeholder="Ville" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
-                <input className="odoo-flat-input" style={{ flex: '0 0 33%' }} placeholder="Région" value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} />
-                <input className="odoo-flat-input" style={{ flex: '0 0 25%' }} placeholder="Code postal" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
+                <input className="flat-input" style={{ flex: '0 0 38%' }} placeholder="Ville" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
+                <input className="flat-input" style={{ flex: '0 0 33%' }} placeholder="Région" value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} />
+                <input className="flat-input" style={{ flex: '0 0 25%' }} placeholder="Code postal" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
               </div>
-              <input className="odoo-flat-input" placeholder="Pays" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
+              <input className="flat-input" placeholder="Pays" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
             </div>
-            <div className="odoo-group-label">Autre adresse</div>
-            <input className="odoo-flat-input" placeholder="Adresse libre (optionnel)" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+            <div className="field-group-label">Autre adresse</div>
+            <input className="flat-input" placeholder="Adresse libre (optionnel)" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
           </div>
-          <div className="odoo-group">
+          <div className="field-group">
             {!f.isCompany && (
               <>
-                <div className="odoo-group-label">Fonction</div>
-                <input className="odoo-flat-input" placeholder="Ex: Directeur commercial" value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
+                <div className="field-group-label">Fonction</div>
+                <input className="flat-input" placeholder="Ex: Directeur commercial" value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
               </>
             )}
-            <div className="odoo-group-label">SIRET</div>
-            <input className="odoo-flat-input" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
+            <div className="field-group-label">SIRET</div>
+            <input className="flat-input" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
             {type === 'client' && (
               <>
-                <div className="odoo-group-label">Liste de prix</div>
-                <select className="odoo-flat-input" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
+                <div className="field-group-label">Liste de prix</div>
+                <select className="flat-input" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
                   <option value="">Aucune</option>
                   {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
                 </select>
               </>
             )}
-            <div className="odoo-group-label">Tags</div>
+            <div className="field-group-label">Tags</div>
             <div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {contactTags.map(t => {
@@ -6427,9 +6427,9 @@ function ContactsTab({ type, highlightId }) {
           </div>
         </div>
 
-        <div className="odoo-group">
-          <div className="odoo-group-label">Notes</div>
-          <textarea className="odoo-flat-input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder="Notes internes..." rows={2} style={{ resize: 'vertical' }} />
+        <div className="field-group">
+          <div className="field-group-label">Notes</div>
+          <textarea className="flat-input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder="Notes internes..." rows={2} style={{ resize: 'vertical' }} />
         </div>
       </div>
     );
@@ -6611,19 +6611,19 @@ function ContactsTab({ type, highlightId }) {
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Contacts liés à cette société</div>
                 <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 4, alignItems: 'end', marginBottom: 12 }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Nom
-                    <input className="odoo-flat-input" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
+                    <input className="flat-input" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Prénom
-                    <input className="odoo-flat-input" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
+                    <input className="flat-input" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Fonction
-                    <input className="odoo-flat-input" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
+                    <input className="flat-input" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Téléphone
-                    <input className="odoo-flat-input" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
+                    <input className="flat-input" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Email
-                    <input className="odoo-flat-input" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
+                    <input className="flat-input" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
                   </label>
                   <Button small type="submit" variant="outline" disabled={subSaving}>
                     {subSaving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />} Ajouter

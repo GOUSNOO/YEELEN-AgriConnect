@@ -80,7 +80,7 @@ export function FeedbackModule({ isPlatformAdmin }) {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
             Votre message
             <textarea
-              className="odoo-flat-input"
+              className="flat-input"
               rows={5}
               placeholder="Décrivez votre suggestion, ce qui vous frustre, ou le problème rencontré..."
               value={form.message}

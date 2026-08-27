@@ -188,7 +188,7 @@ export function EquipementsModule({ canManage = false }) {
       )}
 
       <Card style={{ padding: 0 }}>
-        <table className="odoo-table">
+        <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: '#5B6357' }}>
               <th>Équipement</th>

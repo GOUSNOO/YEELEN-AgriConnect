@@ -89,7 +89,7 @@ export function Button({ children, onClick, variant = 'default', small, style, t
 }
 
 // Champ façon Odoo (project_odoo_contact_architecture) : plus de rectangle visible au
-// repos (bordure/fond transparents, `.odoo-flat-input` dans App.css reproduit
+// repos (bordure/fond transparents, `.flat-input` dans App.css reproduit
 // --o-input-border-color: transparent mesuré dans le vrai CSS d'Odoo), une bordure
 // discrète apparaît seulement au survol/focus. Étendu à Field/Select eux-mêmes (au lieu
 // d'un traitement au cas par cas par écran) sur demande explicite de l'utilisateur, pour
@@ -101,7 +101,7 @@ export function Field({ label, className, style, ...props }) {
       {label}
       <input
         {...props}
-        className={className ? `odoo-flat-input ${className}` : 'odoo-flat-input'}
+        className={className ? `flat-input ${className}` : 'flat-input'}
         style={style}
       />
     </label>
@@ -114,7 +114,7 @@ export function Select({ label, children, className, style, ...props }) {
       {label}
       <select
         {...props}
-        className={className ? `odoo-flat-input ${className}` : 'odoo-flat-input'}
+        className={className ? `flat-input ${className}` : 'flat-input'}
         style={style}
       >
         {children}

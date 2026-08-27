@@ -141,7 +141,7 @@ export function ObservationListView() {
               <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
                 Description
                 <textarea
-                  className="odoo-flat-input"
+                  className="flat-input"
                   rows={5}
                   value={form.notes}
                   onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
