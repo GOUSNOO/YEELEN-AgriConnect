@@ -14,8 +14,12 @@ const router = express.Router();
 const DEVIS_COLUMNS = `
   d.id, d.numero, d.statut, d.date, d.date_signature AS "dateSignature",
   d.signataire_nom AS "signataireNom", d.total::float8 AS total, d.notes,
+  d.remise_globale::float8 AS "remiseGlobale", d.taux_taxe::float8 AS "tauxTaxe",
+  d.conditions_paiement AS "conditionsPaiement", d.livraison_promise AS "livraisonPromise",
   d.client_id AS "clientId", c.nom AS "clientNom", c.prenom AS "clientPrenom",
   c.email AS "clientEmail", c.telephone AS "clientTelephone", c.adresse AS "clientAdresse",
+  c.adresse_rue AS "clientAdresseRue", c.adresse_ville AS "clientAdresseVille",
+  c.adresse_code_postal AS "clientCodePostal", c.adresse_pays AS "clientPays",
   d.created_at AS "createdAt"
 `;
 
@@ -63,6 +67,7 @@ function normalizeLigne(l) {
     quantite: isSection ? 0 : (Number(l.quantite) || 0),
     prixUnitaire: isSection ? 0 : (Number(l.prixUnitaire) || 0),
     remisePourcentage: isSection ? 0 : Math.min(100, Math.max(0, Number(l.remisePourcentage) || 0)),
+    unite: isSection ? null : (l.unite || null),
     recolteId: isSection ? null : l.recolteId,
     stockId: isSection ? null : l.stockId,
     stockModule: isSection ? null : l.stockModule,
@@ -72,6 +77,16 @@ function ligneTotal(l) {
   if (l.type === 'section') return 0;
   const sousTotal = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0);
   return sousTotal * (1 - (Number(l.remisePourcentage) || 0) / 100);
+}
+
+// Alignement visuel Odoo : une remise globale (%) et un taux de taxe (%) uniques par devis,
+// appliqués sur le total des lignes — voir la note dans migrate.js sur pourquoi ceci est
+// stocké dans devis.total plutôt que recalculé côté frontend uniquement (cohérence avec
+// financeSync/stockSync, qui lisent tous les deux devis.total comme source de vérité).
+function calculerTotal(lignesNormalisees, remiseGlobale, tauxTaxe) {
+  const montantHT = lignesNormalisees.reduce((s, l) => s + ligneTotal(l), 0);
+  const apresRemise = montantHT * (1 - (Number(remiseGlobale) || 0) / 100);
+  return apresRemise * (1 + (Number(tauxTaxe) || 0) / 100);
 }
 
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
@@ -95,7 +110,7 @@ async function getDevisComplet(devisId, entrepriseId) {
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
     `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-            remise_pourcentage::float8 AS "remisePourcentage",
+            remise_pourcentage::float8 AS "remisePourcentage", unite,
             quantite_livree::float8 AS "quantiteLivree", quantite_facturee::float8 AS "quantiteFacturee",
             recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
@@ -151,7 +166,7 @@ router.get('/ledger', authRequired, async (req, res) => {
        FROM devis_lignes dl
        JOIN devis d ON d.id = dl.devis_id
        LEFT JOIN contacts c ON c.id = d.client_id
-       WHERE d.entreprise_id = $1 AND d.statut != 'Brouillon' AND dl.type = 'produit'
+       WHERE d.entreprise_id = $1 AND d.statut NOT IN ('Brouillon', 'Annulé') AND dl.type = 'produit'
        ORDER BY d.date DESC, dl.ordre ASC`,
       [req.user.entrepriseId]
     );
@@ -192,7 +207,7 @@ router.get('/:id/journal', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/', authRequired, async (req, res) => {
-  const { clientId, lignes, notes } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, tauxTaxe, conditionsPaiement, livraisonPromise } = req.body;
   if (!clientId || !Array.isArray(lignes) || lignes.length === 0) {
     return res.status(400).json({ error: 'Un client et au moins une ligne de produit sont requis.' });
   }
@@ -203,12 +218,13 @@ router.post('/', authRequired, async (req, res) => {
 
     const numero = await genererNumero(req.user.entrepriseId);
     const lignesNormalisees = lignes.map(normalizeLigne);
-    const total = lignesNormalisees.reduce((s, l) => s + ligneTotal(l), 0);
+    const total = calculerTotal(lignesNormalisees, remiseGlobale, tauxTaxe);
 
     const devisResult = await client.query(
-      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes)
-       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6) RETURNING id`,
-      [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null]
+      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, taux_taxe, conditions_paiement, livraison_promise)
+       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null,
+       Number(remiseGlobale) || 0, Number(tauxTaxe) || 0, conditionsPaiement || null, livraisonPromise || null]
     );
     const devisId = devisResult.rows[0].id;
     const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
@@ -218,9 +234,9 @@ router.post('/', authRequired, async (req, res) => {
       const l = lignesNormalisees[i];
       const stockOk = stockLigneValide(l);
       await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, ordre, recolte_id, stock_id, stock_module, type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, i,
+        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
          recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
          stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
       );
@@ -244,11 +260,11 @@ router.post('/', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.put('/:id', authRequired, async (req, res) => {
-  const { clientId, lignes, notes } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, tauxTaxe, conditionsPaiement, livraisonPromise } = req.body;
 
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut, total::float8 AS total FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query('SELECT statut, total::float8 AS total, remise_globale::float8 AS "remiseGlobale", taux_taxe::float8 AS "tauxTaxe" FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
     if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
       return res.status(400).json({ error: 'Ce devis ne peut plus être modifié à ce stade.' });
@@ -256,12 +272,29 @@ router.put('/:id', authRequired, async (req, res) => {
 
     await client.query('BEGIN');
 
-    const lignesNormalisees = Array.isArray(lignes) ? lignes.map(normalizeLigne) : [];
-    const total = lignesNormalisees.reduce((s, l) => s + ligneTotal(l), 0);
+    // Un appel qui ne touche que la remise globale/taxe/conditions (sans renvoyer de
+    // lignes, ex: le panneau "Totaux" de la popup de détail) ne doit pas faire retomber
+    // le total à 0 — on recharge alors les lignes déjà en base pour le recalcul.
+    const lignesSource = Array.isArray(lignes)
+      ? lignes
+      : (await client.query(
+          `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+                  remise_pourcentage::float8 AS "remisePourcentage", unite,
+                  recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
+           FROM devis_lignes WHERE devis_id = $1`,
+          [req.params.id]
+        )).rows;
+    const lignesNormalisees = lignesSource.map(normalizeLigne);
+    const remiseGlobaleFinale = remiseGlobale != null ? Number(remiseGlobale) || 0 : check.rows[0].remiseGlobale;
+    const tauxTaxeFinal = tauxTaxe != null ? Number(tauxTaxe) || 0 : check.rows[0].tauxTaxe;
+    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale, tauxTaxeFinal);
 
     await client.query(
-      `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes) WHERE id = $4`,
-      [clientId, total, notes, req.params.id]
+      `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes),
+       remise_globale = $4, taux_taxe = $5,
+       conditions_paiement = COALESCE($6, conditions_paiement), livraison_promise = COALESCE($7, livraison_promise)
+       WHERE id = $8`,
+      [clientId, total, notes, remiseGlobaleFinale, tauxTaxeFinal, conditionsPaiement, livraisonPromise, req.params.id]
     );
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { total: check.rows[0].total }, { total }, ['total']);
@@ -274,9 +307,9 @@ router.put('/:id', authRequired, async (req, res) => {
         const l = lignesNormalisees[i];
         const stockOk = stockLigneValide(l);
         await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, ordre, recolte_id, stock_id, stock_module, type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, i,
+          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
            recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
            stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
         );
@@ -368,6 +401,29 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
   } catch (err) {
     console.error('[POST /devis/:id/valider-manuel]', err);
     return res.status(500).json({ error: 'Erreur lors de la validation.' });
+  }
+});
+
+// Annule un devis avant signature (Brouillon/Envoyé uniquement) — le stock n'a encore
+// jamais bougé à ce stade (voir applyVenteLignesToStock, déclenché seulement à la
+// signature), donc aucune réversion n'est nécessaire ici, contrairement à
+// remettre-brouillon. Statut terminal simple, pas de retour possible vers Brouillon
+// depuis Annulé (recréer un nouveau devis plutôt que ressusciter celui-ci).
+router.post('/:id/annuler', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const check = await pool.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (!['Brouillon', 'Devis', 'Envoyé'].includes(check.rows[0].statut)) {
+      return res.status(400).json({ error: 'Seul un devis pas encore signé peut être annulé.' });
+    }
+    await pool.query(`UPDATE devis SET statut = 'Annulé' WHERE id = $1`, [req.params.id]);
+    await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+      { statut: check.rows[0].statut }, { statut: 'Annulé' }, ['statut']);
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    return res.json({ devis });
+  } catch (err) {
+    console.error('[POST /devis/:id/annuler]', err);
+    return res.status(500).json({ error: "Erreur lors de l'annulation." });
   }
 });
 

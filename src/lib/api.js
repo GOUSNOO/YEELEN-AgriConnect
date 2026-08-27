@@ -634,8 +634,24 @@ export async function updateDevisLigneQuantites(id, lignes) {
   return request(`/devis/${id}/lignes-quantites`, { method: 'PATCH', body: JSON.stringify({ lignes }) });
 }
 
+// Annule un devis pas encore signé (Brouillon/Envoyé) — statut terminal, pas de retour
+// possible vers Brouillon (voir server/src/routes/devis.js).
+export async function annulerDevis(id) {
+  return request(`/devis/${id}/annuler`, { method: 'POST' });
+}
 
-// Ouvre le PDF d'un devis dans un nouvel onglet, avec authentification
+// ─────────────────────────────────────────────────────────────────────
+// Messages (fil de discussion en texte libre attaché à une ressource — devis, contact)
+// ─────────────────────────────────────────────────────────────────────
+export async function getMessages(ressourceType, ressourceId) {
+  return request(`/messages?ressourceType=${encodeURIComponent(ressourceType)}&ressourceId=${encodeURIComponent(ressourceId)}`, { method: 'GET' });
+}
+
+export async function createMessage(payload) {
+  return request('/messages', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Ouvre le PDF d'un devis dans un nouvel onglet ("Aperçu"), avec authentification
 export async function openDevisPdf(id) {
   const token = getToken();
   const response = await fetch(`${API_BASE_URL}/devis/${id}/pdf`, {
@@ -645,6 +661,25 @@ export async function openDevisPdf(id) {
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
+}
+
+// Télécharge le PDF d'un devis en tant que fichier ("PDF"), distinct de l'aperçu ci-dessus
+// qui l'ouvre juste dans un nouvel onglet.
+export async function downloadDevisPdf(id, numero) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/devis/${id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Impossible de générer le PDF.');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${numero || 'devis'}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // Consultation publique (aucun token d'authentification requis, juste le token du lien)

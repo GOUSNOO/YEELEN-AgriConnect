@@ -31,7 +31,8 @@ import {
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   getActivites, createActivite, updateActivite, deleteActivite,
-  openDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites,
+  getMessages, createMessage,
+  openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
   getOnboardingStatus, updateOnboardingStatus,
 } from './lib/api';
@@ -765,6 +766,12 @@ const DEVIS_STATUT_STEPS = [
 const CHEVRON_NOTCH = 12;
 
 function DevisStatusBar({ statut }) {
+  // "Annulé" est un statut terminal hors chaîne (voir routes/devis.js:POST /:id/annuler) —
+  // aucune étape des chevrons ne doit s'y allumer, un badge rouge à part le montre clairement
+  // plutôt qu'une barre à chevrons sans étape active (ambigu, pourrait passer pour une erreur).
+  if (statut === 'Annulé') {
+    return <Badge tone="red">Annulé</Badge>;
+  }
   const activeIndex = DEVIS_STATUT_STEPS.findIndex(s => s.matches.includes(statut));
   return (
     <div style={{ display: 'flex' }}>
@@ -894,12 +901,13 @@ function ActivitesSection({ ressourceType, ressourceId }) {
 }
 
 function DevisModule({ clientsListe, filtreStatut }) {
+  const navigate = useNavigate();
   const [devisListe, setDevisListe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', recolteId: '', stockId: null, stockModule: null };
-  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', recolteId: '', stockId: null, stockModule: null };
+  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', unite: '', recolteId: '', stockId: null, stockModule: null };
+  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', unite: '', recolteId: '', stockId: null, stockModule: null };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
   const [draggedLigneIndex, setDraggedLigneIndex] = useState(null);
   const [draggedEditLigneIndex, setDraggedEditLigneIndex] = useState(null);
@@ -918,6 +926,17 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // ligne.id, initialisée depuis les valeurs serveur à chaque (ré)ouverture du détail.
   const [quantitesEdit, setQuantitesEdit] = useState({});
   const [quantitesSaving, setQuantitesSaving] = useState(false);
+  // Onglets façon Odoo au-dessus du tableau de lignes, dans la popup de détail
+  const [detailTab, setDetailTab] = useState('lignes');
+  // Remise globale / taxe / conditions de paiement / livraison promise, éditables
+  // seulement tant que le devis est en Brouillon — voir handleSaveDetailMeta.
+  const emptyDetailMeta = { remiseGlobale: '0', tauxTaxe: '0', conditionsPaiement: '', livraisonPromise: '' };
+  const [detailMeta, setDetailMeta] = useState(emptyDetailMeta);
+  const [detailMetaSaving, setDetailMetaSaving] = useState(false);
+  // Fil de messages (chatter minimal) attaché au devis affiché en détail
+  const [messages, setMessages] = useState([]);
+  const [nouveauMessage, setNouveauMessage] = useState('');
+  const [messageSaving, setMessageSaving] = useState(false);
   // Popup demandant le mode et la modalité de paiement avant de valider la facturation
   const [paiementPopupOpen, setPaiementPopupOpen] = useState(false);
   const [paiementDevisId, setPaiementDevisId] = useState(null);
@@ -1060,6 +1079,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remisePourcentage: Number(l.remisePourcentage) || 0,
+          unite: l.unite || null,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
           stockModule: l.stockModule || null,
@@ -1101,7 +1121,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       setEditForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
     } catch (err) {
       setApiError(err.message);
@@ -1126,6 +1146,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remisePourcentage: Number(l.remisePourcentage) || 0,
+          unite: l.unite || null,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
           stockModule: l.stockModule || null,
@@ -1144,6 +1165,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
   const openDetail = async (id) => {
     setDetailId(id);
+    setDetailTab('lignes');
     try {
       const data = await getDevisDetail(id);
       setDetailData(data.devis);
@@ -1152,10 +1174,66 @@ function DevisModule({ clientsListe, filtreStatut }) {
         if (l.type !== 'section') map[l.id] = { quantiteLivree: l.quantiteLivree || 0, quantiteFacturee: l.quantiteFacturee || 0 };
       });
       setQuantitesEdit(map);
+      setDetailMeta({
+        remiseGlobale: String(data.devis.remiseGlobale ?? 0),
+        tauxTaxe: String(data.devis.tauxTaxe ?? 0),
+        conditionsPaiement: data.devis.conditionsPaiement || '',
+        livraisonPromise: data.devis.livraisonPromise ? data.devis.livraisonPromise.slice(0, 10) : '',
+      });
     } catch (err) {
       setApiError(err.message);
     }
     getDevisJournal(id).then(d => setJournal(d.changements || [])).catch(() => setJournal([]));
+    getMessages('devis', id).then(d => setMessages(d.messages || [])).catch(() => setMessages([]));
+  };
+
+  const handleSaveDetailMeta = async () => {
+    setDetailMetaSaving(true);
+    try {
+      await updateDevis(detailData.id, {
+        remiseGlobale: Number(detailMeta.remiseGlobale) || 0,
+        tauxTaxe: Number(detailMeta.tauxTaxe) || 0,
+        conditionsPaiement: detailMeta.conditionsPaiement,
+        livraisonPromise: detailMeta.livraisonPromise || null,
+      });
+      notifySuccess('Devis mis à jour.');
+      await loadDevis();
+      await openDetail(detailData.id);
+    } catch (err) {
+      notifyError(err, 'Impossible de mettre à jour le devis.');
+    } finally {
+      setDetailMetaSaving(false);
+    }
+  };
+
+  const handleEnvoyerMessage = async () => {
+    if (!nouveauMessage.trim()) return;
+    setMessageSaving(true);
+    try {
+      await createMessage({ ressourceType: 'devis', ressourceId: detailData.id, contenu: nouveauMessage.trim() });
+      setNouveauMessage('');
+      const d = await getMessages('devis', detailData.id);
+      setMessages(d.messages || []);
+    } catch (err) {
+      notifyError(err, "Impossible d'envoyer le message.");
+    } finally {
+      setMessageSaving(false);
+    }
+  };
+
+  const handleAnnuler = async (id) => {
+    if (!window.confirm('Annuler ce devis ? Cette action ne peut pas être annulée (il faudra en recréer un nouveau).')) return;
+    setActionBusy(true);
+    try {
+      await annulerDevis(id);
+      notifySuccess('Devis annulé.');
+      await loadDevis();
+      if (detailId === id) await openDetail(id);
+    } catch (err) {
+      notifyError(err, "Impossible d'annuler ce devis.");
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   const updateQuantiteEdit = (ligneId, field, value) => {
@@ -1351,7 +1429,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
                       <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
                         const value = e.target.value;
                         updateLigne(i, 'produit', value);
@@ -1362,8 +1440,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         if (prix != null && !ligne.prixUnitaire) {
                           updateLigne(i, 'prixUnitaire', String(prix));
                         }
+                        if (match && match.unite && !ligne.unite) {
+                          updateLigne(i, 'unite', match.unite);
+                        }
                       }} />
                       <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
+                      <Field label={i === 0 ? 'Unité' : ''} placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} />
                       <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
                       <Field label={i === 0 ? 'Remise (%)' : ''} type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} />
                       <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
@@ -1476,7 +1558,15 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Popup de détail d'un devis, avec actions (envoyer, facturer) et aperçu de la signature */}
       {detailId && detailData && (() => {
         const margeInfo = computeMarge(detailData, catalogItems);
-        const closeDetailPopup = () => { setDetailId(null); setDetailData(null); setJournal([]); };
+        const closeDetailPopup = () => { setDetailId(null); setDetailData(null); setJournal([]); setMessages([]); };
+        const modifiable = detailData.statut === 'Brouillon';
+        const nbLignesProduit = detailData.lignes.filter(l => l.type !== 'section').length;
+        const nbEcheances = (detailData.echeances || []).length;
+        const montantHT = detailData.lignes.reduce((s, l) => {
+          if (l.type === 'section') return s;
+          const pct = Number(l.remisePourcentage) || 0;
+          return s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+        }, 0);
         return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={closeDetailPopup}>
           {/* Disposition à deux colonnes façon fiche Odoo (Order Lines + chatter à droite) — voir
@@ -1487,7 +1577,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             <button onClick={closeDetailPopup} aria-label="Fermer" style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
             <div style={{ flex: '1 1 620px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 18, paddingRight: 26 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12, paddingRight: 26 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {detailData.statut === 'Brouillon' && detailData.clientEmail && (
                     <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
@@ -1504,14 +1594,69 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       Valider et facturer
                     </Button>
                   )}
+                  {modifiable && (
+                    <Button variant="outline" onClick={() => { startEditDevis(detailData); closeDetailPopup(); }}>
+                      <Settings2 size={14} /> Modifier les lignes
+                    </Button>
+                  )}
                   <Button variant="outline" onClick={() => openDevisPdf(detailData.id)}>
-                    <FileText size={14} /> PDF
+                    <FileText size={14} /> Aperçu
                   </Button>
+                  <Button variant="outline" onClick={() => downloadDevisPdf(detailData.id, detailData.numero)}>
+                    <Download size={14} /> PDF
+                  </Button>
+                  {['Brouillon', 'Devis', 'Envoyé'].includes(detailData.statut) && (
+                    <Button variant="ghost" onClick={() => handleAnnuler(detailData.id)} disabled={actionBusy} style={{ color: COLORS.red }}>
+                      Annuler
+                    </Button>
+                  )}
                 </div>
                 <DevisStatusBar statut={detailData.statut} />
               </div>
 
-              <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 16 }}>{detailData.numero}</div>
+              <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 8 }}>{detailData.numero}</div>
+
+              {/* "Boutons intelligents" façon Odoo — dérivés de données déjà chargées, sans
+                  nouvel appel réseau, plus un lien direct vers la fiche du client (seul
+                  vrai renvoi vers un autre enregistrement possible ici, voir highlightFromUrl
+                  dans App pour le mécanisme de navigation). */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                <div style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
+                  {nbLignesProduit} ligne{nbLignesProduit > 1 ? 's' : ''}
+                </div>
+                {nbEcheances > 0 && (
+                  <div style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
+                    {nbEcheances} échéance{nbEcheances > 1 ? 's' : ''}
+                  </div>
+                )}
+                {detailData.clientId && (
+                  <button
+                    onClick={() => { navigate(`/app/clients?highlight=${detailData.clientId}`); closeDetailPopup(); }}
+                    style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
+                  >
+                    Voir le contact →
+                  </button>
+                )}
+              </div>
+
+              {/* Onglets façon Odoo au-dessus du tableau — Générateur de devis/Autres
+                  informations n'ont pas d'équivalent réel ici (voir project_odoo_devis_visual_alignment),
+                  seuls Lignes de commande/Notes sont repris. */}
+              <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
+                {[{ id: 'lignes', label: 'Lignes de commande' }, { id: 'notes', label: 'Notes' }].map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setDetailTab(t.id)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                      color: detailTab === t.id ? COLORS.green : COLORS.inkSoft,
+                      borderBottom: detailTab === t.id ? `2px solid ${COLORS.green}` : '2px solid transparent', marginBottom: -1,
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20, fontSize: 13 }}>
                 <div>
@@ -1523,7 +1668,16 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <div style={{ color: COLORS.inkSoft, fontStyle: 'italic' }}>Pas d'email renseigné</div>
                   )}
                   {detailData.clientTelephone && <div style={{ color: COLORS.inkSoft }}>{detailData.clientTelephone}</div>}
-                  {detailData.clientAdresse && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresse}</div>}
+                  {/* Adresse décomposée si disponible (rue/ville/CP/pays), sinon repli sur
+                      l'ancien champ adresse en texte libre — voir migrate.js. Pas de distinction
+                      facturation/livraison, un contact n'a qu'une seule adresse dans ce modèle. */}
+                  {(detailData.clientAdresseRue || detailData.clientAdresseVille || detailData.clientCodePostal || detailData.clientPays) ? (
+                    <>
+                      {detailData.clientAdresseRue && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresseRue}</div>}
+                      <div style={{ color: COLORS.inkSoft }}>{[detailData.clientCodePostal, detailData.clientAdresseVille].filter(Boolean).join(' ')}</div>
+                      {detailData.clientPays && <div style={{ color: COLORS.inkSoft }}>{detailData.clientPays}</div>}
+                    </>
+                  ) : detailData.clientAdresse && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresse}</div>}
                 </div>
                 <div>
                   <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>Détails</div>
@@ -1531,6 +1685,33 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <span style={{ color: COLORS.inkSoft }}>Date</span>
                     <span>{new Date(detailData.date || detailData.createdAt).toLocaleDateString('fr-FR')}</span>
                   </div>
+                  {modifiable ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
+                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Conditions paiement</span>
+                        <input value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right' }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
+                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Livraison promise</span>
+                        <input type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {detailData.conditionsPaiement && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                          <span style={{ color: COLORS.inkSoft }}>Conditions paiement</span>
+                          <span>{detailData.conditionsPaiement}</span>
+                        </div>
+                      )}
+                      {detailData.livraisonPromise && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                          <span style={{ color: COLORS.inkSoft }}>Livraison promise</span>
+                          <span>{new Date(detailData.livraisonPromise).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   {detailData.signataireNom && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                       <span style={{ color: COLORS.inkSoft }}>Signé par</span>
@@ -1546,10 +1727,16 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </div>
               </div>
 
+              {detailTab === 'notes' ? (
+                <div style={{ minHeight: 80, padding: '10px 0', fontSize: 13.5, color: detailData.notes ? COLORS.ink : COLORS.inkSoft, fontStyle: detailData.notes ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
+                  {detailData.notes || "Aucune note — c'est ici que s'affichent les conditions générales ou remarques saisies à la création du devis."}
+                </div>
+              ) : (
+              <>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12, borderBottom: `2px solid ${COLORS.border}` }}>
-                    <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>Livré</th><th>Facturé</th><th>P.U.</th><th>Remise (%)</th><th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>Unité</th><th>Livré</th><th>Facturé</th><th>P.U.</th><th>Remise (%)</th><th style={{ textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1557,7 +1744,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     if (l.type === 'section') {
                       return (
                         <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                          <td colSpan={7} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
+                          <td colSpan={8} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
                         </tr>
                       );
                     }
@@ -1576,6 +1763,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                           )}
                         </td>
                         <td>{l.quantite}</td>
+                        <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
                             <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
@@ -1603,7 +1791,29 @@ function DevisModule({ clientsListe, filtreStatut }) {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-                <div style={{ minWidth: 220 }}>
+                <div style={{ minWidth: 240 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
+                    <span>Montant HT</span><span>{montantHT.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
+                    <span>Remise globale (%)</span>
+                    {modifiable ? (
+                      <input type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right' }} />
+                    ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
+                    <span>Taxe (%)</span>
+                    {modifiable ? (
+                      <input type="number" value={detailMeta.tauxTaxe} onChange={e => setDetailMeta(m => ({ ...m, tauxTaxe: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right' }} />
+                    ) : <span>{Number(detailData.tauxTaxe) || 0}%</span>}
+                  </div>
+                  {modifiable && (
+                    <div style={{ textAlign: 'right', marginTop: 4, marginBottom: 4 }}>
+                      <Button small variant="outline" onClick={handleSaveDetailMeta} disabled={detailMetaSaving}>
+                        {detailMetaSaving ? <Loader2 size={14} className="spin" /> : null} Enregistrer
+                      </Button>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
                     <span>Total</span><span>{detailData.total.toLocaleString('fr-FR')} FCFA</span>
                   </div>
@@ -1644,10 +1854,39 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   </div>
                 </div>
               )}
+              </>
+              )}
             </div>
 
-            {/* Panneau latéral façon chatter Odoo : activités planifiées + journal des modifications */}
+            {/* Panneau latéral façon chatter Odoo : messages, activités planifiées, journal des modifications */}
             <div style={{ flex: '0 0 300px', width: 300, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Messages</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={nouveauMessage}
+                    onChange={e => setNouveauMessage(e.target.value)}
+                    placeholder="Écrire un message..."
+                    onKeyDown={e => { if (e.key === 'Enter') handleEnvoyerMessage(); }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }}
+                  />
+                  <Button small variant="outline" onClick={handleEnvoyerMessage} disabled={messageSaving || !nouveauMessage.trim()}>
+                    {messageSaving ? <Loader2 size={13} className="spin" /> : 'Envoyer'}
+                  </Button>
+                </div>
+                {messages.length === 0 ? (
+                  <div style={{ fontSize: 12, color: COLORS.inkSoft, fontStyle: 'italic' }}>Aucun message.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {messages.map(m => (
+                      <div key={m.id} style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: `1px solid ${COLORS.border}` }}>
+                        <div style={{ fontSize: 12.5 }}>{m.contenu}</div>
+                        <div style={{ fontSize: 10.5, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || 'système'} · {new Date(m.createdAt).toLocaleString('fr-FR')}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
               {journal.length > 0 && (
                 <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginTop: 16, textAlign: 'left' }}>
@@ -1777,7 +2016,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       </div>
                     ) : (
                       <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
                           <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
                             const value = e.target.value;
                             updateEditLigne(i, 'produit', value);
@@ -1788,8 +2027,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             if (prix != null && !ligne.prixUnitaire) {
                               updateEditLigne(i, 'prixUnitaire', String(prix));
                             }
+                            if (match && match.unite && !ligne.unite) {
+                              updateEditLigne(i, 'unite', match.unite);
+                            }
                           }} />
                           <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
+                          <Field label={i === 0 ? 'Unité' : ''} placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} />
                           <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} />
                           <Field label={i === 0 ? 'Remise (%)' : ''} type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} />
                           <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
@@ -5560,7 +5803,7 @@ function ContactsTab({ type, highlightId }) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [apiError, setApiError] = useState('');
-  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false, listePrixId: null };
+  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false, listePrixId: null, adresseRue: '', adresseVille: '', adresseCodePostal: '', adressePays: '' };
   const [form, setForm]         = useState(emptyForm);
   const [query, setQuery]       = useState('');
 
@@ -5621,6 +5864,7 @@ function ContactsTab({ type, highlightId }) {
 
   const buildPayload = (f) => ({
     nom: f.nom, prenom: f.prenom, telephone: f.telephone, adresse: f.adresse, email: f.email, siret: f.siret,
+    adresseRue: f.adresseRue, adresseVille: f.adresseVille, adresseCodePostal: f.adresseCodePostal, adressePays: f.adressePays,
     estClient: type === 'client' ? true : f.estAutre,
     estFournisseur: type === 'fournisseur' ? true : f.estAutre,
     ...(type === 'client' ? { listePrixId: f.listePrixId } : {}),
@@ -5686,6 +5930,10 @@ function ContactsTab({ type, highlightId }) {
       siret: contact.siret || '',
       estAutre: Boolean(contact[autreFlagKey]),
       listePrixId: contact.listePrixId ?? null,
+      adresseRue: contact.adresseRue || '',
+      adresseVille: contact.adresseVille || '',
+      adresseCodePostal: contact.adresseCodePostal || '',
+      adressePays: contact.adressePays || '',
     });
   };
 
@@ -5741,6 +5989,13 @@ function ContactsTab({ type, highlightId }) {
       <Field label="Téléphone" placeholder="+223..." value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })} />
       <Field label="Email" type="email" placeholder="email@exemple.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
       <Field label="Adresse" placeholder="Ville / quartier" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+      {/* Adresse décomposée (rue/ville/CP/pays), en plus du champ texte libre ci-dessus —
+          voir migrate.js : additive, sert à l'affichage façon fiche Odoo dans la popup de
+          détail d'un devis. */}
+      <Field label="Rue (optionnel)" placeholder="Ex: 12 rue des Fleurs" value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
+      <Field label="Code postal (optionnel)" placeholder="Ex: 75001" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
+      <Field label="Ville (optionnel)" placeholder="Ex: Paris" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
+      <Field label="Pays (optionnel)" placeholder="Ex: Mali" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
       <Field label="SIRET (optionnel)" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft, paddingBottom: 9 }}>
         <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
@@ -6076,6 +6331,13 @@ export default function App() {
   // fonctionnent alors naturellement, sans logique supplémentaire à écrire.
   const screen = pathnameToScreen(location.pathname);
   const urlTab = location.pathname.startsWith('/app/') ? location.pathname.slice(5) : null;
+  // Repli par URL du même mécanisme highlightContactId que la recherche globale — le
+  // "smart button" Client de la popup de détail d'un devis (DevisModule, imbriqué sous
+  // Ventes) n'a pas de moyen direct d'appeler setHighlightContactId (pas de contexte
+  // partagé), donc il navigue vers /app/clients?highlight=<id> et ce repli prend le relais.
+  const highlightFromUrl = (urlTab === 'clients' || urlTab === 'fournisseurs')
+    ? Number(new URLSearchParams(location.search).get('highlight')) || null
+    : null;
   const goToScreen = (screenName, tabId) => navigate(screenToPath(screenName, tabId));
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [user, setUser] = useState(null);
@@ -6499,8 +6761,8 @@ export default function App() {
                 highlightProduitId={highlightProduit?.module === 'Poulailler' ? highlightProduit.id : null}
               />
             )}
-            {tab === 'clients' && <ContactsTab type="client" highlightId={highlightContactId} />}
-            {tab === 'fournisseurs' && <ContactsTab type="fournisseur" highlightId={highlightContactId} />}
+            {tab === 'clients' && <ContactsTab type="client" highlightId={highlightContactId || highlightFromUrl} />}
+            {tab === 'fournisseurs' && <ContactsTab type="fournisseur" highlightId={highlightContactId || highlightFromUrl} />}
             {tab === 'employees' && <EmployeesModule farmId={user} role={role} />}
             {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}

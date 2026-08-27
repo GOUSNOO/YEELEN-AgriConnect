@@ -239,6 +239,21 @@ CREATE TABLE IF NOT EXISTS devis_lignes (
   stock_module   TEXT
 );
 
+-- Alignement visuel Odoo (2026-08-27) : remise globale + taux de taxe uniques par devis
+-- (pas un moteur multi-taux par ligne — une seule TVA appliquée à l'ensemble, ce qui couvre
+-- l'usage réel observé chez Odoo pour ce type de document), conditions de paiement en texte
+-- libre (ex: "30 jours") et date de livraison promise. Contrairement à une v1 envisagée où
+-- ces infos n'auraient été qu'un affichage recalculé côté frontend, remise_globale/taux_taxe
+-- sont appliqués au total stocké en base (voir routes/devis.js:ligneTotal) pour que la
+-- synchronisation finances/stock (qui lit devis.total) reste cohérente avec ce qui s'affiche.
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS remise_globale NUMERIC(5, 2) NOT NULL DEFAULT 0;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS taux_taxe NUMERIC(5, 2) NOT NULL DEFAULT 0;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS conditions_paiement TEXT;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS livraison_promise DATE;
+-- Unité de mesure par ligne (ex: "kg", "sacs", "Heures") — préremplie depuis le produit du
+-- catalogue au même titre que le prix, mais reste un simple champ texte libre modifiable.
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS unite TEXT;
+
 -- Étape 4 (2026-08-18) : alignement structurel Odoo — remise en pourcentage, lignes de
 -- section/note, suivi manuel livré/facturé. Voir migrateRemiseToPourcentage() plus bas pour
 -- la conversion de l'ancienne colonne remise (montant fixe) vers remise_pourcentage.
@@ -791,6 +806,16 @@ CREATE INDEX IF NOT EXISTS idx_contacts_entreprise_id ON contacts(entreprise_id)
 -- supprimer une liste détache les contacts qui l'utilisaient, ne les supprime pas.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS liste_prix_id INTEGER REFERENCES listes_prix(id) ON DELETE SET NULL;
 
+-- Alignement visuel Odoo (2026-08-27) : adresse décomposée (rue/ville/code postal/pays)
+-- pour l'affichage façon fiche Sales Order, additive à côté de l'ancien champ adresse
+-- (texte libre, conservé pour compatibilité avec tout ce qui l'affiche déjà ailleurs) plutôt
+-- que de le remplacer. Pas de distinction facturation/livraison : un contact n'a qu'une
+-- seule adresse dans ce modèle, contrairement à Odoo (adresses enfants) — hors scope ici.
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_rue TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_ville TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_code_postal TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_pays TEXT;
+
 -- ═══════════════ Journal des modifications (chatter) + activités planifiées ═══════════════
 -- Round 2 de l'inspiration Odoo (après recherche globale/boutons intelligents/routage/nav
 -- adaptative/Kanban devis) : deux mécanismes génériques attachables à n'importe quelle
@@ -833,6 +858,22 @@ CREATE TABLE IF NOT EXISTS activites (
   terminee_at    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_activites_ressource ON activites(ressource_type, ressource_id);
+
+-- messages : fil de discussion en texte libre attaché à une ressource (équivalent minimal
+-- du "Envoyer un message"/"Log note" du chatter Odoo) — distinct de journal_modifications
+-- (log automatique de changements de champs) et d'activites (tâches planifiées). Volontairement
+-- pas de pièces jointes ni de followers/notifications (2026-08-27) : juste un historique de
+-- texte, le plus petit sous-ensemble utile d'un vrai chatter.
+CREATE TABLE IF NOT EXISTS messages (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  ressource_type TEXT NOT NULL,
+  ressource_id   INTEGER NOT NULL,
+  user_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  contenu        TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_messages_ressource ON messages(ressource_type, ressource_id);
 `;
 
 // Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre

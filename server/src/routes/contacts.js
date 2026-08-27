@@ -21,6 +21,8 @@ async function resolveListePrixId(entrepriseId, listePrixId) {
 
 const CONTACT_COLUMNS = `
   id, nom, prenom, telephone, email, siret, adresse,
+  adresse_rue AS "adresseRue", adresse_ville AS "adresseVille",
+  adresse_code_postal AS "adresseCodePostal", adresse_pays AS "adressePays",
   est_client AS "estClient", est_fournisseur AS "estFournisseur",
   liste_prix_id AS "listePrixId", created_at AS "createdAt"
 `;
@@ -44,7 +46,8 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.post('/', authRequired, async (req, res) => {
-  const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixId } = req.body;
+  const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixId,
+          adresseRue, adresseVille, adresseCodePostal, adressePays } = req.body;
   if (!nom) {
     return res.status(400).json({ error: 'Le nom du contact est requis.' });
   }
@@ -54,10 +57,12 @@ router.post('/', authRequired, async (req, res) => {
   try {
     const listePrixValide = await resolveListePrixId(req.user.entrepriseId, listePrixId);
     const result = await pool.query(
-      `INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, adresse, email, siret, est_client, est_fournisseur, liste_prix_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, adresse, email, siret, est_client, est_fournisseur, liste_prix_id,
+                              adresse_rue, adresse_ville, adresse_code_postal, adresse_pays)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING ${CONTACT_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, nom, prenom || null, telephone || null, adresse || null, email || null, siret || null, Boolean(estClient), Boolean(estFournisseur), listePrixValide]
+      [req.user.entrepriseId, req.user.sub, nom, prenom || null, telephone || null, adresse || null, email || null, siret || null, Boolean(estClient), Boolean(estFournisseur), listePrixValide,
+       adresseRue || null, adresseVille || null, adresseCodePostal || null, adressePays || null]
     );
     return res.status(201).json({ contact: result.rows[0] });
   } catch (err) {
@@ -67,7 +72,8 @@ router.post('/', authRequired, async (req, res) => {
 });
 
 router.put('/:id', authRequired, async (req, res) => {
-  const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur } = req.body;
+  const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur,
+          adresseRue, adresseVille, adresseCodePostal, adressePays } = req.body;
   if (estClient === false && estFournisseur === false) {
     return res.status(400).json({ error: 'Un contact doit être client, fournisseur, ou les deux.' });
   }
@@ -87,10 +93,15 @@ router.put('/:id', authRequired, async (req, res) => {
          siret = COALESCE($6, siret),
          est_client = COALESCE($7, est_client),
          est_fournisseur = COALESCE($8, est_fournisseur),
-         liste_prix_id = CASE WHEN $9 THEN $10 ELSE liste_prix_id END
-       WHERE id = $11 AND entreprise_id = $12
+         liste_prix_id = CASE WHEN $9 THEN $10 ELSE liste_prix_id END,
+         adresse_rue = COALESCE($11, adresse_rue),
+         adresse_ville = COALESCE($12, adresse_ville),
+         adresse_code_postal = COALESCE($13, adresse_code_postal),
+         adresse_pays = COALESCE($14, adresse_pays)
+       WHERE id = $15 AND entreprise_id = $16
        RETURNING ${CONTACT_COLUMNS}`,
-      [nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixFourni, listePrixValide, req.params.id, req.user.entrepriseId]
+      [nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixFourni, listePrixValide,
+       adresseRue, adresseVille, adresseCodePostal, adressePays, req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Contact introuvable.' });
