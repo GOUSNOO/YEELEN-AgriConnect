@@ -822,6 +822,40 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_ville TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_code_postal TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_pays TEXT;
 
+-- Architecture façon fiche contact Odoo (2026-08-27, suite explicite de la demande
+-- utilisateur d'aligner aussi les données, pas seulement l'affichage — voir
+-- project_odoo_contact_architecture) : bascule Particulier/Société, photo, poste,
+-- notes internes, deuxième ligne d'adresse + région (complète le rue/ville/CP/pays
+-- déjà là), rattachement à une société mère + sous-contacts, et tags colorés.
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS is_company BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS photo TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS fonction TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_rue2 TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_region TEXT;
+-- Auto-référence (société mère d'un sous-contact) : ON DELETE SET NULL, pas CASCADE —
+-- supprimer la société ne doit pas supprimer les personnes qui y travaillent, juste les
+-- détacher (même philosophie que liste_prix_id juste au-dessus).
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_contacts_parent_id ON contacts(parent_id);
+
+-- Tags colorés (many2many_tags côté Odoo) : vraie ressource CRUD par entreprise (même
+-- posture que produit_categories/listes_prix, pas une liste figée globale).
+CREATE TABLE IF NOT EXISTS contact_tags (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom           TEXT NOT NULL,
+  couleur       TEXT NOT NULL DEFAULT '#C1861F',
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_contact_tags_entreprise_id ON contact_tags(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS contacts_tags_rel (
+  contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  tag_id     INTEGER NOT NULL REFERENCES contact_tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (contact_id, tag_id)
+);
+
 -- ═══════════════ Journal des modifications (chatter) + activités planifiées ═══════════════
 -- Round 2 de l'inspiration Odoo (après recherche globale/boutons intelligents/routage/nav
 -- adaptative/Kanban devis) : deux mécanismes génériques attachables à n'importe quelle

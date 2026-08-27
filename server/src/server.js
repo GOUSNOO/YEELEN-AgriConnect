@@ -29,6 +29,7 @@ import listesPrixRoutes from "./routes/listesPrix.js";
 import rechercheRoutes from "./routes/recherche.js";
 import activitesRoutes from "./routes/activites.js";
 import messagesRoutes from "./routes/messages.js";
+import contactTagsRoutes from "./routes/contactTags.js";
 
 
 dotenv.config();
@@ -40,7 +41,11 @@ const app = express();
 // le même domaine via Caddy (voir Caddyfile), donc CORS n'est plus vraiment sollicité
 // mais reste ouvert — pas de verrouillage par domaine fait à ce jour.
 app.use(cors());
-app.use(express.json());
+// Limite par défaut (100kb) relevée : la photo de contact (2026-08-27, voir contacts.js)
+// est envoyée en base64 dans le corps JSON, pas via un upload multipart séparé — un
+// avatar redimensionné côté client à 128x128 tient largement dans 2mb mais dépasserait
+// facilement 100kb une fois encodé en base64.
+app.use(express.json({ limit: '2mb' }));
 
 // Chaque route est un routeur Express indépendant, monté sous son propre préfixe —
 // pas de registre centralisé des permissions ici, chaque fichier de routes applique
@@ -64,6 +69,7 @@ app.use("/api/equipements", equipementsRoutes);
 app.use("/api/produits", produitsRoutes);
 app.use("/api/produit-categories", produitCategoriesRoutes);
 app.use("/api/contacts", contactsRoutes);
+app.use("/api/contact-tags", contactTagsRoutes);
 app.use("/api/listes-prix", listesPrixRoutes);
 app.use("/api/recherche", rechercheRoutes);
 app.use("/api/activites", activitesRoutes);

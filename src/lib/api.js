@@ -71,8 +71,12 @@ export async function getMe() {
 // ─────────────────────────────────────────────────────────────────────
 // Contacts (clients + fournisseurs unifiés, 2026-08-18)
 // ─────────────────────────────────────────────────────────────────────
-export async function getContacts(type) {
-  return request(type ? `/contacts?type=${encodeURIComponent(type)}` : '/contacts');
+export async function getContacts(type, parentId) {
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (parentId) params.set('parentId', parentId);
+  const qs = params.toString();
+  return request(qs ? `/contacts?${qs}` : '/contacts');
 }
 
 export async function createContact(payload) {
@@ -85,6 +89,21 @@ export async function updateContact(id, payload) {
 
 export async function deleteContact(id) {
   return request(`/contacts/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Tags de contact (par entreprise)
+// ─────────────────────────────────────────────────────────────────────
+export async function getContactTags() {
+  return request('/contact-tags');
+}
+
+export async function createContactTag(payload) {
+  return safeRequest('/contact-tags', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteContactTag(id) {
+  return safeRequest(`/contact-tags/${id}`, { method: 'DELETE' });
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -7,12 +7,14 @@ import {
   TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, Printer, FileText, Download, Users, Briefcase, Landmark, Bell,
-  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History
+  CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon
 } from 'lucide-react';
 import {
   clearToken, createFinance, deleteFinance,
   getFinances, getMe, getToken, login, register, setToken,
   getContacts, createContact, updateContact, deleteContact,
+  getContactTags, createContactTag, deleteContactTag,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
@@ -5892,6 +5894,146 @@ const CONTACT_TYPE_CONFIG = {
   fournisseur: { label: 'fournisseur', labelPluriel: 'fournisseurs', Labelcap: 'Fournisseur', accent: COLORS.ochre, autre: 'client', nomPlaceholder: 'Ex: Traoré', prenomPlaceholder: 'Ex: Ibrahim' },
 };
 
+// Redimensionne une image choisie par l'utilisateur en un carré `maxSize`px avant de
+// l'encoder en base64 (widget image_1920 d'Odoo fait la même chose côté serveur ; ici
+// tout se passe côté client puisqu'il n'existe aucune infrastructure de stockage de
+// fichiers dans cette app — le base64 part directement dans la colonne contacts.photo).
+function resizeImageToBase64(file, maxSize = 128) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('Lecture du fichier impossible.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image invalide.'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Avatar façon fiche Odoo (image_1920, 130px, coins arrondis) — retombe sur des initiales
+// si aucune photo n'est renseignée plutôt que sur une icône générique, pour rester lisible
+// même sans upload. `onChange` absent = lecture seule (utilisé dans le panneau de détail).
+function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) {
+  const inputRef = useRef(null);
+  const initials = isCompany
+    ? (nom || '?').trim().slice(0, 2).toUpperCase()
+    : (`${(prenom || '').charAt(0)}${(nom || '').charAt(0)}`.toUpperCase() || '?');
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      {photo ? (
+        <img src={photo} alt="Avatar" style={{ width: size, height: size, borderRadius: 12, objectFit: 'cover', border: `1px solid ${COLORS.border}`, display: 'block' }} />
+      ) : (
+        <div style={{ width: size, height: size, borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size / 3, fontWeight: 700, color: COLORS.inkSoft }}>
+          {initials}
+        </div>
+      )}
+      {onChange && (
+        <>
+          <button
+            type="button"
+            title="Changer la photo"
+            onClick={() => inputRef.current?.click()}
+            style={{ position: 'absolute', bottom: -6, right: -6, width: 28, height: 28, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.inkSoft, padding: 0 }}
+          >
+            <Camera size={14} />
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              try {
+                const base64 = await resizeImageToBase64(file, 128);
+                onChange(base64);
+              } catch (err) {
+                notifyError(err, "Impossible de charger l'image.");
+              }
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// Gestionnaire de tags de contact (many2many_tags côté Odoo) — panneau repliable, même
+// esprit que ListesPrixManager/"Gérer les catégories" de StocksTab : une ressource CRUD
+// par entreprise, pas une liste figée.
+function ContactTagsManager({ tags, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [nom, setNom] = useState('');
+  const [couleur, setCouleur] = useState('#C1861F');
+  const [creating, setCreating] = useState(false);
+
+  const create = async (e) => {
+    e.preventDefault();
+    if (!nom.trim()) return;
+    setCreating(true);
+    try {
+      await createContactTag({ nom: nom.trim(), couleur });
+      setNom('');
+      notifySuccess('Tag créé.');
+      onChange();
+    } catch (err) {
+      notifyError(err, 'Impossible de créer le tag.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const remove = async (id, tagNom) => {
+    if (!window.confirm(`Supprimer le tag « ${tagNom} » ? Il sera retiré de tous les contacts qui l'utilisent.`)) return;
+    try {
+      await deleteContactTag(id);
+      notifySuccess('Tag supprimé.');
+      onChange();
+    } catch (err) {
+      notifyError(err, 'Impossible de supprimer le tag.');
+    }
+  };
+
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, padding: 0 }}>
+        Gérer les tags {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {tags.map(t => (
+              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>
+                {t.nom}
+                <button type="button" onClick={() => remove(t.id, t.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}>
+                  <Trash2 size={11} />
+                </button>
+              </span>
+            ))}
+            {tags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>Aucun tag pour l'instant.</span>}
+          </div>
+          <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: VIP, B2B..." style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
+            <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: 6, cursor: 'pointer' }} />
+            <Button small type="submit" variant="outline" disabled={creating}>{creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}</Button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ContactsTab({ type, highlightId }) {
   const cfg = CONTACT_TYPE_CONFIG[type];
   const [contacts, setContacts] = useState([]);
@@ -5899,7 +6041,11 @@ function ContactsTab({ type, highlightId }) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [apiError, setApiError] = useState('');
-  const emptyForm = { nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false, listePrixId: null, adresseRue: '', adresseVille: '', adresseCodePostal: '', adressePays: '' };
+  const emptyForm = {
+    nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false, listePrixId: null,
+    adresseRue: '', adresseRue2: '', adresseVille: '', adresseCodePostal: '', adresseRegion: '', adressePays: '',
+    isCompany: false, photo: null, fonction: '', notes: '', parentId: null, tagIds: [],
+  };
   const [form, setForm]         = useState(emptyForm);
   const [query, setQuery]       = useState('');
 
@@ -5919,6 +6065,72 @@ function ContactsTab({ type, highlightId }) {
       }
     })();
   }, [type]);
+
+  // Tags colorés (many2many_tags), chargés une fois pour toute l'entreprise — voir
+  // ContactTagsManager pour la gestion CRUD (création/suppression).
+  const [contactTags, setContactTags] = useState([]);
+  const loadTags = useCallback(async () => {
+    try {
+      const { tags } = await getContactTags();
+      setContactTags(tags || []);
+    } catch (err) {
+      console.error('[ContactsTab tags]', err);
+    }
+  }, []);
+  useEffect(() => { loadTags(); }, [loadTags]);
+
+  // Sous-contacts (personnes rattachées à une société) — façon Odoo (page "Contacts" du
+  // formulaire fiche), mais en section repliable plutôt qu'un vrai onglet séparé : ne
+  // concerne que l'édition d'un contact déjà marqué Société (une nouvelle fiche n'a pas
+  // encore d'id pour y rattacher qui que ce soit).
+  const [subContacts, setSubContacts] = useState([]);
+  const [subContactsLoading, setSubContactsLoading] = useState(false);
+  const emptySubForm = { nom: '', prenom: '', telephone: '', email: '', fonction: '' };
+  const [subForm, setSubForm] = useState(emptySubForm);
+  const [subSaving, setSubSaving] = useState(false);
+
+  const loadSubContacts = useCallback(async (parentId) => {
+    if (!parentId) { setSubContacts([]); return; }
+    setSubContactsLoading(true);
+    try {
+      const { contacts: children } = await getContacts(type, parentId);
+      setSubContacts(children || []);
+    } catch (err) {
+      console.error('[ContactsTab subContacts]', err);
+    } finally {
+      setSubContactsLoading(false);
+    }
+  }, [type]);
+
+  const submitSubContact = async (e) => {
+    e.preventDefault();
+    if (!subForm.nom || !editingId) return;
+    setSubSaving(true);
+    try {
+      const { contact } = await createContact({
+        nom: subForm.nom, prenom: subForm.prenom, telephone: subForm.telephone, email: subForm.email, fonction: subForm.fonction,
+        estClient: type === 'client', estFournisseur: type === 'fournisseur', parentId: editingId, isCompany: false,
+      });
+      setSubContacts(prev => [contact, ...prev]);
+      setSubForm(emptySubForm);
+      notifySuccess('Contact ajouté.');
+    } catch (err) {
+      notifyError(err, "Impossible d'ajouter ce contact.");
+    } finally {
+      setSubSaving(false);
+    }
+  };
+
+  const removeSubContact = async (id, nom) => {
+    if (!window.confirm(`Supprimer « ${nom} » ?`)) return;
+    try {
+      await deleteContact(id);
+      setSubContacts(prev => prev.filter(c => c.id !== id));
+      notifySuccess('Contact supprimé.');
+    } catch (err) {
+      notifyError(err, 'Impossible de supprimer ce contact.');
+    }
+  };
 
   const selectedContact = contacts.find(c => c.id === selectedId) || null;
 
@@ -5960,7 +6172,10 @@ function ContactsTab({ type, highlightId }) {
 
   const buildPayload = (f) => ({
     nom: f.nom, prenom: f.prenom, telephone: f.telephone, adresse: f.adresse, email: f.email, siret: f.siret,
-    adresseRue: f.adresseRue, adresseVille: f.adresseVille, adresseCodePostal: f.adresseCodePostal, adressePays: f.adressePays,
+    adresseRue: f.adresseRue, adresseRue2: f.adresseRue2, adresseVille: f.adresseVille,
+    adresseCodePostal: f.adresseCodePostal, adresseRegion: f.adresseRegion, adressePays: f.adressePays,
+    isCompany: f.isCompany, photo: f.photo, fonction: f.fonction, notes: f.notes,
+    parentId: f.parentId, tagIds: f.tagIds,
     estClient: type === 'client' ? true : f.estAutre,
     estFournisseur: type === 'fournisseur' ? true : f.estAutre,
     ...(type === 'client' ? { listePrixId: f.listePrixId } : {}),
@@ -6027,15 +6242,26 @@ function ContactsTab({ type, highlightId }) {
       estAutre: Boolean(contact[autreFlagKey]),
       listePrixId: contact.listePrixId ?? null,
       adresseRue: contact.adresseRue || '',
+      adresseRue2: contact.adresseRue2 || '',
       adresseVille: contact.adresseVille || '',
       adresseCodePostal: contact.adresseCodePostal || '',
+      adresseRegion: contact.adresseRegion || '',
       adressePays: contact.adressePays || '',
+      isCompany: Boolean(contact.isCompany),
+      photo: contact.photo || null,
+      fonction: contact.fonction || '',
+      notes: contact.notes || '',
+      parentId: contact.parentId ?? null,
+      tagIds: (contact.tags || []).map(t => t.id),
     });
+    setSubForm(emptySubForm);
+    if (contact.isCompany) loadSubContacts(contact.id); else setSubContacts([]);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm(emptyForm);
+    setSubContacts([]);
   };
 
   const submitEditForm = async (e) => {
@@ -6078,33 +6304,115 @@ function ContactsTab({ type, highlightId }) {
     </div>
   );
 
-  const renderFields = (f, setF) => (
-    <>
-      <Field label="Nom" placeholder={cfg.nomPlaceholder} value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required />
-      <Field label="Prénom" placeholder={cfg.prenomPlaceholder} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })} />
-      <Field label="Téléphone" placeholder="+223..." value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })} />
-      <Field label="Email" type="email" placeholder="email@exemple.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
-      <Field label="Adresse" placeholder="Ville / quartier" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
-      {/* Adresse décomposée (rue/ville/CP/pays), en plus du champ texte libre ci-dessus —
-          voir migrate.js : additive, sert à l'affichage façon fiche Odoo dans la popup de
-          détail d'un devis. */}
-      <Field label="Rue (optionnel)" placeholder="Ex: 12 rue des Fleurs" value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
-      <Field label="Code postal (optionnel)" placeholder="Ex: 75001" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
-      <Field label="Ville (optionnel)" placeholder="Ex: Paris" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
-      <Field label="Pays (optionnel)" placeholder="Ex: Mali" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
-      <Field label="SIRET (optionnel)" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
-      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft, paddingBottom: 9 }}>
-        <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
-        Est aussi {cfg.autre}
-      </label>
-      {type === 'client' && (
-        <Select label="Liste de prix" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
-          <option value="">Aucune</option>
-          {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
-        </Select>
-      )}
-    </>
-  );
+  // Reproduit la structure réelle de la fiche contact d'Odoo (res_partner_views.xml,
+  // inspection du dépôt source odoo/odoo — voir project_odoo_contact_architecture) :
+  // avatar + bascule Particulier/Société + gros nom + email/téléphone à icônes en
+  // en-tête, puis un groupe deux colonnes (société+adresse à gauche, détails+tags à
+  // droite). L'adresse reprend les proportions CSS exactes mesurées côté Odoo
+  // (.o_address_format : ville 38% / région 33% / code postal 25%).
+  const renderFields = (f, setF, excludeCompanyId) => {
+    const companies = contacts.filter(c => c.isCompany && c.id !== excludeCompanyId);
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <ContactAvatar photo={f.photo} nom={f.nom} prenom={f.prenom} isCompany={f.isCompany} onChange={photo => setF({ ...f, photo })} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: COLORS.inkSoft, cursor: 'pointer' }}>
+                <input type="radio" checked={!f.isCompany} onChange={() => setF({ ...f, isCompany: false })} /> <UserIcon size={13} /> Particulier
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: COLORS.inkSoft, cursor: 'pointer' }}>
+                <input type="radio" checked={f.isCompany} onChange={() => setF({ ...f, isCompany: true })} /> <Building2 size={13} /> Société
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                placeholder={f.isCompany ? 'Ex: Coopérative Djiguiya' : cfg.nomPlaceholder}
+                value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required
+                style={{ fontSize: 21, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
+              />
+              {!f.isCompany && (
+                <input
+                  placeholder={cfg.prenomPlaceholder} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })}
+                  style={{ fontSize: 21, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
+                />
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Mail size={14} color={COLORS.blue} />
+              <input type="email" placeholder="Email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })}
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <PhoneIcon size={14} color={COLORS.blue} />
+              <input placeholder="Téléphone" value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })}
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {!f.isCompany && (
+              <Select label="Société" value={f.parentId ?? ''} onChange={e => setF({ ...f, parentId: e.target.value === '' ? null : Number(e.target.value) })}>
+                <option value="">Aucune</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+              </Select>
+            )}
+            <Field placeholder="Rue..." value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
+            <Field placeholder="Rue 2..." value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ flex: '0 0 38%' }}><Field placeholder="Ville" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} /></div>
+              <div style={{ flex: '0 0 33%' }}><Field placeholder="Région" value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} /></div>
+              <div style={{ flex: '0 0 25%' }}><Field placeholder="Code postal" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} /></div>
+            </div>
+            <Field placeholder="Pays" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
+            <Field placeholder="Adresse libre (optionnel)" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {!f.isCompany && (
+              <Field label="Fonction" placeholder="Ex: Directeur commercial" value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
+            )}
+            <Field label="SIRET (optionnel)" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
+            {type === 'client' && (
+              <Select label="Liste de prix" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
+                <option value="">Aucune</option>
+                {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
+              </Select>
+            )}
+            <div>
+              <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>Tags</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {contactTags.map(t => {
+                  const active = f.tagIds.includes(t.id);
+                  return (
+                    <button key={t.id} type="button"
+                      onClick={() => setF({ ...f, tagIds: active ? f.tagIds.filter(id => id !== t.id) : [...f.tagIds, t.id] })}
+                      style={{ background: active ? t.couleur : 'transparent', color: active ? '#fff' : t.couleur, border: `1px solid ${t.couleur}`, borderRadius: 999, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}
+                    >
+                      {t.nom}
+                    </button>
+                  );
+                })}
+                {contactTags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>Aucun tag disponible.</span>}
+              </div>
+              <ContactTagsManager tags={contactTags} onChange={loadTags} />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
+              <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
+              Est aussi {cfg.autre}
+            </label>
+          </div>
+        </div>
+
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
+          Notes
+          <textarea value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder="Notes internes..." rows={2}
+            style={{ fontFamily: "'Inter', sans-serif", fontSize: 13.5, padding: '9px 11px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.ink, outline: 'none', resize: 'vertical' }} />
+        </label>
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -6118,8 +6426,8 @@ function ContactsTab({ type, highlightId }) {
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
           Ajouter un {cfg.label}
         </div>
-        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          {renderFields(form, setForm)}
+        <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {renderFields(form, setForm, null)}
           <div style={{ display: 'flex', gap: 8 }}>
             <Button type="submit" variant={type === 'client' ? 'green' : 'ochre'} disabled={saving}>
               {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
@@ -6144,9 +6452,17 @@ function ContactsTab({ type, highlightId }) {
                 onClick={() => setSelectedId(contact.id)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{contact.prenom} {contact.nom}</div>
-                    <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{contact.telephone || 'Pas de telephone'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <ContactAvatar photo={contact.photo} nom={contact.nom} prenom={contact.prenom} isCompany={contact.isCompany} size={36} />
+                    <div>
+                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {contact.isCompany ? contact.nom : `${contact.prenom || ''} ${contact.nom}`}
+                        {contact.isCompany && <Building2 size={12} color={COLORS.inkSoft} />}
+                      </div>
+                      <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
+                        {contact.fonction ? `${contact.fonction} · ` : ''}{contact.telephone || 'Pas de telephone'}
+                      </div>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={(ev) => { ev.stopPropagation(); startEdit(contact); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
@@ -6158,12 +6474,36 @@ function ContactsTab({ type, highlightId }) {
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || 'Aucune adresse renseignee'}</div>
+                {contact.tags && contact.tags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                    {contact.tags.map(t => (
+                      <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: 999, padding: '2px 7px', fontSize: 11 }}>{t.nom}</span>
+                    ))}
+                  </div>
+                )}
               </Card>
             ))}
           </div>
           {selectedContact && (
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17 }}>{selectedContact.prenom} {selectedContact.nom}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <ContactAvatar photo={selectedContact.photo} nom={selectedContact.nom} prenom={selectedContact.prenom} isCompany={selectedContact.isCompany} size={56} />
+                <div>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {selectedContact.isCompany ? selectedContact.nom : `${selectedContact.prenom || ''} ${selectedContact.nom}`}
+                    {selectedContact.isCompany && <Building2 size={14} color={COLORS.inkSoft} />}
+                  </div>
+                  {selectedContact.fonction && <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{selectedContact.fonction}{selectedContact.parentNom ? ` · ${selectedContact.parentNom}` : ''}</div>}
+                  {!selectedContact.fonction && selectedContact.parentNom && <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{selectedContact.parentNom}</div>}
+                </div>
+              </div>
+              {selectedContact.tags && selectedContact.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {selectedContact.tags.map(t => (
+                    <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: 999, padding: '2px 8px', fontSize: 11.5 }}>{t.nom}</span>
+                  ))}
+                </div>
+              )}
               <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span>Tel : {selectedContact.telephone || 'Non renseigne'}</span>
                 <span>Email : {selectedContact.email || 'Non renseigne'}</span>
@@ -6227,13 +6567,13 @@ function ContactsTab({ type, highlightId }) {
       )}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le {cfg.label}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
-            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-              {renderFields(editForm, setEditForm)}
+            <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {renderFields(editForm, setEditForm, editingId)}
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button type="submit" variant="green" disabled={editSaving}>
                   {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Enregistrer
@@ -6241,6 +6581,47 @@ function ContactsTab({ type, highlightId }) {
                 <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
               </div>
             </form>
+
+            {/* Sous-contacts (page "Contacts" de la fiche Odoo) — uniquement pour une
+                Société déjà enregistrée : une nouvelle fiche n'a pas encore d'id auquel
+                rattacher qui que ce soit. */}
+            {editForm.isCompany && (
+              <div style={{ marginTop: 18, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Contacts liés à cette société</div>
+                <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 12 }}>
+                  <Field label="Nom" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
+                  <Field label="Prénom" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
+                  <Field label="Fonction" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
+                  <Field label="Téléphone" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
+                  <Field label="Email" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
+                  <Button small type="submit" variant="outline" disabled={subSaving}>
+                    {subSaving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />} Ajouter
+                  </Button>
+                </form>
+                {subContactsLoading ? (
+                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="spin" /> Chargement...</div>
+                ) : subContacts.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Aucun contact rattaché pour l'instant.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {subContacts.map(sc => (
+                      <div key={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <ContactAvatar photo={sc.photo} nom={sc.nom} prenom={sc.prenom} isCompany={false} size={28} />
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{sc.prenom} {sc.nom}</div>
+                            <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{sc.fonction || ''}{sc.fonction && (sc.telephone || sc.email) ? ' · ' : ''}{sc.telephone || sc.email || ''}</div>
+                          </div>
+                        </div>
+                        <button onClick={() => removeSubContact(sc.id, sc.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
