@@ -69,7 +69,7 @@ export function Card({ children, style, ...rest }) {
 export function Button({ children, onClick, variant = 'default', small, style, type = 'button', disabled, ...rest }) {
   const base = {
     fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: small ? 13 : 14,
-    padding: small ? '7px 12px' : '10px 16px', borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer',
+    padding: small ? '6px 12px' : '8px 16px', borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer',
     border: '1px solid transparent', display: 'inline-flex', alignItems: 'center', gap: 6,
     transition: 'transform 0.1s ease, opacity 0.15s ease', opacity: disabled ? 0.5 : 1,
   };

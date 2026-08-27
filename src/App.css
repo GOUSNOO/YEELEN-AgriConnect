@@ -182,3 +182,36 @@
     border-right-color: var(--border);
   }
 }
+
+/* Dimensions de tableau façon Odoo, mesurées sur un vrai compte Odoo (demo3.odoo.com,
+   commande S00067) : ligne ~41px, cellules 14px, padding 10px/8px (16px sur les bords
+   du tableau) — voir project_odoo_devis_visual_alignment. Une seule classe partagée
+   plutôt qu'un réglage au cas par cas, pour que tous les tableaux de l'app restent
+   cohérents entre eux. Couleur de bordure fixée en dur (pas var(--border), qui bascule
+   en sombre sous prefers-color-scheme: dark — même piège que le bug color-scheme déjà
+   documenté ailleurs) pour matcher COLORS.border ('#E2E8F0') utilisé partout en inline. */
+.odoo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.odoo-table th,
+.odoo-table td {
+  padding: 10px 8px;
+  text-align: left;
+}
+.odoo-table th:first-child,
+.odoo-table td:first-child {
+  padding-left: 16px;
+}
+.odoo-table th:last-child,
+.odoo-table td:last-child {
+  padding-right: 16px;
+}
+.odoo-table thead tr {
+  font-weight: 500;
+  border-bottom: 2px solid #E2E8F0;
+}
+.odoo-table tbody tr {
+  border-top: 1px solid #E2E8F0;
+}

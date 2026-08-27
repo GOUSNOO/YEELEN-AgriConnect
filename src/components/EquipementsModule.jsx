@@ -188,26 +188,26 @@ export function EquipementsModule({ canManage = false }) {
       )}
 
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: '#5B6357', fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Équipement</th>
+            <tr style={{ textAlign: 'left', color: '#5B6357' }}>
+              <th>Équipement</th>
               <th>Catégorie</th>
               <th>État</th>
               <th>Valeur</th>
-              <th style={{ textAlign: 'right', paddingRight: 16 }}>Actions</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {equipements.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '16px', color: '#5B6357' }}>Aucun équipement enregistré.</td></tr>
+              <tr><td colSpan={5} style={{ color: '#5B6357' }}>Aucun équipement enregistré.</td></tr>
             ) : equipements.map(eq => (
-              <tr key={eq.id} style={{ borderTop: '1px solid #DAD6C4' }}>
-                <td style={{ padding: '12px 16px', fontWeight: 500 }}>{eq.nom}</td>
+              <tr key={eq.id}>
+                <td style={{ fontWeight: 500 }}>{eq.nom}</td>
                 <td>{eq.categorie}</td>
                 <td><Badge tone={ETAT_TONE[eq.etat] || 'blue'}>{eq.etat}</Badge></td>
                 <td>{eq.valeur != null ? `${Number(eq.valeur).toLocaleString('fr-FR')} FCFA` : '—'}</td>
-                <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button onClick={() => openDetail(eq)} title="Historique de maintenance" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex' }}>
                       <Wrench size={15} />
@@ -232,7 +232,7 @@ export function EquipementsModule({ canManage = false }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 520, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'équipement</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', fontSize: 18 }}>×</button>
@@ -261,7 +261,7 @@ export function EquipementsModule({ canManage = false }) {
 
       {detailEquipement && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{detailEquipement.nom}</div>

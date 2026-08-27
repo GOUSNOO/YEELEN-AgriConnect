@@ -1065,7 +1065,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // Style commun des cellules éditables du tableau de lignes (add-form + edit-modal) —
   // volontairement sans bordure/boîte individuelle par champ (contrairement à l'ancien
   // rendu en grille de <Field>), pour une seule ligne de tableau continue façon Odoo.
-  const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: COLORS.ink, padding: '4px 2px' };
+  const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: COLORS.ink, padding: 0 };
 
   const resetForm = () => {
     setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
@@ -1424,20 +1424,20 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 seule ("—") ici : ils n'ont de sens qu'une fois le devis créé et signé, voir la
                 popup de détail pour leur édition réelle. */}
             <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table className="odoo-table">
               <thead>
-                <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                  <th style={{ width: 20 }}></th>
-                  <th style={{ padding: '4px 2px', minWidth: 160 }}>Désignation</th>
-                  <th style={{ padding: '4px 2px', width: 64 }}>Qté</th>
-                  <th style={{ padding: '4px 2px', width: 52 }}>Livré</th>
-                  <th style={{ padding: '4px 2px', width: 56 }}>Facturé</th>
-                  <th style={{ padding: '4px 2px', width: 80 }}>Unité</th>
-                  <th style={{ padding: '4px 2px', width: 90 }}>Prix unit.</th>
-                  <th style={{ padding: '4px 2px', width: 64 }}>Taxe (%)</th>
-                  <th style={{ padding: '4px 2px', width: 72 }}>Remise (%)</th>
-                  <th style={{ padding: '4px 2px', width: 100, textAlign: 'right' }}>Montant</th>
-                  <th style={{ width: 24 }}></th>
+                <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                  <th style={{ width: '3.5%' }}></th>
+                  <th style={{ width: '24%' }}>Désignation</th>
+                  <th style={{ width: '9%' }}>Qté</th>
+                  <th style={{ width: '9%' }}>Livré</th>
+                  <th style={{ width: '9%' }}>Facturé</th>
+                  <th style={{ width: '6%' }}>Unité</th>
+                  <th style={{ width: '9%' }}>Prix unit.</th>
+                  <th style={{ width: '13%' }}>Taxe (%)</th>
+                  <th style={{ width: '5%' }}>Remise (%)</th>
+                  <th style={{ width: '10%', textAlign: 'right' }}>Montant</th>
+                  <th style={{ width: '3%' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -1449,16 +1449,16 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => { e.preventDefault(); if (draggedLigneIndex !== null && draggedLigneIndex !== i) moveLigne(draggedLigneIndex, i); setDraggedLigneIndex(null); }}
                     onDragEnd={() => setDraggedLigneIndex(null)}
-                    style={{ borderBottom: `1px solid ${COLORS.border}`, opacity: draggedLigneIndex === i ? 0.4 : 1 }}
+                    style={{ opacity: draggedLigneIndex === i ? 0.4 : 1 }}
                   >
                     <td style={{ cursor: 'grab', color: COLORS.inkSoft, textAlign: 'center' }}><GripVertical size={14} /></td>
                     {ligne.type === 'section' ? (
-                      <td colSpan={9} style={{ padding: '6px 2px' }}>
+                      <td colSpan={9}>
                         <input placeholder="Titre de section (ex: Matériel d'irrigation)" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
                       </td>
                     ) : (
                       <>
-                        <td style={{ padding: '4px 2px' }}>
+                        <td>
                           <input placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
                             const value = e.target.value;
                             updateLigne(i, 'produit', value);
@@ -1474,14 +1474,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             }
                           }} style={ligneCellInputStyle} />
                         </td>
-                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
-                        <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
-                        <td style={{ padding: '4px 2px' }}><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td style={{ padding: '4px 2px', textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
+                        <td><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
+                        <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
+                        <td><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
                       </>
                     )}
                     <td style={{ textAlign: 'center' }}>
@@ -1565,10 +1565,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
             {filtreStatut ? 'Aucun devis à facturer pour l\'instant.' : 'Aucun devis pour l\'instant.'}
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <table className="odoo-table">
             <thead>
-              <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-                <th style={{ padding: '12px 16px' }}>Numéro</th>
+              <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                <th>Numéro</th>
                 <th>Client</th>
                 <th>Statut</th>
                 <th>Total</th>
@@ -1577,8 +1577,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </thead>
             <tbody>
               {devisAffiches.map(d => (
-                <tr key={d.id} style={{ borderTop: `1px solid ${COLORS.border}`, cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
-                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{d.numero}</td>
+                <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
+                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{d.numero}</td>
                   <td>{d.clientPrenom} {d.clientNom}</td>
                   <td><Badge tone={statutTone[d.statut] || 'blue'}>{d.statut}</Badge></td>
                   <td style={{ fontWeight: 600 }}>{d.total.toLocaleString('fr-FR')} FCFA</td>
@@ -1624,10 +1624,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
               project_odoo_devis_visual_alignment : même structure (barre d'action + chevrons en
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1080, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
             <button onClick={closeDetailPopup} aria-label="Fermer" style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
-            <div style={{ flex: '1 1 620px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22 }}>
+            <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22, boxSizing: 'border-box' }}>
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
                   la ligne au hasard selon la largeur : actions principales (transition de
                   statut) en haut, outils du document (aperçu/téléchargement/annulation) en
@@ -1796,18 +1796,18 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </div>
               ) : (
               <>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
+              <table className="odoo-table" style={{ marginBottom: 12 }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12, borderBottom: `2px solid ${COLORS.border}` }}>
-                    <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>Livré</th><th>Facturé</th><th>Unité</th><th>P.U.</th><th>Taxe (%)</th><th>Remise (%)</th><th style={{ textAlign: 'right' }}>Total</th>
+                  <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                    <th style={{ width: '25%' }}>Produit</th><th style={{ width: '10%' }}>Qté</th><th style={{ width: '10%' }}>Livré</th><th style={{ width: '10%' }}>Facturé</th><th style={{ width: '6%' }}>Unité</th><th style={{ width: '10%' }}>P.U.</th><th style={{ width: '14%' }}>Taxe (%)</th><th style={{ width: '5%' }}>Remise (%)</th><th style={{ width: '10%', textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailData.lignes.map(l => {
                     if (l.type === 'section') {
                       return (
-                        <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                          <td colSpan={9} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
+                        <tr key={l.id}>
+                          <td colSpan={9} style={{ fontWeight: 700 }}>{l.produit}</td>
                         </tr>
                       );
                     }
@@ -1818,8 +1818,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
                     const qEdit = quantitesEdit[l.id] || { quantiteLivree: 0, quantiteFacturee: 0 };
                     return (
-                      <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                        <td style={{ padding: '6px 0' }}>
+                      <tr key={l.id}>
+                        <td>
                           {l.produit}
                           {recolteLiee && (
                             <div style={{ fontSize: 11, color: COLORS.inkSoft, marginTop: 2 }}>
@@ -1925,7 +1925,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </div>
 
             {/* Panneau latéral façon chatter Odoo : messages, activités planifiées, journal des modifications */}
-            <div style={{ flex: '0 0 300px', width: 300, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto' }}>
+            <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Messages</div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -1977,7 +1977,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Popup demandant le mode et la modalité de paiement avant de facturer */}
       {paiementPopupOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 480, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Conditions de paiement</div>
 
             <Select label="Mode de paiement" value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
@@ -2046,7 +2046,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Fenêtre de modification d'un devis existant, séparée du formulaire de création */}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 620, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le devis</div>
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -2062,20 +2062,20 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
                 <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <table className="odoo-table">
                   <thead>
-                    <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                      <th style={{ width: 20 }}></th>
-                      <th style={{ padding: '4px 2px', minWidth: 160 }}>Désignation</th>
-                      <th style={{ padding: '4px 2px', width: 64 }}>Qté</th>
-                      <th style={{ padding: '4px 2px', width: 52 }}>Livré</th>
-                      <th style={{ padding: '4px 2px', width: 56 }}>Facturé</th>
-                      <th style={{ padding: '4px 2px', width: 80 }}>Unité</th>
-                      <th style={{ padding: '4px 2px', width: 90 }}>Prix unit.</th>
-                      <th style={{ padding: '4px 2px', width: 64 }}>Taxe (%)</th>
-                      <th style={{ padding: '4px 2px', width: 72 }}>Remise (%)</th>
-                      <th style={{ padding: '4px 2px', width: 100, textAlign: 'right' }}>Montant</th>
-                      <th style={{ width: 24 }}></th>
+                    <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                      <th style={{ width: '3.5%' }}></th>
+                      <th style={{ width: '24%' }}>Désignation</th>
+                      <th style={{ width: '9%' }}>Qté</th>
+                      <th style={{ width: '9%' }}>Livré</th>
+                      <th style={{ width: '9%' }}>Facturé</th>
+                      <th style={{ width: '6%' }}>Unité</th>
+                      <th style={{ width: '9%' }}>Prix unit.</th>
+                      <th style={{ width: '13%' }}>Taxe (%)</th>
+                      <th style={{ width: '5%' }}>Remise (%)</th>
+                      <th style={{ width: '10%', textAlign: 'right' }}>Montant</th>
+                      <th style={{ width: '3%' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2087,16 +2087,16 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => { e.preventDefault(); if (draggedEditLigneIndex !== null && draggedEditLigneIndex !== i) moveEditLigne(draggedEditLigneIndex, i); setDraggedEditLigneIndex(null); }}
                         onDragEnd={() => setDraggedEditLigneIndex(null)}
-                        style={{ borderBottom: `1px solid ${COLORS.border}`, opacity: draggedEditLigneIndex === i ? 0.4 : 1 }}
+                        style={{ opacity: draggedEditLigneIndex === i ? 0.4 : 1 }}
                       >
                         <td style={{ cursor: 'grab', color: COLORS.inkSoft, textAlign: 'center' }}><GripVertical size={14} /></td>
                         {ligne.type === 'section' ? (
-                          <td colSpan={9} style={{ padding: '6px 2px' }}>
+                          <td colSpan={9}>
                             <input placeholder="Titre de section (ex: Matériel d'irrigation)" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
                           </td>
                         ) : (
                           <>
-                            <td style={{ padding: '4px 2px' }}>
+                            <td>
                               <input placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
                                 const value = e.target.value;
                                 updateEditLigne(i, 'produit', value);
@@ -2112,14 +2112,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
                                 }
                               }} style={ligneCellInputStyle} />
                             </td>
-                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
-                            <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
-                            <td style={{ padding: '4px 2px' }}><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateEditLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td style={{ padding: '4px 2px', textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
+                            <td><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
+                            <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
+                            <td><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateEditLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
                           </>
                         )}
                         <td style={{ textAlign: 'center' }}>
@@ -2226,16 +2226,16 @@ function VentesAnalyseTab() {
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
             {mouvements.length} ligne(s) vendue(s) · Total : <strong style={{ color: COLORS.ink }}>{total.toLocaleString('fr-FR')} FCFA</strong>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table className="odoo-table">
             <thead>
-              <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-                <th style={{ padding: '6px 0' }}>Date</th><th>Produit</th><th>Client</th><th>Qté</th><th style={{ textAlign: 'right' }}>Montant</th>
+              <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                <th>Date</th><th>Produit</th><th>Client</th><th>Qté</th><th style={{ textAlign: 'right' }}>Montant</th>
               </tr>
             </thead>
             <tbody>
               {mouvements.map(m => (
-                <tr key={m.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                  <td style={{ padding: '6px 0' }}>{formatDateFr(m.date)}</td>
+                <tr key={m.id}>
+                  <td>{formatDateFr(m.date)}</td>
                   <td>{m.produit}</td>
                   <td>{m.partenaire}</td>
                   <td>{m.quantite}</td>
@@ -2711,29 +2711,29 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         </div>
       </Card>
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>Date</th>
               <th>Fournisseur</th>
               <th>Statut</th>
               <th>Total</th>
-              <th style={{ textAlign: 'right', paddingRight: 16 }}>Actions</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {docs.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
+              <tr><td colSpan={5} style={{ color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
             ) : docs.map(doc => {
               const statut = doc.statut || 'Reçu';
               const modifiable = ['Brouillon', 'Commandé'].includes(statut);
               return (
-              <tr key={doc.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(doc.date)}</td>
+              <tr key={doc.id}>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(doc.date)}</td>
                 <td>{doc.fournisseurNom}</td>
                 <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{statut}</Badge></td>
                 <td style={{ fontWeight: 600 }}>{doc.total.toLocaleString('fr-FR')} FCFA</td>
-                <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
                     {statut === 'Brouillon' && (
                       <Button small variant="outline" onClick={() => changerStatutDoc(doc.id, 'commander')}>Commander</Button>
@@ -2761,7 +2761,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       </Card>
       {detailDoc && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
@@ -2775,10 +2775,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             </div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Lignes</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+              <table className="odoo-table">
                 <thead>
-                  <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-                    <th style={{ padding: '10px 12px' }}>Produit</th>
+                  <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                    <th>Produit</th>
                     <th>Qté</th>
                     <th>PU</th>
                     <th style={{ textAlign: 'right' }}>Total</th>
@@ -2786,8 +2786,8 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 </thead>
                 <tbody>
                   {detailDoc.lignes.map((ligne, index) => (
-                    <tr key={index} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                      <td style={{ padding: '10px 12px' }}>{ligne.produit}</td>
+                    <tr key={index}>
+                      <td>{ligne.produit}</td>
                       <td>{ligne.quantite}</td>
                       <td>{Number(ligne.prixUnitaire).toLocaleString('fr-FR')}</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(ligne.quantite) * Number(ligne.prixUnitaire)).toLocaleString('fr-FR')} FCFA</td>
@@ -2803,7 +2803,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       {/* Fenêtre de modification d'un achat existant, séparée du formulaire d'ajout */}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 620, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier un achat</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -3132,10 +3132,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <MiniChart data={stockEvolution} color={COLORS.blue} />
       </Card>
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Article</th>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>Article</th>
               <th>Catégorie</th>
               <th>Quantité</th>
               <th>Seuil</th>
@@ -3145,10 +3145,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           </thead>
           <tbody>
             {stocks.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: '16px', color: COLORS.inkSoft }}>Aucun article en stock pour l'instant.</td></tr>
+              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>Aucun article en stock pour l'instant.</td></tr>
             ) : stocks.map(s => (
-              <tr key={s.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontWeight: 500 }}>{s.nom}</td>
+              <tr key={s.id}>
+                <td style={{ fontWeight: 500 }}>{s.nom}</td>
                 <td><Badge tone="ochre">{s.categorie}</Badge></td>
                 <td>{s.quantite} {s.unite}</td>
                 <td>
@@ -3157,7 +3157,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                     : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
                 </td>
                 <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? `${Number(s.prixDefaut).toLocaleString('fr-FR')} FCFA` : '—'}</td>
-                <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button onClick={() => openHistorique(s)} title="Historique des mouvements" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                       <History size={15} />
@@ -3178,7 +3178,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 480, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'article</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -3208,7 +3208,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {historiqueArticle && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeHistorique}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 520, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{historiqueArticle.nom}</div>
@@ -3404,16 +3404,16 @@ function LivraisonsTab({ farmId }) {
         </form>
       </Card>
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th><th>Client</th><th>Produit</th><th>Qté</th><th>Statut</th><th></th>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>Date</th><th>Client</th><th>Produit</th><th>Qté</th><th>Statut</th><th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => (
-              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(r.date)}</td>
+              <tr key={r.id}>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(r.date)}</td>
                 <td>{r.client}</td>
                 <td>{r.produit}</td>
                 <td>{r.quantite}</td>
@@ -3425,7 +3425,7 @@ function LivraisonsTab({ farmId }) {
                     {STATUTS.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </td>
-                <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                <td style={{ textAlign: 'right' }}>
                   <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={15} />
                   </button>
@@ -3512,10 +3512,10 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       )}
 
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th><th>Type</th><th>Détail</th><th style={{ textAlign: 'right', paddingRight: 16 }}>Montant</th>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>Date</th><th>Type</th><th>Détail</th><th style={{ textAlign: 'right' }}>Montant</th>
             </tr>
           </thead>
           <tbody>
@@ -3523,15 +3523,15 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
               <tr><td colSpan={4} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>Aucune transaction enregistrée.</td></tr>
             )}
             {ledger.map(l => (
-              <tr key={l.type + l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(l.date)}</td>
+              <tr key={l.type + l.id}>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(l.date)}</td>
                 <td>
                   {l.type === 'Vente'
                     ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowUpCircle size={13} /> Vente</span>
                     : <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowDownCircle size={13} /> Achat</span>}
                 </td>
                 <td>{l.produit} — {l.partenaire} ({l.quantite})</td>
-                <td style={{ textAlign: 'right', paddingRight: 16, fontWeight: 600, color: l.montant >= 0 ? COLORS.green : COLORS.red }}>
+                <td style={{ textAlign: 'right', fontWeight: 600, color: l.montant >= 0 ? COLORS.green : COLORS.red }}>
                   {l.montant >= 0 ? '+' : ''}{l.montant.toLocaleString('fr-FR')} FCFA
                 </td>
               </tr>
@@ -3543,7 +3543,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       {/* Popup listant tout l'historique (modifications + suppressions) du module */}
       {historiqueOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 600, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>Historique des modifications et suppressions</div>
             {historiqueLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
@@ -3690,10 +3690,10 @@ function PoultryMonitoringTab({ farmId }) {
       </div>
 
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>Date</th>
               <th>Type</th>
               <th>Quantité</th>
               <th>Détail</th>
@@ -3701,10 +3701,10 @@ function PoultryMonitoringTab({ farmId }) {
           </thead>
           <tbody>
             {records.length === 0 ? (
-              <tr><td colSpan="4" style={{ padding: 16, color: COLORS.inkSoft }}>Aucune donnée enregistrée.</td></tr>
+              <tr><td colSpan="4" style={{ color: COLORS.inkSoft }}>Aucune donnée enregistrée.</td></tr>
             ) : records.map(item => (
-              <tr key={item.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px' }}>{formatDateFr(item.date)}</td>
+              <tr key={item.id}>
+                <td>{formatDateFr(item.date)}</td>
                 <td><Badge tone={typeMeta[item.type]?.tone || 'green'}>{typeMeta[item.type]?.label || item.type}</Badge></td>
                 <td>{item.quantity} {typeMeta[item.type]?.unit || 'u'}</td>
                 <td>{item.detail || '—'}</td>
@@ -4602,7 +4602,7 @@ function AgriculturalCalendarModule({ farmId }) {
       </div>
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEvent}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 520, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'activité</div>
               <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -4784,10 +4784,10 @@ function HarvestsModule({ farmId }) {
       </div>
 
       <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table className="odoo-table">
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>Date</th>
               <th>Parcelle</th>
               <th>Culture</th>
               <th>Quantité</th>
@@ -4798,11 +4798,11 @@ function HarvestsModule({ farmId }) {
           <tbody>
             {harvests.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '16px', color: COLORS.inkSoft }}>Aucune récolte enregistrée pour le moment.</td>
+                <td colSpan="6" style={{ color: COLORS.inkSoft }}>Aucune récolte enregistrée pour le moment.</td>
               </tr>
             ) : harvests.map(item => (
-              <tr key={item.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px' }}>{item.date}</td>
+              <tr key={item.id}>
+                <td>{item.date}</td>
                 <td>{item.parcelle}</td>
                 <td>{item.culture}</td>
                 <td>{item.quantite.toLocaleString('fr-FR')} kg</td>
@@ -5589,7 +5589,7 @@ function EmployeesModule({ farmId, role }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEmployee}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'employé</div>
               <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -6227,7 +6227,7 @@ function ContactsTab({ type, highlightId }) {
       )}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le {cfg.label}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
