@@ -906,8 +906,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', unite: '', recolteId: '', stockId: null, stockModule: null };
-  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', unite: '', recolteId: '', stockId: null, stockModule: null };
+  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', tauxTaxe: '', unite: '', recolteId: '', stockId: null, stockModule: null };
+  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', tauxTaxe: '', unite: '', recolteId: '', stockId: null, stockModule: null };
   const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
   const [draggedLigneIndex, setDraggedLigneIndex] = useState(null);
   const [draggedEditLigneIndex, setDraggedEditLigneIndex] = useState(null);
@@ -930,7 +930,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [detailTab, setDetailTab] = useState('lignes');
   // Remise globale / taxe / conditions de paiement / livraison promise, éditables
   // seulement tant que le devis est en Brouillon — voir handleSaveDetailMeta.
-  const emptyDetailMeta = { remiseGlobale: '0', tauxTaxe: '0', conditionsPaiement: '', livraisonPromise: '' };
+  const emptyDetailMeta = { remiseGlobale: '0', conditionsPaiement: '', livraisonPromise: '' };
   const [detailMeta, setDetailMeta] = useState(emptyDetailMeta);
   const [detailMetaSaving, setDetailMetaSaving] = useState(false);
   // Fil de messages (chatter minimal) attaché au devis affiché en détail
@@ -1054,8 +1054,18 @@ function DevisModule({ clientsListe, filtreStatut }) {
     const sousTotal = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0);
     return sousTotal * (1 - (Number(l.remisePourcentage) || 0) / 100);
   };
-  const totalForm = form.lignes.reduce((s, l) => s + ligneTotal(l), 0);
-  const totalEditForm = editForm.lignes.reduce((s, l) => s + ligneTotal(l), 0);
+  // Montant HT + taxe de la ligne (pas de remise globale ici : elle ne se règle qu'après
+  // création, dans la popup de détail — voir handleSaveDetailMeta).
+  const ligneTotalAvecTaxe = (l) => {
+    const ht = ligneTotal(l);
+    return ht + ht * (Number(l.tauxTaxe) || 0) / 100;
+  };
+  const totalForm = form.lignes.reduce((s, l) => s + ligneTotalAvecTaxe(l), 0);
+  const totalEditForm = editForm.lignes.reduce((s, l) => s + ligneTotalAvecTaxe(l), 0);
+  // Style commun des cellules éditables du tableau de lignes (add-form + edit-modal) —
+  // volontairement sans bordure/boîte individuelle par champ (contrairement à l'ancien
+  // rendu en grille de <Field>), pour une seule ligne de tableau continue façon Odoo.
+  const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: COLORS.ink, padding: '4px 2px' };
 
   const resetForm = () => {
     setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
@@ -1079,6 +1089,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remisePourcentage: Number(l.remisePourcentage) || 0,
+          tauxTaxe: Number(l.tauxTaxe) || 0,
           unite: l.unite || null,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
@@ -1121,7 +1132,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       setEditForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', tauxTaxe: l.tauxTaxe || '', unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
     } catch (err) {
       setApiError(err.message);
@@ -1146,6 +1157,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remisePourcentage: Number(l.remisePourcentage) || 0,
+          tauxTaxe: Number(l.tauxTaxe) || 0,
           unite: l.unite || null,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
@@ -1176,7 +1188,6 @@ function DevisModule({ clientsListe, filtreStatut }) {
       setQuantitesEdit(map);
       setDetailMeta({
         remiseGlobale: String(data.devis.remiseGlobale ?? 0),
-        tauxTaxe: String(data.devis.tauxTaxe ?? 0),
         conditionsPaiement: data.devis.conditionsPaiement || '',
         livraisonPromise: data.devis.livraisonPromise ? data.devis.livraisonPromise.slice(0, 10) : '',
       });
@@ -1192,7 +1203,6 @@ function DevisModule({ clientsListe, filtreStatut }) {
     try {
       await updateDevis(detailData.id, {
         remiseGlobale: Number(detailMeta.remiseGlobale) || 0,
-        tauxTaxe: Number(detailMeta.tauxTaxe) || 0,
         conditionsPaiement: detailMeta.conditionsPaiement,
         livraisonPromise: detailMeta.livraisonPromise || null,
       });
@@ -1408,61 +1418,96 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
-            {form.lignes.map((ligne, i) => (
-              <div
-                key={i}
-                draggable
-                onDragStart={() => setDraggedLigneIndex(i)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); if (draggedLigneIndex !== null && draggedLigneIndex !== i) moveLigne(draggedLigneIndex, i); setDraggedLigneIndex(null); }}
-                onDragEnd={() => setDraggedLigneIndex(null)}
-                style={{ display: 'flex', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}`, opacity: draggedLigneIndex === i ? 0.4 : 1 }}
-              >
-                <div style={{ cursor: 'grab', color: COLORS.inkSoft, paddingTop: 10 }}><GripVertical size={14} /></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                {ligne.type === 'section' ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'end' }}>
-                    <Field label={i === 0 ? 'Titre de section' : ''} placeholder="Ex: Matériel d'irrigation" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} />
-                    <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                      <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
-                        const value = e.target.value;
-                        updateLigne(i, 'produit', value);
-                        const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                        updateLigne(i, 'stockId', match ? match.id : null);
-                        updateLigne(i, 'stockModule', match ? match.module : null);
-                        const prix = prixPourMatch(match, clientPrixMap);
-                        if (prix != null && !ligne.prixUnitaire) {
-                          updateLigne(i, 'prixUnitaire', String(prix));
-                        }
-                        if (match && match.unite && !ligne.unite) {
-                          updateLigne(i, 'unite', match.unite);
-                        }
-                      }} />
-                      <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} />
-                      <Field label={i === 0 ? 'Unité' : ''} placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} />
-                      <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} />
-                      <Field label={i === 0 ? 'Remise (%)' : ''} type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} />
-                      <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                        <Trash2 size={16} />
+            {/* Tableau continu façon Odoo (une seule ligne par article, sans boîte séparée par
+                champ) plutôt que la grille de <Field> encadrés d'avant — voir la demande
+                explicite de l'utilisateur à ce sujet. "Livré"/"Facturé" apparaissent en lecture
+                seule ("—") ici : ils n'ont de sens qu'une fois le devis créé et signé, voir la
+                popup de détail pour leur édition réelle. */}
+            <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                  <th style={{ width: 20 }}></th>
+                  <th style={{ padding: '4px 2px', minWidth: 160 }}>Désignation</th>
+                  <th style={{ padding: '4px 2px', width: 64 }}>Qté</th>
+                  <th style={{ padding: '4px 2px', width: 52 }}>Livré</th>
+                  <th style={{ padding: '4px 2px', width: 56 }}>Facturé</th>
+                  <th style={{ padding: '4px 2px', width: 80 }}>Unité</th>
+                  <th style={{ padding: '4px 2px', width: 90 }}>Prix unit.</th>
+                  <th style={{ padding: '4px 2px', width: 64 }}>Taxe (%)</th>
+                  <th style={{ padding: '4px 2px', width: 72 }}>Remise (%)</th>
+                  <th style={{ padding: '4px 2px', width: 100, textAlign: 'right' }}>Montant</th>
+                  <th style={{ width: 24 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {form.lignes.map((ligne, i) => (
+                  <React.Fragment key={i}>
+                  <tr
+                    draggable
+                    onDragStart={() => setDraggedLigneIndex(i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); if (draggedLigneIndex !== null && draggedLigneIndex !== i) moveLigne(draggedLigneIndex, i); setDraggedLigneIndex(null); }}
+                    onDragEnd={() => setDraggedLigneIndex(null)}
+                    style={{ borderBottom: `1px solid ${COLORS.border}`, opacity: draggedLigneIndex === i ? 0.4 : 1 }}
+                  >
+                    <td style={{ cursor: 'grab', color: COLORS.inkSoft, textAlign: 'center' }}><GripVertical size={14} /></td>
+                    {ligne.type === 'section' ? (
+                      <td colSpan={9} style={{ padding: '6px 2px' }}>
+                        <input placeholder="Titre de section (ex: Matériel d'irrigation)" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
+                      </td>
+                    ) : (
+                      <>
+                        <td style={{ padding: '4px 2px' }}>
+                          <input placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                            const value = e.target.value;
+                            updateLigne(i, 'produit', value);
+                            const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                            updateLigne(i, 'stockId', match ? match.id : null);
+                            updateLigne(i, 'stockModule', match ? match.module : null);
+                            const prix = prixPourMatch(match, clientPrixMap);
+                            if (prix != null && !ligne.prixUnitaire) {
+                              updateLigne(i, 'prixUnitaire', String(prix));
+                            }
+                            if (match && match.unite && !ligne.unite) {
+                              updateLigne(i, 'unite', match.unite);
+                            }
+                          }} style={ligneCellInputStyle} />
+                        </td>
+                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
+                        <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
+                        <td style={{ padding: '4px 2px' }}><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td style={{ padding: '4px 2px', textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
+                      </>
+                    )}
+                    <td style={{ textAlign: 'center' }}>
+                      <button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: 0 }}>
+                        <Trash2 size={14} />
                       </button>
-                    </div>
-                    <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
-                      <option value="">Aucune</option>
-                      {recoltes.map(r => (
-                        <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
-                      ))}
-                    </Select>
-                  </>
-                )}
-                </div>
-              </div>
-            ))}
+                    </td>
+                  </tr>
+                  {ligne.type !== 'section' && (
+                    <tr>
+                      <td></td>
+                      <td colSpan={9} style={{ paddingBottom: 8 }}>
+                        <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
+                          <option value="">Aucune</option>
+                          {recoltes.map(r => (
+                            <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
+                          ))}
+                        </Select>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
                 <Plus size={14} /> Ajouter une ligne
@@ -1566,6 +1611,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
           if (l.type === 'section') return s;
           const pct = Number(l.remisePourcentage) || 0;
           return s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+        }, 0);
+        const montantTaxe = detailData.lignes.reduce((s, l) => {
+          if (l.type === 'section') return s;
+          const pct = Number(l.remisePourcentage) || 0;
+          const ht = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+          return s + ht * (Number(l.tauxTaxe) || 0) / 100;
         }, 0);
         return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={closeDetailPopup}>
@@ -1748,7 +1799,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12, borderBottom: `2px solid ${COLORS.border}` }}>
-                    <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>Unité</th><th>Livré</th><th>Facturé</th><th>P.U.</th><th>Remise (%)</th><th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ padding: '6px 0' }}>Produit</th><th>Qté</th><th>Livré</th><th>Facturé</th><th>Unité</th><th>P.U.</th><th>Taxe (%)</th><th>Remise (%)</th><th style={{ textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1756,12 +1807,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     if (l.type === 'section') {
                       return (
                         <tr key={l.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                          <td colSpan={8} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
+                          <td colSpan={9} style={{ padding: '8px 0', fontWeight: 700 }}>{l.produit}</td>
                         </tr>
                       );
                     }
                     const pct = Number(l.remisePourcentage) || 0;
-                    const netLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+                    const tauxTaxeLigne = Number(l.tauxTaxe) || 0;
+                    const netLigneHT = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+                    const netLigne = netLigneHT * (1 + tauxTaxeLigne / 100);
                     const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
                     const qEdit = quantitesEdit[l.id] || { quantiteLivree: 0, quantiteFacturee: 0 };
                     return (
@@ -1775,7 +1828,6 @@ function DevisModule({ clientsListe, filtreStatut }) {
                           )}
                         </td>
                         <td>{l.quantite}</td>
-                        <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
                             <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
@@ -1786,7 +1838,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
                           ) : '—'}
                         </td>
+                        <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
                         <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
+                        <td>{tauxTaxeLigne.toLocaleString('fr-FR')}</td>
                         <td>{pct.toLocaleString('fr-FR')}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{netLigne.toLocaleString('fr-FR')}</td>
                       </tr>
@@ -1813,11 +1867,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       <input type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
                     ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
-                    <span>Taxe (%)</span>
-                    {modifiable ? (
-                      <input type="number" value={detailMeta.tauxTaxe} onChange={e => setDetailMeta(m => ({ ...m, tauxTaxe: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
-                    ) : <span>{Number(detailData.tauxTaxe) || 0}%</span>}
+                  {/* Taxe désormais définie par ligne (voir la colonne "Taxe (%)" du tableau
+                      ci-dessus), plus un taux unique par devis — ce total n'est donc plus
+                      éditable ici, juste un récapitulatif de ce que chaque ligne applique. */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
+                    <span>Montant taxes</span><span>{montantTaxe.toLocaleString('fr-FR')} FCFA</span>
                   </div>
                   {modifiable && (
                     <div style={{ textAlign: 'right', marginTop: 4, marginBottom: 4 }}>
@@ -2007,61 +2061,91 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
-                {editForm.lignes.map((ligne, i) => (
-                  <div
-                    key={i}
-                    draggable
-                    onDragStart={() => setDraggedEditLigneIndex(i)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => { e.preventDefault(); if (draggedEditLigneIndex !== null && draggedEditLigneIndex !== i) moveEditLigne(draggedEditLigneIndex, i); setDraggedEditLigneIndex(null); }}
-                    onDragEnd={() => setDraggedEditLigneIndex(null)}
-                    style={{ display: 'flex', gap: 6, paddingBottom: 8, borderBottom: `1px dashed ${COLORS.border}`, opacity: draggedEditLigneIndex === i ? 0.4 : 1 }}
-                  >
-                    <div style={{ cursor: 'grab', color: COLORS.inkSoft, paddingTop: 10 }}><GripVertical size={14} /></div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                    {ligne.type === 'section' ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'end' }}>
-                        <Field label={i === 0 ? 'Titre de section' : ''} placeholder="Ex: Matériel d'irrigation" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} />
-                        <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                          <Field label={i === 0 ? 'Produit' : ''} placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
-                            const value = e.target.value;
-                            updateEditLigne(i, 'produit', value);
-                            const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                            updateEditLigne(i, 'stockId', match ? match.id : null);
-                            updateEditLigne(i, 'stockModule', match ? match.module : null);
-                            const prix = prixPourMatch(match, editClientPrixMap);
-                            if (prix != null && !ligne.prixUnitaire) {
-                              updateEditLigne(i, 'prixUnitaire', String(prix));
-                            }
-                            if (match && match.unite && !ligne.unite) {
-                              updateEditLigne(i, 'unite', match.unite);
-                            }
-                          }} />
-                          <Field label={i === 0 ? 'Quantité' : ''} type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} />
-                          <Field label={i === 0 ? 'Unité' : ''} placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} />
-                          <Field label={i === 0 ? 'Prix unitaire' : ''} type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} />
-                          <Field label={i === 0 ? 'Remise (%)' : ''} type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} />
-                          <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
-                            <Trash2 size={16} />
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                      <th style={{ width: 20 }}></th>
+                      <th style={{ padding: '4px 2px', minWidth: 160 }}>Désignation</th>
+                      <th style={{ padding: '4px 2px', width: 64 }}>Qté</th>
+                      <th style={{ padding: '4px 2px', width: 52 }}>Livré</th>
+                      <th style={{ padding: '4px 2px', width: 56 }}>Facturé</th>
+                      <th style={{ padding: '4px 2px', width: 80 }}>Unité</th>
+                      <th style={{ padding: '4px 2px', width: 90 }}>Prix unit.</th>
+                      <th style={{ padding: '4px 2px', width: 64 }}>Taxe (%)</th>
+                      <th style={{ padding: '4px 2px', width: 72 }}>Remise (%)</th>
+                      <th style={{ padding: '4px 2px', width: 100, textAlign: 'right' }}>Montant</th>
+                      <th style={{ width: 24 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editForm.lignes.map((ligne, i) => (
+                      <React.Fragment key={i}>
+                      <tr
+                        draggable
+                        onDragStart={() => setDraggedEditLigneIndex(i)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => { e.preventDefault(); if (draggedEditLigneIndex !== null && draggedEditLigneIndex !== i) moveEditLigne(draggedEditLigneIndex, i); setDraggedEditLigneIndex(null); }}
+                        onDragEnd={() => setDraggedEditLigneIndex(null)}
+                        style={{ borderBottom: `1px solid ${COLORS.border}`, opacity: draggedEditLigneIndex === i ? 0.4 : 1 }}
+                      >
+                        <td style={{ cursor: 'grab', color: COLORS.inkSoft, textAlign: 'center' }}><GripVertical size={14} /></td>
+                        {ligne.type === 'section' ? (
+                          <td colSpan={9} style={{ padding: '6px 2px' }}>
+                            <input placeholder="Titre de section (ex: Matériel d'irrigation)" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
+                          </td>
+                        ) : (
+                          <>
+                            <td style={{ padding: '4px 2px' }}>
+                              <input placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                                const value = e.target.value;
+                                updateEditLigne(i, 'produit', value);
+                                const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                                updateEditLigne(i, 'stockId', match ? match.id : null);
+                                updateEditLigne(i, 'stockModule', match ? match.module : null);
+                                const prix = prixPourMatch(match, editClientPrixMap);
+                                if (prix != null && !ligne.prixUnitaire) {
+                                  updateEditLigne(i, 'prixUnitaire', String(prix));
+                                }
+                                if (match && match.unite && !ligne.unite) {
+                                  updateEditLigne(i, 'unite', match.unite);
+                                }
+                              }} style={ligneCellInputStyle} />
+                            </td>
+                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
+                            <td style={{ padding: '4px 2px', textAlign: 'center', color: COLORS.border }}>—</td>
+                            <td style={{ padding: '4px 2px' }}><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateEditLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ padding: '4px 2px' }}><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td style={{ padding: '4px 2px', textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
+                          </>
+                        )}
+                        <td style={{ textAlign: 'center' }}>
+                          <button type="button" onClick={() => removeEditLigne(i)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: 0 }}>
+                            <Trash2 size={14} />
                           </button>
-                        </div>
-                        <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
-                          <option value="">Aucune</option>
-                          {recoltes.map(r => (
-                            <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
-                          ))}
-                        </Select>
-                      </>
-                    )}
-                    </div>
-                  </div>
-                ))}
+                        </td>
+                      </tr>
+                      {ligne.type !== 'section' && (
+                        <tr>
+                          <td></td>
+                          <td colSpan={9} style={{ paddingBottom: 8 }}>
+                            <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
+                              <option value="">Aucune</option>
+                              {recoltes.map(r => (
+                                <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
+                              ))}
+                            </Select>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}>
                     <Plus size={14} /> Ajouter une ligne

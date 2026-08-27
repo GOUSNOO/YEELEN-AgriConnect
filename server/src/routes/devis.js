@@ -14,7 +14,7 @@ const router = express.Router();
 const DEVIS_COLUMNS = `
   d.id, d.numero, d.statut, d.date, d.date_signature AS "dateSignature",
   d.signataire_nom AS "signataireNom", d.total::float8 AS total, d.notes,
-  d.remise_globale::float8 AS "remiseGlobale", d.taux_taxe::float8 AS "tauxTaxe",
+  d.remise_globale::float8 AS "remiseGlobale",
   d.conditions_paiement AS "conditionsPaiement", d.livraison_promise AS "livraisonPromise",
   d.client_id AS "clientId", c.nom AS "clientNom", c.prenom AS "clientPrenom",
   c.email AS "clientEmail", c.telephone AS "clientTelephone", c.adresse AS "clientAdresse",
@@ -67,26 +67,35 @@ function normalizeLigne(l) {
     quantite: isSection ? 0 : (Number(l.quantite) || 0),
     prixUnitaire: isSection ? 0 : (Number(l.prixUnitaire) || 0),
     remisePourcentage: isSection ? 0 : Math.min(100, Math.max(0, Number(l.remisePourcentage) || 0)),
+    tauxTaxe: isSection ? 0 : Math.min(100, Math.max(0, Number(l.tauxTaxe) || 0)),
     unite: isSection ? null : (l.unite || null),
     recolteId: isSection ? null : l.recolteId,
     stockId: isSection ? null : l.stockId,
     stockModule: isSection ? null : l.stockModule,
   };
 }
+// Montant HT de la ligne (après remise ligne, avant taxe) — c'est ce que Odoo appelle
+// "Amount"/"Montant" sur une ligne de commande.
 function ligneTotal(l) {
   if (l.type === 'section') return 0;
   const sousTotal = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0);
   return sousTotal * (1 - (Number(l.remisePourcentage) || 0) / 100);
 }
 
-// Alignement visuel Odoo : une remise globale (%) et un taux de taxe (%) uniques par devis,
-// appliqués sur le total des lignes — voir la note dans migrate.js sur pourquoi ceci est
-// stocké dans devis.total plutôt que recalculé côté frontend uniquement (cohérence avec
-// financeSync/stockSync, qui lisent tous les deux devis.total comme source de vérité).
-function calculerTotal(lignesNormalisees, remiseGlobale, tauxTaxe) {
-  const montantHT = lignesNormalisees.reduce((s, l) => s + ligneTotal(l), 0);
-  const apresRemise = montantHT * (1 - (Number(remiseGlobale) || 0) / 100);
-  return apresRemise * (1 + (Number(tauxTaxe) || 0) / 100);
+// Alignement visuel Odoo (révisé le jour même après retour utilisateur) : chaque ligne porte
+// son propre taux de taxe, comme chez Odoo — abandon de la première version (un taux unique
+// par devis, voir migrate.js:migrateTaxeDevisVersLignes pour la bascule). Remise globale
+// toujours unique par devis, appliquée au montant HT de chaque ligne avant sa propre taxe
+// (ordre comptable standard : remise avant taxe). Stocké dans devis.total (pas recalculé
+// uniquement côté frontend) pour que financeSync/stockSync, qui lisent tous deux devis.total
+// comme source de vérité, restent cohérents avec ce qui s'affiche.
+function calculerTotal(lignesNormalisees, remiseGlobale) {
+  const facteurRemiseGlobale = 1 - (Number(remiseGlobale) || 0) / 100;
+  return lignesNormalisees.reduce((s, l) => {
+    const ht = ligneTotal(l) * facteurRemiseGlobale;
+    const taxe = ht * (Number(l.tauxTaxe) || 0) / 100;
+    return s + ht + taxe;
+  }, 0);
 }
 
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
@@ -110,7 +119,7 @@ async function getDevisComplet(devisId, entrepriseId) {
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
     `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-            remise_pourcentage::float8 AS "remisePourcentage", unite,
+            remise_pourcentage::float8 AS "remisePourcentage", taux_taxe::float8 AS "tauxTaxe", unite,
             quantite_livree::float8 AS "quantiteLivree", quantite_facturee::float8 AS "quantiteFacturee",
             recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
@@ -207,7 +216,7 @@ router.get('/:id/journal', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/', authRequired, async (req, res) => {
-  const { clientId, lignes, notes, remiseGlobale, tauxTaxe, conditionsPaiement, livraisonPromise } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise } = req.body;
   if (!clientId || !Array.isArray(lignes) || lignes.length === 0) {
     return res.status(400).json({ error: 'Un client et au moins une ligne de produit sont requis.' });
   }
@@ -218,13 +227,13 @@ router.post('/', authRequired, async (req, res) => {
 
     const numero = await genererNumero(req.user.entrepriseId);
     const lignesNormalisees = lignes.map(normalizeLigne);
-    const total = calculerTotal(lignesNormalisees, remiseGlobale, tauxTaxe);
+    const total = calculerTotal(lignesNormalisees, remiseGlobale);
 
     const devisResult = await client.query(
-      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, taux_taxe, conditions_paiement, livraison_promise)
-       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9, $10) RETURNING id`,
+      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise)
+       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9) RETURNING id`,
       [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null,
-       Number(remiseGlobale) || 0, Number(tauxTaxe) || 0, conditionsPaiement || null, livraisonPromise || null]
+       Number(remiseGlobale) || 0, conditionsPaiement || null, livraisonPromise || null]
     );
     const devisId = devisResult.rows[0].id;
     const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
@@ -234,9 +243,9 @@ router.post('/', authRequired, async (req, res) => {
       const l = lignesNormalisees[i];
       const stockOk = stockLigneValide(l);
       await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
+        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, taux_taxe, unite, ordre, recolte_id, stock_id, stock_module, type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.tauxTaxe, l.unite, i,
          recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
          stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
       );
@@ -260,11 +269,11 @@ router.post('/', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.put('/:id', authRequired, async (req, res) => {
-  const { clientId, lignes, notes, remiseGlobale, tauxTaxe, conditionsPaiement, livraisonPromise } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise } = req.body;
 
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut, total::float8 AS total, remise_globale::float8 AS "remiseGlobale", taux_taxe::float8 AS "tauxTaxe" FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query('SELECT statut, total::float8 AS total, remise_globale::float8 AS "remiseGlobale" FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
     if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
       return res.status(400).json({ error: 'Ce devis ne peut plus être modifié à ce stade.' });
@@ -272,29 +281,29 @@ router.put('/:id', authRequired, async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Un appel qui ne touche que la remise globale/taxe/conditions (sans renvoyer de
-    // lignes, ex: le panneau "Totaux" de la popup de détail) ne doit pas faire retomber
-    // le total à 0 — on recharge alors les lignes déjà en base pour le recalcul.
+    // Un appel qui ne touche que la remise globale/conditions (sans renvoyer de lignes,
+    // ex: le panneau "Totaux" de la popup de détail) ne doit pas faire retomber le total à
+    // 0 — on recharge alors les lignes déjà en base (avec leur propre taux_taxe) pour le
+    // recalcul.
     const lignesSource = Array.isArray(lignes)
       ? lignes
       : (await client.query(
           `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-                  remise_pourcentage::float8 AS "remisePourcentage", unite,
+                  remise_pourcentage::float8 AS "remisePourcentage", taux_taxe::float8 AS "tauxTaxe", unite,
                   recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
            FROM devis_lignes WHERE devis_id = $1`,
           [req.params.id]
         )).rows;
     const lignesNormalisees = lignesSource.map(normalizeLigne);
     const remiseGlobaleFinale = remiseGlobale != null ? Number(remiseGlobale) || 0 : check.rows[0].remiseGlobale;
-    const tauxTaxeFinal = tauxTaxe != null ? Number(tauxTaxe) || 0 : check.rows[0].tauxTaxe;
-    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale, tauxTaxeFinal);
+    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale);
 
     await client.query(
       `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes),
-       remise_globale = $4, taux_taxe = $5,
-       conditions_paiement = COALESCE($6, conditions_paiement), livraison_promise = COALESCE($7, livraison_promise)
-       WHERE id = $8`,
-      [clientId, total, notes, remiseGlobaleFinale, tauxTaxeFinal, conditionsPaiement, livraisonPromise, req.params.id]
+       remise_globale = $4,
+       conditions_paiement = COALESCE($5, conditions_paiement), livraison_promise = COALESCE($6, livraison_promise)
+       WHERE id = $7`,
+      [clientId, total, notes, remiseGlobaleFinale, conditionsPaiement, livraisonPromise, req.params.id]
     );
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { total: check.rows[0].total }, { total }, ['total']);
@@ -307,9 +316,9 @@ router.put('/:id', authRequired, async (req, res) => {
         const l = lignesNormalisees[i];
         const stockOk = stockLigneValide(l);
         await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
+          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, taux_taxe, unite, ordre, recolte_id, stock_id, stock_module, type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.tauxTaxe, l.unite, i,
            recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
            stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
         );

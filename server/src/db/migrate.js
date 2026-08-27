@@ -239,20 +239,26 @@ CREATE TABLE IF NOT EXISTS devis_lignes (
   stock_module   TEXT
 );
 
--- Alignement visuel Odoo (2026-08-27) : remise globale + taux de taxe uniques par devis
--- (pas un moteur multi-taux par ligne — une seule TVA appliquée à l'ensemble, ce qui couvre
--- l'usage réel observé chez Odoo pour ce type de document), conditions de paiement en texte
--- libre (ex: "30 jours") et date de livraison promise. Contrairement à une v1 envisagée où
--- ces infos n'auraient été qu'un affichage recalculé côté frontend, remise_globale/taux_taxe
--- sont appliqués au total stocké en base (voir routes/devis.js:ligneTotal) pour que la
--- synchronisation finances/stock (qui lit devis.total) reste cohérente avec ce qui s'affiche.
+-- Alignement visuel Odoo (2026-08-27) : remise globale unique par devis, conditions de
+-- paiement en texte libre (ex: "30 jours") et date de livraison promise. Contrairement à une
+-- v1 envisagée où ces infos n'auraient été qu'un affichage recalculé côté frontend,
+-- remise_globale est appliquée au total stocké en base (voir routes/devis.js:calculerTotal)
+-- pour que la synchronisation finances/stock (qui lit devis.total) reste cohérente avec ce
+-- qui s'affiche. Un taux de taxe UNIQUE par devis a été tenté ici dans un premier temps
+-- (colonne devis.taux_taxe) puis abandonné le jour même au profit d'un vrai taux par ligne
+-- (devis_lignes.taux_taxe, plus bas) après retour explicite de l'utilisateur — voir
+-- migrateTaxeDevisVersLignes() pour la bascule (sans perte, confirmé 0 ligne réelle affectée
+-- en production au moment du changement).
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS remise_globale NUMERIC(5, 2) NOT NULL DEFAULT 0;
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS taux_taxe NUMERIC(5, 2) NOT NULL DEFAULT 0;
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS conditions_paiement TEXT;
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS livraison_promise DATE;
 -- Unité de mesure par ligne (ex: "kg", "sacs", "Heures") — préremplie depuis le produit du
 -- catalogue au même titre que le prix, mais reste un simple champ texte libre modifiable.
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS unite TEXT;
+-- Taux de taxe (%) par ligne, comme chez Odoo — remplace la tentative devis.taux_taxe
+-- (unique par devis) du même jour. Voir calculerTotal() dans routes/devis.js pour l'ordre
+-- d'application (remise globale d'abord, puis taxe sur le montant remisé, ligne par ligne).
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS taux_taxe NUMERIC(5, 2) NOT NULL DEFAULT 0;
 
 -- Étape 4 (2026-08-18) : alignement structurel Odoo — remise en pourcentage, lignes de
 -- section/note, suivi manuel livré/facturé. Voir migrateRemiseToPourcentage() plus bas pour
@@ -1437,6 +1443,68 @@ async function migrateRemiseToPourcentage() {
   }
 }
 
+// Bascule du taux de taxe unique par devis (colonne devis.taux_taxe, ajoutée puis abandonnée
+// le même jour, voir le commentaire au-dessus de la définition de devis_lignes.taux_taxe)
+// vers un vrai taux par ligne. Idempotent sur l'existence de devis.taux_taxe (même garde que
+// migrateRemiseToPourcentage) : sur une base où la colonne n'a jamais existé (installation
+// fraîche postérieure à ce changement), ne fait rien.
+async function migrateTaxeDevisVersLignes() {
+  const { rows: [{ exists: colonneExiste }] } = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'devis' AND column_name = 'taux_taxe'
+    ) AS exists
+  `);
+  if (!colonneExiste) {
+    console.log('ℹ️  taux_taxe par ligne : colonne devis.taux_taxe déjà absente — bascule déjà effectuée, étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ count: nbDevisAffectes }] } = await client.query(
+      `SELECT COUNT(*) FROM devis WHERE taux_taxe IS NOT NULL AND taux_taxe <> 0`
+    );
+
+    // Reporte le taux du devis sur chacune de ses lignes de type produit (les sections n'ont
+    // jamais de taxe, voir normalizeLigne côté route).
+    await client.query(`
+      UPDATE devis_lignes dl SET taux_taxe = d.taux_taxe
+      FROM devis d
+      WHERE dl.devis_id = d.id AND d.taux_taxe IS NOT NULL AND d.taux_taxe <> 0 AND dl.type = 'produit'
+    `);
+
+    // Recalcule le total de chaque devis affecté avec la nouvelle formule par ligne
+    // (remise globale puis taxe, ligne par ligne) pour rester cohérent avec calculerTotal()
+    // côté route — voir routes/devis.js.
+    await client.query(`
+      UPDATE devis d SET total = sub.nouveau_total
+      FROM (
+        SELECT dl.devis_id,
+               SUM(
+                 CASE WHEN dl.type = 'section' THEN 0 ELSE
+                   dl.quantite * dl.prix_unitaire * (1 - dl.remise_pourcentage / 100)
+                   * (1 - d2.remise_globale / 100) * (1 + dl.taux_taxe / 100)
+                 END
+               ) AS nouveau_total
+        FROM devis_lignes dl
+        JOIN devis d2 ON d2.id = dl.devis_id
+        WHERE d2.taux_taxe IS NOT NULL AND d2.taux_taxe <> 0
+        GROUP BY dl.devis_id
+      ) sub
+      WHERE d.id = sub.devis_id
+    `);
+
+    await client.query('ALTER TABLE devis DROP COLUMN taux_taxe');
+    await client.query('COMMIT');
+    console.log(`✅ taux_taxe par ligne : ${nbDevisAffectes} devis converti(s). Colonne devis.taux_taxe supprimée.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
+
 // Toute la variable SQL ci-dessus est envoyée en un seul `query()` — PostgreSQL exécute
 // les instructions séparées par `;` dans l'ordre au sein d'une même requête multi-instructions
 // (pas de vraie transaction globale explicite ici : une instruction en échec arrête tout,
@@ -1454,6 +1522,7 @@ async function migrate() {
     await mergeClientsFournisseursIntoContacts();
     await migrateClientPrixToListesPrix();
     await migrateRemiseToPourcentage();
+    await migrateTaxeDevisVersLignes();
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);
