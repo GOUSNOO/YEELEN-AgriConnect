@@ -486,7 +486,7 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '7px 10px', background: COLORS.surfaceAlt }}>
             <Search size={14} color={COLORS.inkSoft} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher ${partnerLabel.toLowerCase()}`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, minWidth: 180 }} />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher ${partnerLabel.toLowerCase()}`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, minWidth: 180, color: COLORS.ink }} />
           </label>
         </div>
       </Card>
@@ -6046,7 +6046,7 @@ function ContactsTab({ type, highlightId }) {
       {type === 'client' && <ListesPrixManager />}
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
         <Search size={14} color={COLORS.inkSoft} />
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher un ${cfg.label}...`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1 }} />
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher un ${cfg.label}...`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1, color: COLORS.ink }} />
       </label>
       {filtered.length === 0 ? (
         <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun {cfg.label} trouvé.</div></Card>
