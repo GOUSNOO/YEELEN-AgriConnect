@@ -88,9 +88,9 @@ export function Button({ children, onClick, variant = 'default', small, style, t
   );
 }
 
-// Champ façon Odoo (project_odoo_contact_architecture) : plus de rectangle visible au
+// Champ façon ERP (project_erp_contact_architecture) : plus de rectangle visible au
 // repos (bordure/fond transparents, `.flat-input` dans App.css reproduit
-// --o-input-border-color: transparent mesuré dans le vrai CSS d'Odoo), une bordure
+// --o-input-border-color: transparent mesuré dans le CSS d'un ERP de référence), une bordure
 // discrète apparaît seulement au survol/focus. Étendu à Field/Select eux-mêmes (au lieu
 // d'un traitement au cas par cas par écran) sur demande explicite de l'utilisateur, pour
 // que ce style s'applique automatiquement partout où ces deux composants partagés sont

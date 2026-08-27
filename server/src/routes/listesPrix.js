@@ -1,7 +1,7 @@
 // Listes de prix nommées et réutilisables (2026-08-18) — troisième étape de l'alignement
-// structurel Odoo, remplace l'ancienne client_prix (une ligne = un override non réutilisable
+// structurel façon ERP, remplace l'ancienne client_prix (une ligne = un override non réutilisable
 // pour un seul client) par un objet nommé assignable à plusieurs contacts à la fois, comme
-// le champ "Liste de prix" d'une commande Odoo. Voir server/src/db/migrate.js:
+// le champ "Liste de prix" d'une commande dans un ERP de référence. Voir server/src/db/migrate.js:
 // migrateClientPrixToListesPrix pour la migration des données existantes. L'assignation
 // d'une liste à un contact se fait via routes/contacts.js (POST/PUT, champ listePrixId) —
 // ce fichier ne gère que les listes elles-mêmes et leurs lignes.

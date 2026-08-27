@@ -1,5 +1,5 @@
 // Journal des modifications (chatter) — voir server/src/db/migrate.js pour le schéma et
-// le contexte (inspiré de mail.tracking.value dans Odoo, en plus simple : une ligne par
+// le contexte (inspiré d'un suivi de champ standard, en plus simple : une ligne par
 // mise à jour listant tous les champs changés, pas une ligne par champ).
 import { pool } from '../db.js';
 

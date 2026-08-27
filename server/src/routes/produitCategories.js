@@ -1,7 +1,6 @@
 // Catégories de produits (Cultures/Poulailler) — vraie ressource CRUD par entreprise,
 // remplace le texte libre non validé qu'était cultures_stocks.categorie/poulailler_stocks.categorie
-// avant la fusion en produits (2026-08-18). Modèle inspiré d'une inspection réelle d'un compte
-// Odoo (Inventaire > Configuration > Catégories de produits) : chaque entreprise gère sa propre
+// avant la fusion en produits (2026-08-18). Modèle inspiré d'une inspection réelle d'un compte ERP (Inventaire > Configuration > Catégories de produits) : chaque entreprise gère sa propre
 // liste, pas un catalogue figé partagé par tous — voir server/src/db/migrate.js pour les 7
 // catégories créées par défaut lors de la fusion.
 import express from 'express';

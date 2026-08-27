@@ -1,4 +1,4 @@
-// Tags de contact colorés (many2many_tags côté Odoo) — vraie ressource CRUD par
+// Tags de contact colorés (un widget de tags standard côté ERP de référence) — vraie ressource CRUD par
 // entreprise, même posture que produit_categories/listes_prix : chaque entreprise gère
 // sa propre liste de tags, pas un catalogue figé partagé par tous.
 import express from 'express';

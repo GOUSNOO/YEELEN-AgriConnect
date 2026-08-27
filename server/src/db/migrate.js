@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS devis_lignes (
   stock_module   TEXT
 );
 
--- Alignement visuel Odoo (2026-08-27) : remise globale unique par devis, conditions de
+-- Alignement visuel ERP (2026-08-27) : remise globale unique par devis, conditions de
 -- paiement en texte libre (ex: "30 jours") et date de livraison promise. Contrairement à une
 -- v1 envisagée où ces infos n'auraient été qu'un affichage recalculé côté frontend,
 -- remise_globale est appliquée au total stocké en base (voir routes/devis.js:calculerTotal)
@@ -255,12 +255,12 @@ ALTER TABLE devis ADD COLUMN IF NOT EXISTS livraison_promise DATE;
 -- Unité de mesure par ligne (ex: "kg", "sacs", "Heures") — préremplie depuis le produit du
 -- catalogue au même titre que le prix, mais reste un simple champ texte libre modifiable.
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS unite TEXT;
--- Taux de taxe (%) par ligne, comme chez Odoo — remplace la tentative devis.taux_taxe
+-- Taux de taxe (%) par ligne, comme dans un ERP de référence — remplace la tentative devis.taux_taxe
 -- (unique par devis) du même jour. Voir calculerTotal() dans routes/devis.js pour l'ordre
 -- d'application (remise globale d'abord, puis taxe sur le montant remisé, ligne par ligne).
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS taux_taxe NUMERIC(5, 2) NOT NULL DEFAULT 0;
 
--- Étape 4 (2026-08-18) : alignement structurel Odoo — remise en pourcentage, lignes de
+-- Étape 4 (2026-08-18) : alignement structurel ERP — remise en pourcentage, lignes de
 -- section/note, suivi manuel livré/facturé. Voir migrateRemiseToPourcentage() plus bas pour
 -- la conversion de l'ancienne colonne remise (montant fixe) vers remise_pourcentage.
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS remise_pourcentage NUMERIC(5, 2) NOT NULL DEFAULT 0;
@@ -749,10 +749,9 @@ CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id)
 ALTER TABLE produits ADD COLUMN IF NOT EXISTS cout NUMERIC(12, 2);
 
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
--- Troisième étape de l'alignement structurel Odoo : remplace le prix négocié client+article
+-- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,
--- assignable à plusieurs contacts à la fois — comme le champ "Liste de prix" d'une commande
--- Odoo. Toujours en complément du prix par défaut de l'article, jamais à la place : un contact
+-- assignable à plusieurs contacts à la fois — comme le champ "Liste de prix" d'une commande dans un ERP de référence. Toujours en complément du prix par défaut de l'article, jamais à la place : un contact
 -- sans liste assignée (contacts.liste_prix_id NULL, colonne ajoutée plus bas) continue
 -- d'utiliser prix_defaut. Pas de stock_module ici (contrairement à l'ancienne client_prix,
 -- conçue avant la fusion produits) — stock_id seul est non-ambigu depuis cette fusion.
@@ -775,8 +774,8 @@ CREATE TABLE IF NOT EXISTS listes_prix_lignes (
 CREATE INDEX IF NOT EXISTS idx_listes_prix_lignes_liste_prix_id ON listes_prix_lignes(liste_prix_id);
 
 -- ═══════════════ Contacts unifiés (fusion clients / fournisseurs) ═══════════════
--- Deuxième étape de l'alignement structurel Odoo (après produits) : remplace deux tables
--- séparées par une seule, inspirée de res.partner — contrairement à produits.module (un
+-- Deuxième étape de l'alignement structurel ERP (après produits) : remplace deux tables
+-- séparées par une seule, inspirée d'un modèle de contact standard — contrairement à produits.module (un
 -- article de stock ne peut être que Cultures OU Poulailler), un contact réel peut être à
 -- la fois client ET fournisseur, d'où deux booléens indépendants plutôt qu'un enum.
 -- Voir mergeClientsFournisseursIntoContacts() plus bas pour la fusion effective, y compris
@@ -812,19 +811,19 @@ CREATE INDEX IF NOT EXISTS idx_contacts_entreprise_id ON contacts(entreprise_id)
 -- supprimer une liste détache les contacts qui l'utilisaient, ne les supprime pas.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS liste_prix_id INTEGER REFERENCES listes_prix(id) ON DELETE SET NULL;
 
--- Alignement visuel Odoo (2026-08-27) : adresse décomposée (rue/ville/code postal/pays)
+-- Alignement visuel ERP (2026-08-27) : adresse décomposée (rue/ville/code postal/pays)
 -- pour l'affichage façon fiche Sales Order, additive à côté de l'ancien champ adresse
 -- (texte libre, conservé pour compatibilité avec tout ce qui l'affiche déjà ailleurs) plutôt
 -- que de le remplacer. Pas de distinction facturation/livraison : un contact n'a qu'une
--- seule adresse dans ce modèle, contrairement à Odoo (adresses enfants) — hors scope ici.
+-- seule adresse dans ce modèle, contrairement à un ERP de référence (adresses enfants) — hors scope ici.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_rue TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_ville TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_code_postal TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_pays TEXT;
 
--- Architecture façon fiche contact Odoo (2026-08-27, suite explicite de la demande
+-- Architecture façon fiche contact d'un ERP de référence (2026-08-27, suite explicite de la demande
 -- utilisateur d'aligner aussi les données, pas seulement l'affichage — voir
--- project_odoo_contact_architecture) : bascule Particulier/Société, photo, poste,
+-- project_erp_contact_architecture) : bascule Particulier/Société, photo, poste,
 -- notes internes, deuxième ligne d'adresse + région (complète le rue/ville/CP/pays
 -- déjà là), rattachement à une société mère + sous-contacts, et tags colorés.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS is_company BOOLEAN NOT NULL DEFAULT false;
@@ -839,7 +838,7 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS adresse_region TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_contacts_parent_id ON contacts(parent_id);
 
--- Tags colorés (many2many_tags côté Odoo) : vraie ressource CRUD par entreprise (même
+-- Tags colorés (un widget de tags standard côté ERP de référence) : vraie ressource CRUD par entreprise (même
 -- posture que produit_categories/listes_prix, pas une liste figée globale).
 CREATE TABLE IF NOT EXISTS contact_tags (
   id            SERIAL PRIMARY KEY,
@@ -857,7 +856,7 @@ CREATE TABLE IF NOT EXISTS contacts_tags_rel (
 );
 
 -- ═══════════════ Journal des modifications (chatter) + activités planifiées ═══════════════
--- Round 2 de l'inspiration Odoo (après recherche globale/boutons intelligents/routage/nav
+-- Round 2 de l'inspiration ERP (après recherche globale/boutons intelligents/routage/nav
 -- adaptative/Kanban devis) : deux mécanismes génériques attachables à n'importe quelle
 -- ressource via (ressource_type, ressource_id), plutôt que deux tables dédiées aux devis
 -- (qui redeviendraient à refaire pour le prochain type de ressource). Pas de FK sur
@@ -865,10 +864,10 @@ CREATE TABLE IF NOT EXISTS contacts_tags_rel (
 -- ressource_type, une FK réelle nécessiterait une table polymorphe que Postgres ne sait pas
 -- exprimer nativement.
 --
--- journal_modifications : version simplifiée du mail.tracking.value d'Odoo (une ligne par
+-- journal_modifications : version simplifiée d'un suivi de champ standard (une ligne par
 -- champ changé, liée à un message) — ici une seule ligne par mise à jour, la colonne
 -- changements listant tous les champs modifiés en JSON, suffisant pour l'usage (affichage
--- en lecture seule) sans le mécanisme de messagerie complet d'Odoo.
+-- en lecture seule) sans le mécanisme de messagerie complet d'un ERP de référence.
 CREATE TABLE IF NOT EXISTS journal_modifications (
   id             SERIAL PRIMARY KEY,
   entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
@@ -880,8 +879,8 @@ CREATE TABLE IF NOT EXISTS journal_modifications (
 );
 CREATE INDEX IF NOT EXISTS idx_journal_modifications_ressource ON journal_modifications(ressource_type, ressource_id);
 
--- activites : équivalent simplifié de mail.activity — un rappel/tâche avec échéance,
--- attaché à une ressource. Contrairement à Odoo, ne se supprime pas automatiquement une
+-- activites : équivalent simplifié d'un modèle d'activité standard — un rappel/tâche avec échéance,
+-- attaché à une ressource. Contrairement à un ERP de référence, ne se supprime pas automatiquement une
 -- fois terminée (terminee = TRUE, terminee_at renseignée) : reste visible comme historique
 -- plutôt que de se transformer en message de chatter, pour ne pas dépendre du même
 -- mécanisme de messagerie.
@@ -900,7 +899,7 @@ CREATE TABLE IF NOT EXISTS activites (
 CREATE INDEX IF NOT EXISTS idx_activites_ressource ON activites(ressource_type, ressource_id);
 
 -- messages : fil de discussion en texte libre attaché à une ressource (équivalent minimal
--- du "Envoyer un message"/"Log note" du chatter Odoo) — distinct de journal_modifications
+-- du "Envoyer un message"/"Log note" du chatter d'un ERP de référence) — distinct de journal_modifications
 -- (log automatique de changements de champs) et d'activites (tâches planifiées). Volontairement
 -- pas de pièces jointes ni de followers/notifications (2026-08-27) : juste un historique de
 -- texte, le plus petit sous-ensemble utile d'un vrai chatter.

@@ -640,10 +640,10 @@ const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouve
 
 // Module de gestion des devis/factures multi-lignes, avec envoi au client et signature électronique.
 // clientsListe : liste des clients existants (pour le sélecteur), transmise par le parent (Ventes)
-// Vue Kanban des devis — inspirée de crm_lead_views.xml chez Odoo (colonnes =
+// Vue Kanban des devis — inspirée des vues pipeline de référence d'un ERP (colonnes =
 // regroupement par statut, glisser une carte = changer le statut), mais
 // adaptée à notre vraie machine à états : contrairement au stage_id générique
-// d'Odoo (n'importe quel champ, n'importe quelle transition), nos statuts ont
+// d'un ERP de référence (n'importe quel champ, n'importe quelle transition), nos statuts ont
 // des transitions précises portées par des routes dédiées (envoyer/valider-
 // manuel/facturer/remettre-brouillon), certaines n'existant même pas côté
 // admin (Envoyé → Signé ne se fait que via le lien public signé par le
@@ -726,14 +726,14 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
   );
 }
 
-// Activités planifiées — équivalent simplifié de mail.activity chez Odoo (voir
-// server/src/db/migrate.js et project_odoo_round2_kanban_chatter_activites). Composant
+// Activités planifiées — équivalent simplifié d'un modèle d'activité standard (voir
+// server/src/db/migrate.js et project_erp_round2_kanban_chatter_activites). Composant
 // partagé, rattachable à n'importe quelle ressource via ressourceType/ressourceId — utilisé
 // ici par la popup de détail d'un devis et le panneau de détail d'un contact.
 // Marge d'un devis — total moins le coût de revient des lignes dont l'article est identifié
 // (stockId résolu vers un produit du catalogue ayant un coût renseigné). Les lignes sans
 // stockId (produit en texte libre) ou dont l'article n'a pas de coût renseigné ne contribuent
-// simplement pas au coût total, comme chez Odoo (une ligne de service sans coût n'entre pas
+// simplement pas au coût total, comme dans un ERP de référence (une ligne de service sans coût n'entre pas
 // dans le calcul non plus) — retourne null si aucune ligne n'a de coût connu, pour ne rien
 // afficher plutôt qu'une marge trompeuse basée sur un total partiel.
 function computeMarge(devis, catalogItems) {
@@ -753,10 +753,10 @@ function computeMarge(devis, catalogItems) {
   return { marge, pourcentage };
 }
 
-// Barre de statut en chevrons, inspirée du widget statusbar d'Odoo (voir
+// Barre de statut en chevrons, inspirée d'un widget statusbar de référence (voir
 // addons/web/static/src/views/fields/statusbar/statusbar_field.scss dans le clone local) —
 // version simplifiée en clip-path plutôt que la géométrie exacte avec compensation de
-// bordure qu'utilise Odoo, pour un effet visuel proche sans la complexité. Les statuts
+// bordure qu'utilise un ERP de référence, pour un effet visuel proche sans la complexité. Les statuts
 // post-facturation (Non payé/Payé partiellement/Payé) sont regroupés sous "Facturé" —
 // même principe de regroupement que les colonnes de DevisKanban plus haut.
 const DEVIS_STATUT_STEPS = [
@@ -930,7 +930,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // ligne.id, initialisée depuis les valeurs serveur à chaque (ré)ouverture du détail.
   const [quantitesEdit, setQuantitesEdit] = useState({});
   const [quantitesSaving, setQuantitesSaving] = useState(false);
-  // Onglets façon Odoo au-dessus du tableau de lignes, dans la popup de détail
+  // Onglets façon ERP au-dessus du tableau de lignes, dans la popup de détail
   const [detailTab, setDetailTab] = useState('lignes');
   // Remise globale / taxe / conditions de paiement / livraison promise, éditables
   // seulement tant que le devis est en Brouillon — voir handleSaveDetailMeta.
@@ -1068,7 +1068,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const totalEditForm = editForm.lignes.reduce((s, l) => s + ligneTotalAvecTaxe(l), 0);
   // Style commun des cellules éditables du tableau de lignes (add-form + edit-modal) —
   // volontairement sans bordure/boîte individuelle par champ (contrairement à l'ancien
-  // rendu en grille de <Field>), pour une seule ligne de tableau continue façon Odoo.
+  // rendu en grille de <Field>), pour une seule ligne de tableau continue façon ERP.
   const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: COLORS.ink, padding: 0 };
 
   const resetForm = () => {
@@ -1389,7 +1389,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
     'Annulé': 'red',
   };
 
-  // "À facturer" (menu Odoo) n'est qu'un filtre sur la même liste, pas une ressource
+  // "À facturer" (menu d'un ERP de référence) n'est qu'un filtre sur la même liste, pas une ressource
   // séparée — mêmes devis, juste restreints au statut concerné.
   const devisAffiches = filtreStatut ? devisListe.filter(d => d.statut === filtreStatut) : devisListe;
 
@@ -1405,7 +1405,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         </div>
       )}
 
-      {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu Odoo
+      {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
       {!filtreStatut && (
       <Card>
@@ -1422,7 +1422,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
-            {/* Tableau continu façon Odoo (une seule ligne par article, sans boîte séparée par
+            {/* Tableau continu façon ERP (une seule ligne par article, sans boîte séparée par
                 champ) plutôt que la grille de <Field> encadrés d'avant — voir la demande
                 explicite de l'utilisateur à ce sujet. "Livré"/"Facturé" apparaissent en lecture
                 seule ("—") ici : ils n'ont de sens qu'une fois le devis créé et signé, voir la
@@ -1624,8 +1624,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
         }, 0);
         return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={closeDetailPopup}>
-          {/* Disposition à deux colonnes façon fiche Odoo (Order Lines + chatter à droite) — voir
-              project_odoo_devis_visual_alignment : même structure (barre d'action + chevrons en
+          {/* Disposition à deux colonnes façon fiche d'un ERP de référence (Order Lines + chatter à droite) — voir
+              project_erp_devis_visual_alignment : même structure (barre d'action + chevrons en
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
           <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
@@ -1635,7 +1635,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
                   la ligne au hasard selon la largeur : actions principales (transition de
                   statut) en haut, outils du document (aperçu/téléchargement/annulation) en
-                  dessous — même logique de regroupement qu'Odoo (actions primaires vs. menu
+                  dessous — même logique de regroupement qu'un ERP de référence (actions primaires vs. menu
                   secondaire), sans reproduire son menu déroulant. */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12, paddingRight: 26 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1683,7 +1683,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 8 }}>{detailData.numero}</div>
 
-              {/* "Boutons intelligents" façon Odoo — dérivés de données déjà chargées, sans
+              {/* "Boutons intelligents" façon ERP — dérivés de données déjà chargées, sans
                   nouvel appel réseau, plus un lien direct vers la fiche du client (seul
                   vrai renvoi vers un autre enregistrement possible ici, voir highlightFromUrl
                   dans App pour le mécanisme de navigation). */}
@@ -1706,8 +1706,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 )}
               </div>
 
-              {/* Onglets façon Odoo au-dessus du tableau — Générateur de devis/Autres
-                  informations n'ont pas d'équivalent réel ici (voir project_odoo_devis_visual_alignment),
+              {/* Onglets façon ERP au-dessus du tableau — Générateur de devis/Autres
+                  informations n'ont pas d'équivalent réel ici (voir project_erp_devis_visual_alignment),
                   seuls Lignes de commande/Notes sont repris. */}
               <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
                 {[{ id: 'lignes', label: 'Lignes de commande' }, { id: 'notes', label: 'Notes' }].map(t => (
@@ -1928,7 +1928,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               )}
             </div>
 
-            {/* Panneau latéral façon chatter Odoo : messages, activités planifiées, journal des modifications */}
+            {/* Panneau latéral façon chatter d'un ERP de référence : messages, activités planifiées, journal des modifications */}
             <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Messages</div>
@@ -2180,11 +2180,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
   );
 }
 
-// Sous-menu façon barre d'application Odoo (Ventes : Commandes/À facturer/Produits/
+// Sous-menu façon barre d'application d'un ERP de référence (Ventes : Commandes/À facturer/Produits/
 // Analyse/Configuration) — mêmes 5 entrées, reliées à des fonctionnalités déjà
 // existantes plutôt qu'à de nouvelles pages : voir VentesWithDevis ci-dessous pour
 // le détail de ce que rend chaque entrée. Couleurs YEELEN conservées (vert plutôt que
-// le violet Odoo), seule la structure horizontale est reprise.
+// le violet de l'ERP de référence), seule la structure horizontale est reprise.
 const VENTES_SOUS_NAV = [
   { id: 'commandes', label: 'Commandes' },
   { id: 'a_facturer', label: 'À facturer' },
@@ -2194,7 +2194,7 @@ const VENTES_SOUS_NAV = [
 ];
 
 // Grand livre des ventes (devis signés/facturés), en lecture seule — équivalent
-// minimal du menu "Analyse" d'Odoo. Réutilise getVentesLedger, déjà la source de
+// minimal d'un menu "Analyse" de référence. Réutilise getVentesLedger, déjà la source de
 // vérité de ComptabiliteTab pour les mêmes données.
 function VentesAnalyseTab() {
   const [mouvements, setMouvements] = useState([]);
@@ -2256,7 +2256,7 @@ function VentesAnalyseTab() {
 }
 
 // Affiche le modèle de devis multi-lignes dans l'onglet Ventes, avec une barre de
-// sous-navigation façon Odoo au-dessus (voir VENTES_SOUS_NAV).
+// sous-navigation façon ERP au-dessus (voir VENTES_SOUS_NAV).
 function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
   const [clientsListe, setClientsListe] = useState([]);
   const [sousNav, setSousNav] = useState('commandes');
@@ -2912,7 +2912,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   };
 
   // Catégories : vraie ressource CRUD par entreprise depuis la fusion produits
-  // (2026-08-18), inspirée d'un compte Odoo réel (Inventaire > Configuration >
+  // (2026-08-18), inspirée d'un compte ERP réel (Inventaire > Configuration >
   // Catégories de produits) — plus une liste figée dans le code.
   const [categories, setCategories] = useState([]);
   const defaultCategorieId = categories[0]?.id ?? '';
@@ -3740,10 +3740,10 @@ function ModuleTabButton({ tab, active, onClick, accentColor }) {
 // Barre d'onglets horizontale adaptative — remplace le simple flexWrap qui
 // existait avant (fonctionnel mais provoque un retour à la ligne peu soigné
 // sur petit écran) par un repli des onglets en trop dans un menu "Plus",
-// inspiré de navbar.js dans le client web d'Odoo Community (adapt(), voir
-// project_odoo_ux_alignment.md). Mesure la largeur réelle des onglets via une
+// inspiré de une barre de navigation de client web de référence (adapt(), voir
+// project_erp_ux_alignment.md). Mesure la largeur réelle des onglets via une
 // couche invisible avant de décider combien en afficher — même principe que
-// l'implémentation d'Odoo plutôt qu'un seuil de largeur codé en dur.
+// l'implémentation de référence plutôt qu'un seuil de largeur codé en dur.
 function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
   const containerRef = useRef(null);
   const measureRef = useRef(null);
@@ -5898,7 +5898,7 @@ const CONTACT_TYPE_CONFIG = {
 };
 
 // Redimensionne une image choisie par l'utilisateur en un carré `maxSize`px avant de
-// l'encoder en base64 (widget image_1920 d'Odoo fait la même chose côté serveur ; ici
+// l'encoder en base64 (un widget image standard fait la même chose côté serveur ; ici
 // tout se passe côté client puisqu'il n'existe aucune infrastructure de stockage de
 // fichiers dans cette app — le base64 part directement dans la colonne contacts.photo).
 function resizeImageToBase64(file, maxSize = 128) {
@@ -5922,7 +5922,7 @@ function resizeImageToBase64(file, maxSize = 128) {
   });
 }
 
-// Avatar façon fiche Odoo (image_1920, 130px, coins arrondis) — retombe sur des initiales
+// Avatar façon fiche d'un ERP de référence (un widget image standard, 130px, coins arrondis) — retombe sur des initiales
 // si aucune photo n'est renseignée plutôt que sur une icône générique, pour rester lisible
 // même sans upload. `onChange` absent = lecture seule (utilisé dans le panneau de détail).
 function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) {
@@ -5972,7 +5972,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
   );
 }
 
-// Gestionnaire de tags de contact (many2many_tags côté Odoo) — panneau repliable, même
+// Gestionnaire de tags de contact (un widget de tags standard côté ERP de référence) — panneau repliable, même
 // esprit que ListesPrixManager/"Gérer les catégories" de StocksTab : une ressource CRUD
 // par entreprise, pas une liste figée.
 function ContactTagsManager({ tags, onChange }) {
@@ -6069,7 +6069,7 @@ function ContactsTab({ type, highlightId }) {
     })();
   }, [type]);
 
-  // Tags colorés (many2many_tags), chargés une fois pour toute l'entreprise — voir
+  // Tags colorés (un widget de tags standard), chargés une fois pour toute l'entreprise — voir
   // ContactTagsManager pour la gestion CRUD (création/suppression).
   const [contactTags, setContactTags] = useState([]);
   const loadTags = useCallback(async () => {
@@ -6082,7 +6082,7 @@ function ContactsTab({ type, highlightId }) {
   }, []);
   useEffect(() => { loadTags(); }, [loadTags]);
 
-  // Sous-contacts (personnes rattachées à une société) — façon Odoo (page "Contacts" du
+  // Sous-contacts (personnes rattachées à une société) — façon ERP (page "Contacts" du
   // formulaire fiche), mais en section repliable plutôt qu'un vrai onglet séparé : ne
   // concerne que l'édition d'un contact déjà marqué Société (une nouvelle fiche n'a pas
   // encore d'id pour y rattacher qui que ce soit).
@@ -6137,7 +6137,7 @@ function ContactsTab({ type, highlightId }) {
 
   const selectedContact = contacts.find(c => c.id === selectedId) || null;
 
-  // Bouton intelligent façon Odoo ("Devis (3)" / "Achats (2)" sur une fiche) :
+  // Bouton intelligent façon ERP ("Devis (3)" / "Achats (2)" sur une fiche) :
   // charge la liste liée au contact sélectionné (devis pour un client, achats
   // pour un fournisseur — un contact double-rôle n'a qu'une seule des deux vues
   // active à la fois, selon la valeur de `type` sur cet onglet), affiche le
@@ -6307,11 +6307,11 @@ function ContactsTab({ type, highlightId }) {
     </div>
   );
 
-  // Reproduit la structure réelle de la fiche contact d'Odoo (res_partner_views.xml,
-  // inspection du dépôt source odoo/odoo — voir project_odoo_contact_architecture) :
+  // Reproduit la structure de la fiche contact d'un ERP de référence (structure des vues contact,
+  // voir project_erp_contact_architecture) :
   // avatar + bascule Particulier/Société + gros nom + email/téléphone à icônes en
   // en-tête, puis un groupe deux colonnes (société+adresse à gauche, détails+tags à
-  // droite). L'adresse reprend les proportions CSS exactes mesurées côté Odoo
+  // droite). L'adresse reprend les proportions CSS exactes mesurées côté ERP de référence
   // (.o_address_format : ville 38% / région 33% / code postal 25%).
   const renderFields = (f, setF, excludeCompanyId) => {
     const companies = contacts.filter(c => c.isCompany && c.id !== excludeCompanyId);
@@ -6354,10 +6354,10 @@ function ContactsTab({ type, highlightId }) {
           </div>
         </div>
 
-        {/* Groupe étiquette/valeur façon Odoo (.o_inner_group) : plus de champ encadré
+        {/* Groupe étiquette/valeur façon ERP (un groupe étiquette/valeur de référence) : plus de champ encadré
             individuellement — juste une bordure discrète au survol/focus (classe
             .flat-input, voir App.css) et une étiquette à gauche sur la même ligne
-            que la valeur, comme dans la vraie fiche contact d'Odoo. */}
+            que la valeur, comme dans la fiche contact d'un ERP de référence. */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
           <div className="field-group">
             {!f.isCompany && (
@@ -6603,7 +6603,7 @@ function ContactsTab({ type, highlightId }) {
               </div>
             </form>
 
-            {/* Sous-contacts (page "Contacts" de la fiche Odoo) — uniquement pour une
+            {/* Sous-contacts (page "Contacts" de la fiche d'un ERP de référence) — uniquement pour une
                 Société déjà enregistrée : une nouvelle fiche n'a pas encore d'id auquel
                 rattacher qui que ce soit. */}
             {editForm.isCompany && (
@@ -6806,7 +6806,7 @@ function SidebarNav({ tabs, activeTab, onSelect, top }) {
 }
 
 // Route un nom d'écran interne vers un vrai chemin d'URL — Phase 1 du routage
-// (voir la mémoire project_odoo_ux_alignment) : seuls l'écran principal et
+// (voir la mémoire project_erp_ux_alignment) : seuls l'écran principal et
 // l'onglet de premier niveau sont dans l'URL pour l'instant. Les sous-onglets
 // (Cultures > Stocks) et la fiche sélectionnée (Clients/:id) restent en state
 // local, pas encore dans l'URL — Phase 2 potentielle, pas ce chantier-ci.

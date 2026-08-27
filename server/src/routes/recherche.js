@@ -1,4 +1,4 @@
-// Recherche globale (Ctrl+K) — inspirée de la palette de commandes d'Odoo
+// Recherche globale (Ctrl+K) — inspirée d'une palette de commandes de référence
 // (addons/web/static/src/core/commands côté client web open source), version
 // minimale : cherche par nom dans les 3 ressources les plus consultées au
 // quotidien (contacts, produits, devis), scopée par entreprise_id comme

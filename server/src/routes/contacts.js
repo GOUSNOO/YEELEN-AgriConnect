@@ -5,9 +5,9 @@
 // pour la migration des données existantes, y compris le rapprochement automatique des
 // fiches qui représentaient déjà la même entité des deux côtés).
 //
-// Architecture façon fiche contact Odoo (2026-08-27) : is_company/photo/fonction/notes,
+// Architecture façon fiche contact d'un ERP de référence (2026-08-27) : is_company/photo/fonction/notes,
 // rattachement société mère (parent_id) + sous-contacts, tags colorés — voir migrate.js
-// pour le détail du schéma et project_odoo_contact_architecture pour le contexte complet.
+// pour le détail du schéma et project_erp_contact_architecture pour le contexte complet.
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
@@ -27,7 +27,7 @@ async function resolveListePrixId(entrepriseId, listePrixId) {
 // société (is_company = true) — même posture "silencieusement null plutôt que 400" que
 // resolveListePrixId ci-dessus. Empêche aussi un contact de se désigner lui-même comme sa
 // propre société mère (aucune boucle réelle n'est possible autrement, la hiérarchie n'a
-// qu'un seul niveau ici, contrairement à Odoo qui autorise des chaînes plus longues).
+// qu'un seul niveau ici, contrairement à un ERP de référence qui autorise des chaînes plus longues).
 async function resolveParentId(entrepriseId, parentId, ownId) {
   if (parentId == null) return null;
   if (ownId != null && Number(parentId) === Number(ownId)) return null;

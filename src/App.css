@@ -183,9 +183,9 @@
   }
 }
 
-/* Dimensions de tableau façon Odoo, mesurées sur un vrai compte Odoo (demo3.odoo.com,
+/* Dimensions de tableau façon ERP, mesurées sur un vrai compte ERP (un compte ERP de démonstration,
    commande S00067) : ligne ~41px, cellules 14px, padding 10px/8px (16px sur les bords
-   du tableau) — voir project_odoo_devis_visual_alignment. Une seule classe partagée
+   du tableau) — voir project_erp_devis_visual_alignment. Une seule classe partagée
    plutôt qu'un réglage au cas par cas, pour que tous les tableaux de l'app restent
    cohérents entre eux. Couleur de bordure fixée en dur (pas var(--border), qui bascule
    en sombre sous prefers-color-scheme: dark — même piège que le bug color-scheme déjà
@@ -216,11 +216,11 @@
   border-top: 1px solid #E2E8F0;
 }
 
-/* Champs façon Odoo : aucun encadré visible au repos (le "rectangle" que l'utilisateur
+/* Champs façon ERP : aucun encadré visible au repos (le "rectangle" que l'utilisateur
    a explicitement demandé de retirer), juste une bordure discrète qui apparaît au survol
-   ou au focus. Mesuré dans le vrai CSS d'Odoo (form_controller.scss) :
+   ou au focus. Mesuré dans le CSS d'un ERP de référence (le CSS de formulaire de référence) :
    `--o-input-border-color: transparent` tant que le champ n'est ni survolé ni focus —
-   reproduit ici à l'identique plutôt qu'approximé, pour la fiche contact (project_odoo_contact_architecture)
+   reproduit ici à l'identique plutôt qu'approximé, pour la fiche contact (project_erp_contact_architecture)
    et tout futur formulaire voulant le même traitement. Couleurs fixées en dur (pas
    var(--border), qui bascule en sombre sous prefers-color-scheme — même piège déjà
    documenté pour .data-table) pour matcher COLORS.ink/inkSoft/border utilisés en inline. */
@@ -246,11 +246,11 @@
   background: #fff;
 }
 
-/* Groupe étiquette/valeur façon Odoo (.o_inner_group : grid-template-columns:
+/* Groupe étiquette/valeur façon ERP (un groupe étiquette/valeur de référence : grid-template-columns:
    fit-content(150px) minmax(0,1fr)) — une étiquette à gauche, la valeur à droite sur la
    même ligne, plutôt que l'étiquette empilée au-dessus du champ utilisée ailleurs dans
    l'app (composant Field partagé, volontairement pas touché ici — voir la note dans
-   project_odoo_contact_architecture sur la portée de ce changement). */
+   project_erp_contact_architecture sur la portée de ce changement). */
 .field-group {
   display: grid;
   grid-template-columns: fit-content(150px) minmax(0, 1fr);

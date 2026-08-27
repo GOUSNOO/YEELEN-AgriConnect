@@ -19,7 +19,7 @@ const resultRowStyle = {
 };
 
 // Recherche globale (Ctrl+K) — version minimale inspirée de la palette de
-// commandes d'Odoo (voir CLAUDE.md : addons/web/static/src/core/commands côté
+// commandes d'un ERP de référence (voir CLAUDE.md : addons/web/static/src/core/commands côté
 // client web open source). Ne couvre que 3 ressources pour ce premier passage :
 // contacts, produits, devis — les plus consultées au quotidien. `onSelect`
 // reçoit { kind: 'contact'|'produit'|'devis', item } et gère la navigation ;

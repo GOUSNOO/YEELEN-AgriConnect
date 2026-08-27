@@ -1,4 +1,4 @@
-// Activités planifiées — équivalent simplifié de mail.activity chez Odoo (un rappel/tâche
+// Activités planifiées — équivalent simplifié d'un modèle d'activité standard (un rappel/tâche
 // avec échéance, attaché à n'importe quelle ressource via ressource_type/ressource_id).
 // Voir server/src/db/migrate.js pour le schéma et le contexte.
 import express from 'express';

@@ -74,7 +74,7 @@ function normalizeLigne(l) {
     stockModule: isSection ? null : l.stockModule,
   };
 }
-// Montant HT de la ligne (après remise ligne, avant taxe) — c'est ce que Odoo appelle
+// Montant HT de la ligne (après remise ligne, avant taxe) — c'est ce qu'un ERP de référence appelle
 // "Amount"/"Montant" sur une ligne de commande.
 function ligneTotal(l) {
   if (l.type === 'section') return 0;
@@ -82,8 +82,8 @@ function ligneTotal(l) {
   return sousTotal * (1 - (Number(l.remisePourcentage) || 0) / 100);
 }
 
-// Alignement visuel Odoo (révisé le jour même après retour utilisateur) : chaque ligne porte
-// son propre taux de taxe, comme chez Odoo — abandon de la première version (un taux unique
+// Alignement visuel ERP (révisé le jour même après retour utilisateur) : chaque ligne porte
+// son propre taux de taxe, comme dans un ERP de référence — abandon de la première version (un taux unique
 // par devis, voir migrate.js:migrateTaxeDevisVersLignes pour la bascule). Remise globale
 // toujours unique par devis, appliquée au montant HT de chaque ligne avant sa propre taxe
 // (ordre comptable standard : remise avant taxe). Stocké dans devis.total (pas recalculé
