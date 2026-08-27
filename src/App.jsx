@@ -866,13 +866,13 @@ function ActivitesSection({ ressourceType, ressourceId }) {
           placeholder="Ex : rappeler le client"
           value={titre}
           onChange={e => setTitre(e.target.value)}
-          style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif" }}
+          style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif", background: '#fff', color: COLORS.ink }}
         />
         <input
           type="date"
           value={dateEcheance}
           onChange={e => setDateEcheance(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif" }}
+          style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif", background: '#fff', color: COLORS.ink }}
         />
         <Button small type="submit" variant="green" disabled={saving}>
           {saving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}
@@ -1577,39 +1577,51 @@ function DevisModule({ clientsListe, filtreStatut }) {
             <button onClick={closeDetailPopup} aria-label="Fermer" style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
             <div style={{ flex: '1 1 620px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12, paddingRight: 26 }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {detailData.statut === 'Brouillon' && detailData.clientEmail && (
-                    <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
-                      {actionBusy ? <Loader2 size={14} className="spin" /> : null} Envoyer au client
+              {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
+                  la ligne au hasard selon la largeur : actions principales (transition de
+                  statut) en haut, outils du document (aperçu/téléchargement/annulation) en
+                  dessous — même logique de regroupement qu'Odoo (actions primaires vs. menu
+                  secondaire), sans reproduire son menu déroulant. */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12, paddingRight: 26 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {detailData.statut === 'Brouillon' && detailData.clientEmail && (
+                      <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
+                        {actionBusy ? <Loader2 size={14} className="spin" /> : null} Envoyer au client
+                      </Button>
+                    )}
+                    {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
+                      <Button variant="outline" onClick={() => handleValiderManuel(detailData.id)} disabled={actionBusy}>
+                        {actionBusy ? <Loader2 size={14} className="spin" /> : null} Valider manuellement
+                      </Button>
+                    )}
+                    {detailData.statut === 'Signé' && (
+                      <Button variant="green" onClick={() => openPaiementPopup(detailData.id, detailData.total)} disabled={actionBusy}>
+                        Valider et facturer
+                      </Button>
+                    )}
+                    {modifiable && (
+                      <Button variant="outline" onClick={() => { startEditDevis(detailData); closeDetailPopup(); }}>
+                        <Settings2 size={14} /> Modifier les lignes
+                      </Button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Button small variant="outline" onClick={() => openDevisPdf(detailData.id)}>
+                      <FileText size={14} /> Aperçu
                     </Button>
-                  )}
-                  {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
-                    <Button variant="outline" onClick={() => handleValiderManuel(detailData.id)} disabled={actionBusy}>
-                      {actionBusy ? <Loader2 size={14} className="spin" /> : null} Valider manuellement
+                    <Button small variant="outline" onClick={() => downloadDevisPdf(detailData.id, detailData.numero)}>
+                      <Download size={14} /> PDF
                     </Button>
-                  )}
-                  {detailData.statut === 'Signé' && (
-                    <Button variant="green" onClick={() => openPaiementPopup(detailData.id, detailData.total)} disabled={actionBusy}>
-                      Valider et facturer
-                    </Button>
-                  )}
-                  {modifiable && (
-                    <Button variant="outline" onClick={() => { startEditDevis(detailData); closeDetailPopup(); }}>
-                      <Settings2 size={14} /> Modifier les lignes
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={() => openDevisPdf(detailData.id)}>
-                    <FileText size={14} /> Aperçu
-                  </Button>
-                  <Button variant="outline" onClick={() => downloadDevisPdf(detailData.id, detailData.numero)}>
-                    <Download size={14} /> PDF
-                  </Button>
-                  {['Brouillon', 'Devis', 'Envoyé'].includes(detailData.statut) && (
-                    <Button variant="ghost" onClick={() => handleAnnuler(detailData.id)} disabled={actionBusy} style={{ color: COLORS.red }}>
-                      Annuler
-                    </Button>
-                  )}
+                    {['Brouillon', 'Devis', 'Envoyé'].includes(detailData.statut) && (
+                      <>
+                        <div style={{ width: 1, height: 16, background: COLORS.border }} />
+                        <Button small variant="ghost" onClick={() => handleAnnuler(detailData.id)} disabled={actionBusy} style={{ color: COLORS.red }}>
+                          Annuler
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <DevisStatusBar statut={detailData.statut} />
               </div>
@@ -1689,11 +1701,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Conditions paiement</span>
-                        <input value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right' }} />
+                        <input value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Livraison promise</span>
-                        <input type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                        <input type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
                       </div>
                     </>
                   ) : (
@@ -1766,12 +1778,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
-                            <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                            <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
                           ) : '—'}
                         </td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
-                            <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }} />
+                            <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
                           ) : '—'}
                         </td>
                         <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
@@ -1798,13 +1810,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
                     <span>Remise globale (%)</span>
                     {modifiable ? (
-                      <input type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right' }} />
+                      <input type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
                     ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
                     <span>Taxe (%)</span>
                     {modifiable ? (
-                      <input type="number" value={detailMeta.tauxTaxe} onChange={e => setDetailMeta(m => ({ ...m, tauxTaxe: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right' }} />
+                      <input type="number" value={detailMeta.tauxTaxe} onChange={e => setDetailMeta(m => ({ ...m, tauxTaxe: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
                     ) : <span>{Number(detailData.tauxTaxe) || 0}%</span>}
                   </div>
                   {modifiable && (
@@ -1868,7 +1880,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     onChange={e => setNouveauMessage(e.target.value)}
                     placeholder="Écrire un message..."
                     onKeyDown={e => { if (e.key === 'Enter') handleEnvoyerMessage(); }}
-                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5 }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }}
                   />
                   <Button small variant="outline" onClick={handleEnvoyerMessage} disabled={messageSaving || !nouveauMessage.trim()}>
                     {messageSaving ? <Loader2 size={13} className="spin" /> : 'Envoyer'}
