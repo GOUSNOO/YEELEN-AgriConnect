@@ -865,16 +865,18 @@ function ActivitesSection({ ressourceType, ressourceId }) {
       <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Activités</div>
       <form onSubmit={submit} style={{ display: 'flex', gap: 6 }}>
         <input
+          className="odoo-flat-input"
           placeholder="Ex : rappeler le client"
           value={titre}
           onChange={e => setTitre(e.target.value)}
-          style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif", background: '#fff', color: COLORS.ink }}
+          style={{ flex: 1 }}
         />
         <input
+          className="odoo-flat-input"
           type="date"
           value={dateEcheance}
           onChange={e => setDateEcheance(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, fontFamily: "'Inter', sans-serif", background: '#fff', color: COLORS.ink }}
+          style={{ width: 'auto' }}
         />
         <Button small type="submit" variant="green" disabled={saving}>
           {saving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}
@@ -1754,11 +1756,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Conditions paiement</span>
-                        <input value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
+                        <input className="odoo-flat-input" value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, textAlign: 'right' }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Livraison promise</span>
-                        <input type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
+                        <input className="odoo-flat-input" type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ width: 'auto' }} />
                       </div>
                     </>
                   ) : (
@@ -1832,12 +1834,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td>{l.quantite}</td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
-                            <input type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
+                            <input className="odoo-flat-input" type="number" value={qEdit.quantiteLivree} onChange={e => updateQuantiteEdit(l.id, 'quantiteLivree', e.target.value)} style={{ width: 56 }} />
                           ) : '—'}
                         </td>
                         <td>
                           {detailData.statut !== 'Brouillon' ? (
-                            <input type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
+                            <input className="odoo-flat-input" type="number" value={qEdit.quantiteFacturee} onChange={e => updateQuantiteEdit(l.id, 'quantiteFacturee', e.target.value)} style={{ width: 56 }} />
                           ) : '—'}
                         </td>
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
@@ -1866,7 +1868,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
                     <span>Remise globale (%)</span>
                     {modifiable ? (
-                      <input type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, padding: '3px 4px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, textAlign: 'right', background: '#fff', color: COLORS.ink }} />
+                      <input className="odoo-flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
                     ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
                   </div>
                   {/* Taxe désormais définie par ligne (voir la colonne "Taxe (%)" du tableau
@@ -1932,11 +1934,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Messages</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input
+                    className="odoo-flat-input"
                     value={nouveauMessage}
                     onChange={e => setNouveauMessage(e.target.value)}
                     placeholder="Écrire un message..."
                     onKeyDown={e => { if (e.key === 'Enter') handleEnvoyerMessage(); }}
-                    style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }}
+                    style={{ flex: 1 }}
                   />
                   <Button small variant="outline" onClick={handleEnvoyerMessage} disabled={messageSaving || !nouveauMessage.trim()}>
                     {messageSaving ? <Loader2 size={13} className="spin" /> : 'Envoyer'}

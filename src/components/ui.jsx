@@ -88,33 +88,34 @@ export function Button({ children, onClick, variant = 'default', small, style, t
   );
 }
 
-export function Field({ label, ...props }) {
+// Champ façon Odoo (project_odoo_contact_architecture) : plus de rectangle visible au
+// repos (bordure/fond transparents, `.odoo-flat-input` dans App.css reproduit
+// --o-input-border-color: transparent mesuré dans le vrai CSS d'Odoo), une bordure
+// discrète apparaît seulement au survol/focus. Étendu à Field/Select eux-mêmes (au lieu
+// d'un traitement au cas par cas par écran) sur demande explicite de l'utilisateur, pour
+// que ce style s'applique automatiquement partout où ces deux composants partagés sont
+// déjà utilisés (une centaine d'endroits dans l'app).
+export function Field({ label, className, style, ...props }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
       {label}
       <input
         {...props}
-        style={{
-          fontFamily: "'Inter', sans-serif", fontSize: 14, padding: '9px 11px',
-          borderRadius: 8, border: '1px solid #DAD6C4', background: '#FBFAF4',
-          color: '#22271D', outline: 'none'
-        }}
+        className={className ? `odoo-flat-input ${className}` : 'odoo-flat-input'}
+        style={style}
       />
     </label>
   );
 }
 
-export function Select({ label, children, ...props }) {
+export function Select({ label, children, className, style, ...props }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
       {label}
       <select
         {...props}
-        style={{
-          fontFamily: "'Inter', sans-serif", fontSize: 14, padding: '9px 11px',
-          borderRadius: 8, border: '1px solid #DAD6C4', background: '#FBFAF4',
-          color: '#22271D', outline: 'none'
-        }}
+        className={className ? `odoo-flat-input ${className}` : 'odoo-flat-input'}
+        style={style}
       >
         {children}
       </select>
