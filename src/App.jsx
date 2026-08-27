@@ -6024,7 +6024,7 @@ function ContactTagsManager({ tags, onChange }) {
             {tags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>Aucun tag pour l'instant.</span>}
           </div>
           <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: VIP, B2B..." style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff', color: COLORS.ink }} />
+            <input className="odoo-flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: VIP, B2B..." style={{ flex: 1 }} />
             <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: 6, cursor: 'pointer' }} />
             <Button small type="submit" variant="outline" disabled={creating}>{creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}</Button>
           </form>
@@ -6351,37 +6351,55 @@ function ContactsTab({ type, highlightId }) {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Groupe étiquette/valeur façon Odoo (.o_inner_group) : plus de champ encadré
+            individuellement — juste une bordure discrète au survol/focus (classe
+            .odoo-flat-input, voir App.css) et une étiquette à gauche sur la même ligne
+            que la valeur, comme dans la vraie fiche contact d'Odoo. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
+          <div className="odoo-group">
             {!f.isCompany && (
-              <Select label="Société" value={f.parentId ?? ''} onChange={e => setF({ ...f, parentId: e.target.value === '' ? null : Number(e.target.value) })}>
-                <option value="">Aucune</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-              </Select>
+              <>
+                <div className="odoo-group-label">Société</div>
+                <select className="odoo-flat-input" value={f.parentId ?? ''} onChange={e => setF({ ...f, parentId: e.target.value === '' ? null : Number(e.target.value) })}>
+                  <option value="">Aucune</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                </select>
+              </>
             )}
-            <Field placeholder="Rue..." value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
-            <Field placeholder="Rue 2..." value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
-            <div style={{ display: 'flex', gap: 6 }}>
-              <div style={{ flex: '0 0 38%' }}><Field placeholder="Ville" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} /></div>
-              <div style={{ flex: '0 0 33%' }}><Field placeholder="Région" value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} /></div>
-              <div style={{ flex: '0 0 25%' }}><Field placeholder="Code postal" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} /></div>
-            </div>
-            <Field placeholder="Pays" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
-            <Field placeholder="Adresse libre (optionnel)" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {!f.isCompany && (
-              <Field label="Fonction" placeholder="Ex: Directeur commercial" value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
-            )}
-            <Field label="SIRET (optionnel)" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
-            {type === 'client' && (
-              <Select label="Liste de prix" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
-                <option value="">Aucune</option>
-                {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
-              </Select>
-            )}
+            <div className="odoo-group-label">Adresse</div>
             <div>
-              <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>Tags</div>
+              <input className="odoo-flat-input" placeholder="Rue..." value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
+              <input className="odoo-flat-input" placeholder="Rue 2..." value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
+              <div style={{ display: 'flex' }}>
+                <input className="odoo-flat-input" style={{ flex: '0 0 38%' }} placeholder="Ville" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
+                <input className="odoo-flat-input" style={{ flex: '0 0 33%' }} placeholder="Région" value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} />
+                <input className="odoo-flat-input" style={{ flex: '0 0 25%' }} placeholder="Code postal" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
+              </div>
+              <input className="odoo-flat-input" placeholder="Pays" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
+            </div>
+            <div className="odoo-group-label">Autre adresse</div>
+            <input className="odoo-flat-input" placeholder="Adresse libre (optionnel)" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+          </div>
+          <div className="odoo-group">
+            {!f.isCompany && (
+              <>
+                <div className="odoo-group-label">Fonction</div>
+                <input className="odoo-flat-input" placeholder="Ex: Directeur commercial" value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
+              </>
+            )}
+            <div className="odoo-group-label">SIRET</div>
+            <input className="odoo-flat-input" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
+            {type === 'client' && (
+              <>
+                <div className="odoo-group-label">Liste de prix</div>
+                <select className="odoo-flat-input" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
+                  <option value="">Aucune</option>
+                  {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
+                </select>
+              </>
+            )}
+            <div className="odoo-group-label">Tags</div>
+            <div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {contactTags.map(t => {
                   const active = f.tagIds.includes(t.id);
@@ -6398,6 +6416,7 @@ function ContactsTab({ type, highlightId }) {
               </div>
               <ContactTagsManager tags={contactTags} onChange={loadTags} />
             </div>
+            <div />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
               <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
               Est aussi {cfg.autre}
@@ -6405,11 +6424,10 @@ function ContactsTab({ type, highlightId }) {
           </div>
         </div>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
-          Notes
-          <textarea value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder="Notes internes..." rows={2}
-            style={{ fontFamily: "'Inter', sans-serif", fontSize: 13.5, padding: '9px 11px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.ink, outline: 'none', resize: 'vertical' }} />
-        </label>
+        <div className="odoo-group">
+          <div className="odoo-group-label">Notes</div>
+          <textarea className="odoo-flat-input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder="Notes internes..." rows={2} style={{ resize: 'vertical' }} />
+        </div>
       </div>
     );
   };
@@ -6588,12 +6606,22 @@ function ContactsTab({ type, highlightId }) {
             {editForm.isCompany && (
               <div style={{ marginTop: 18, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Contacts liés à cette société</div>
-                <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 12 }}>
-                  <Field label="Nom" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
-                  <Field label="Prénom" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
-                  <Field label="Fonction" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
-                  <Field label="Téléphone" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
-                  <Field label="Email" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
+                <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 4, alignItems: 'end', marginBottom: 12 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Nom
+                    <input className="odoo-flat-input" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Prénom
+                    <input className="odoo-flat-input" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Fonction
+                    <input className="odoo-flat-input" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Téléphone
+                    <input className="odoo-flat-input" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Email
+                    <input className="odoo-flat-input" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
+                  </label>
                   <Button small type="submit" variant="outline" disabled={subSaving}>
                     {subSaving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />} Ajouter
                   </Button>

@@ -215,3 +215,51 @@
 .odoo-table tbody tr {
   border-top: 1px solid #E2E8F0;
 }
+
+/* Champs façon Odoo : aucun encadré visible au repos (le "rectangle" que l'utilisateur
+   a explicitement demandé de retirer), juste une bordure discrète qui apparaît au survol
+   ou au focus. Mesuré dans le vrai CSS d'Odoo (form_controller.scss) :
+   `--o-input-border-color: transparent` tant que le champ n'est ni survolé ni focus —
+   reproduit ici à l'identique plutôt qu'approximé, pour la fiche contact (project_odoo_contact_architecture)
+   et tout futur formulaire voulant le même traitement. Couleurs fixées en dur (pas
+   var(--border), qui bascule en sombre sous prefers-color-scheme — même piège déjà
+   documenté pour .odoo-table) pour matcher COLORS.ink/inkSoft/border utilisés en inline. */
+.odoo-flat-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-size: 13.5px;
+  font-family: 'Inter', sans-serif;
+  color: #2D374A;
+  outline: none;
+  transition: border-color 0.1s ease, background-color 0.1s ease;
+}
+.odoo-flat-input::placeholder {
+  color: #9AA5B1;
+}
+.odoo-flat-input:hover,
+.odoo-flat-input:focus {
+  border-color: #E2E8F0;
+  background: #fff;
+}
+
+/* Groupe étiquette/valeur façon Odoo (.o_inner_group : grid-template-columns:
+   fit-content(150px) minmax(0,1fr)) — une étiquette à gauche, la valeur à droite sur la
+   même ligne, plutôt que l'étiquette empilée au-dessus du champ utilisée ailleurs dans
+   l'app (composant Field partagé, volontairement pas touché ici — voir la note dans
+   project_odoo_contact_architecture sur la portée de ce changement). */
+.odoo-group {
+  display: grid;
+  grid-template-columns: fit-content(150px) minmax(0, 1fr);
+  gap: 7px 14px;
+  align-items: start;
+}
+.odoo-group-label {
+  font-size: 12.5px;
+  color: #5B6357;
+  padding-top: 6px;
+  white-space: nowrap;
+}
