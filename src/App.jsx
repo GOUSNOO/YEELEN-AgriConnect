@@ -4477,6 +4477,9 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
 }
 
 function AgriculturalCalendarModule({ farmId }) {
+  const { t } = useTranslation();
+  const { fmtDate } = useLocale();
+  const typeLabel = (ty) => t(`calendar.type.${ty}`, { defaultValue: ty });
   const [events, setEvents] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [useRemote, setUseRemote] = useState(true);
@@ -4543,7 +4546,7 @@ function AgriculturalCalendarModule({ farmId }) {
         await loadEvents();
         setForm({ date: form.date, type: 'irrigation', title: '', description: '' });
       } catch (err) {
-        setError(err.message || "Impossible d'enregistrer l'activité.");
+        setError(err.message || t('calendar.addError'));
       }
       return;
     }
@@ -4594,62 +4597,62 @@ function AgriculturalCalendarModule({ farmId }) {
       } else {
         setEvents(prev => prev.map(ev => ev.id === editingId ? { ...ev, ...editForm } : ev).sort((a, b) => a.date.localeCompare(b.date)));
       }
-      notifySuccess('Activité mise à jour.');
+      notifySuccess(t('calendar.updated'));
       cancelEditEvent();
     } catch (err) {
       console.error('[AgriculturalCalendarModule saveEditEvent]', err);
-      notifyError(err, "Impossible de mettre à jour l'activité.");
+      notifyError(err, t('calendar.updateError'));
     } finally {
       setEditSubmitting(false);
     }
   };
 
   const activityMeta = {
-    irrigation: { label: 'Irrigation', tone: 'blue' },
-    traitement: { label: 'Traitement', tone: 'green' },
-    recolte: { label: 'Récolte', tone: 'ochre' },
-    vaccination: { label: 'Vaccination', tone: 'red' },
-    livraison: { label: 'Livraison', tone: 'blue' },
+    irrigation: { tone: 'blue' },
+    traitement: { tone: 'green' },
+    recolte: { tone: 'ochre' },
+    vaccination: { tone: 'red' },
+    livraison: { tone: 'blue' },
   };
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement du calendrier…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('calendar.loading')}</div>;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Planifier une activité</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('calendar.planTitle')}</div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={addEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-          <Select label="Type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
-            <option value="irrigation">Irrigation</option>
-            <option value="traitement">Traitement</option>
-            <option value="recolte">Récolte</option>
-            <option value="vaccination">Vaccination</option>
-            <option value="livraison">Livraison</option>
+          <Field label={t("common.date")} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+          <Select label={t("common.type")} value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+            <option value="irrigation">{typeLabel("irrigation")}</option>
+            <option value="traitement">{typeLabel("traitement")}</option>
+            <option value="recolte">{typeLabel("recolte")}</option>
+            <option value="vaccination">{typeLabel("vaccination")}</option>
+            <option value="livraison">{typeLabel("livraison")}</option>
           </Select>
-          <Field label="Titre" placeholder="Ex: Arrosage parcelle B" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-          <Field label="Description" placeholder="Détails" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <Button variant="green" type="submit"><Plus size={15} /> Ajouter</Button>
+          <Field label={t("calendar.titre")} placeholder={t("calendar.titrePlaceholder")} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+          <Field label={t("calendar.description")} placeholder={t("calendar.descriptionPlaceholder")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          <Button variant="green" type="submit"><Plus size={15} /> {t("common.add")}</Button>
         </form>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 16, alignItems: 'start' }}>
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>Calendrier agricole</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>{t('calendar.calendarTitle')}</div>
             <div style={{ display: 'flex', gap: 6 }}>
               <Button small variant="outline" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}>←</Button>
               <Button small variant="outline" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}>→</Button>
             </div>
           </div>
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 8 }}>
-            {viewMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+            {fmtDate(viewMonth, { month: 'long', year: 'numeric' })}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-            {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, idx) => (
+            {t('common.daysShort', { returnObjects: true }).map((day, idx) => (
               <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
             ))}
             {Array.from({ length: firstDayOffset }).map((_, idx) => (
@@ -4666,9 +4669,9 @@ function AgriculturalCalendarModule({ farmId }) {
                   <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5, color: isToday ? COLORS.green : COLORS.ink }}>{dayNumber}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {dayEvents.slice(0, 2).map(event => {
-                      const meta = activityMeta[event.type] || { label: event.type, tone: 'green' };
+                      const meta = activityMeta[event.type] || { tone: 'green' };
                       return <div key={event.id} style={{ fontSize: 10.5, padding: '3px 5px', borderRadius: 6, background: meta.tone === 'blue' ? COLORS.blueSoft : meta.tone === 'green' ? COLORS.greenSoft : meta.tone === 'red' ? COLORS.redSoft : COLORS.ochreSoft, color: meta.tone === 'blue' ? COLORS.blue : meta.tone === 'green' ? COLORS.green : meta.tone === 'red' ? COLORS.red : COLORS.ochre }}>
-                        {meta.label}
+                        {typeLabel(event.type)}
                       </div>;
                     })}
                     {dayEvents.length > 2 && <div style={{ fontSize: 10, color: COLORS.inkSoft }}>+{dayEvents.length - 2}</div>}
@@ -4681,28 +4684,28 @@ function AgriculturalCalendarModule({ farmId }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Types d’activités</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('calendar.typesTitle')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {Object.entries(activityMeta).map(([key, meta]) => (
                 <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: COLORS.inkSoft }}>
-                  <span>{meta.label}</span>
-                  <Badge tone={meta.tone}>{meta.label}</Badge>
+                  <span>{typeLabel(key)}</span>
+                  <Badge tone={meta.tone}>{typeLabel(key)}</Badge>
                 </div>
               ))}
             </div>
           </Card>
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Tous les événements</div>
-            <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginBottom: 8 }}>Passés et à venir — pour corriger une erreur de saisie.</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('calendar.allEvents')}</div>
+            <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginBottom: 8 }}>{t('calendar.allEventsHint')}</div>
             {allEventsSorted.length === 0 ? (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune activité prévue.</div>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('calendar.empty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
                 {allEventsSorted.map(event => (
                   <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{event.title}</div>
-                      <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 3 }}>{event.date} • {activityMeta[event.type]?.label || event.type}</div>
+                      <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 3 }}>{fmtDate(event.date)} • {typeLabel(event.type)}</div>
                     </div>
                     <button onClick={() => startEditEvent(event)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex', flexShrink: 0 }}>
                       <Settings2 size={14} />
@@ -4718,25 +4721,25 @@ function AgriculturalCalendarModule({ farmId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEvent}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'activité</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('calendar.editTitle')}</div>
               <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={saveEditEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-              <Field label="Date" type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} required />
-              <Select label="Type" value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value })}>
-                <option value="irrigation">Irrigation</option>
-                <option value="traitement">Traitement</option>
-                <option value="recolte">Récolte</option>
-                <option value="vaccination">Vaccination</option>
-                <option value="livraison">Livraison</option>
+              <Field label={t("common.date")} type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} required />
+              <Select label={t("common.type")} value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value })}>
+                <option value="irrigation">{typeLabel("irrigation")}</option>
+                <option value="traitement">{typeLabel("traitement")}</option>
+                <option value="recolte">{typeLabel("recolte")}</option>
+                <option value="vaccination">{typeLabel("vaccination")}</option>
+                <option value="livraison">{typeLabel("livraison")}</option>
               </Select>
-              <Field label="Titre" placeholder="Ex: Arrosage parcelle B" value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} required />
-              <Field label="Description" placeholder="Détails" value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
+              <Field label={t("calendar.titre")} placeholder={t("calendar.titrePlaceholder")} value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} required />
+              <Field label={t("calendar.description")} placeholder={t("calendar.descriptionPlaceholder")} value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
-                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t("common.save")}
                 </Button>
-                <Button type="button" onClick={cancelEditEvent}>Annuler</Button>
+                <Button type="button" onClick={cancelEditEvent}>{t("common.cancel")}</Button>
               </div>
             </form>
           </div>
@@ -4747,6 +4750,9 @@ function AgriculturalCalendarModule({ farmId }) {
 }
 
 function HarvestsModule({ farmId }) {
+  const { t } = useTranslation();
+  const { fmtDate, fmtNumber } = useLocale();
+  const qualiteLabel = (q) => t(`harvests.qualiteLabels.${q}`, { defaultValue: q });
   const todayValue = () => {
     const d = new Date();
     const y = d.getFullYear();
@@ -4833,7 +4839,7 @@ function HarvestsModule({ farmId }) {
         await loadHarvests();
         resetForm();
       } catch (err) {
-        setError(err.message || "Impossible d'enregistrer la récolte.");
+        setError(err.message || t('harvests.addError'));
       }
       return;
     }
@@ -4854,45 +4860,45 @@ function HarvestsModule({ farmId }) {
   const totalQuantite = harvests.reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement des récoltes…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('harvests.loading')}</div>;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Enregistrer une récolte</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('harvests.recordTitle')}</div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={addHarvest} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-          <Select label="Parcelle" value={form.parcelleId} onChange={e => setForm({ ...form, parcelleId: e.target.value, parcelleNom: '' })}>
-            <option value="">Sélectionner une parcelle...</option>
+          <Field label={t("common.date")} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+          <Select label={t("harvests.parcelle")} value={form.parcelleId} onChange={e => setForm({ ...form, parcelleId: e.target.value, parcelleNom: '' })}>
+            <option value="">{t("harvests.selectParcelle")}</option>
             {parcelles.map(p => (
               <option key={p.id} value={p.id}>{p.nom}</option>
             ))}
-            <option value="__autre__">Autre parcelle</option>
+            <option value="__autre__">{t("harvests.autreParcelle")}</option>
           </Select>
           {form.parcelleId === '__autre__' && (
-            <Field label="Nom de la parcelle" placeholder="Ex: Parcelle A" value={form.parcelleNom} onChange={e => setForm({ ...form, parcelleNom: e.target.value })} />
+            <Field label={t("harvests.parcelleNom")} placeholder={t("harvests.parcelleNomPlaceholder")} value={form.parcelleNom} onChange={e => setForm({ ...form, parcelleNom: e.target.value })} />
           )}
-          <Field label="Culture" placeholder="Ex: Maïs" value={form.culture} onChange={e => setForm({ ...form, culture: e.target.value })} />
-          <Field label="Quantité récoltée" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
-          <Select label="Qualité" value={form.qualite} onChange={e => setForm({ ...form, qualite: e.target.value })}>
-            <option value="Bonne">Bonne</option>
-            <option value="Moyenne">Moyenne</option>
-            <option value="Faible">Faible</option>
+          <Field label={t("harvests.culture")} placeholder={t("harvests.culturePlaceholder")} value={form.culture} onChange={e => setForm({ ...form, culture: e.target.value })} />
+          <Field label={t("harvests.quantite")} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
+          <Select label={t("harvests.qualite")} value={form.qualite} onChange={e => setForm({ ...form, qualite: e.target.value })}>
+            <option value="Bonne">{qualiteLabel("Bonne")}</option>
+            <option value="Moyenne">{qualiteLabel("Moyenne")}</option>
+            <option value="Faible">{qualiteLabel("Faible")}</option>
           </Select>
-          <Field label="Destination" placeholder="Marché / stockage / transformation" value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} />
-          <Button variant="green" type="submit"><Plus size={15} /> Ajouter</Button>
+          <Field label={t("harvests.destination")} placeholder={t("harvests.destinationPlaceholder")} value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} />
+          <Button variant="green" type="submit"><Plus size={15} /> {t("common.add")}</Button>
         </form>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Quantité totale récoltée</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{totalQuantite.toLocaleString('fr-FR')} kg</div>
+          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('harvests.totalQuantite')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtNumber(totalQuantite)} kg</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>Nombre d’enregistrements</div>
+          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('harvests.nbEnregistrements')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{harvests.length}</div>
         </Card>
       </div>
@@ -4901,26 +4907,26 @@ function HarvestsModule({ farmId }) {
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>Date</th>
-              <th>Parcelle</th>
-              <th>Culture</th>
-              <th>Quantité</th>
-              <th>Qualité</th>
-              <th>Destination</th>
+              <th>{t('common.date')}</th>
+              <th>{t('harvests.colParcelle')}</th>
+              <th>{t('harvests.colCulture')}</th>
+              <th>{t('harvests.colQuantite')}</th>
+              <th>{t('harvests.colQualite')}</th>
+              <th>{t('harvests.colDestination')}</th>
             </tr>
           </thead>
           <tbody>
             {harvests.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ color: COLORS.inkSoft }}>Aucune récolte enregistrée pour le moment.</td>
+                <td colSpan="6" style={{ color: COLORS.inkSoft }}>{t("harvests.emptyTable")}</td>
               </tr>
             ) : harvests.map(item => (
               <tr key={item.id}>
-                <td>{item.date}</td>
+                <td>{fmtDate(item.date)}</td>
                 <td>{item.parcelle}</td>
                 <td>{item.culture}</td>
-                <td>{item.quantite.toLocaleString('fr-FR')} kg</td>
-                <td><Badge tone={item.qualite === 'Bonne' ? 'green' : item.qualite === 'Moyenne' ? 'ochre' : 'red'}>{item.qualite}</Badge></td>
+                <td>{fmtNumber(item.quantite)} kg</td>
+                <td><Badge tone={item.qualite === 'Bonne' ? 'green' : item.qualite === 'Moyenne' ? 'ochre' : 'red'}>{qualiteLabel(item.qualite)}</Badge></td>
                 <td>{item.destination}</td>
               </tr>
             ))}

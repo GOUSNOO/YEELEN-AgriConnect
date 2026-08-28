@@ -23,7 +23,9 @@
     "actions": "Actions",
     "noData": "No data",
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    "daysShort": ["M", "T", "W", "T", "F", "S", "S"],
+    "type": "Type"
   },
   "role": {
     "admin": "Administrator",
@@ -702,6 +704,55 @@
       "deleted": "Tag deleted.",
       "deleteError": "Could not delete the tag."
     }
+  },
+  "calendar": {
+    "loading": "Loading calendar…",
+    "planTitle": "Schedule an activity",
+    "titre": "Title",
+    "titrePlaceholder": "e.g. Water plot B",
+    "description": "Description",
+    "descriptionPlaceholder": "Details",
+    "calendarTitle": "Farm calendar",
+    "typesTitle": "Activity types",
+    "allEvents": "All events",
+    "allEventsHint": "Past and upcoming — to fix a data-entry mistake.",
+    "empty": "No activities planned.",
+    "editTitle": "Edit activity",
+    "addError": "Could not save the activity.",
+    "updated": "Activity updated.",
+    "updateError": "Could not update the activity.",
+    "type": {
+      "irrigation": "Irrigation",
+      "traitement": "Treatment",
+      "recolte": "Harvest",
+      "vaccination": "Vaccination",
+      "livraison": "Delivery"
+    }
+  },
+  "harvests": {
+    "loading": "Loading harvests…",
+    "recordTitle": "Record a harvest",
+    "parcelle": "Plot",
+    "selectParcelle": "Select a plot…",
+    "autreParcelle": "Other plot",
+    "parcelleNom": "Plot name",
+    "parcelleNomPlaceholder": "e.g. Plot A",
+    "culture": "Crop",
+    "culturePlaceholder": "e.g. Maize",
+    "quantite": "Quantity harvested",
+    "qualite": "Quality",
+    "destination": "Destination",
+    "destinationPlaceholder": "Market / storage / processing",
+    "totalQuantite": "Total quantity harvested",
+    "nbEnregistrements": "Number of records",
+    "colParcelle": "Plot",
+    "colCulture": "Crop",
+    "colQuantite": "Quantity",
+    "colQualite": "Quality",
+    "colDestination": "Destination",
+    "emptyTable": "No harvests recorded yet.",
+    "addError": "Could not save the harvest.",
+    "qualiteLabels": { "Bonne": "Good", "Moyenne": "Average", "Faible": "Low" }
   },
   "nav": {
     "accueil": "Home",

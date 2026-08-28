@@ -23,7 +23,9 @@
     "actions": "Actions",
     "noData": "Aucune donnée",
     "months": ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"],
-    "days": ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+    "days": ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+    "daysShort": ["L", "M", "M", "J", "V", "S", "D"],
+    "type": "Type"
   },
   "role": {
     "admin": "Administrateur",
@@ -702,6 +704,55 @@
       "deleted": "Tag supprimé.",
       "deleteError": "Impossible de supprimer le tag."
     }
+  },
+  "calendar": {
+    "loading": "Chargement du calendrier…",
+    "planTitle": "Planifier une activité",
+    "titre": "Titre",
+    "titrePlaceholder": "Ex: Arrosage parcelle B",
+    "description": "Description",
+    "descriptionPlaceholder": "Détails",
+    "calendarTitle": "Calendrier agricole",
+    "typesTitle": "Types d'activités",
+    "allEvents": "Tous les événements",
+    "allEventsHint": "Passés et à venir — pour corriger une erreur de saisie.",
+    "empty": "Aucune activité prévue.",
+    "editTitle": "Modifier l'activité",
+    "addError": "Impossible d'enregistrer l'activité.",
+    "updated": "Activité mise à jour.",
+    "updateError": "Impossible de mettre à jour l'activité.",
+    "type": {
+      "irrigation": "Irrigation",
+      "traitement": "Traitement",
+      "recolte": "Récolte",
+      "vaccination": "Vaccination",
+      "livraison": "Livraison"
+    }
+  },
+  "harvests": {
+    "loading": "Chargement des récoltes…",
+    "recordTitle": "Enregistrer une récolte",
+    "parcelle": "Parcelle",
+    "selectParcelle": "Sélectionner une parcelle…",
+    "autreParcelle": "Autre parcelle",
+    "parcelleNom": "Nom de la parcelle",
+    "parcelleNomPlaceholder": "Ex: Parcelle A",
+    "culture": "Culture",
+    "culturePlaceholder": "Ex: Maïs",
+    "quantite": "Quantité récoltée",
+    "qualite": "Qualité",
+    "destination": "Destination",
+    "destinationPlaceholder": "Marché / stockage / transformation",
+    "totalQuantite": "Quantité totale récoltée",
+    "nbEnregistrements": "Nombre d'enregistrements",
+    "colParcelle": "Parcelle",
+    "colCulture": "Culture",
+    "colQuantite": "Quantité",
+    "colQualite": "Qualité",
+    "colDestination": "Destination",
+    "emptyTable": "Aucune récolte enregistrée pour le moment.",
+    "addError": "Impossible d'enregistrer la récolte.",
+    "qualiteLabels": { "Bonne": "Bonne", "Moyenne": "Moyenne", "Faible": "Faible" }
   },
   "nav": {
     "accueil": "Accueil",
