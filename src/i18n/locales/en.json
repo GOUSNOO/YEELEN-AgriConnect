@@ -20,7 +20,8 @@
     "amount": "Amount",
     "status": "Status",
     "actions": "Actions",
-    "noData": "No data"
+    "noData": "No data",
+    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   },
   "role": {
     "admin": "Administrator",
@@ -217,6 +218,50 @@
       "statusHighTemp": "High temperature",
       "statusToWater": "Needs watering",
       "statusNormal": "Normal"
+    }
+  },
+  "stocks": {
+    "loading": "Loading stock…",
+    "article": "Item",
+    "articlePlaceholder": "e.g. Cracked maize",
+    "categorie": "Category",
+    "quantite": "Quantity",
+    "unite": "Unit",
+    "unitePlaceholder": "kg, bags…",
+    "seuilAlerte": "Alert threshold",
+    "seuil": "Threshold",
+    "prixDefautField": "Default price ({{devise}})",
+    "coutRevient": "Cost price ({{devise}})",
+    "prixDefaut": "Default price",
+    "optionalPlaceholder": "Optional",
+    "manageCategories": "Manage categories",
+    "hideCategories": "Hide categories",
+    "newCategorie": "New category",
+    "stockEvolution": "Stock trend",
+    "emptyTable": "No items in stock yet.",
+    "stockLow": "Low stock ({{seuil}})",
+    "historiqueTitle": "Movement history",
+    "historiqueEmpty": "No movements recorded for this item.",
+    "editArticle": "Edit item",
+    "confirmDeleteArticle": "Remove “{{nom}}” from stock?",
+    "confirmDeleteCategorie": "Delete category “{{nom}}”?",
+    "articleAdded": "Item added to stock.",
+    "articleAddError": "Could not add the item.",
+    "articleDeleted": "Item deleted.",
+    "articleDeleteError": "Could not delete the item.",
+    "articleUpdated": "Item updated.",
+    "articleUpdateError": "Could not update the item.",
+    "categorieAddError": "Could not add the category.",
+    "categorieDeleteError": "Could not delete this category (it may still be used by an item).",
+    "historiqueLoadError": "Could not load the history.",
+    "raison": {
+      "achat_reception": "Purchase received",
+      "achat_annulation_reception": "Purchase reception cancelled",
+      "achat_creation": "Purchase recorded",
+      "achat_modification": "Purchase modified",
+      "achat_suppression": "Purchase deleted",
+      "devis_signature": "Sale (quote signed)",
+      "devis_remise_en_brouillon": "Sale cancelled (quote reverted to draft)"
     }
   },
   "nav": {

@@ -20,7 +20,8 @@
     "amount": "Montant",
     "status": "Statut",
     "actions": "Actions",
-    "noData": "Aucune donnée"
+    "noData": "Aucune donnée",
+    "months": ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
   },
   "role": {
     "admin": "Administrateur",
@@ -217,6 +218,50 @@
       "statusHighTemp": "Température élevée",
       "statusToWater": "À arroser",
       "statusNormal": "Normale"
+    }
+  },
+  "stocks": {
+    "loading": "Chargement des stocks…",
+    "article": "Article",
+    "articlePlaceholder": "Ex: Maïs concassé",
+    "categorie": "Catégorie",
+    "quantite": "Quantité",
+    "unite": "Unité",
+    "unitePlaceholder": "kg, sacs…",
+    "seuilAlerte": "Seuil d'alerte",
+    "seuil": "Seuil",
+    "prixDefautField": "Prix par défaut ({{devise}})",
+    "coutRevient": "Coût de revient ({{devise}})",
+    "prixDefaut": "Prix par défaut",
+    "optionalPlaceholder": "Optionnel",
+    "manageCategories": "Gérer les catégories",
+    "hideCategories": "Masquer les catégories",
+    "newCategorie": "Nouvelle catégorie",
+    "stockEvolution": "Évolution du stock",
+    "emptyTable": "Aucun article en stock pour l'instant.",
+    "stockLow": "Stock bas ({{seuil}})",
+    "historiqueTitle": "Historique des mouvements",
+    "historiqueEmpty": "Aucun mouvement enregistré pour cet article.",
+    "editArticle": "Modifier l'article",
+    "confirmDeleteArticle": "Supprimer « {{nom}} » du stock ?",
+    "confirmDeleteCategorie": "Supprimer la catégorie « {{nom}} » ?",
+    "articleAdded": "Article ajouté au stock.",
+    "articleAddError": "Impossible d'ajouter l'article.",
+    "articleDeleted": "Article supprimé.",
+    "articleDeleteError": "Impossible de supprimer l'article.",
+    "articleUpdated": "Article mis à jour.",
+    "articleUpdateError": "Impossible de mettre à jour l'article.",
+    "categorieAddError": "Impossible d'ajouter la catégorie.",
+    "categorieDeleteError": "Impossible de supprimer cette catégorie (peut-être encore utilisée par un article).",
+    "historiqueLoadError": "Impossible de charger l'historique.",
+    "raison": {
+      "achat_reception": "Achat reçu",
+      "achat_annulation_reception": "Réception d'achat annulée",
+      "achat_creation": "Achat enregistré",
+      "achat_modification": "Achat modifié",
+      "achat_suppression": "Achat supprimé",
+      "devis_signature": "Vente (devis signé)",
+      "devis_remise_en_brouillon": "Vente annulée (devis remis en brouillon)"
     }
   },
   "nav": {

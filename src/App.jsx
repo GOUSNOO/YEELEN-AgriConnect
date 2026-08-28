@@ -2882,17 +2882,6 @@ const DEFAULT_STOCKS = [
   { nom: 'Poulets de chair', categorie: 'Volailles vivantes', quantite: 180, unite: 'têtes', seuil: 20 },
 ];
 
-const MOUVEMENT_RAISON_LABEL = {
-  achat_reception: 'Achat reçu',
-  achat_annulation_reception: 'Réception d\'achat annulée',
-  // Raisons historiques (achats enregistrés avant l'ajout du cycle Brouillon→Commandé→Reçu) :
-  achat_creation: 'Achat enregistré',
-  achat_modification: 'Achat modifié',
-  achat_suppression: 'Achat supprimé',
-  devis_signature: 'Vente (devis signé)',
-  devis_remise_en_brouillon: 'Vente annulée (devis remis en brouillon)',
-};
-
 function useTable(farmId, key, defaults) {
   const [rows, setRows] = useState(defaults);
   const loadedRef = useRef(false);
@@ -2911,6 +2900,8 @@ function useTable(farmId, key, defaults) {
 }
 
 function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
+  const { t } = useTranslation();
+  const { devise, fmtMoney } = useLocale();
   const api = {
     get: () => getProduits(moduleType),
     create: (payload) => createProduit({ ...payload, module: moduleType }),
@@ -2938,19 +2929,19 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       setNewCatNom('');
     } catch (err) {
       console.error('[StocksTab addCategorie]', err);
-      notifyError(err, "Impossible d'ajouter la catégorie.");
+      notifyError(err, t('stocks.categorieAddError'));
     } finally {
       setCatSubmitting(false);
     }
   };
   const removeCategorie = async (id, nom) => {
-    if (!window.confirm(`Supprimer la catégorie « ${nom} » ?`)) return;
+    if (!window.confirm(t('stocks.confirmDeleteCategorie', { nom }))) return;
     try {
       await deleteProduitCategorie(id);
       setCategories(c => c.filter(cat => cat.id !== id));
     } catch (err) {
       console.error('[StocksTab removeCategorie]', err);
-      notifyError(err, 'Impossible de supprimer cette catégorie (peut-être encore utilisée par un article).');
+      notifyError(err, t('stocks.categorieDeleteError'));
     }
   };
 
@@ -2974,7 +2965,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       setHistoriqueMouvements(mouvements || []);
     } catch (err) {
       console.error('[StocksTab historique]', err);
-      notifyError(err, "Impossible de charger l'historique.");
+      notifyError(err, t('stocks.historiqueLoadError'));
       setHistoriqueMouvements([]);
     } finally {
       setHistoriqueLoading(false);
@@ -3040,23 +3031,23 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       });
       if (stock) {
         setStocks(s => [...s, stock]);
-        notifySuccess('Article ajouté au stock.');
+        notifySuccess(t('stocks.articleAdded'));
       }
     } catch (err) {
       console.error('[StocksTab add]', err);
-      notifyError(err, "Impossible d'ajouter l'article.");
+      notifyError(err, t('stocks.articleAddError'));
     }
     setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
   };
   const remove = async (id, nom) => {
-    if (!window.confirm(`Supprimer « ${nom} » du stock ?`)) return;
+    if (!window.confirm(t('stocks.confirmDeleteArticle', { nom }))) return;
     try {
       await api.remove(id);
       setStocks(s => s.filter(r => r.id !== id));
-      notifySuccess('Article supprimé.');
+      notifySuccess(t('stocks.articleDeleted'));
     } catch (err) {
       console.error('[StocksTab remove]', err);
-      notifyError(err, "Impossible de supprimer l'article.");
+      notifyError(err, t('stocks.articleDeleteError'));
     }
   };
 
@@ -3080,46 +3071,47 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       });
       if (stock) {
         setStocks(s => s.map(r => r.id === editingId ? stock : r));
-        notifySuccess('Article mis à jour.');
+        notifySuccess(t('stocks.articleUpdated'));
       }
       cancelEdit();
     } catch (err) {
       console.error('[StocksTab saveEdit]', err);
-      notifyError(err, "Impossible de mettre à jour l'article.");
+      notifyError(err, t('stocks.articleUpdateError'));
     } finally {
       setEditSubmitting(false);
     }
   };
 
   const stockTotal = stocks.reduce((sum, item) => sum + item.quantite, 0);
+  const months = t('common.months', { returnObjects: true });
   const stockEvolution = [
-    { label: 'Jan', value: Math.max(50, stockTotal - 120) },
-    { label: 'Fév', value: Math.max(60, stockTotal - 80) },
-    { label: 'Mar', value: Math.max(70, stockTotal - 40) },
-    { label: 'Avr', value: stockTotal },
+    { label: months[0], value: Math.max(50, stockTotal - 120) },
+    { label: months[1], value: Math.max(60, stockTotal - 80) },
+    { label: months[2], value: Math.max(70, stockTotal - 40) },
+    { label: months[3], value: stockTotal },
   ];
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement des stocks…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('stocks.loading')}</div>;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Article" placeholder="Ex: Maïs concassé" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
-          <Select label="Catégorie" value={form.categorieId} onChange={e => setForm({ ...form, categorieId: Number(e.target.value) })}>
+          <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
+          <Select label={t('stocks.categorie')} value={form.categorieId} onChange={e => setForm({ ...form, categorieId: Number(e.target.value) })}>
             {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
           </Select>
-          <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
-          <Field label="Unité" placeholder="kg, sacs…" value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
-          <Field label="Seuil d'alerte" type="number" placeholder="0" value={form.seuil} onChange={e => setForm({ ...form, seuil: e.target.value })} />
-          <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
-          <Field label="Coût de revient (FCFA)" type="number" placeholder="Optionnel" value={form.cout} onChange={e => setForm({ ...form, cout: e.target.value })} />
-          <Button variant="ochre" type="submit"><Plus size={15} /> Ajouter</Button>
+          <Field label={t('stocks.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
+          <Field label={t('stocks.unite')} placeholder={t('stocks.unitePlaceholder')} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
+          <Field label={t('stocks.seuilAlerte')} type="number" placeholder="0" value={form.seuil} onChange={e => setForm({ ...form, seuil: e.target.value })} />
+          <Field label={t('stocks.prixDefautField', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
+          <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={form.cout} onChange={e => setForm({ ...form, cout: e.target.value })} />
+          <Button variant="ochre" type="submit"><Plus size={15} /> {t('common.add')}</Button>
         </form>
         <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12.5, padding: 0, marginTop: 10 }}>
-          {catManagerOpen ? 'Masquer les catégories' : 'Gérer les catégories'}
+          {catManagerOpen ? t('stocks.hideCategories') : t('stocks.manageCategories')}
         </button>
         {catManagerOpen && (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -3132,33 +3124,33 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               </div>
             ))}
             <form onSubmit={addCategorie} style={{ display: 'flex', gap: 8 }}>
-              <Field placeholder="Nouvelle catégorie" value={newCatNom} onChange={e => setNewCatNom(e.target.value)} />
+              <Field placeholder={t('stocks.newCategorie')} value={newCatNom} onChange={e => setNewCatNom(e.target.value)} />
               <Button type="submit" disabled={catSubmitting} style={{ whiteSpace: 'nowrap' }}>
-                {catSubmitting ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Ajouter
+                {catSubmitting ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t('common.add')}
               </Button>
             </form>
           </div>
         )}
       </Card>
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Évolution du stock</div>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t('stocks.stockEvolution')}</div>
         <MiniChart data={stockEvolution} color={COLORS.blue} />
       </Card>
       <Card style={{ padding: 0 }}>
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>Article</th>
-              <th>Catégorie</th>
-              <th>Quantité</th>
-              <th>Seuil</th>
-              <th>Prix par défaut</th>
+              <th>{t('stocks.article')}</th>
+              <th>{t('stocks.categorie')}</th>
+              <th>{t('stocks.quantite')}</th>
+              <th>{t('stocks.seuil')}</th>
+              <th>{t('stocks.prixDefaut')}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {stocks.length === 0 ? (
-              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>Aucun article en stock pour l'instant.</td></tr>
+              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>{t('stocks.emptyTable')}</td></tr>
             ) : stocks.map(s => (
               <tr key={s.id}>
                 <td style={{ fontWeight: 500 }}>{s.nom}</td>
@@ -3166,13 +3158,13 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 <td>{s.quantite} {s.unite}</td>
                 <td>
                   {s.quantite <= s.seuil
-                    ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><AlertTriangle size={13} /> Stock bas ({s.seuil})</span>
+                    ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><AlertTriangle size={13} /> {t('stocks.stockLow', { seuil: s.seuil })}</span>
                     : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
                 </td>
-                <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? `${Number(s.prixDefaut).toLocaleString('fr-FR')} FCFA` : '—'}</td>
+                <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? fmtMoney(s.prixDefaut) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button onClick={() => openHistorique(s)} title="Historique des mouvements" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                    <button onClick={() => openHistorique(s)} title={t('stocks.historiqueTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                       <History size={15} />
                     </button>
                     <button onClick={() => startEdit(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
@@ -3193,26 +3185,26 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'article</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('stocks.editArticle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
-                <Field label="Article" placeholder="Ex: Maïs concassé" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
-                <Select label="Catégorie" value={editForm.categorieId} onChange={e => setEditForm({ ...editForm, categorieId: Number(e.target.value) })}>
+                <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
+                <Select label={t('stocks.categorie')} value={editForm.categorieId} onChange={e => setEditForm({ ...editForm, categorieId: Number(e.target.value) })}>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                 </Select>
-                <Field label="Quantité" type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
-                <Field label="Unité" placeholder="kg, sacs…" value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
-                <Field label="Seuil d'alerte" type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
-                <Field label="Prix par défaut (FCFA)" type="number" placeholder="Optionnel" value={editForm.prixDefaut} onChange={e => setEditForm({ ...editForm, prixDefaut: e.target.value })} />
-                <Field label="Coût de revient (FCFA)" type="number" placeholder="Optionnel" value={editForm.cout} onChange={e => setEditForm({ ...editForm, cout: e.target.value })} />
+                <Field label={t('stocks.quantite')} type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
+                <Field label={t('stocks.unite')} placeholder={t('stocks.unitePlaceholder')} value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
+                <Field label={t('stocks.seuilAlerte')} type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
+                <Field label={t('stocks.prixDefautField', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.prixDefaut} onChange={e => setEditForm({ ...editForm, prixDefaut: e.target.value })} />
+                <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.cout} onChange={e => setEditForm({ ...editForm, cout: e.target.value })} />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
-                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('common.save')}
                 </Button>
-                <Button type="button" onClick={cancelEdit}>Annuler</Button>
+                <Button type="button" onClick={cancelEdit}>{t('common.cancel')}</Button>
               </div>
             </form>
           </div>
@@ -3225,20 +3217,20 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{historiqueArticle.nom}</div>
-                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Historique des mouvements</div>
+                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('stocks.historiqueTitle')}</div>
               </div>
               <button onClick={closeHistorique} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             {historiqueLoading ? (
-              <div style={{ color: COLORS.inkSoft }}>Chargement…</div>
+              <div style={{ color: COLORS.inkSoft }}>{t('common.loading')}</div>
             ) : historiqueMouvements.length === 0 ? (
-              <div style={{ color: COLORS.inkSoft }}>Aucun mouvement enregistré pour cet article.</div>
+              <div style={{ color: COLORS.inkSoft }}>{t('stocks.historiqueEmpty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {historiqueMouvements.map(m => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{MOUVEMENT_RAISON_LABEL[m.raison] || m.raison}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{t(`stocks.raison.${m.raison}`, { defaultValue: m.raison })}</div>
                       <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{formatDateTimeFr(m.createdAt)}</div>
                     </div>
                     <div style={{ fontWeight: 700, color: m.delta >= 0 ? COLORS.green : COLORS.red }}>
