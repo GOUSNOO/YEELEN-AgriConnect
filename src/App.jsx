@@ -939,6 +939,20 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [editForm, setEditForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
   const [editSaving, setEditSaving] = useState(false);
 
+  // Sélection du client au clavier (champ texte + <datalist>, même mécanique que le
+  // champ Produit) — `clientId` reste la source de vérité envoyée au backend, le texte
+  // saisi n'est qu'un moyen de le résoudre. `clientSearch`/`editClientSearch` = texte
+  // affiché dans le champ, tenu synchro avec le client sélectionné.
+  const [clientSearch, setClientSearch] = useState('');
+  const [editClientSearch, setEditClientSearch] = useState('');
+  const clientLabel = (c) => (c && c.prenom ? `${c.prenom} ${c.nom}` : (c ? c.nom : ''));
+  const findClientById = (id) => (clientsListe || []).find(c => String(c.id) === String(id)) || null;
+  const findClientByLabel = (label) => {
+    const q = (label || '').trim().toLowerCase();
+    if (!q) return null;
+    return (clientsListe || []).find(c => clientLabel(c).toLowerCase() === q) || null;
+  };
+
   const [detailId, setDetailId] = useState(null); // devis actuellement affiché en détail
   const [detailData, setDetailData] = useState(null);
   const [journal, setJournal] = useState([]);
@@ -1088,8 +1102,34 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // rendu en grille de <Field>), pour une seule ligne de tableau continue façon ERP.
   const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: COLORS.ink, padding: 0 };
 
+  // Carte de coordonnées affichée dès qu'un client est sélectionné (formulaire de
+  // création + modale de modification) — bâtie sur les données déjà chargées par
+  // getContacts('client'), sans appel supplémentaire.
+  const renderClientCard = (client) => {
+    if (!client) return null;
+    const lignesAdresse = [
+      client.adresseRue,
+      [client.adresseCodePostal, client.adresseVille].filter(Boolean).join(' '),
+      client.adressePays,
+    ].filter(Boolean);
+    const adresseLibre = lignesAdresse.length === 0 && client.adresse ? client.adresse : null;
+    return (
+      <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div style={{ fontWeight: 600, color: COLORS.ink, display: 'flex', alignItems: 'center', gap: 5 }}>
+          {client.isCompany ? <Building2 size={13} /> : <UserIcon size={13} />}
+          {clientLabel(client)}
+        </div>
+        {client.email && <div>{client.email}</div>}
+        {client.telephone && <div>{client.telephone}</div>}
+        {lignesAdresse.map((l, i) => <div key={i}>{l}</div>)}
+        {adresseLibre && <div>{adresseLibre}</div>}
+      </div>
+    );
+  };
+
   const resetForm = () => {
     setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+    setClientSearch('');
   };
 
   const submitForm = async (e) => {
@@ -1142,6 +1182,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const cancelEditDevis = () => {
     setEditingId(null);
     setEditForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+    setEditClientSearch('');
   };
 
   const startEditDevis = async (d) => {
@@ -1155,6 +1196,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
         notes: devisComplet.notes || '',
         lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', tauxTaxe: l.tauxTaxe || '', unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
+      const c = findClientById(devisComplet.clientId);
+      setEditClientSearch(c ? clientLabel(c) : (devisComplet.clientPrenom ? `${devisComplet.clientPrenom} ${devisComplet.clientNom}` : (devisComplet.clientNom || '')));
     } catch (err) {
       setApiError(err.message);
     }
@@ -1415,6 +1458,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
       <datalist id={catalogDatalistId}>
         {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
+      <datalist id="devis-clients-datalist">
+        {(clientsListe || []).map(c => <option key={c.id} value={clientLabel(c)} />)}
+      </datalist>
       {apiError && (
         <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
@@ -1430,12 +1476,22 @@ function DevisModule({ clientsListe, filtreStatut }) {
           {t("devis.newTitle")}
         </div>
         <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Select label={t("devis.client")} value={form.clientId} onChange={e => setForm({ ...form, clientId: e.target.value })} required>
-            <option value="">{t("devis.selectClient")}</option>
-            {(clientsListe || []).map(c => (
-              <option key={c.id} value={c.id}>{c.prenom ? `${c.prenom} ${c.nom}` : c.nom}</option>
-            ))}
-          </Select>
+          <div>
+            <Field
+              label={t("devis.client")}
+              list="devis-clients-datalist"
+              placeholder={t("devis.selectClient")}
+              value={clientSearch}
+              onChange={e => {
+                const v = e.target.value;
+                setClientSearch(v);
+                const match = findClientByLabel(v);
+                setForm(f => ({ ...f, clientId: match ? String(match.id) : '' }));
+              }}
+              required
+            />
+            {renderClientCard(findClientById(form.clientId))}
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
@@ -2077,12 +2133,22 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Select label={t("devis.client")} value={editForm.clientId} onChange={e => setEditForm({ ...editForm, clientId: e.target.value })} required>
-                <option value="">{t("devis.selectClient")}</option>
-                {(clientsListe || []).map(c => (
-                  <option key={c.id} value={c.id}>{c.prenom ? `${c.prenom} ${c.nom}` : c.nom}</option>
-                ))}
-              </Select>
+              <div>
+                <Field
+                  label={t("devis.client")}
+                  list="devis-clients-datalist"
+                  placeholder={t("devis.selectClient")}
+                  value={editClientSearch}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setEditClientSearch(v);
+                    const match = findClientByLabel(v);
+                    setEditForm(f => ({ ...f, clientId: match ? String(match.id) : '' }));
+                  }}
+                  required
+                />
+                {renderClientCard(findClientById(editForm.clientId))}
+              </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
