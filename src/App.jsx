@@ -669,13 +669,15 @@ function isValidDevisTransition(fromStatut, toColumn) {
 }
 
 const DEVIS_KANBAN_COLUMNS = [
-  { key: 'Brouillon', label: 'Brouillon', statuts: ['Brouillon', 'Devis'] },
-  { key: 'Envoyé', label: 'Envoyé', statuts: ['Envoyé'] },
-  { key: 'Signé', label: 'Signé', statuts: ['Signé'] },
-  { key: 'Facturé', label: 'Facturé', statuts: ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'] },
+  { key: 'Brouillon', statuts: ['Brouillon', 'Devis'] },
+  { key: 'Envoyé', statuts: ['Envoyé'] },
+  { key: 'Signé', statuts: ['Signé'] },
+  { key: 'Facturé', statuts: ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'] },
 ];
 
 function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFacturer, onRemettreBrouillon, onOpenDetail }) {
+  const { t } = useTranslation();
+  const { fmtMoney } = useLocale();
   const [draggedId, setDraggedId] = useState(null);
   const draggedDevis = devisListe.find(d => d.id === draggedId) || null;
 
@@ -704,7 +706,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
             }}
           >
             <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-              <span>{col.label}</span><span>{items.length}</span>
+              <span>{t(`devis.statut.${col.key}`)}</span><span>{items.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {items.map(d => (
@@ -723,8 +725,8 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: COLORS.inkSoft }}>{d.numero}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0' }}>{d.clientPrenom} {d.clientNom}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Badge tone={statutTone[d.statut] || 'blue'}>{d.statut}</Badge>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{Number(d.total).toLocaleString('fr-FR')} FCFA</span>
+                    <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
+                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{fmtMoney(d.total)}</span>
                   </div>
                 </div>
               ))}
@@ -770,19 +772,20 @@ function computeMarge(devis, catalogItems) {
 // post-facturation (Non payé/Payé partiellement/Payé) sont regroupés sous "Facturé" —
 // même principe de regroupement que les colonnes de DevisKanban plus haut.
 const DEVIS_STATUT_STEPS = [
-  { key: 'Brouillon', label: 'Brouillon', matches: ['Brouillon', 'Devis'] },
-  { key: 'Envoyé', label: 'Envoyé', matches: ['Envoyé'] },
-  { key: 'Signé', label: 'Signé', matches: ['Signé'] },
-  { key: 'Facturé', label: 'Facturé', matches: ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'] },
+  { key: 'Brouillon', matches: ['Brouillon', 'Devis'] },
+  { key: 'Envoyé', matches: ['Envoyé'] },
+  { key: 'Signé', matches: ['Signé'] },
+  { key: 'Facturé', matches: ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'] },
 ];
 const CHEVRON_NOTCH = 12;
 
 function DevisStatusBar({ statut }) {
+  const { t } = useTranslation();
   // "Annulé" est un statut terminal hors chaîne (voir routes/devis.js:POST /:id/annuler) —
   // aucune étape des chevrons ne doit s'y allumer, un badge rouge à part le montre clairement
   // plutôt qu'une barre à chevrons sans étape active (ambigu, pourrait passer pour une erreur).
   if (statut === 'Annulé') {
-    return <Badge tone="red">Annulé</Badge>;
+    return <Badge tone="red">{t('devis.statut.Annulé')}</Badge>;
   }
   const activeIndex = DEVIS_STATUT_STEPS.findIndex(s => s.matches.includes(statut));
   return (
@@ -804,7 +807,7 @@ function DevisStatusBar({ statut }) {
             color: isActive ? '#fff' : COLORS.inkSoft,
             position: 'relative', zIndex: isActive ? 2 : 1,
           }}>
-            {step.label}
+            {t(`devis.statut.${step.key}`)}
           </div>
         );
       })}
@@ -813,6 +816,8 @@ function DevisStatusBar({ statut }) {
 }
 
 function ActivitesSection({ ressourceType, ressourceId }) {
+  const { t } = useTranslation();
+  const { fmtDate } = useLocale();
   const [activites, setActivites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [titre, setTitre] = useState('');
@@ -846,7 +851,7 @@ function ActivitesSection({ ressourceType, ressourceId }) {
       setTitre('');
       setDateEcheance('');
     } catch (err) {
-      notifyError(err, "Impossible d'ajouter l'activité.");
+      notifyError(err, t('activites.addError'));
     } finally {
       setSaving(false);
     }
@@ -857,7 +862,7 @@ function ActivitesSection({ ressourceType, ressourceId }) {
       const { activite: updated } = await updateActivite(activite.id, !activite.termine);
       setActivites(a => a.map(x => x.id === updated.id ? updated : x));
     } catch (err) {
-      notifyError(err, "Impossible de mettre à jour l'activité.");
+      notifyError(err, t('activites.updateError'));
     }
   };
 
@@ -866,17 +871,17 @@ function ActivitesSection({ ressourceType, ressourceId }) {
       await deleteActivite(id);
       setActivites(a => a.filter(x => x.id !== id));
     } catch (err) {
-      notifyError(err, "Impossible de supprimer l'activité.");
+      notifyError(err, t('activites.deleteError'));
     }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Activités</div>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>{t('activites.title')}</div>
       <form onSubmit={submit} style={{ display: 'flex', gap: 6 }}>
         <input
           className="flat-input"
-          placeholder="Ex : rappeler le client"
+          placeholder={t('activites.placeholder')}
           value={titre}
           onChange={e => setTitre(e.target.value)}
           style={{ flex: 1 }}
@@ -893,16 +898,16 @@ function ActivitesSection({ ressourceType, ressourceId }) {
         </Button>
       </form>
       {loading ? (
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Chargement...</div>
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
       ) : activites.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Aucune activité.</div>
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('activites.empty')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {activites.map(a => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, opacity: a.termine ? 0.5 : 1 }}>
               <input type="checkbox" checked={a.termine} onChange={() => toggle(a)} style={{ cursor: 'pointer' }} />
               <span style={{ flex: 1, textDecoration: a.termine ? 'line-through' : 'none' }}>{a.titre}</span>
-              {a.dateEcheance && <span style={{ color: COLORS.inkSoft, fontSize: 11.5 }}>{new Date(a.dateEcheance).toLocaleDateString('fr-FR')}</span>}
+              {a.dateEcheance && <span style={{ color: COLORS.inkSoft, fontSize: 11.5 }}>{fmtDate(a.dateEcheance)}</span>}
               <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                 <Trash2 size={12} />
               </button>
@@ -916,6 +921,8 @@ function ActivitesSection({ ressourceType, ressourceId }) {
 
 function DevisModule({ clientsListe, filtreStatut }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { fmtMoney, fmtDate, locale } = useLocale();
   const [devisListe, setDevisListe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
@@ -1088,7 +1095,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const submitForm = async (e) => {
     e.preventDefault();
     if (!form.clientId || form.lignes.some(l => !l.produit || (l.type !== 'section' && (l.quantite === '' || l.prixUnitaire === '')))) {
-      setApiError('Un client et toutes les lignes de produits (complètes) sont requis.');
+      setApiError(t('devis.errRequired'));
       return;
     }
     setSaving(true);
@@ -1111,7 +1118,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         })),
       };
       await createDevis(payload);
-      notifySuccess('Devis créé en brouillon.');
+      notifySuccess(t('devis.created'));
       resetForm();
       await loadDevis();
     } catch (err) {
@@ -1156,7 +1163,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const submitEditForm = async (e) => {
     e.preventDefault();
     if (!editForm.clientId || editForm.lignes.some(l => !l.produit || (l.type !== 'section' && (l.quantite === '' || l.prixUnitaire === '')))) {
-      setApiError('Un client et toutes les lignes de produits (complètes) sont requis.');
+      setApiError(t('devis.errRequired'));
       return;
     }
     setEditSaving(true);
@@ -1179,7 +1186,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         })),
       };
       await updateDevis(editingId, payload);
-      notifySuccess('Devis mis à jour.');
+      notifySuccess(t('devis.updated'));
       cancelEditDevis();
       await loadDevis();
     } catch (err) {
@@ -1220,11 +1227,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
         conditionsPaiement: detailMeta.conditionsPaiement,
         livraisonPromise: detailMeta.livraisonPromise || null,
       });
-      notifySuccess('Devis mis à jour.');
+      notifySuccess(t('devis.updated'));
       await loadDevis();
       await openDetail(detailData.id);
     } catch (err) {
-      notifyError(err, 'Impossible de mettre à jour le devis.');
+      notifyError(err, t('devis.updateMetaError'));
     } finally {
       setDetailMetaSaving(false);
     }
@@ -1239,22 +1246,22 @@ function DevisModule({ clientsListe, filtreStatut }) {
       const d = await getMessages('devis', detailData.id);
       setMessages(d.messages || []);
     } catch (err) {
-      notifyError(err, "Impossible d'envoyer le message.");
+      notifyError(err, t('devis.sendMessageError'));
     } finally {
       setMessageSaving(false);
     }
   };
 
   const handleAnnuler = async (id) => {
-    if (!window.confirm('Annuler ce devis ? Cette action ne peut pas être annulée (il faudra en recréer un nouveau).')) return;
+    if (!window.confirm(t('devis.confirmAnnuler'))) return;
     setActionBusy(true);
     try {
       await annulerDevis(id);
-      notifySuccess('Devis annulé.');
+      notifySuccess(t('devis.annule'));
       await loadDevis();
       if (detailId === id) await openDetail(id);
     } catch (err) {
-      notifyError(err, "Impossible d'annuler ce devis.");
+      notifyError(err, t('devis.annulerError'));
     } finally {
       setActionBusy(false);
     }
@@ -1273,10 +1280,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
         quantiteFacturee: Number(q.quantiteFacturee) || 0,
       }));
       await updateDevisLigneQuantites(detailData.id, lignes);
-      notifySuccess('Quantités livrée/facturée mises à jour.');
+      notifySuccess(t('devis.quantitesUpdated'));
       await openDetail(detailData.id);
     } catch (err) {
-      notifyError(err, 'Impossible de mettre à jour les quantités.');
+      notifyError(err, t('devis.quantitesError'));
     } finally {
       setQuantitesSaving(false);
     }
@@ -1286,27 +1293,27 @@ function DevisModule({ clientsListe, filtreStatut }) {
     setActionBusy(true);
     try {
       await envoyerDevis(id);
-      notifySuccess('Devis envoyé par email au client.');
+      notifySuccess(t('devis.sent'));
       await loadDevis();
       if (detailId === id) await openDetail(id);
     } catch (err) {
-      notifyError(err, "Impossible d'envoyer le devis.");
+      notifyError(err, t('devis.sendError'));
     } finally {
       setActionBusy(false);
     }
   };
 
   const handleValiderManuel = async (id) => {
-    const confirmePar = window.prompt('Nom du client ayant donné son accord :');
+    const confirmePar = window.prompt(t('devis.promptSignataire'));
     if (!confirmePar || !confirmePar.trim()) return;
     setActionBusy(true);
     try {
       await validerDevisManuel(id, confirmePar);
-      notifySuccess('Devis validé manuellement.');
+      notifySuccess(t('devis.validatedManual'));
       await loadDevis();
       if (detailId === id) await openDetail(id);
     } catch (err) {
-      notifyError(err, 'Impossible de valider ce devis.');
+      notifyError(err, t('devis.validateError'));
     } finally {
       setActionBusy(false);
     }
@@ -1327,7 +1334,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
   const submitFacturer = async () => {
     if (paiementForm.modalitePaiement === 'echelonne' && paiementForm.echeances.some(e => !e.montant || !e.dateEcheance)) {
-      notifyError(new Error('Toutes les échéances doivent avoir un montant et une date.'));
+      notifyError(new Error(t('devis.echeancesIncompletes')));
       return;
     }
     setActionBusy(true);
@@ -1337,55 +1344,55 @@ function DevisModule({ clientsListe, filtreStatut }) {
         modalitePaiement: paiementForm.modalitePaiement,
         echeances: paiementForm.modalitePaiement === 'echelonne' ? paiementForm.echeances : undefined,
       });
-      notifySuccess('Devis converti en facture.');
+      notifySuccess(t('devis.facture'));
       setPaiementPopupOpen(false);
       await loadDevis();
       if (detailId === paiementDevisId) await openDetail(paiementDevisId);
     } catch (err) {
-      notifyError(err, 'Impossible de valider et Facturer.');
+      notifyError(err, t('devis.factureError'));
     } finally {
       setActionBusy(false);
     }
   };
 
   const handleRemettreBrouillon = async (id) => {
-    if (!window.confirm('Remettre ce document en brouillon ? Les paiements enregistrés seront annulés et retirés de Finances.')) return;
+    if (!window.confirm(t('devis.confirmRemettreBrouillon'))) return;
     setActionBusy(true);
     try {
       await remettreDevisBrouillon(id);
-      notifySuccess('Document remis en brouillon.');
+      notifySuccess(t('devis.remisBrouillon'));
       await loadDevis();
       if (detailId === id) await openDetail(id);
     } catch (err) {
-      notifyError(err, 'Impossible de remettre en brouillon.');
+      notifyError(err, t('devis.remettreBrouillonError'));
     } finally {
       setActionBusy(false);
     }
   };
 
   const handlePayerEcheance = async (devisId, echeanceId) => {
-    if (!window.confirm('Confirmer que cette échéance a bien été payée ?')) return;
+    if (!window.confirm(t('devis.confirmPayerEcheance'))) return;
     setActionBusy(true);
     try {
       await payerEcheance(devisId, echeanceId);
-      notifySuccess('Échéance marquée comme payée.');
+      notifySuccess(t('devis.echeancePayee'));
       await loadDevis();
       await openDetail(devisId);
     } catch (err) {
-      notifyError(err, "Impossible de marquer cette échéance comme payée.");
+      notifyError(err, t('devis.echeancePayeeError'));
     } finally {
       setActionBusy(false);
     }
   };
 
   const handleDelete = async (id, numero) => {
-    if (!window.confirm(`Supprimer le devis « ${numero} » ?`)) return;
+    if (!window.confirm(t('devis.confirmDelete', { numero }))) return;
     try {
       await deleteDevis(id);
-      notifySuccess('Devis supprimé.');
+      notifySuccess(t('devis.deleted'));
       await loadDevis();
     } catch (err) {
-      notifyError(err, 'Impossible de supprimer.');
+      notifyError(err, t('devis.deleteError'));
     }
   };
 
@@ -1420,18 +1427,18 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {!filtreStatut && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          Nouveau devis
+          {t("devis.newTitle")}
         </div>
         <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Select label="Client" value={form.clientId} onChange={e => setForm({ ...form, clientId: e.target.value })} required>
-            <option value="">Sélectionner un client...</option>
+          <Select label={t("devis.client")} value={form.clientId} onChange={e => setForm({ ...form, clientId: e.target.value })} required>
+            <option value="">{t("devis.selectClient")}</option>
             {(clientsListe || []).map(c => (
               <option key={c.id} value={c.id}>{c.prenom ? `${c.prenom} ${c.nom}` : c.nom}</option>
             ))}
           </Select>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
             {/* Tableau continu façon ERP (une seule ligne par article, sans boîte séparée par
                 champ) plutôt que la grille de <Field> encadrés d'avant — voir la demande
                 explicite de l'utilisateur à ce sujet. "Livré"/"Facturé" apparaissent en lecture
@@ -1442,15 +1449,15 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <thead>
                 <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                   <th style={{ width: '3.5%' }}></th>
-                  <th style={{ width: '24%' }}>Désignation</th>
-                  <th style={{ width: '9%' }}>Qté</th>
-                  <th style={{ width: '9%' }}>Livré</th>
-                  <th style={{ width: '9%' }}>Facturé</th>
-                  <th style={{ width: '6%' }}>Unité</th>
-                  <th style={{ width: '9%' }}>Prix unit.</th>
-                  <th style={{ width: '13%' }}>Taxe (%)</th>
-                  <th style={{ width: '5%' }}>Remise (%)</th>
-                  <th style={{ width: '10%', textAlign: 'right' }}>Montant</th>
+                  <th style={{ width: '24%' }}>{t("devis.colDesignation")}</th>
+                  <th style={{ width: '9%' }}>{t("devis.colQte")}</th>
+                  <th style={{ width: '9%' }}>{t("devis.colLivre")}</th>
+                  <th style={{ width: '9%' }}>{t("devis.colFacture")}</th>
+                  <th style={{ width: '6%' }}>{t("devis.colUnite")}</th>
+                  <th style={{ width: '9%' }}>{t("devis.colPrixUnit")}</th>
+                  <th style={{ width: '13%' }}>{t("devis.colTaxe")}</th>
+                  <th style={{ width: '5%' }}>{t("devis.colRemise")}</th>
+                  <th style={{ width: '10%', textAlign: 'right' }}>{t("devis.colMontant")}</th>
                   <th style={{ width: '3%' }}></th>
                 </tr>
               </thead>
@@ -1468,12 +1475,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <td style={{ cursor: 'grab', color: COLORS.inkSoft, textAlign: 'center' }}><GripVertical size={14} /></td>
                     {ligne.type === 'section' ? (
                       <td colSpan={9}>
-                        <input placeholder="Titre de section (ex: Matériel d'irrigation)" value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
+                        <input placeholder={t("devis.sectionPlaceholder")} value={ligne.produit} onChange={e => updateLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
                       </td>
                     ) : (
                       <>
                         <td>
-                          <input placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                          <input placeholder={t("devis.produitPlaceholder")} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                             const value = e.target.value;
                             updateLigne(i, 'produit', value);
                             const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
@@ -1491,11 +1498,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
                         <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
-                        <td><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td><input placeholder={t("devis.unitePlaceholder")} value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(ligneTotalAvecTaxe(ligne))}</td>
                       </>
                     )}
                     <td style={{ textAlign: 'center' }}>
@@ -1508,8 +1515,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <tr>
                       <td></td>
                       <td colSpan={9} style={{ paddingBottom: 8 }}>
-                        <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
-                          <option value="">Aucune</option>
+                        <Select label={t("devis.recolteLiee")} value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
+                          <option value="">{t("common.none")}</option>
                           {recoltes.map(r => (
                             <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
                           ))}
@@ -1524,21 +1531,21 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
-                <Plus size={14} /> Ajouter une ligne
+                <Plus size={14} /> {t("devis.addLigne")}
               </Button>
               <Button type="button" variant="ghost" onClick={addSectionLigne} style={{ alignSelf: 'flex-start' }}>
-                <Plus size={14} /> Ajouter une section
+                <Plus size={14} /> {t("devis.addSection")}
               </Button>
             </div>
           </div>
 
-          <Field label="Notes (optionnel)" placeholder="Conditions, délais, remarques..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalForm.toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalForm) })}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="green" disabled={saving}>
-                {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Créer le devis
+                {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {t("devis.create")}
               </Button>
             </div>
           </div>
@@ -1548,14 +1555,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
       {/* Liste des devis existants */}
       <div style={{ display: 'flex', gap: 6 }}>
-        <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>Liste</Button>
-        <Button variant={vueDevis === 'kanban' ? 'default' : 'ghost'} small onClick={() => setVueDevis('kanban')}>Kanban</Button>
+        <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>{t('devis.vueListe')}</Button>
+        <Button variant={vueDevis === 'kanban' ? 'default' : 'ghost'} small onClick={() => setVueDevis('kanban')}>{t('devis.vueKanban')}</Button>
       </div>
 
       {vueDevis === 'kanban' ? (
         loading ? (
           <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
-            <Loader2 size={16} className="spin" /> Chargement...
+            <Loader2 size={16} className="spin" /> {t("common.loading")}
           </div>
         ) : (
           <DevisKanban
@@ -1572,20 +1579,20 @@ function DevisModule({ clientsListe, filtreStatut }) {
       <Card style={{ padding: 0 }}>
         {loading ? (
           <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
-            <Loader2 size={16} className="spin" /> Chargement...
+            <Loader2 size={16} className="spin" /> {t("common.loading")}
           </div>
         ) : devisAffiches.length === 0 ? (
           <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: 13 }}>
-            {filtreStatut ? 'Aucun devis à facturer pour l\'instant.' : 'Aucun devis pour l\'instant.'}
+            {filtreStatut ? t('devis.emptyAFacturer') : t('devis.emptyList')}
           </div>
         ) : (
           <table className="data-table">
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-                <th>Numéro</th>
-                <th>Client</th>
-                <th>Statut</th>
-                <th>Total</th>
+                <th>{t("devis.colNumero")}</th>
+                <th>{t("devis.client")}</th>
+                <th>{t("common.status")}</th>
+                <th>{t("common.total")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -1594,8 +1601,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
                   <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{d.numero}</td>
                   <td>{d.clientPrenom} {d.clientNom}</td>
-                  <td><Badge tone={statutTone[d.statut] || 'blue'}>{d.statut}</Badge></td>
-                  <td style={{ fontWeight: 600 }}>{d.total.toLocaleString('fr-FR')} FCFA</td>
+                  <td><Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge></td>
+                  <td style={{ fontWeight: 600 }}>{fmtMoney(d.total)}</td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                       {['Brouillon', 'Devis'].includes(d.statut) && (
@@ -1639,7 +1646,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
           <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
-            <button onClick={closeDetailPopup} aria-label="Fermer" style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
+            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
             <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22, boxSizing: 'border-box' }}>
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
@@ -1652,37 +1659,37 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {detailData.statut === 'Brouillon' && detailData.clientEmail && (
                       <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
-                        {actionBusy ? <Loader2 size={14} className="spin" /> : null} Envoyer au client
+                        {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.envoyerClient")}
                       </Button>
                     )}
                     {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
                       <Button variant="outline" onClick={() => handleValiderManuel(detailData.id)} disabled={actionBusy}>
-                        {actionBusy ? <Loader2 size={14} className="spin" /> : null} Valider manuellement
+                        {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.validerManuel")}
                       </Button>
                     )}
                     {detailData.statut === 'Signé' && (
                       <Button variant="green" onClick={() => openPaiementPopup(detailData.id, detailData.total)} disabled={actionBusy}>
-                        Valider et facturer
+                        {t("devis.validerFacturer")}
                       </Button>
                     )}
                     {modifiable && (
                       <Button variant="outline" onClick={() => { startEditDevis(detailData); closeDetailPopup(); }}>
-                        <Settings2 size={14} /> Modifier les lignes
+                        <Settings2 size={14} /> {t("devis.modifierLignes")}
                       </Button>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <Button small variant="outline" onClick={() => openDevisPdf(detailData.id)}>
-                      <FileText size={14} /> Aperçu
+                      <FileText size={14} /> {t("devis.apercu")}
                     </Button>
                     <Button small variant="outline" onClick={() => downloadDevisPdf(detailData.id, detailData.numero)}>
-                      <Download size={14} /> PDF
+                      <Download size={14} /> {t("devis.pdf")}
                     </Button>
                     {['Brouillon', 'Devis', 'Envoyé'].includes(detailData.statut) && (
                       <>
                         <div style={{ width: 1, height: 16, background: COLORS.border }} />
                         <Button small variant="ghost" onClick={() => handleAnnuler(detailData.id)} disabled={actionBusy} style={{ color: COLORS.red }}>
-                          Annuler
+                          {t("devis.annuler")}
                         </Button>
                       </>
                     )}
@@ -1699,11 +1706,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   dans App pour le mécanisme de navigation). */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
                 <div style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
-                  {nbLignesProduit} ligne{nbLignesProduit > 1 ? 's' : ''}
+                  {t("devis.smartLignes", { count: nbLignesProduit })}
                 </div>
                 {nbEcheances > 0 && (
                   <div style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
-                    {nbEcheances} échéance{nbEcheances > 1 ? 's' : ''}
+                    {t("devis.smartEcheances", { count: nbEcheances })}
                   </div>
                 )}
                 {detailData.clientId && (
@@ -1711,7 +1718,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     onClick={() => { navigate(`/app/clients?highlight=${detailData.clientId}`); closeDetailPopup(); }}
                     style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
                   >
-                    Voir le contact →
+                    {t("devis.voirContact")}
                   </button>
                 )}
               </div>
@@ -1720,29 +1727,29 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   informations n'ont pas d'équivalent réel ici (voir project_erp_devis_visual_alignment),
                   seuls Lignes de commande/Notes sont repris. */}
               <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
-                {[{ id: 'lignes', label: 'Lignes de commande' }, { id: 'notes', label: 'Notes' }].map(t => (
+                {[{ id: 'lignes', label: t('devis.tabLignes') }, { id: 'notes', label: t('devis.tabNotes') }].map(tab => (
                   <button
-                    key={t.id}
-                    onClick={() => setDetailTab(t.id)}
+                    key={tab.id}
+                    onClick={() => setDetailTab(tab.id)}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', fontSize: 13, fontWeight: 600,
-                      color: detailTab === t.id ? COLORS.green : COLORS.inkSoft,
-                      borderBottom: detailTab === t.id ? `2px solid ${COLORS.green}` : '2px solid transparent', marginBottom: -1,
+                      color: detailTab === tab.id ? COLORS.green : COLORS.inkSoft,
+                      borderBottom: detailTab === tab.id ? `2px solid ${COLORS.green}` : '2px solid transparent', marginBottom: -1,
                     }}
                   >
-                    {t.label}
+                    {tab.label}
                   </button>
                 ))}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20, fontSize: 13 }}>
                 <div>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>Client</div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.client")}</div>
                   <div style={{ fontWeight: 600 }}>{detailData.clientPrenom} {detailData.clientNom}</div>
                   {detailData.clientEmail ? (
                     <div style={{ color: COLORS.inkSoft }}>{detailData.clientEmail}</div>
                   ) : (
-                    <div style={{ color: COLORS.inkSoft, fontStyle: 'italic' }}>Pas d'email renseigné</div>
+                    <div style={{ color: COLORS.inkSoft, fontStyle: 'italic' }}>{t("devis.noEmail")}</div>
                   )}
                   {detailData.clientTelephone && <div style={{ color: COLORS.inkSoft }}>{detailData.clientTelephone}</div>}
                   {/* Adresse décomposée si disponible (rue/ville/CP/pays), sinon repli sur
@@ -1757,19 +1764,19 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   ) : detailData.clientAdresse && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresse}</div>}
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>Détails</div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.details")}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                    <span style={{ color: COLORS.inkSoft }}>Date</span>
-                    <span>{new Date(detailData.date || detailData.createdAt).toLocaleDateString('fr-FR')}</span>
+                    <span style={{ color: COLORS.inkSoft }}>{t("common.date")}</span>
+                    <span>{fmtDate(detailData.date || detailData.createdAt)}</span>
                   </div>
                   {modifiable ? (
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
-                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Conditions paiement</span>
-                        <input className="flat-input" value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder="Ex: 30 jours" style={{ width: 120, textAlign: 'right' }} />
+                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.conditionsPaiement")}</span>
+                        <input className="flat-input" value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder={t("devis.conditionsPaiementPlaceholder")} style={{ width: 120, textAlign: 'right' }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
-                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>Livraison promise</span>
+                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.livraisonPromise")}</span>
                         <input className="flat-input" type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ width: 'auto' }} />
                       </div>
                     </>
@@ -1777,27 +1784,27 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <>
                       {detailData.conditionsPaiement && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: COLORS.inkSoft }}>Conditions paiement</span>
+                          <span style={{ color: COLORS.inkSoft }}>{t("devis.conditionsPaiement")}</span>
                           <span>{detailData.conditionsPaiement}</span>
                         </div>
                       )}
                       {detailData.livraisonPromise && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <span style={{ color: COLORS.inkSoft }}>Livraison promise</span>
-                          <span>{new Date(detailData.livraisonPromise).toLocaleDateString('fr-FR')}</span>
+                          <span style={{ color: COLORS.inkSoft }}>{t("devis.livraisonPromise")}</span>
+                          <span>{fmtDate(detailData.livraisonPromise)}</span>
                         </div>
                       )}
                     </>
                   )}
                   {detailData.signataireNom && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                      <span style={{ color: COLORS.inkSoft }}>Signé par</span>
-                      <span>{detailData.signataireNom} — {new Date(detailData.dateSignature).toLocaleDateString('fr-FR')}</span>
+                      <span style={{ color: COLORS.inkSoft }}>{t("devis.signePar")}</span>
+                      <span>{detailData.signataireNom} — {fmtDate(detailData.dateSignature)}</span>
                     </div>
                   )}
                   {detailData.modePaiement && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                      <span style={{ color: COLORS.inkSoft }}>Mode de paiement</span>
+                      <span style={{ color: COLORS.inkSoft }}>{t("devis.modePaiement")}</span>
                       <span>{detailData.modePaiement}</span>
                     </div>
                   )}
@@ -1806,14 +1813,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               {detailTab === 'notes' ? (
                 <div style={{ minHeight: 80, padding: '10px 0', fontSize: 13.5, color: detailData.notes ? COLORS.ink : COLORS.inkSoft, fontStyle: detailData.notes ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
-                  {detailData.notes || "Aucune note — c'est ici que s'affichent les conditions générales ou remarques saisies à la création du devis."}
+                  {detailData.notes || t("devis.notesEmpty")}
                 </div>
               ) : (
               <>
               <table className="data-table" style={{ marginBottom: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-                    <th style={{ width: '25%' }}>Produit</th><th style={{ width: '10%' }}>Qté</th><th style={{ width: '10%' }}>Livré</th><th style={{ width: '10%' }}>Facturé</th><th style={{ width: '6%' }}>Unité</th><th style={{ width: '10%' }}>P.U.</th><th style={{ width: '14%' }}>Taxe (%)</th><th style={{ width: '5%' }}>Remise (%)</th><th style={{ width: '10%', textAlign: 'right' }}>Total</th>
+                    <th style={{ width: '25%' }}>{t("devis.colProduit")}</th><th style={{ width: '10%' }}>{t("devis.colQte")}</th><th style={{ width: '10%' }}>{t("devis.colLivre")}</th><th style={{ width: '10%' }}>{t("devis.colFacture")}</th><th style={{ width: '6%' }}>{t("devis.colUnite")}</th><th style={{ width: '10%' }}>{t("devis.colPU")}</th><th style={{ width: '14%' }}>{t("devis.colTaxe")}</th><th style={{ width: '5%' }}>{t("devis.colRemise")}</th><th style={{ width: '10%', textAlign: 'right' }}>{t("common.total")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1853,10 +1860,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
                           ) : '—'}
                         </td>
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
-                        <td>{l.prixUnitaire.toLocaleString('fr-FR')}</td>
-                        <td>{tauxTaxeLigne.toLocaleString('fr-FR')}</td>
-                        <td>{pct.toLocaleString('fr-FR')}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{netLigne.toLocaleString('fr-FR')}</td>
+                        <td>{fmtMoney(l.prixUnitaire)}</td>
+                        <td>{tauxTaxeLigne.toLocaleString(locale)}</td>
+                        <td>{pct.toLocaleString(locale)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(netLigne)}</td>
                       </tr>
                     );
                   })}
@@ -1865,7 +1872,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               {detailData.statut !== 'Brouillon' && (
                 <div style={{ textAlign: 'right', marginBottom: 10 }}>
                   <Button small variant="outline" onClick={handleSaveQuantites} disabled={quantitesSaving}>
-                    {quantitesSaving ? <Loader2 size={14} className="spin" /> : null} Enregistrer les quantités
+                    {quantitesSaving ? <Loader2 size={14} className="spin" /> : null} {t("devis.enregistrerQuantites")}
                   </Button>
                 </div>
               )}
@@ -1873,10 +1880,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
                 <div style={{ minWidth: 240 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
-                    <span>Montant HT</span><span>{montantHT.toLocaleString('fr-FR')} FCFA</span>
+                    <span>{t("devis.montantHT")}</span><span>{fmtMoney(montantHT)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
-                    <span>Remise globale (%)</span>
+                    <span>{t("devis.remiseGlobale")}</span>
                     {modifiable ? (
                       <input className="flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
                     ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
@@ -1885,21 +1892,21 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       ci-dessus), plus un taux unique par devis — ce total n'est donc plus
                       éditable ici, juste un récapitulatif de ce que chaque ligne applique. */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
-                    <span>Montant taxes</span><span>{montantTaxe.toLocaleString('fr-FR')} FCFA</span>
+                    <span>{t("devis.montantTaxes")}</span><span>{fmtMoney(montantTaxe)}</span>
                   </div>
                   {modifiable && (
                     <div style={{ textAlign: 'right', marginTop: 4, marginBottom: 4 }}>
                       <Button small variant="outline" onClick={handleSaveDetailMeta} disabled={detailMetaSaving}>
-                        {detailMetaSaving ? <Loader2 size={14} className="spin" /> : null} Enregistrer
+                        {detailMetaSaving ? <Loader2 size={14} className="spin" /> : null} {t("common.save")}
                       </Button>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
-                    <span>Total</span><span>{detailData.total.toLocaleString('fr-FR')} FCFA</span>
+                    <span>{t("common.total")}</span><span>{fmtMoney(detailData.total)}</span>
                   </div>
                   {margeInfo && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 }}>
-                      <span>Marge</span><span>{margeInfo.marge.toLocaleString('fr-FR')} FCFA ({margeInfo.pourcentage.toFixed(1)}%)</span>
+                      <span>{t("devis.marge")}</span><span>{t("devis.margeValeur", { montant: fmtMoney(margeInfo.marge), pct: margeInfo.pourcentage.toFixed(1) })}</span>
                     </div>
                   )}
                 </div>
@@ -1908,25 +1915,25 @@ function DevisModule({ clientsListe, filtreStatut }) {
               {detailData.echeances && detailData.echeances.length > 0 && (
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                    Échéances {detailData.modePaiement && `· ${detailData.modePaiement}`}
+                    {t("devis.echeances")} {detailData.modePaiement && `· ${detailData.modePaiement}`}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {detailData.echeances.map(ech => (
                       <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{ech.montant.toLocaleString('fr-FR')} FCFA</div>
-                          <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>Échéance : {new Date(ech.dateEcheance).toLocaleDateString('fr-FR')}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtMoney(ech.montant)}</div>
+                          <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{t("devis.echeanceDate", { date: fmtDate(ech.dateEcheance) })}</div>
                         </div>
                         {ech.statut === 'Payé' ? (
-                          <Badge tone="green">Payé le {new Date(ech.datePaiement).toLocaleDateString('fr-FR')}</Badge>
+                          <Badge tone="green">{t("devis.payeLe", { date: fmtDate(ech.datePaiement) })}</Badge>
                         ) : (
                           <Button small variant="green" onClick={() => handlePayerEcheance(detailData.id, ech.id)} disabled={actionBusy}>
-                            Marquer comme payé
+                            {t("devis.marquerPaye")}
                           </Button>
                         )}
                         {detailData.statut === 'Brouillon' && (
                           <Button small variant="outline" onClick={() => handleRemettreBrouillon(detailData.id)} disabled={actionBusy}>
-                            Remettre en brouillon
+                            {t("devis.remettreBrouillon")}
                           </Button>
                         )}
                       </div>
@@ -1941,28 +1948,28 @@ function DevisModule({ clientsListe, filtreStatut }) {
             {/* Panneau latéral façon chatter d'un ERP de référence : messages, activités planifiées, journal des modifications */}
             <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>Messages</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>{t("devis.messages")}</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input
                     className="flat-input"
                     value={nouveauMessage}
                     onChange={e => setNouveauMessage(e.target.value)}
-                    placeholder="Écrire un message..."
+                    placeholder={t("devis.messagePlaceholder")}
                     onKeyDown={e => { if (e.key === 'Enter') handleEnvoyerMessage(); }}
                     style={{ flex: 1 }}
                   />
                   <Button small variant="outline" onClick={handleEnvoyerMessage} disabled={messageSaving || !nouveauMessage.trim()}>
-                    {messageSaving ? <Loader2 size={13} className="spin" /> : 'Envoyer'}
+                    {messageSaving ? <Loader2 size={13} className="spin" /> : t('devis.envoyer')}
                   </Button>
                 </div>
                 {messages.length === 0 ? (
-                  <div style={{ fontSize: 12, color: COLORS.inkSoft, fontStyle: 'italic' }}>Aucun message.</div>
+                  <div style={{ fontSize: 12, color: COLORS.inkSoft, fontStyle: 'italic' }}>{t("devis.noMessage")}</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {messages.map(m => (
                       <div key={m.id} style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: `1px solid ${COLORS.border}` }}>
                         <div style={{ fontSize: 12.5 }}>{m.contenu}</div>
-                        <div style={{ fontSize: 10.5, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || 'système'} · {new Date(m.createdAt).toLocaleString('fr-FR')}</div>
+                        <div style={{ fontSize: 10.5, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || t("devis.systeme")} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
                       </div>
                     ))}
                   </div>
@@ -1971,11 +1978,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
               {journal.length > 0 && (
                 <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginTop: 16, textAlign: 'left' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>Historique</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>{t("devis.historique")}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {journal.map(j => (
                       <div key={j.id} style={{ fontSize: 12, color: COLORS.inkSoft }}>
-                        {new Date(j.createdAt).toLocaleString('fr-FR')} — {j.userEmail || 'système'} :{' '}
+                        {fmtDate(j.createdAt, { dateStyle: 'short', timeStyle: 'short' })} — {j.userEmail || t('devis.systeme')} :{' '}
                         {j.changements.map((c, i) => (
                           <span key={i}>{i > 0 && ', '}<strong>{c.champ}</strong> {c.ancienne ?? '—'} → {c.nouvelle ?? '—'}</span>
                         ))}
@@ -1993,13 +2000,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {paiementPopupOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Conditions de paiement</div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{t("devis.paiementTitle")}</div>
 
-            <Select label="Mode de paiement" value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
-              <option value="Espèces">Espèces</option>
-              <option value="Banque">Banque (virement)</option>
-              <option value="Mobile Money">Mobile Money</option>
-              <option value="Chèque">Chèque</option>
+            <Select label={t("devis.modePaiement")} value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
+              <option value="Espèces">{t("devis.modePaiementEspeces")}</option>
+              <option value="Banque">{t("devis.modePaiementBanque")}</option>
+              <option value="Mobile Money">{t("devis.modePaiementMobile")}</option>
+              <option value="Chèque">{t("devis.modePaiementCheque")}</option>
             </Select>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -2014,7 +2021,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   fontWeight: 600, fontSize: 13,
                 }}
               >
-                Paiement complet
+                {t("devis.paiementComplet")}
               </button>
               <button
                 type="button"
@@ -2027,32 +2034,32 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   fontWeight: 600, fontSize: 13,
                 }}
               >
-                Paiement échelonné
+                {t("devis.paiementEchelonne")}
               </button>
             </div>
 
             {paiementForm.modalitePaiement === 'echelonne' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Échéances</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.echeances")}</div>
                 {paiementForm.echeances.map((e, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                    <Field label={i === 0 ? 'Montant' : ''} type="text" inputMode="decimal" placeholder="0" value={e.montant} onChange={ev => updateEcheance(i, 'montant', ev.target.value.replace(/[^\d]/g, ''))} />
-                    <Field label={i === 0 ? 'Date' : ''} type="date" value={e.dateEcheance} onChange={ev => updateEcheance(i, 'dateEcheance', ev.target.value)} />
+                    <Field label={i === 0 ? t('devis.montant') : ''} type="text" inputMode="decimal" placeholder="0" value={e.montant} onChange={ev => updateEcheance(i, 'montant', ev.target.value.replace(/[^\d]/g, ''))} />
+                    <Field label={i === 0 ? t('common.date') : ''} type="date" value={e.dateEcheance} onChange={ev => updateEcheance(i, 'dateEcheance', ev.target.value)} />
                     <button type="button" onClick={() => removeEcheance(i)} disabled={paiementForm.echeances.length === 1} style={{ background: 'none', border: 'none', cursor: paiementForm.echeances.length === 1 ? 'default' : 'pointer', color: paiementForm.echeances.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
                 <Button type="button" variant="ghost" onClick={addEcheance} style={{ alignSelf: 'flex-start' }}>
-                  <Plus size={14} /> Ajouter une échéance
+                  <Plus size={14} /> {t("devis.addEcheance")}
                 </Button>
               </div>
             )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <Button variant="ghost" onClick={() => setPaiementPopupOpen(false)}>Annuler</Button>
+              <Button variant="ghost" onClick={() => setPaiementPopupOpen(false)}>{t("common.cancel")}</Button>
               <Button variant="green" onClick={submitFacturer} disabled={actionBusy}>
-                {actionBusy ? <Loader2 size={14} className="spin" /> : null} Confirmer et facturer
+                {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.confirmerFacturer")}
               </Button>
             </div>
           </div>
@@ -2063,33 +2070,33 @@ function DevisModule({ clientsListe, filtreStatut }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le devis</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t("devis.editTitle")}</div>
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Select label="Client" value={editForm.clientId} onChange={e => setEditForm({ ...editForm, clientId: e.target.value })} required>
-                <option value="">Sélectionner un client...</option>
+              <Select label={t("devis.client")} value={editForm.clientId} onChange={e => setEditForm({ ...editForm, clientId: e.target.value })} required>
+                <option value="">{t("devis.selectClient")}</option>
                 {(clientsListe || []).map(c => (
                   <option key={c.id} value={c.id}>{c.prenom ? `${c.prenom} ${c.nom}` : c.nom}</option>
                 ))}
               </Select>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes de produits</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
                 <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">
                   <thead>
                     <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                       <th style={{ width: '3.5%' }}></th>
-                      <th style={{ width: '24%' }}>Désignation</th>
-                      <th style={{ width: '9%' }}>Qté</th>
-                      <th style={{ width: '9%' }}>Livré</th>
-                      <th style={{ width: '9%' }}>Facturé</th>
-                      <th style={{ width: '6%' }}>Unité</th>
-                      <th style={{ width: '9%' }}>Prix unit.</th>
-                      <th style={{ width: '13%' }}>Taxe (%)</th>
-                      <th style={{ width: '5%' }}>Remise (%)</th>
-                      <th style={{ width: '10%', textAlign: 'right' }}>Montant</th>
+                      <th style={{ width: '24%' }}>{t("devis.colDesignation")}</th>
+                      <th style={{ width: '9%' }}>{t("devis.colQte")}</th>
+                      <th style={{ width: '9%' }}>{t("devis.colLivre")}</th>
+                      <th style={{ width: '9%' }}>{t("devis.colFacture")}</th>
+                      <th style={{ width: '6%' }}>{t("devis.colUnite")}</th>
+                      <th style={{ width: '9%' }}>{t("devis.colPrixUnit")}</th>
+                      <th style={{ width: '13%' }}>{t("devis.colTaxe")}</th>
+                      <th style={{ width: '5%' }}>{t("devis.colRemise")}</th>
+                      <th style={{ width: '10%', textAlign: 'right' }}>{t("devis.colMontant")}</th>
                       <th style={{ width: '3%' }}></th>
                     </tr>
                   </thead>
@@ -2107,12 +2114,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td style={{ cursor: 'grab', color: COLORS.inkSoft, textAlign: 'center' }}><GripVertical size={14} /></td>
                         {ligne.type === 'section' ? (
                           <td colSpan={9}>
-                            <input placeholder="Titre de section (ex: Matériel d'irrigation)" value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
+                            <input placeholder={t("devis.sectionPlaceholder")} value={ligne.produit} onChange={e => updateEditLigne(i, 'produit', e.target.value)} style={{ ...ligneCellInputStyle, fontWeight: 700 }} />
                           </td>
                         ) : (
                           <>
                             <td>
-                              <input placeholder="Ex: Sacs d'aliment" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                              <input placeholder={t("devis.produitPlaceholder")} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                                 const value = e.target.value;
                                 updateEditLigne(i, 'produit', value);
                                 const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
@@ -2130,11 +2137,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             <td><input type="number" placeholder="0" value={ligne.quantite} onChange={e => updateEditLigne(i, 'quantite', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
                             <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
-                            <td><input placeholder="kg, sacs..." value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td><input placeholder={t("devis.unitePlaceholder")} value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateEditLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{ligneTotalAvecTaxe(ligne).toLocaleString('fr-FR')}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(ligneTotalAvecTaxe(ligne))}</td>
                           </>
                         )}
                         <td style={{ textAlign: 'center' }}>
@@ -2147,8 +2154,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <tr>
                           <td></td>
                           <td colSpan={9} style={{ paddingBottom: 8 }}>
-                            <Select label="Récolte liée (optionnel)" value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
-                              <option value="">Aucune</option>
+                            <Select label={t("devis.recolteLiee")} value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
+                              <option value="">{t("common.none")}</option>
                               {recoltes.map(r => (
                                 <option key={r.id} value={r.id}>{r.parcelle} — {formatDateFr(r.date)}</option>
                               ))}
@@ -2163,22 +2170,22 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}>
-                    <Plus size={14} /> Ajouter une ligne
+                    <Plus size={14} /> {t("devis.addLigne")}
                   </Button>
                   <Button type="button" variant="ghost" onClick={addSectionEditLigne} style={{ alignSelf: 'flex-start' }}>
-                    <Plus size={14} /> Ajouter une section
+                    <Plus size={14} /> {t("devis.addSection")}
                   </Button>
                 </div>
               </div>
 
-              <Field label="Notes (optionnel)" placeholder="Conditions, délais, remarques..." value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+              <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalEditForm.toLocaleString('fr-FR')} FCFA</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalEditForm) })}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Button type="button" variant="ghost" onClick={cancelEditDevis}>Annuler</Button>
+                  <Button type="button" variant="ghost" onClick={cancelEditDevis}>{t("common.cancel")}</Button>
                   <Button type="submit" variant="green" disabled={editSaving}>
-                    {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Mettre à jour
+                    {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} {t("devis.update")}
                   </Button>
                 </div>
               </div>
@@ -2196,17 +2203,19 @@ function DevisModule({ clientsListe, filtreStatut }) {
 // le détail de ce que rend chaque entrée. Couleurs YEELEN conservées (vert plutôt que
 // le violet de l'ERP de référence), seule la structure horizontale est reprise.
 const VENTES_SOUS_NAV = [
-  { id: 'commandes', label: 'Commandes' },
-  { id: 'a_facturer', label: 'À facturer' },
-  { id: 'produits', label: 'Produits' },
-  { id: 'analyse', label: 'Analyse' },
-  { id: 'configuration', label: 'Configuration' },
+  { id: 'commandes', labelKey: 'ventes.navCommandes' },
+  { id: 'a_facturer', labelKey: 'ventes.navAFacturer' },
+  { id: 'produits', labelKey: 'ventes.navProduits' },
+  { id: 'analyse', labelKey: 'ventes.navAnalyse' },
+  { id: 'configuration', labelKey: 'ventes.navConfiguration' },
 ];
 
 // Grand livre des ventes (devis signés/facturés), en lecture seule — équivalent
 // minimal d'un menu "Analyse" de référence. Réutilise getVentesLedger, déjà la source de
 // vérité de ComptabiliteTab pour les mêmes données.
 function VentesAnalyseTab() {
+  const { t } = useTranslation();
+  const { fmtMoney } = useLocale();
   const [mouvements, setMouvements] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -2228,23 +2237,23 @@ function VentesAnalyseTab() {
   return (
     <Card>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-        Analyse des ventes
+        {t('ventes.analyseTitle')}
       </div>
       {loading ? (
         <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Loader2 size={15} className="spin" /> Chargement...
+          <Loader2 size={15} className="spin" /> {t('common.loading')}
         </div>
       ) : mouvements.length === 0 ? (
-        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune vente enregistrée pour l'instant.</div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('ventes.analyseEmpty')}</div>
       ) : (
         <>
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
-            {mouvements.length} ligne(s) vendue(s) · Total : <strong style={{ color: COLORS.ink }}>{total.toLocaleString('fr-FR')} FCFA</strong>
+            {t('ventes.analyseResume', { count: mouvements.length, total: fmtMoney(total) })}
           </div>
           <table className="data-table">
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-                <th>Date</th><th>Produit</th><th>Client</th><th>Qté</th><th style={{ textAlign: 'right' }}>Montant</th>
+                <th>{t('common.date')}</th><th>{t('ventes.colProduit')}</th><th>{t('ventes.colClient')}</th><th>{t('devis.colQte')}</th><th style={{ textAlign: 'right' }}>{t('common.amount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -2254,7 +2263,7 @@ function VentesAnalyseTab() {
                   <td>{m.produit}</td>
                   <td>{m.partenaire}</td>
                   <td>{m.quantite}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(m.quantite) * Number(m.prixUnitaire)).toLocaleString('fr-FR')} FCFA</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(Number(m.quantite) * Number(m.prixUnitaire))}</td>
                 </tr>
               ))}
             </tbody>
@@ -2268,6 +2277,7 @@ function VentesAnalyseTab() {
 // Affiche le modèle de devis multi-lignes dans l'onglet Ventes, avec une barre de
 // sous-navigation façon ERP au-dessus (voir VENTES_SOUS_NAV).
 function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
+  const { t } = useTranslation();
   const [clientsListe, setClientsListe] = useState([]);
   const [sousNav, setSousNav] = useState('commandes');
 
@@ -2298,7 +2308,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
               marginBottom: -1,
             }}
           >
-            {item.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </div>
@@ -2307,10 +2317,10 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
         <>
           <Card>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-              Ventes via devis multi-lignes
+              {t('ventes.devisTitle')}
             </div>
             <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
-              Créez et modifiez un devis détaillé, puis envoyez-le ou facturez-le directement depuis cet onglet.
+              {t('ventes.devisSubtitle')}
             </div>
           </Card>
           <DevisModule clientsListe={clientsListe} />
@@ -2320,10 +2330,10 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
         <>
           <Card>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-              Devis à facturer
+              {t('ventes.aFacturerTitle')}
             </div>
             <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
-              Devis déjà signés par le client, prêts à être facturés.
+              {t('ventes.aFacturerSubtitle')}
             </div>
           </Card>
           <DevisModule clientsListe={clientsListe} filtreStatut="Signé" />
@@ -2334,7 +2344,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'configuration' && (
         <Card>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 12 }}>
-            Configuration des ventes
+            {t('ventes.configTitle')}
           </div>
           <ListesPrixManager />
         </Card>
