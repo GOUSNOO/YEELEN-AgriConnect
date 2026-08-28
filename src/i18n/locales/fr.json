@@ -512,7 +512,7 @@
     "marquerPaye": "Marquer comme payé",
     "remettreBrouillon": "Remettre en brouillon",
     "messages": "Messages",
-    "messagePlaceholder": "Écrire un message...",
+    "messagePlaceholder": "Écrire un message… (Ctrl+Entrée pour envoyer)",
     "envoyer": "Envoyer",
     "noMessage": "Aucun message.",
     "systeme": "système",

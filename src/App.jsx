@@ -1949,14 +1949,17 @@ function DevisModule({ clientsListe, filtreStatut }) {
             <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>{t("devis.messages")}</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
+                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                  <textarea
                     className="flat-input"
+                    rows={2}
                     value={nouveauMessage}
                     onChange={e => setNouveauMessage(e.target.value)}
                     placeholder={t("devis.messagePlaceholder")}
-                    onKeyDown={e => { if (e.key === 'Enter') handleEnvoyerMessage(); }}
-                    style={{ flex: 1 }}
+                    // Entrée = retour à la ligne (comportement natif du textarea) ;
+                    // Ctrl/Cmd + Entrée = envoyer, comme dans la plupart des messageries.
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleEnvoyerMessage(); } }}
+                    style={{ flex: 1, resize: 'vertical', minHeight: 34, lineHeight: 1.4 }}
                   />
                   <Button small variant="outline" onClick={handleEnvoyerMessage} disabled={messageSaving || !nouveauMessage.trim()}>
                     {messageSaving ? <Loader2 size={13} className="spin" /> : t('devis.envoyer')}
@@ -1968,7 +1971,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {messages.map(m => (
                       <div key={m.id} style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: `1px solid ${COLORS.border}` }}>
-                        <div style={{ fontSize: 12.5 }}>{m.contenu}</div>
+                        <div style={{ fontSize: 12.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.contenu}</div>
                         <div style={{ fontSize: 10.5, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || t("devis.systeme")} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
                       </div>
                     ))}

@@ -512,7 +512,7 @@
     "marquerPaye": "Mark as paid",
     "remettreBrouillon": "Revert to draft",
     "messages": "Messages",
-    "messagePlaceholder": "Write a message...",
+    "messagePlaceholder": "Write a message… (Ctrl+Enter to send)",
     "envoyer": "Send",
     "noMessage": "No messages.",
     "systeme": "system",
