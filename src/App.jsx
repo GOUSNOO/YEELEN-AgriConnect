@@ -5959,6 +5959,8 @@ function NotificationsModule({ farmId, activated }) {
 // d'aucun contact sélectionné : gère toutes les listes de l'entreprise d'un coup, même
 // esprit que "Gérer les catégories" dans StocksTab (panneau repliable).
 function ListesPrixManager() {
+  const { t } = useTranslation();
+  const { fmtMoney, devise } = useLocale();
   const [listes, setListes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -6002,24 +6004,24 @@ function ListesPrixManager() {
     try {
       await createListePrix({ nom: newNom.trim() });
       setNewNom('');
-      notifySuccess('Liste créée.');
+      notifySuccess(t('contacts.listes.created'));
       await loadListes();
     } catch (err) {
-      notifyError(err, 'Impossible de créer la liste.');
+      notifyError(err, t('contacts.listes.createError'));
     } finally {
       setCreating(false);
     }
   };
 
   const removeListe = async (id, nom) => {
-    if (!window.confirm(`Supprimer la liste « ${nom} » ? Les contacts qui l'utilisent perdront leurs prix négociés.`)) return;
+    if (!window.confirm(t('contacts.listes.confirmDelete', { nom }))) return;
     try {
       await deleteListePrix(id);
       setListes(l => l.filter(x => x.id !== id));
       if (expandedId === id) setExpandedId(null);
-      notifySuccess('Liste supprimée.');
+      notifySuccess(t('contacts.listes.deleted'));
     } catch (err) {
-      notifyError(err, 'Impossible de supprimer la liste.');
+      notifyError(err, t('contacts.listes.deleteError'));
     }
   };
 
@@ -6039,7 +6041,7 @@ function ListesPrixManager() {
   const addLigne = async (e, listeId) => {
     e.preventDefault();
     if (!ligneForm.stockId || ligneForm.prix === '') {
-      notifyError(null, 'Choisissez un article du catalogue et un prix.');
+      notifyError(null, t('contacts.listes.ligneError'));
       return;
     }
     try {
@@ -6049,18 +6051,18 @@ function ListesPrixManager() {
       setListes(l => l.map(x => x.id === listeId ? { ...x, nombreLignes: lignes.length } : x));
       setLigneForm({ produit: '', stockId: null, prix: '' });
     } catch (err) {
-      notifyError(err, "Impossible d'enregistrer la ligne.");
+      notifyError(err, t('contacts.listes.ligneSaveError'));
     }
   };
 
   const removeLigne = async (ligneId, listeId) => {
-    if (!window.confirm('Supprimer cette ligne ?')) return;
+    if (!window.confirm(t('contacts.listes.confirmDeleteLigne'))) return;
     try {
       await deleteListePrixLigne(ligneId);
       setLignesParListe(m => ({ ...m, [listeId]: (m[listeId] || []).filter(l => l.id !== ligneId) }));
       setListes(l => l.map(x => x.id === listeId ? { ...x, nombreLignes: Math.max(0, x.nombreLignes - 1) } : x));
     } catch (err) {
-      notifyError(err, 'Impossible de supprimer cette ligne.');
+      notifyError(err, t('contacts.listes.ligneDeleteError'));
     }
   };
 
@@ -6070,26 +6072,26 @@ function ListesPrixManager() {
         {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
       <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 13, padding: 0, fontWeight: 600 }}>
-        {open ? 'Masquer les listes de prix' : 'Gérer les listes de prix'}
+        {open ? t('contacts.listes.toggleHide') : t('contacts.listes.toggleShow')}
       </button>
       {open && (
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <form onSubmit={createListe} style={{ display: 'flex', gap: 8 }}>
-            <Field placeholder="Nouvelle liste (ex: Prix Gros)" value={newNom} onChange={e => setNewNom(e.target.value)} />
+            <Field placeholder={t("contacts.listes.newPlaceholder")} value={newNom} onChange={e => setNewNom(e.target.value)} />
             <Button type="submit" variant="ochre" disabled={creating} style={{ whiteSpace: 'nowrap' }}>
-              {creating ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Créer
+              {creating ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t("contacts.listes.create")}
             </Button>
           </form>
           {loading ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Chargement…</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("common.loading")}</div>
           ) : listes.length === 0 ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucune liste de prix pour l'instant.</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("contacts.listes.empty")}</div>
           ) : listes.map(liste => (
             <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(liste.id)}>
                 <div>
                   <span style={{ fontWeight: 700 }}>{liste.nom}</span>
-                  <span style={{ color: COLORS.inkSoft, fontSize: 12, marginLeft: 8 }}>{liste.nombreLignes} article{liste.nombreLignes > 1 ? 's' : ''}</span>
+                  <span style={{ color: COLORS.inkSoft, fontSize: 12, marginLeft: 8 }}>{t('contacts.listes.articleCount', { count: liste.nombreLignes })}</span>
                 </div>
                 <button onClick={(ev) => { ev.stopPropagation(); removeListe(liste.id, liste.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                   <Trash2 size={14} />
@@ -6098,21 +6100,21 @@ function ListesPrixManager() {
               {expandedId === liste.id && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                    <Field label="Article" placeholder="Nom exact d'un article en stock" list={datalistId} value={ligneForm.produit} onChange={e => {
+                    <Field label={t("contacts.listes.article")} placeholder={t("contacts.listes.articlePlaceholder")} list={datalistId} value={ligneForm.produit} onChange={e => {
                       const value = e.target.value;
                       const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                       setLigneForm({ ...ligneForm, produit: value, stockId: match ? match.id : null });
                     }} />
-                    <Field label="Prix (FCFA)" type="number" placeholder="0" value={ligneForm.prix} onChange={e => setLigneForm({ ...ligneForm, prix: e.target.value })} />
-                    <Button type="submit" small><Plus size={14} /> Ajouter</Button>
+                    <Field label={t("contacts.listes.prix", { devise })} type="number" placeholder="0" value={ligneForm.prix} onChange={e => setLigneForm({ ...ligneForm, prix: e.target.value })} />
+                    <Button type="submit" small><Plus size={14} /> {t("common.add")}</Button>
                   </form>
                   {(lignesParListe[liste.id] || []).length === 0 ? (
-                    <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>Aucun article dans cette liste.</div>
+                    <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t("contacts.listes.emptyLignes")}</div>
                   ) : (lignesParListe[liste.id] || []).map(l => (
                     <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13 }}>
                       <span>{l.stockNom}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontWeight: 700 }}>{Number(l.prix).toLocaleString('fr-FR')} FCFA</span>
+                        <span style={{ fontWeight: 700 }}>{fmtMoney(l.prix)}</span>
                         <button onClick={() => removeLigne(l.id, liste.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                       </div>
                     </div>
@@ -6131,9 +6133,12 @@ function ListesPrixManager() {
 // fournisseur (est_client/est_fournisseur indépendants côté backend, voir contacts.js) ;
 // ce composant unifie ce qui était ClientsModule/FournisseursModule (quasi identiques
 // octet pour octet avant cette fusion), même principe que StocksTab({ moduleType }).
+// Les libellés (client/fournisseur, singulier/pluriel/capitalisé) sont dans i18n
+// (contacts.type.* / typeCap.* / typePlural.*) ; ici seuls l'accent couleur et la clé
+// du rôle "autre" restent, car ils pilotent de la logique/du style, pas de l'affichage.
 const CONTACT_TYPE_CONFIG = {
-  client: { label: 'client', labelPluriel: 'clients', Labelcap: 'Client', accent: COLORS.green, autre: 'fournisseur', nomPlaceholder: 'Ex: Diallo', prenomPlaceholder: 'Ex: Amadou' },
-  fournisseur: { label: 'fournisseur', labelPluriel: 'fournisseurs', Labelcap: 'Fournisseur', accent: COLORS.ochre, autre: 'client', nomPlaceholder: 'Ex: Traoré', prenomPlaceholder: 'Ex: Ibrahim' },
+  client: { accent: COLORS.green, autreKey: 'fournisseur' },
+  fournisseur: { accent: COLORS.ochre, autreKey: 'client' },
 };
 
 // Redimensionne une image choisie par l'utilisateur en un carré `maxSize`px avant de
@@ -6165,6 +6170,7 @@ function resizeImageToBase64(file, maxSize = 128) {
 // si aucune photo n'est renseignée plutôt que sur une icône générique, pour rester lisible
 // même sans upload. `onChange` absent = lecture seule (utilisé dans le panneau de détail).
 function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) {
+  const { t } = useTranslation();
   const inputRef = useRef(null);
   const initials = isCompany
     ? (nom || '?').trim().slice(0, 2).toUpperCase()
@@ -6172,7 +6178,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       {photo ? (
-        <img src={photo} alt="Avatar" style={{ width: size, height: size, borderRadius: 12, objectFit: 'cover', border: `1px solid ${COLORS.border}`, display: 'block' }} />
+        <img src={photo} alt={t("contacts.avatarAlt")} style={{ width: size, height: size, borderRadius: 12, objectFit: 'cover', border: `1px solid ${COLORS.border}`, display: 'block' }} />
       ) : (
         <div style={{ width: size, height: size, borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size / 3, fontWeight: 700, color: COLORS.inkSoft }}>
           {initials}
@@ -6182,7 +6188,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
         <>
           <button
             type="button"
-            title="Changer la photo"
+            title={t("contacts.avatarChange")}
             onClick={() => inputRef.current?.click()}
             style={{ position: 'absolute', bottom: -6, right: -6, width: 28, height: 28, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.inkSoft, padding: 0 }}
           >
@@ -6201,7 +6207,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
                 const base64 = await resizeImageToBase64(file, 128);
                 onChange(base64);
               } catch (err) {
-                notifyError(err, "Impossible de charger l'image.");
+                notifyError(err, t('contacts.avatarLoadError'));
               }
             }}
           />
@@ -6215,6 +6221,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
 // esprit que ListesPrixManager/"Gérer les catégories" de StocksTab : une ressource CRUD
 // par entreprise, pas une liste figée.
 function ContactTagsManager({ tags, onChange }) {
+  const { t: tr } = useTranslation();
   const [open, setOpen] = useState(false);
   const [nom, setNom] = useState('');
   const [couleur, setCouleur] = useState('#C1861F');
@@ -6227,30 +6234,30 @@ function ContactTagsManager({ tags, onChange }) {
     try {
       await createContactTag({ nom: nom.trim(), couleur });
       setNom('');
-      notifySuccess('Tag créé.');
+      notifySuccess(tr('contacts.tags.created'));
       onChange();
     } catch (err) {
-      notifyError(err, 'Impossible de créer le tag.');
+      notifyError(err, tr('contacts.tags.createError'));
     } finally {
       setCreating(false);
     }
   };
 
   const remove = async (id, tagNom) => {
-    if (!window.confirm(`Supprimer le tag « ${tagNom} » ? Il sera retiré de tous les contacts qui l'utilisent.`)) return;
+    if (!window.confirm(tr('contacts.tags.confirmDelete', { nom: tagNom }))) return;
     try {
       await deleteContactTag(id);
-      notifySuccess('Tag supprimé.');
+      notifySuccess(tr('contacts.tags.deleted'));
       onChange();
     } catch (err) {
-      notifyError(err, 'Impossible de supprimer le tag.');
+      notifyError(err, tr('contacts.tags.deleteError'));
     }
   };
 
   return (
     <div>
       <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, padding: 0 }}>
-        Gérer les tags {open ? '▲' : '▼'}
+        {tr('contacts.tags.toggle')} {open ? '▲' : '▼'}
       </button>
       {open && (
         <div style={{ marginTop: 8, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -6263,10 +6270,10 @@ function ContactTagsManager({ tags, onChange }) {
                 </button>
               </span>
             ))}
-            {tags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>Aucun tag pour l'instant.</span>}
+            {tags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.tags.empty")}</span>}
           </div>
           <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input className="flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder="Ex: VIP, B2B..." style={{ flex: 1 }} />
+            <input className="flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder={tr("contacts.tags.placeholder")} style={{ flex: 1 }} />
             <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: 6, cursor: 'pointer' }} />
             <Button small type="submit" variant="outline" disabled={creating}>{creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}</Button>
           </form>
@@ -6277,7 +6284,18 @@ function ContactTagsManager({ tags, onChange }) {
 }
 
 function ContactsTab({ type, highlightId }) {
+  const { t: tr } = useTranslation();
+  const { fmtMoney, fmtDate } = useLocale();
   const cfg = CONTACT_TYPE_CONFIG[type];
+  // Libellés dépendant du type (client/fournisseur), résolus une fois.
+  const L = {
+    s: tr(`contacts.type.${type}`),
+    sCap: tr(`contacts.typeCap.${type}`),
+    pl: tr(`contacts.typePlural.${type}`),
+    autre: tr(`contacts.type.${cfg.autreKey}`),
+    nomPh: tr(`contacts.nomPlaceholder.${type}`),
+    prenomPh: tr(`contacts.prenomPlaceholder.${type}`),
+  };
   const [contacts, setContacts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -6355,22 +6373,22 @@ function ContactsTab({ type, highlightId }) {
       });
       setSubContacts(prev => [contact, ...prev]);
       setSubForm(emptySubForm);
-      notifySuccess('Contact ajouté.');
+      notifySuccess(tr('contacts.subContactAdded'));
     } catch (err) {
-      notifyError(err, "Impossible d'ajouter ce contact.");
+      notifyError(err, tr('contacts.subContactAddError'));
     } finally {
       setSubSaving(false);
     }
   };
 
   const removeSubContact = async (id, nom) => {
-    if (!window.confirm(`Supprimer « ${nom} » ?`)) return;
+    if (!window.confirm(tr('contacts.subContactConfirmDelete', { nom }))) return;
     try {
       await deleteContact(id);
       setSubContacts(prev => prev.filter(c => c.id !== id));
-      notifySuccess('Contact supprimé.');
+      notifySuccess(tr('contacts.subContactDeleted'));
     } catch (err) {
-      notifyError(err, 'Impossible de supprimer ce contact.');
+      notifyError(err, tr('contacts.subContactDeleteError'));
     }
   };
 
@@ -6434,7 +6452,7 @@ function ContactsTab({ type, highlightId }) {
           setSelectedId(wantedId);
         }
       } catch (err) {
-        setApiError(err.message || `Impossible de charger les ${cfg.labelPluriel}.`);
+        setApiError(err.message || tr('contacts.loadError', { typePlural: L.pl }));
       } finally {
         setLoading(false);
       }
@@ -6465,7 +6483,7 @@ function ContactsTab({ type, highlightId }) {
       setSelectedId(contact.id);
       setForm(emptyForm);
     } catch (err) {
-      setApiError(err.message || "Erreur lors de l'enregistrement.");
+      setApiError(err.message || tr('contacts.saveError'));
     } finally {
       setSaving(false);
     }
@@ -6514,25 +6532,25 @@ function ContactsTab({ type, highlightId }) {
     try {
       const { contact } = await updateContact(editingId, buildPayload(editForm));
       setContacts(prev => prev.map(c => c.id === editingId ? contact : c));
-      notifySuccess(`${cfg.Labelcap} mis à jour.`);
+      notifySuccess(tr('contacts.updated', { typeCap: L.sCap }));
       cancelEdit();
     } catch (err) {
-      setApiError(err.message || "Erreur lors de l'enregistrement.");
+      setApiError(err.message || tr('contacts.saveError'));
     } finally {
       setEditSaving(false);
     }
   };
 
   const removeContact = async (id, nom) => {
-    if (!window.confirm(`Supprimer le ${cfg.label} « ${nom} » ? Cette action est irréversible.`)) return;
+    if (!window.confirm(tr('contacts.confirmDelete', { type: L.s, nom }))) return;
     setApiError('');
     try {
       await deleteContact(id);
       setContacts(prev => prev.filter(c => c.id !== id));
       if (selectedId === id) setSelectedId(null);
-      notifySuccess(`${cfg.Labelcap} supprimé.`);
+      notifySuccess(tr('contacts.deleted', { typeCap: L.sCap }));
     } catch (err) {
-      setApiError(err.message || 'Erreur lors de la suppression.');
+      setApiError(err.message || tr('contacts.deleteError'));
     }
   };
 
@@ -6542,7 +6560,7 @@ function ContactsTab({ type, highlightId }) {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
-      <Loader2 size={18} className="spin" /> Chargement des {cfg.labelPluriel}...
+      <Loader2 size={18} className="spin" /> {tr("contacts.loading", { typePlural: L.pl })}
     </div>
   );
 
@@ -6561,33 +6579,33 @@ function ContactsTab({ type, highlightId }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', gap: 16 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: COLORS.inkSoft, cursor: 'pointer' }}>
-                <input type="radio" checked={!f.isCompany} onChange={() => setF({ ...f, isCompany: false })} /> <UserIcon size={13} /> Particulier
+                <input type="radio" checked={!f.isCompany} onChange={() => setF({ ...f, isCompany: false })} /> <UserIcon size={13} /> {tr("contacts.particulier")}
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: COLORS.inkSoft, cursor: 'pointer' }}>
-                <input type="radio" checked={f.isCompany} onChange={() => setF({ ...f, isCompany: true })} /> <Building2 size={13} /> Société
+                <input type="radio" checked={f.isCompany} onChange={() => setF({ ...f, isCompany: true })} /> <Building2 size={13} /> {tr("contacts.societe")}
               </label>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
-                placeholder={f.isCompany ? 'Ex: Coopérative Djiguiya' : cfg.nomPlaceholder}
+                placeholder={f.isCompany ? tr("contacts.companyNamePlaceholder") : L.nomPh}
                 value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required
                 style={{ fontSize: 21, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
               />
               {!f.isCompany && (
                 <input
-                  placeholder={cfg.prenomPlaceholder} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })}
+                  placeholder={L.prenomPh} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })}
                   style={{ fontSize: 21, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
                 />
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Mail size={14} color={COLORS.blue} />
-              <input type="email" placeholder="Email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })}
+              <input type="email" placeholder={tr("contacts.emailPlaceholder")} value={f.email} onChange={e => setF({ ...f, email: e.target.value })}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <PhoneIcon size={14} color={COLORS.blue} />
-              <input placeholder="Téléphone" value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })}
+              <input placeholder={tr("contacts.telephonePlaceholder")} value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
             </div>
           </div>
@@ -6601,46 +6619,46 @@ function ContactsTab({ type, highlightId }) {
           <div className="field-group">
             {!f.isCompany && (
               <>
-                <div className="field-group-label">Société</div>
+                <div className="field-group-label">{tr("contacts.labelSociete")}</div>
                 <select className="flat-input" value={f.parentId ?? ''} onChange={e => setF({ ...f, parentId: e.target.value === '' ? null : Number(e.target.value) })}>
-                  <option value="">Aucune</option>
+                  <option value="">{tr("contacts.aucune")}</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                 </select>
               </>
             )}
-            <div className="field-group-label">Adresse</div>
+            <div className="field-group-label">{tr("contacts.labelAdresse")}</div>
             <div>
-              <input className="flat-input" placeholder="Rue..." value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
-              <input className="flat-input" placeholder="Rue 2..." value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
+              <input className="flat-input" placeholder={tr("contacts.rue")} value={f.adresseRue} onChange={e => setF({ ...f, adresseRue: e.target.value })} />
+              <input className="flat-input" placeholder={tr("contacts.rue2")} value={f.adresseRue2} onChange={e => setF({ ...f, adresseRue2: e.target.value })} />
               <div style={{ display: 'flex' }}>
-                <input className="flat-input" style={{ flex: '0 0 38%' }} placeholder="Ville" value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
-                <input className="flat-input" style={{ flex: '0 0 33%' }} placeholder="Région" value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} />
-                <input className="flat-input" style={{ flex: '0 0 25%' }} placeholder="Code postal" value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
+                <input className="flat-input" style={{ flex: '0 0 38%' }} placeholder={tr("contacts.ville")} value={f.adresseVille} onChange={e => setF({ ...f, adresseVille: e.target.value })} />
+                <input className="flat-input" style={{ flex: '0 0 33%' }} placeholder={tr("contacts.region")} value={f.adresseRegion} onChange={e => setF({ ...f, adresseRegion: e.target.value })} />
+                <input className="flat-input" style={{ flex: '0 0 25%' }} placeholder={tr("contacts.codePostal")} value={f.adresseCodePostal} onChange={e => setF({ ...f, adresseCodePostal: e.target.value })} />
               </div>
-              <input className="flat-input" placeholder="Pays" value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
+              <input className="flat-input" placeholder={tr("contacts.pays")} value={f.adressePays} onChange={e => setF({ ...f, adressePays: e.target.value })} />
             </div>
-            <div className="field-group-label">Autre adresse</div>
-            <input className="flat-input" placeholder="Adresse libre (optionnel)" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+            <div className="field-group-label">{tr("contacts.labelAutreAdresse")}</div>
+            <input className="flat-input" placeholder={tr("contacts.adresseLibre")} value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
           </div>
           <div className="field-group">
             {!f.isCompany && (
               <>
-                <div className="field-group-label">Fonction</div>
-                <input className="flat-input" placeholder="Ex: Directeur commercial" value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
+                <div className="field-group-label">{tr("contacts.labelFonction")}</div>
+                <input className="flat-input" placeholder={tr("contacts.fonctionPlaceholder")} value={f.fonction} onChange={e => setF({ ...f, fonction: e.target.value })} />
               </>
             )}
-            <div className="field-group-label">SIRET</div>
-            <input className="flat-input" placeholder="Si société" value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
+            <div className="field-group-label">{tr("contacts.labelSiret")}</div>
+            <input className="flat-input" placeholder={tr("contacts.siretPlaceholder")} value={f.siret} onChange={e => setF({ ...f, siret: e.target.value })} />
             {type === 'client' && (
               <>
-                <div className="field-group-label">Liste de prix</div>
+                <div className="field-group-label">{tr("contacts.labelListePrix")}</div>
                 <select className="flat-input" value={f.listePrixId ?? ''} onChange={e => setF({ ...f, listePrixId: e.target.value === '' ? null : Number(e.target.value) })}>
-                  <option value="">Aucune</option>
+                  <option value="">{tr("contacts.aucune")}</option>
                   {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
                 </select>
               </>
             )}
-            <div className="field-group-label">Tags</div>
+            <div className="field-group-label">{tr("contacts.labelTags")}</div>
             <div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {contactTags.map(t => {
@@ -6654,21 +6672,21 @@ function ContactsTab({ type, highlightId }) {
                     </button>
                   );
                 })}
-                {contactTags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>Aucun tag disponible.</span>}
+                {contactTags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.noTagAvailable")}</span>}
               </div>
               <ContactTagsManager tags={contactTags} onChange={loadTags} />
             </div>
             <div />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
               <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
-              Est aussi {cfg.autre}
+              {tr("contacts.estAussi", { autre: L.autre })}
             </label>
           </div>
         </div>
 
         <div className="field-group">
-          <div className="field-group-label">Notes</div>
-          <textarea className="flat-input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder="Notes internes..." rows={2} style={{ resize: 'vertical' }} />
+          <div className="field-group-label">{tr("contacts.labelNotes")}</div>
+          <textarea className="flat-input" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} placeholder={tr("contacts.notesPlaceholder")} rows={2} style={{ resize: 'vertical' }} />
         </div>
       </div>
     );
@@ -6684,13 +6702,13 @@ function ContactsTab({ type, highlightId }) {
       )}
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          Ajouter un {cfg.label}
+          {tr("contacts.addTitle", { type: L.s })}
         </div>
         <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {renderFields(form, setForm, null)}
           <div style={{ display: 'flex', gap: 8 }}>
             <Button type="submit" variant={type === 'client' ? 'green' : 'ochre'} disabled={saving}>
-              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} Ajouter
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {tr("common.add")}
             </Button>
           </div>
         </form>
@@ -6698,10 +6716,10 @@ function ContactsTab({ type, highlightId }) {
       {type === 'client' && <ListesPrixManager />}
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
         <Search size={14} color={COLORS.inkSoft} />
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher un ${cfg.label}...`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1, color: COLORS.ink }} />
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("contacts.searchPlaceholder", { type: L.s })} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1, color: COLORS.ink }} />
       </label>
       {filtered.length === 0 ? (
-        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun {cfg.label} trouvé.</div></Card>
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{tr("contacts.noneFound", { type: L.s })}</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -6720,7 +6738,7 @@ function ContactsTab({ type, highlightId }) {
                         {contact.isCompany && <Building2 size={12} color={COLORS.inkSoft} />}
                       </div>
                       <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
-                        {contact.fonction ? `${contact.fonction} · ` : ''}{contact.telephone || 'Pas de telephone'}
+                        {contact.fonction ? `${contact.fonction} · ` : ''}{contact.telephone || tr('contacts.noTelephone')}
                       </div>
                     </div>
                   </div>
@@ -6733,7 +6751,7 @@ function ContactsTab({ type, highlightId }) {
                     </button>
                   </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || 'Aucune adresse renseignee'}</div>
+                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || tr("contacts.noAdresse")}</div>
                 {contact.tags && contact.tags.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                     {contact.tags.map(t => (
@@ -6765,25 +6783,25 @@ function ContactsTab({ type, highlightId }) {
                 </div>
               )}
               <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span>Tel : {selectedContact.telephone || 'Non renseigne'}</span>
-                <span>Email : {selectedContact.email || 'Non renseigne'}</span>
-                <span>Adresse : {selectedContact.adresse || 'Non renseignee'}</span>
-                {selectedContact.siret && <span>SIRET : {selectedContact.siret}</span>}
-                {selectedContact[autreFlagKey] && <span style={{ color: cfg.accent, fontWeight: 600 }}>Est aussi {cfg.autre}</span>}
+                <span>{tr("contacts.detailTel", { value: selectedContact.telephone || tr("contacts.nonRenseigne") })}</span>
+                <span>{tr("contacts.detailEmail", { value: selectedContact.email || tr("contacts.nonRenseigne") })}</span>
+                <span>{tr("contacts.detailAdresse", { value: selectedContact.adresse || tr("contacts.nonRenseignee") })}</span>
+                {selectedContact.siret && <span>{tr("contacts.detailSiret", { value: selectedContact.siret })}</span>}
+                {selectedContact[autreFlagKey] && <span style={{ color: cfg.accent, fontWeight: 600 }}>{tr("contacts.estAussi", { autre: L.autre })}</span>}
                 {type === 'client' && (
-                  <span>Liste de prix : {listesPrix.find(l => l.id === selectedContact.listePrixId)?.nom || 'Aucune'}</span>
+                  <span>{tr("contacts.detailListePrix", { value: listesPrix.find(l => l.id === selectedContact.listePrixId)?.nom || tr("contacts.aucune") })}</span>
                 )}
-                <span style={{ fontSize: 11.5, color: COLORS.border }}>ID : {selectedContact.id}</span>
+                <span style={{ fontSize: 11.5, color: COLORS.border }}>{tr("contacts.detailId", { value: selectedContact.id })}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                 <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>Enregistre le</div>
+                  <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>{tr("contacts.enregistreLe")}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: COLORS.green }}>
-                    {selectedContact.createdAt ? new Date(selectedContact.createdAt).toLocaleDateString('fr-FR') : '-'}
+                    {selectedContact.createdAt ? fmtDate(selectedContact.createdAt) : '-'}
                   </div>
                 </Card>
                 <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>Total {cfg.labelPluriel}</div>
+                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>{tr("contacts.totalLabel", { typePlural: L.pl })}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{contacts.length}</div>
                 </Card>
               </div>
@@ -6795,24 +6813,24 @@ function ContactsTab({ type, highlightId }) {
                     border: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
-                  {type === 'client' ? 'Devis' : 'Achats'} ({relatedLoading ? '…' : relatedList.length})
+                  {type === 'client' ? tr('contacts.relatedDevis') : tr('contacts.relatedAchats')} ({relatedLoading ? '…' : relatedList.length})
                   <ChevronRight size={14} style={{ transform: relatedOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                 </button>
                 {relatedOpen && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
                     {relatedList.length === 0 && !relatedLoading && (
-                      <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Aucun {type === 'client' ? 'devis' : 'achat'} pour ce contact.</div>
+                      <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{type === 'client' ? tr('contacts.noRelatedDevis') : tr('contacts.noRelatedAchats')}</div>
                     )}
                     {type === 'client' && relatedList.map(d => (
                       <div key={d.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: 8 }}>
-                        <span>{d.numero} — {d.statut}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{Number(d.total).toLocaleString('fr-FR')} FCFA</span>
+                        <span>{d.numero} — {tr(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtMoney(d.total)}</span>
                       </div>
                     ))}
                     {type === 'fournisseur' && relatedList.map(a => (
                       <div key={a.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: 8 }}>
-                        <span>{a.module} — {new Date(a.date).toLocaleDateString('fr-FR')} ({a.statut})</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{Number(a.total).toLocaleString('fr-FR')} FCFA</span>
+                        <span>{a.module} — {fmtDate(a.date)} ({tr(`achats.statut.${a.statut}`, { defaultValue: a.statut })})</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtMoney(a.total)}</span>
                       </div>
                     ))}
                   </div>
@@ -6829,16 +6847,16 @@ function ContactsTab({ type, highlightId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier le {cfg.label}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{tr("contacts.editTitle", { type: L.s })}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {renderFields(editForm, setEditForm, editingId)}
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button type="submit" variant="green" disabled={editSaving}>
-                  {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} Enregistrer
+                  {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} {tr("common.save")}
                 </Button>
-                <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+                <Button type="button" variant="ghost" onClick={cancelEdit}>{tr("common.cancel")}</Button>
               </div>
             </form>
 
@@ -6847,31 +6865,31 @@ function ContactsTab({ type, highlightId }) {
                 rattacher qui que ce soit. */}
             {editForm.isCompany && (
               <div style={{ marginTop: 18, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Contacts liés à cette société</div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{tr("contacts.subContactsTitle")}</div>
                 <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 4, alignItems: 'end', marginBottom: 12 }}>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Nom
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subNom")}
                     <input className="flat-input" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Prénom
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subPrenom")}
                     <input className="flat-input" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Fonction
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subFonction")}
                     <input className="flat-input" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Téléphone
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subTelephone")}
                     <input className="flat-input" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>Email
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subEmail")}
                     <input className="flat-input" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
                   </label>
                   <Button small type="submit" variant="outline" disabled={subSaving}>
-                    {subSaving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />} Ajouter
+                    {subSaving ? <Loader2 size={13} className="spin" /> : <Plus size={13} />} {tr("common.add")}
                   </Button>
                 </form>
                 {subContactsLoading ? (
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="spin" /> Chargement...</div>
+                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="spin" /> {tr("common.loading")}</div>
                 ) : subContacts.length === 0 ? (
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>Aucun contact rattaché pour l'instant.</div>
+                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{tr("contacts.noSubContact")}</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {subContacts.map(sc => (
