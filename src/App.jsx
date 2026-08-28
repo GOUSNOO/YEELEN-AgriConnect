@@ -91,19 +91,20 @@ const DEFAULT_PARCELLES = [
 ];
 
 function ParcelMapTab({ parcelles }) {
+  const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState(parcelles[0]?.id ?? null);
   const selected = parcelles.find(p => p.id === selectedId) || parcelles[0] || null;
 
   const statusOf = (p) => {
-    if (p.temperature > 33) return { label: 'Température élevée', tone: 'red' };
-    if (p.humidite < p.seuil) return { label: 'À arroser', tone: 'blue' };
-    return { label: 'Normale', tone: 'green' };
+    if (p.temperature > 33) return { label: t('cultures.map.statusHighTemp'), tone: 'red' };
+    if (p.humidite < p.seuil) return { label: t('cultures.map.statusToWater'), tone: 'blue' };
+    return { label: t('cultures.map.statusNormal'), tone: 'green' };
   };
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
       <Card style={{ padding: 14 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Carte des parcelles</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('cultures.map.title')}</div>
         <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: 12, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
           {parcelles.map(p => {
             const status = statusOf(p);
@@ -128,9 +129,9 @@ function ParcelMapTab({ parcelles }) {
           })}
         </div>
         <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 12, color: COLORS.inkSoft }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> Normale</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> À arroser</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> Température élevée</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> {t('cultures.map.statusNormal')}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> {t('cultures.map.statusToWater')}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> {t('cultures.map.statusHighTemp')}</span>
         </div>
       </Card>
 
@@ -144,8 +145,8 @@ function ParcelMapTab({ parcelles }) {
             <Badge tone={statusOf(selected).tone}>{statusOf(selected).label}</Badge>
           </div>
           <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0' }}>
-            <GaugeDial value={selected.humidite} label="Humidité du sol" unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
-            <GaugeDial value={selected.temperature} max={45} label="Température" unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
+            <GaugeDial value={selected.humidite} label={t('cultures.soilHumidity')} unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
+            <GaugeDial value={selected.temperature} max={45} label={t('cultures.temperature')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
           </div>
         </Card>
       )}
@@ -3836,8 +3837,12 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
   );
 }
 
+const VANNE_ACTION_CODES = ['vanne_auto_open', 'vanne_auto_close', 'vanne_manual_open', 'vanne_manual_close'];
+
 function CulturesModule({ farmId, highlightProduitId }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState('parcelles');
+  const renderAction = (action) => (VANNE_ACTION_CODES.includes(action) ? t(`cultures.vanneAction.${action}`) : action);
 
   // Atterrissage depuis la recherche globale (Ctrl+K) sur un produit Cultures :
   // bascule sur l'onglet Stocks dès qu'un id à surligner est fourni, que le
@@ -3903,9 +3908,9 @@ function CulturesModule({ farmId, highlightProduitId }) {
       if (saved) setHistorique(h => [saved, ...h.filter(x => !String(x.id).startsWith('local-'))].slice(0, 40));
     } catch (err) {
       console.error('[pushHistorique]', err);
-      notifyError(err, "L'historique n'a pas pu être enregistré.");
+      notifyError(err, t('cultures.historiqueSaveError'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -3917,7 +3922,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
           const shouldOpen = humidite < p.seuil;
           if (shouldOpen !== vanneOuverte) {
             vanneOuverte = shouldOpen;
-            pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: shouldOpen ? 'Vanne ouverte automatiquement' : 'Vanne fermée automatiquement' });
+            pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: shouldOpen ? 'vanne_auto_open' : 'vanne_auto_close' });
             updateParcelle(p.id, { vanneOuverte }).catch(err => { console.error('[auto vanne update]', err); notifyError(err); });
           }
         }
@@ -3940,7 +3945,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
     setParcelles(prev => prev.map(p => {
       if (p.id !== id) return p;
       const vanneOuverte = !p.vanneOuverte;
-      pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: vanneOuverte ? 'Vanne ouverte manuellement' : 'Vanne fermée manuellement' });
+      pushHistorique({ parcelleId: p.id, parcelle: p.nom, action: vanneOuverte ? 'vanne_manual_open' : 'vanne_manual_close' });
       updateParcelle(id, { vanneOuverte }).catch(err => { console.error('[toggleVanne]', err); notifyError(err); });
       return { ...p, vanneOuverte };
     }));
@@ -3970,31 +3975,31 @@ function CulturesModule({ farmId, highlightProduitId }) {
       if (parcelle) {
         setParcelles(prev => [...prev, normalizeParcelle(parcelle)]);
         setNewParcelleForm({ nom: '', culture: '', seuil: 35, superficie: '', localisation: '' });
-        notifySuccess('Parcelle ajoutée.');
+        notifySuccess(t('cultures.parcelleAdded'));
       }
     } catch (err) {
       console.error('[addParcelle]', err);
-      notifyError(err, "Impossible d'ajouter la parcelle.");
+      notifyError(err, t('cultures.parcelleAddError'));
     } finally {
       setAddingParcelle(false);
     }
   };
 
   const removeParcelle = async (id, nom) => {
-    if (!window.confirm(`Supprimer la parcelle « ${nom} » ? Cette action est irréversible.`)) return;
+    if (!window.confirm(t('cultures.confirmDeleteParcelle', { nom }))) return;
     try {
       await deleteParcelle(id);
       setParcelles(prev => prev.filter(p => p.id !== id));
-      notifySuccess('Parcelle supprimée.');
+      notifySuccess(t('cultures.parcelleDeleted'));
     } catch (err) {
       console.error('[removeParcelle]', err);
-      notifyError(err, 'Impossible de supprimer la parcelle.');
+      notifyError(err, t('cultures.parcelleDeleteError'));
     }
   };
 
   if (!loaded) {
     return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
-      <Loader2 size={18} className="spin" /> Chargement des parcelles…
+      <Loader2 size={18} className="spin" /> {t('cultures.loadingParcelles')}
     </div>;
   }
 
@@ -4002,12 +4007,12 @@ function CulturesModule({ farmId, highlightProduitId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <ModuleTabBar
         tabs={[
-          { id: 'parcelles', label: 'Parcelles', icon: Sprout },
-          { id: 'carte', label: 'Carte', icon: Home },
-          { id: 'stocks', label: 'Stocks', icon: Package },
-          { id: 'ventes', label: 'Ventes', icon: TrendingUp },
-          { id: 'achats', label: 'Achats', icon: ShoppingCart },
-          { id: 'comptabilite', label: 'Comptabilité', icon: Wallet },
+          { id: 'parcelles', label: t('cultures.tabParcelles'), icon: Sprout },
+          { id: 'carte', label: t('cultures.tabCarte'), icon: Home },
+          { id: 'stocks', label: t('cultures.tabStocks'), icon: Package },
+          { id: 'ventes', label: t('cultures.tabVentes'), icon: TrendingUp },
+          { id: 'achats', label: t('cultures.tabAchats'), icon: ShoppingCart },
+          { id: 'comptabilite', label: t('cultures.tabComptabilite'), icon: Wallet },
         ]}
         activeTab={tab}
         onSelect={setTab}
@@ -4017,14 +4022,14 @@ function CulturesModule({ farmId, highlightProduitId }) {
       {tab === 'parcelles' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Ajouter une parcelle</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('cultures.addParcelleTitle')}</div>
         <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Nom" placeholder="Ex: Parcelle D" value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
-          <Field label="Culture" placeholder="Ex: Riz" value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
-          <Field label="Seuil d'humidité (%)" type="number" value={newParcelleForm.seuil} onChange={e => setNewParcelleForm({ ...newParcelleForm, seuil: e.target.value })} />
-          <Field label="Superficie (ha)" type="number" placeholder="Optionnel" value={newParcelleForm.superficie} onChange={e => setNewParcelleForm({ ...newParcelleForm, superficie: e.target.value })} />
-          <Field label="Localisation" placeholder="Optionnel" value={newParcelleForm.localisation} onChange={e => setNewParcelleForm({ ...newParcelleForm, localisation: e.target.value })} />
-          <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? 'Ajout…' : 'Ajouter'}</Button>
+          <Field label={t('cultures.fieldNom')} placeholder={t('cultures.fieldNomPlaceholder')} value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
+          <Field label={t('cultures.fieldCulture')} placeholder={t('cultures.fieldCulturePlaceholder')} value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
+          <Field label={t('cultures.fieldSeuil')} type="number" value={newParcelleForm.seuil} onChange={e => setNewParcelleForm({ ...newParcelleForm, seuil: e.target.value })} />
+          <Field label={t('cultures.fieldSuperficie')} type="number" placeholder={t('cultures.optionalPlaceholder')} value={newParcelleForm.superficie} onChange={e => setNewParcelleForm({ ...newParcelleForm, superficie: e.target.value })} />
+          <Field label={t('cultures.fieldLocalisation')} placeholder={t('cultures.optionalPlaceholder')} value={newParcelleForm.localisation} onChange={e => setNewParcelleForm({ ...newParcelleForm, localisation: e.target.value })} />
+          <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? t('cultures.adding') : t('common.add')}</Button>
         </form>
       </Card>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
@@ -4038,20 +4043,20 @@ function CulturesModule({ farmId, highlightProduitId }) {
                   <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{p.culture}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? 'Arrosage recommandé' : 'Sol suffisamment humide'}</Badge>
-                  <button onClick={() => removeParcelle(p.id, p.nom)} title="Supprimer la parcelle" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                  <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? t('cultures.wateringRecommended') : t('cultures.soilMoistEnough')}</Badge>
+                  <button onClick={() => removeParcelle(p.id, p.nom)} title={t('cultures.deleteParcelleTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={15} />
                   </button>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0 14px' }}>
                 <GaugeDial
-                  value={p.humidite} label="Humidité du sol" unit="%"
+                  value={p.humidite} label={t('cultures.soilHumidity')} unit="%"
                   colorMain={COLORS.blue} colorTrack={COLORS.blueSoft}
                   icon={<Droplet size={15} color={COLORS.blue} />}
                 />
                 <GaugeDial
-                  value={p.temperature} max={45} label="Température" unit="°"
+                  value={p.temperature} max={45} label={t('cultures.temperature')} unit="°"
                   colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft}
                   icon={<Thermometer size={15} color={COLORS.ochre} />}
                 />
@@ -4062,7 +4067,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
                   style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}
                 >
                   {p.mode === 'auto' ? <ToggleRight size={22} color={COLORS.green} /> : <ToggleLeft size={22} color={COLORS.inkSoft} />}
-                  Mode {p.mode === 'auto' ? 'automatique' : 'manuel'}
+                  {p.mode === 'auto' ? t('cultures.modeAuto') : t('cultures.modeManuel')}
                 </button>
                 <Button
                   small
@@ -4070,7 +4075,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
                   disabled={p.mode === 'auto'}
                   onClick={() => toggleVanne(p.id)}
                 >
-                  Vanne {p.vanneOuverte ? 'ouverte' : 'fermée'}
+                  {p.vanneOuverte ? t('cultures.valveOpen') : t('cultures.valveClosed')}
                 </Button>
               </div>
             </Card>
@@ -4080,15 +4085,15 @@ function CulturesModule({ farmId, highlightProduitId }) {
 
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
-          <ClipboardList size={16} color={COLORS.green} /> Historique des vannes
+          <ClipboardList size={16} color={COLORS.green} /> {t('cultures.valveHistory')}
         </div>
         {historique.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun évènement pour le moment.</div>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('cultures.noEvent')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
             {historique.map(h => (
               <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
-                <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {h.action}</span>
+                <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {renderAction(h.action)}</span>
                 <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateTimeFr(h.date)}</span>
               </div>
             ))}
