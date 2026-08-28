@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Settings2, Wrench } from 'lucide-react';
 import {
   getEquipements, createEquipement, updateEquipement, deleteEquipement,
   getEquipementMaintenance, createEquipementMaintenance, deleteEquipementMaintenance,
 } from '../lib/api.js';
 import { Badge, Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { useLocale } from '../lib/locale.jsx';
 
 const CATEGORIES = ['Tracteur/Machine', 'Véhicule', 'Outil manuel', 'Irrigation', 'Autre'];
 const ETATS = ['Fonctionnel', 'En panne', 'En maintenance', 'Hors service'];
@@ -14,6 +16,10 @@ const emptyForm = { nom: '', categorie: CATEGORIES[0], etat: ETATS[0], dateAcqui
 const emptyMaintenanceForm = { date: '', description: '', cout: '' };
 
 export function EquipementsModule({ canManage = false }) {
+  const { t } = useTranslation();
+  const { fmtMoney, fmtDate, devise } = useLocale();
+  const catLabel = (c) => t(`equipements.categorieLabels.${c}`, { defaultValue: c });
+  const etatLabel = (s) => t(`equipements.etatLabels.${s}`, { defaultValue: s });
   const [equipements, setEquipements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,7 +42,7 @@ export function EquipementsModule({ canManage = false }) {
       const data = await getEquipements();
       setEquipements(data?.equipements || []);
     } catch (err) {
-      setError(err.message || 'Impossible de charger les équipements.');
+      setError(err.message || t('equipements.loadError'));
       setEquipements([]);
     } finally {
       setIsLoading(false);
@@ -57,22 +63,22 @@ export function EquipementsModule({ canManage = false }) {
       });
       if (equipement) {
         setEquipements(list => [equipement, ...list]);
-        notifySuccess('Équipement ajouté.');
+        notifySuccess(t('equipements.added'));
       }
       setForm(emptyForm);
     } catch (err) {
-      notifyError(err, "Impossible d'ajouter l'équipement.");
+      notifyError(err, t('equipements.addError'));
     }
   };
 
   const remove = async (id, nom) => {
-    if (!window.confirm(`Supprimer « ${nom} » de l'inventaire ? Son historique de maintenance sera aussi supprimé.`)) return;
+    if (!window.confirm(t('equipements.confirmDelete', { nom }))) return;
     try {
       await deleteEquipement(id);
       setEquipements(list => list.filter(eq => eq.id !== id));
-      notifySuccess('Équipement supprimé.');
+      notifySuccess(t('equipements.deleted'));
     } catch (err) {
-      notifyError(err, "Impossible de supprimer l'équipement.");
+      notifyError(err, t('equipements.deleteError'));
     }
   };
 
@@ -98,11 +104,11 @@ export function EquipementsModule({ canManage = false }) {
       });
       if (equipement) {
         setEquipements(list => list.map(eq => eq.id === editingId ? equipement : eq));
-        notifySuccess('Équipement mis à jour.');
+        notifySuccess(t('equipements.updated'));
       }
       cancelEdit();
     } catch (err) {
-      notifyError(err, "Impossible de mettre à jour l'équipement.");
+      notifyError(err, t('equipements.updateError'));
     } finally {
       setEditSubmitting(false);
     }
@@ -116,7 +122,7 @@ export function EquipementsModule({ canManage = false }) {
       const { maintenance: rows } = await getEquipementMaintenance(eq.id);
       setMaintenance(rows || []);
     } catch (err) {
-      notifyError(err, "Impossible de charger l'historique de maintenance.");
+      notifyError(err, t('equipements.maintLoadError'));
       setMaintenance([]);
     } finally {
       setMaintenanceLoading(false);
@@ -135,32 +141,32 @@ export function EquipementsModule({ canManage = false }) {
       });
       if (entry) {
         setMaintenance(list => [entry, ...list]);
-        notifySuccess('Intervention enregistrée.');
+        notifySuccess(t('equipements.maintAdded'));
       }
       setMaintenanceForm(emptyMaintenanceForm);
     } catch (err) {
-      notifyError(err, "Impossible d'enregistrer l'intervention.");
+      notifyError(err, t('equipements.maintAddError'));
     }
   };
 
   const removeMaintenance = async (id) => {
-    if (!window.confirm('Supprimer cette intervention ?')) return;
+    if (!window.confirm(t('equipements.maintConfirmDelete'))) return;
     try {
       await deleteEquipementMaintenance(id);
       setMaintenance(list => list.filter(m => m.id !== id));
-      notifySuccess('Intervention supprimée.');
+      notifySuccess(t('equipements.maintDeleted'));
     } catch (err) {
-      notifyError(err, "Impossible de supprimer l'intervention.");
+      notifyError(err, t('equipements.maintDeleteError'));
     }
   };
 
   if (isLoading) {
-    return <Card><p style={{ margin: 0, color: '#5B6357' }}>Chargement des équipements…</p></Card>;
+    return <Card><p style={{ margin: 0, color: '#5B6357' }}>{t('equipements.loading')}</p></Card>;
   }
   if (error) {
     return (
       <Card>
-        <p style={{ margin: 0, color: '#B23B2E', fontWeight: 600 }}>Erreur de chargement</p>
+        <p style={{ margin: 0, color: '#B23B2E', fontWeight: 600 }}>{t('equipements.errorTitle')}</p>
         <p style={{ margin: '4px 0 0', color: '#5B6357', fontSize: 13 }}>{error}</p>
       </Card>
     );
@@ -170,19 +176,19 @@ export function EquipementsModule({ canManage = false }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {canManage && (
         <Card>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Ajouter un équipement</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{t('equipements.addTitle')}</div>
           <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-            <Field label="Nom" placeholder="Ex: Tracteur John Deere" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
-            <Select label="Catégorie" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            <Field label={t("equipements.nom")} placeholder={t("equipements.nomPlaceholder")} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
+            <Select label={t("equipements.categorie")} value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
             </Select>
-            <Select label="État" value={form.etat} onChange={e => setForm({ ...form, etat: e.target.value })}>
-              {ETATS.map(e => <option key={e}>{e}</option>)}
+            <Select label={t("equipements.etat")} value={form.etat} onChange={e => setForm({ ...form, etat: e.target.value })}>
+              {ETATS.map(e => <option key={e} value={e}>{etatLabel(e)}</option>)}
             </Select>
-            <Field label="Date d'acquisition" type="date" value={form.dateAcquisition} onChange={e => setForm({ ...form, dateAcquisition: e.target.value })} />
-            <Field label="Valeur (FCFA)" type="number" placeholder="0" value={form.valeur} onChange={e => setForm({ ...form, valeur: e.target.value })} />
-            <Field label="Notes" placeholder="Optionnel" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-            <Button type="submit" variant="ochre"><Plus size={15} /> Ajouter</Button>
+            <Field label={t("equipements.dateAcquisition")} type="date" value={form.dateAcquisition} onChange={e => setForm({ ...form, dateAcquisition: e.target.value })} />
+            <Field label={t("equipements.valeur", { devise })} type="number" placeholder="0" value={form.valeur} onChange={e => setForm({ ...form, valeur: e.target.value })} />
+            <Field label={t("equipements.notes")} placeholder={t("equipements.notesPlaceholder")} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+            <Button type="submit" variant="ochre"><Plus size={15} /> {t("common.add")}</Button>
           </form>
         </Card>
       )}
@@ -191,25 +197,25 @@ export function EquipementsModule({ canManage = false }) {
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: '#5B6357' }}>
-              <th>Équipement</th>
-              <th>Catégorie</th>
-              <th>État</th>
-              <th>Valeur</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
+              <th>{t('equipements.colEquipement')}</th>
+              <th>{t('equipements.categorie')}</th>
+              <th>{t('equipements.etat')}</th>
+              <th>{t('equipements.colValeur')}</th>
+              <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {equipements.length === 0 ? (
-              <tr><td colSpan={5} style={{ color: '#5B6357' }}>Aucun équipement enregistré.</td></tr>
+              <tr><td colSpan={5} style={{ color: '#5B6357' }}>{t('equipements.emptyTable')}</td></tr>
             ) : equipements.map(eq => (
               <tr key={eq.id}>
                 <td style={{ fontWeight: 500 }}>{eq.nom}</td>
-                <td>{eq.categorie}</td>
-                <td><Badge tone={ETAT_TONE[eq.etat] || 'blue'}>{eq.etat}</Badge></td>
-                <td>{eq.valeur != null ? `${Number(eq.valeur).toLocaleString('fr-FR')} FCFA` : '—'}</td>
+                <td>{catLabel(eq.categorie)}</td>
+                <td><Badge tone={ETAT_TONE[eq.etat] || 'blue'}>{etatLabel(eq.etat)}</Badge></td>
+                <td>{eq.valeur != null ? fmtMoney(eq.valeur) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button onClick={() => openDetail(eq)} title="Historique de maintenance" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex' }}>
+                    <button onClick={() => openDetail(eq)} title={t("equipements.maintenanceTitle")} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex' }}>
                       <Wrench size={15} />
                     </button>
                     {canManage && (
@@ -234,25 +240,25 @@ export function EquipementsModule({ canManage = false }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'équipement</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('equipements.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-                <Field label="Nom" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
-                <Select label="Catégorie" value={editForm.categorie} onChange={e => setEditForm({ ...editForm, categorie: e.target.value })}>
-                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                <Field label={t("equipements.nom")} value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
+                <Select label={t("equipements.categorie")} value={editForm.categorie} onChange={e => setEditForm({ ...editForm, categorie: e.target.value })}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
                 </Select>
-                <Select label="État" value={editForm.etat} onChange={e => setEditForm({ ...editForm, etat: e.target.value })}>
-                  {ETATS.map(e => <option key={e}>{e}</option>)}
+                <Select label={t("equipements.etat")} value={editForm.etat} onChange={e => setEditForm({ ...editForm, etat: e.target.value })}>
+                  {ETATS.map(e => <option key={e} value={e}>{etatLabel(e)}</option>)}
                 </Select>
-                <Field label="Date d'acquisition" type="date" value={editForm.dateAcquisition} onChange={e => setEditForm({ ...editForm, dateAcquisition: e.target.value })} />
-                <Field label="Valeur (FCFA)" type="number" value={editForm.valeur} onChange={e => setEditForm({ ...editForm, valeur: e.target.value })} />
-                <Field label="Notes" value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+                <Field label={t("equipements.dateAcquisition")} type="date" value={editForm.dateAcquisition} onChange={e => setEditForm({ ...editForm, dateAcquisition: e.target.value })} />
+                <Field label={t("equipements.valeur", { devise })} type="number" value={editForm.valeur} onChange={e => setEditForm({ ...editForm, valeur: e.target.value })} />
+                <Field label={t("equipements.notes")} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <Button type="submit" variant="green" disabled={editSubmitting}>Enregistrer</Button>
-                <Button type="button" onClick={cancelEdit}>Annuler</Button>
+                <Button type="submit" variant="green" disabled={editSubmitting}>{t("common.save")}</Button>
+                <Button type="button" onClick={cancelEdit}>{t("common.cancel")}</Button>
               </div>
             </form>
           </div>
@@ -265,24 +271,24 @@ export function EquipementsModule({ canManage = false }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{detailEquipement.nom}</div>
-                <div style={{ fontSize: 13, color: '#5B6357' }}>Historique de maintenance</div>
+                <div style={{ fontSize: 13, color: '#5B6357' }}>{t('equipements.maintenanceTitle')}</div>
               </div>
               <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', fontSize: 18 }}>×</button>
             </div>
 
             {canManage && (
               <form onSubmit={addMaintenance} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #DAD6C4' }}>
-                <Field label="Date" type="date" value={maintenanceForm.date} onChange={e => setMaintenanceForm({ ...maintenanceForm, date: e.target.value })} />
-                <Field label="Description" placeholder="Ex: Vidange" value={maintenanceForm.description} onChange={e => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} />
-                <Field label="Coût (FCFA)" type="number" placeholder="Optionnel" value={maintenanceForm.cout} onChange={e => setMaintenanceForm({ ...maintenanceForm, cout: e.target.value })} />
-                <Button type="submit" variant="ochre"><Plus size={14} /> Ajouter</Button>
+                <Field label={t("equipements.maintDate")} type="date" value={maintenanceForm.date} onChange={e => setMaintenanceForm({ ...maintenanceForm, date: e.target.value })} />
+                <Field label={t("equipements.maintDescription")} placeholder={t("equipements.maintDescriptionPlaceholder")} value={maintenanceForm.description} onChange={e => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} />
+                <Field label={t("equipements.maintCout", { devise })} type="number" placeholder={t("equipements.notesPlaceholder")} value={maintenanceForm.cout} onChange={e => setMaintenanceForm({ ...maintenanceForm, cout: e.target.value })} />
+                <Button type="submit" variant="ochre"><Plus size={14} /> {t("common.add")}</Button>
               </form>
             )}
 
             {maintenanceLoading ? (
-              <p style={{ color: '#5B6357' }}>Chargement…</p>
+              <p style={{ color: '#5B6357' }}>{t('common.loading')}</p>
             ) : maintenance.length === 0 ? (
-              <p style={{ color: '#5B6357' }}>Aucune intervention enregistrée.</p>
+              <p style={{ color: '#5B6357' }}>{t('equipements.maintEmpty')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {maintenance.map(m => (
@@ -290,8 +296,8 @@ export function EquipementsModule({ canManage = false }) {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{m.description}</div>
                       <div style={{ fontSize: 12, color: '#5B6357' }}>
-                        {m.date ? new Date(m.date).toLocaleDateString('fr-FR') : '—'}
-                        {m.cout != null ? ` · ${Number(m.cout).toLocaleString('fr-FR')} FCFA` : ''}
+                        {m.date ? fmtDate(m.date) : '—'}
+                        {m.cout != null ? ` · ${fmtMoney(m.cout)}` : ''}
                       </div>
                     </div>
                     {canManage && (
