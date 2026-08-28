@@ -5461,6 +5461,8 @@ function HomeOverview({ farmId, activated }) {
 const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 function EmployeesModule({ farmId, role }) {
+  const { t } = useTranslation();
+  const { devise } = useLocale();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -5537,7 +5539,7 @@ function EmployeesModule({ farmId, role }) {
     e.preventDefault();
     if (!form.nom || !form.prenom) return;
     if (form.createAccount && (!form.compteEmail || !form.password || !form.role)) {
-      setFormError('Email de connexion, mot de passe temporaire et rôle sont requis pour créer un compte.');
+      setFormError(t('rh.errAccountFields'));
       return;
     }
     setSubmitting(true);
@@ -5600,7 +5602,7 @@ function EmployeesModule({ farmId, role }) {
     e.preventDefault();
     if (!editForm.nom || !editForm.prenom) return;
     if (editForm.linkAccount && (!editForm.compteEmail || !editForm.password)) {
-      setEditError('Email et mot de passe requis pour créer le compte de connexion.');
+      setEditError(t('rh.errLinkAccountFields'));
       return;
     }
     setEditSubmitting(true);
@@ -5625,11 +5627,6 @@ function EmployeesModule({ farmId, role }) {
     }
   };
 
-  const roleLabels = {
-    admin: 'Administrateur', directeur: 'Directeur', comptable: 'Comptable',
-    assistant_direction: 'Assistant(e) de direction', ouvrier: 'Ouvrier', gestionnaire: 'Gestionnaire',
-  };
-
   const toggleJour = (setF, f, j) => {
     const cur = f.joursTravailles ? f.joursTravailles.split(',').map(s => s.trim()).filter(Boolean) : [];
     const next = cur.includes(j) ? cur.filter(x => x !== j) : [...cur, j];
@@ -5639,14 +5636,14 @@ function EmployeesModule({ farmId, role }) {
   // Bloc "informations complémentaires" partagé par le formulaire d'ajout et la modale d'édition.
   const renderInfosPlus = (f, setF) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-      <Field label="Date de naissance" type="date" value={f.dateNaissance} onChange={e => setF({ ...f, dateNaissance: e.target.value })} />
-      <Field label="Contact d'urgence — nom" value={f.contactUrgenceNom} onChange={e => setF({ ...f, contactUrgenceNom: e.target.value })} />
-      <Field label="Contact d'urgence — tél." value={f.contactUrgenceTel} onChange={e => setF({ ...f, contactUrgenceTel: e.target.value })} />
-      <Field label="N° pièce d'identité" value={f.numPieceIdentite} onChange={e => setF({ ...f, numPieceIdentite: e.target.value })} />
-      <Field label="Coût horaire (FCFA)" type="number" value={f.coutHoraire} onChange={e => setF({ ...f, coutHoraire: e.target.value })} />
-      <Field label="Heures / semaine" type="number" value={f.heuresHebdo} onChange={e => setF({ ...f, heuresHebdo: e.target.value })} />
+      <Field label={t('rh.fieldDateNaissance')} type="date" value={f.dateNaissance} onChange={e => setF({ ...f, dateNaissance: e.target.value })} />
+      <Field label={t('rh.fieldContactUrgenceNom')} value={f.contactUrgenceNom} onChange={e => setF({ ...f, contactUrgenceNom: e.target.value })} />
+      <Field label={t('rh.fieldContactUrgenceTel')} value={f.contactUrgenceTel} onChange={e => setF({ ...f, contactUrgenceTel: e.target.value })} />
+      <Field label={t('rh.fieldNumPiece')} value={f.numPieceIdentite} onChange={e => setF({ ...f, numPieceIdentite: e.target.value })} />
+      <Field label={t('rh.fieldCoutHoraire', { devise })} type="number" value={f.coutHoraire} onChange={e => setF({ ...f, coutHoraire: e.target.value })} />
+      <Field label={t('rh.fieldHeuresHebdo')} type="number" value={f.heuresHebdo} onChange={e => setF({ ...f, heuresHebdo: e.target.value })} />
       <div style={{ gridColumn: '1 / -1' }}>
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>Jours travaillés</div>
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>{t('rh.joursTravailles')}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {JOURS_SEMAINE.map(j => {
             const on = (f.joursTravailles || '').split(',').map(s => s.trim()).includes(j);
@@ -5654,7 +5651,7 @@ function EmployeesModule({ farmId, role }) {
               <button key={j} type="button" onClick={() => toggleJour(setF, f, j)} style={{
                 background: on ? COLORS.green : 'transparent', color: on ? '#fff' : COLORS.inkSoft,
                 border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: 8, padding: '4px 10px', fontSize: 12.5, cursor: 'pointer',
-              }}>{j}</button>
+              }}>{t(`rh.jours.${j}`, { defaultValue: j })}</button>
             );
           })}
         </div>
@@ -5665,32 +5662,32 @@ function EmployeesModule({ farmId, role }) {
   const managerOptions = (excludeId) => employees.filter(e => e.id !== excludeId);
   const renderIdentite = (f, setF, excludeManagerId) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-      <Field label="Nom" placeholder="Nom" value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required />
-      <Field label="Prénom" placeholder="Prénom" value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })} required />
-      <Select label="Poste" value={f.posteId} onChange={e => setF({ ...f, posteId: e.target.value })}>
-        <option value="">— Aucun —</option>
+      <Field label={t('rh.fieldNom')} placeholder={t('rh.fieldNom')} value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required />
+      <Field label={t('rh.fieldPrenom')} placeholder={t('rh.fieldPrenom')} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })} required />
+      <Select label={t('rh.fieldPoste')} value={f.posteId} onChange={e => setF({ ...f, posteId: e.target.value })}>
+        <option value="">{t('common.none')}</option>
         {postes.map(p => <option key={p.id} value={p.id}>{p.intitule}</option>)}
       </Select>
-      <Select label="Département" value={f.departementId} onChange={e => setF({ ...f, departementId: e.target.value })}>
-        <option value="">— Aucun —</option>
+      <Select label={t('rh.fieldDepartement')} value={f.departementId} onChange={e => setF({ ...f, departementId: e.target.value })}>
+        <option value="">{t('common.none')}</option>
         {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
       </Select>
-      <Select label="Manager" value={f.managerId} onChange={e => setF({ ...f, managerId: e.target.value })}>
-        <option value="">— Aucun —</option>
+      <Select label={t('rh.fieldManager')} value={f.managerId} onChange={e => setF({ ...f, managerId: e.target.value })}>
+        <option value="">{t('common.none')}</option>
         {managerOptions(excludeManagerId).map(m => <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
       </Select>
-      <Field label="Date d'embauche" type="date" value={f.dateEmbauche} onChange={e => setF({ ...f, dateEmbauche: e.target.value })} />
-      <Field label="Salaire" type="number" placeholder="Salaire" value={f.salaire} onChange={e => setF({ ...f, salaire: e.target.value })} />
-      <Field label="Email personnel" type="email" placeholder="email@exemple.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
-      <Field label="Téléphone" type="tel" placeholder="Téléphone" value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })} />
-      <Field label="Adresse" placeholder="Adresse" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+      <Field label={t('rh.fieldDateEmbauche')} type="date" value={f.dateEmbauche} onChange={e => setF({ ...f, dateEmbauche: e.target.value })} />
+      <Field label={t('rh.fieldSalaire')} type="number" placeholder={t('rh.fieldSalaire')} value={f.salaire} onChange={e => setF({ ...f, salaire: e.target.value })} />
+      <Field label={t('rh.fieldEmailPerso')} type="email" placeholder="email@exemple.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
+      <Field label={t('rh.fieldTelephone')} type="tel" placeholder={t('rh.fieldTelephone')} value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })} />
+      <Field label={t('rh.fieldAdresse')} placeholder={t('rh.fieldAdresse')} value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
     </div>
   );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Ajouter un employé</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('rh.addEmployeeTitle')}</div>
 
         {formError && (
           <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
@@ -5705,46 +5702,46 @@ function EmployeesModule({ farmId, role }) {
           </div>
 
           <button type="button" onClick={() => setShowMoreAdd(v => !v)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: 13, alignSelf: 'flex-start', padding: 0 }}>
-            {showMoreAdd ? '− Masquer' : '+ Informations complémentaires'}
+            {showMoreAdd ? t('rh.hideMore') : t('rh.showMore')}
           </button>
           {showMoreAdd && renderInfosPlus(form, setForm)}
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
             <input type="checkbox" checked={form.createAccount} onChange={e => setForm({ ...form, createAccount: e.target.checked })} />
-            Créer un compte de connexion pour cet employé
+            {t('rh.createLogin')}
           </label>
 
           {form.createAccount && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
-              <Field label="Email de connexion" type="email" placeholder="email@exemple.com" value={form.compteEmail} onChange={e => setForm({ ...form, compteEmail: e.target.value })} required={form.createAccount} />
-              <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-                <option value="admin">Administrateur</option>
-                <option value="directeur">Directeur</option>
-                <option value="gestionnaire">Gestionnaire</option>
-                <option value="comptable">Comptable</option>
-                <option value="assistant_direction">Assistant(e) de direction</option>
-                <option value="ouvrier">Ouvrier</option>
+              <Field label={t('rh.loginEmail')} type="email" placeholder="email@exemple.com" value={form.compteEmail} onChange={e => setForm({ ...form, compteEmail: e.target.value })} required={form.createAccount} />
+              <Select label={t('rh.roleField')} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+                <option value="admin">{t('role.admin')}</option>
+                <option value="directeur">{t('role.directeur')}</option>
+                <option value="gestionnaire">{t('role.gestionnaire')}</option>
+                <option value="comptable">{t('role.comptable')}</option>
+                <option value="assistant_direction">{t('role.assistant_direction')}</option>
+                <option value="ouvrier">{t('role.ouvrier')}</option>
               </Select>
-              <Field label="Mot de passe temporaire" type="text" placeholder="Mot de passe temporaire" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required={form.createAccount} />
+              <Field label={t('rh.tempPassword')} type="text" placeholder={t('rh.tempPassword')} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required={form.createAccount} />
             </div>
           )}
 
           <Button type="submit" variant="green" disabled={submitting} style={{ alignSelf: 'flex-start' }}>
-            {submitting ? <Loader2 size={15} className="spin" /> : <Plus size={15} />} Ajouter
+            {submitting ? <Loader2 size={15} className="spin" /> : <Plus size={15} />} {t('common.add')}
           </Button>
         </form>
       </Card>
 
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Employés</div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('rh.employeesTitle')}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select className="flat-input" value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ background: '#fff', color: COLORS.ink, fontSize: 12.5 }}>
-              <option value="">Tous les départements</option>
+              <option value="">{t('rh.allDepartments')}</option>
               {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
             </select>
             <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '5px 10px', fontSize: 12.5, color: COLORS.inkSoft, cursor: 'pointer' }}>
-              {viewMode === 'list' ? 'Trombinoscope' : 'Liste'}
+              {viewMode === 'list' ? t('rh.trombinoscope') : t('rh.list')}
             </button>
           </div>
         </div>
@@ -5755,10 +5752,10 @@ function EmployeesModule({ farmId, role }) {
 
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
-            <Loader2 size={15} className="spin" /> Chargement...
+            <Loader2 size={15} className="spin" /> {t('common.loading')}
           </div>
         ) : employees.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun employé{filterDept ? ' dans ce département' : ''} pour l'instant.</div>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{filterDept ? t('rh.noEmployeeInDept') : t('rh.noEmployee')}</div>
         ) : viewMode === 'grid' ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
             {employees.map(emp => (
@@ -5769,7 +5766,7 @@ function EmployeesModule({ farmId, role }) {
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.prenom} {emp.nom}</div>
                 <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{emp.posteNom || emp.poste || '—'}{emp.departementNom ? ` · ${emp.departementNom}` : ''}</div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                  <button onClick={() => setRhEmployee(emp)} title="Fiche RH" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><ClipboardList size={15} /></button>
+                  <button onClick={() => setRhEmployee(emp)} title={t('rh.ficheRh')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><ClipboardList size={15} /></button>
                   {canManageRh && <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}><Settings2 size={15} /></button>}
                   {canManageRh && <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={15} /></button>}
                 </div>
@@ -5787,17 +5784,17 @@ function EmployeesModule({ farmId, role }) {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
                     <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
-                      {emp.posteNom || emp.poste || 'Poste non renseigné'}
+                      {emp.posteNom || emp.poste || t('rh.posteNonRenseigne')}
                       {emp.departementNom && ` · ${emp.departementNom}`}
-                      {emp.managerNom && ` · Manager : ${emp.managerNom}`}
+                      {emp.managerNom && ` · ${t('rh.managerPrefix', { name: emp.managerNom })}`}
                       {emp.telephone && ` · ${emp.telephone}`}
-                      {emp.compteEmail && ` · Connexion : ${emp.compteEmail}`}
-                      {emp.role && ` · ${roleLabels[emp.role] || emp.role}`}
+                      {emp.compteEmail && ` · ${t('rh.loginPrefix', { email: emp.compteEmail })}`}
+                      {emp.role && ` · ${t(`role.${emp.role}`, { defaultValue: emp.role })}`}
                     </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => setRhEmployee(emp)} title="Fiche RH" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+                  <button onClick={() => setRhEmployee(emp)} title={t('rh.ficheRh')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                     <ClipboardList size={15} />
                   </button>
                   {canManageRh && (
@@ -5823,7 +5820,7 @@ function EmployeesModule({ farmId, role }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEditEmployee}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'employé</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('rh.editEmployeeTitle')}</div>
               <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
 
@@ -5840,32 +5837,32 @@ function EmployeesModule({ farmId, role }) {
               {renderInfosPlus(editForm, setEditForm)}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-                <Select label="Statut" value={editForm.statut} onChange={e => setEditForm({ ...editForm, statut: e.target.value })}>
-                  <option value="Actif">Actif</option>
-                  <option value="Inactif">Inactif (désactive aussi la connexion)</option>
+                <Select label={t('rh.fieldStatut')} value={editForm.statut} onChange={e => setEditForm({ ...editForm, statut: e.target.value })}>
+                  <option value="Actif">{t('rh.statutActif')}</option>
+                  <option value="Inactif">{t('rh.statutInactif')}</option>
                 </Select>
-                <Field label="Date de départ" type="date" value={editForm.dateDepart} onChange={e => setEditForm({ ...editForm, dateDepart: e.target.value })} />
-                <Field label="Motif de départ" value={editForm.motifDepart} onChange={e => setEditForm({ ...editForm, motifDepart: e.target.value })} />
+                <Field label={t('rh.fieldDateDepart')} type="date" value={editForm.dateDepart} onChange={e => setEditForm({ ...editForm, dateDepart: e.target.value })} />
+                <Field label={t('rh.fieldMotifDepart')} value={editForm.motifDepart} onChange={e => setEditForm({ ...editForm, motifDepart: e.target.value })} />
               </div>
 
               {!editingEmp.compteEmail && (
                 <>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
                     <input type="checkbox" checked={editForm.linkAccount} onChange={e => setEditForm({ ...editForm, linkAccount: e.target.checked })} />
-                    Créer un compte de connexion pour cet employé
+                    {t('rh.createLogin')}
                   </label>
                   {editForm.linkAccount && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
-                      <Field label="Email de connexion" type="email" value={editForm.compteEmail} onChange={e => setEditForm({ ...editForm, compteEmail: e.target.value })} required />
-                      <Select label="Rôle" value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
-                        <option value="admin">Administrateur</option>
-                        <option value="directeur">Directeur</option>
-                        <option value="gestionnaire">Gestionnaire</option>
-                        <option value="comptable">Comptable</option>
-                        <option value="assistant_direction">Assistant(e) de direction</option>
-                        <option value="ouvrier">Ouvrier</option>
+                      <Field label={t('rh.loginEmail')} type="email" value={editForm.compteEmail} onChange={e => setEditForm({ ...editForm, compteEmail: e.target.value })} required />
+                      <Select label={t('rh.roleField')} value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
+                        <option value="admin">{t('role.admin')}</option>
+                        <option value="directeur">{t('role.directeur')}</option>
+                        <option value="gestionnaire">{t('role.gestionnaire')}</option>
+                        <option value="comptable">{t('role.comptable')}</option>
+                        <option value="assistant_direction">{t('role.assistant_direction')}</option>
+                        <option value="ouvrier">{t('role.ouvrier')}</option>
                       </Select>
-                      <Field label="Mot de passe temporaire" type="text" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} required />
+                      <Field label={t('rh.tempPassword')} type="text" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} required />
                     </div>
                   )}
                 </>
@@ -5873,9 +5870,9 @@ function EmployeesModule({ farmId, role }) {
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
-                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('common.save')}
                 </Button>
-                <Button type="button" onClick={cancelEditEmployee}>Annuler</Button>
+                <Button type="button" onClick={cancelEditEmployee}>{t('common.cancel')}</Button>
               </div>
             </form>
           </div>
