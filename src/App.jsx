@@ -2342,6 +2342,8 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
 }
 
 function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures' }) {
+  const { t } = useTranslation();
+  const { fmtMoney, fmtDate } = useLocale();
   const [fournisseurs, setFournisseurs] = useState([]);
   const [docs, setDocs] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -2440,11 +2442,11 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const submitForm = async (e) => {
     e.preventDefault();
     if (!supplierName) {
-      setError('Un fournisseur est requis.');
+      setError(t('achats.errFournisseurRequis'));
       return;
     }
     if (form.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
-      setError('Toutes les lignes d’achat doivent être complètes.');
+      setError(t('achats.errLignesIncompletes'));
       return;
     }
 
@@ -2467,7 +2469,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         await loadDocs();
         resetForm();
       } catch (err) {
-        setError(err.message || 'Impossible d\'enregistrer l\'achat.');
+        setError(err.message || t('achats.errSave'));
       }
       return;
     }
@@ -2519,7 +2521,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         const data = await getAchatDocument(doc.id);
         source = data.document;
       } catch (err) {
-        setError(err.message || 'Impossible de charger le document.');
+        setError(err.message || t('achats.errLoadDoc'));
         return;
       }
     }
@@ -2536,11 +2538,11 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const submitEditForm = async (e) => {
     e.preventDefault();
     if (!editSupplierName) {
-      setError('Un fournisseur est requis.');
+      setError(t('achats.errFournisseurRequis'));
       return;
     }
     if (editForm.lignes.some(l => !l.produit || l.quantite === '' || l.prixUnitaire === '')) {
-      setError('Toutes les lignes d’achat doivent être complètes.');
+      setError(t('achats.errLignesIncompletes'));
       return;
     }
 
@@ -2564,7 +2566,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         await loadDocs();
         cancelEdit();
       } catch (err) {
-        setError(err.message || 'Impossible d\'enregistrer l\'achat.');
+        setError(err.message || t('achats.errSave'));
       } finally {
         setEditSubmitting(false);
       }
@@ -2586,13 +2588,13 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   };
 
   const removeDoc = async (id) => {
-    if (!window.confirm('Supprimer cet achat multi-lignes ?')) return;
+    if (!window.confirm(t('achats.confirmDelete'))) return;
     if (useRemote) {
       try {
         await deleteAchatDocument(id);
         await loadDocs();
       } catch (err) {
-        setError(err.message || 'Impossible de supprimer le document.');
+        setError(err.message || t('achats.errDeleteDoc'));
       }
       return;
     }
@@ -2606,12 +2608,12 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       await api(id);
       await loadDocs();
       notifySuccess({
-        commander: 'Achat commandé.',
-        recevoir: 'Achat marqué comme reçu — stock et finances mis à jour.',
-        annulerReception: 'Réception annulée.',
+        commander: t('achats.okCommande'),
+        recevoir: t('achats.okRecu'),
+        annulerReception: t('achats.okAnnulerReception'),
       }[action]);
     } catch (err) {
-      notifyError(err, "Impossible de mettre à jour le statut de l'achat.");
+      notifyError(err, t('achats.errStatut'));
     }
   };
 
@@ -2621,7 +2623,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         const data = await getAchatDocument(doc.id);
         setDetailDoc(data.document);
       } catch (err) {
-        setError(err.message || 'Impossible de charger le détail.');
+        setError(err.message || t('achats.errLoadDetail'));
       }
       return;
     }
@@ -2633,7 +2635,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   };
 
   const exportCsv = () => {
-    const header = ['Date', 'Fournisseur', 'Notes', 'Total', 'Lignes'];
+    const header = [t('common.date'), t('achats.fournisseur'), t('achats.notes'), t('common.total'), t('achats.detailLignes')];
     const rows = docs.map(doc => [
       doc.date,
       doc.fournisseurNom,
@@ -2648,15 +2650,15 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const exportPdf = () => {
     const content = docs.map(doc => `
       <tr>
-        <td>${doc.date}</td>
+        <td>${fmtDate(doc.date)}</td>
         <td>${doc.fournisseurNom}</td>
-        <td>${doc.total.toLocaleString('fr-FR')}</td>
-        <td>${doc.lignes.map(l => `${l.produit} x${l.quantite} à ${l.prixUnitaire.toLocaleString('fr-FR')} FCFA`).join('<br />')}</td>
+        <td>${fmtMoney(doc.total)}</td>
+        <td>${doc.lignes.map(l => `${l.produit} x${l.quantite} — ${fmtMoney(l.prixUnitaire)}`).join('<br />')}</td>
       </tr>
     `).join('');
     const printWindow = window.open('', '_blank', 'width=900,height=1000');
     if (!printWindow) return;
-    printWindow.document.write(`<!doctype html><html><head><title>Export achats</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1f2937}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left} th{background:#f7f7f7}</style></head><body><h2>Historique des achats</h2><table><thead><tr><th>Date</th><th>Fournisseur</th><th>Total</th><th>Lignes</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><title>${t('achats.pdfTitle')}</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1f2937}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left} th{background:#f7f7f7}</style></head><body><h2>${t('achats.pdfHeading')}</h2><table><thead><tr><th>${t('common.date')}</th><th>${t('achats.fournisseur')}</th><th>${t('common.total')}</th><th>${t('achats.detailLignes')}</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 250);
   };
@@ -2668,26 +2670,26 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       </datalist>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
-          Nouvel achat multi-lignes
+          {t('achats.newTitle')}
         </div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Select label="Fournisseur" value={form.fournisseurId} onChange={e => setForm({ ...form, fournisseurId: e.target.value, fournisseurNom: '' })}>
-            <option value="">Sélectionner un fournisseur...</option>
+          <Select label={t('achats.fournisseur')} value={form.fournisseurId} onChange={e => setForm({ ...form, fournisseurId: e.target.value, fournisseurNom: '' })}>
+            <option value="">{t('achats.selectFournisseur')}</option>
             {fournisseurs.map(f => (
               <option key={f.id} value={f.id}>{f.nom}</option>
             ))}
-            <option value="__autre__">Autre fournisseur</option>
+            <option value="__autre__">{t('achats.autreFournisseur')}</option>
           </Select>
           {form.fournisseurId === '__autre__' && (
-            <Field label="Nom du fournisseur" placeholder="Nom" value={form.fournisseurNom} onChange={e => setForm({ ...form, fournisseurNom: e.target.value })} />
+            <Field label={t('achats.fournisseurNom')} placeholder={t('achats.fournisseurNomPlaceholder')} value={form.fournisseurNom} onChange={e => setForm({ ...form, fournisseurNom: e.target.value })} />
           )}
-          <Field label="Notes" placeholder="Optionnel" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          <Field label={t('achats.notes')} placeholder={t('common.optionalPlaceholder')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes d’achat</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
             {form.lignes.map((ligne, index) => (
               <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                <Field placeholder="Produit" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                   const value = e.target.value;
                   updateLigne(index, 'produit', value);
                   const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
@@ -2696,19 +2698,19 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                     updateLigne(index, 'prixUnitaire', String(match.prixDefaut));
                   }
                 }} />
-                <Field type="number" placeholder="Qté" value={ligne.quantite} onChange={e => updateLigne(index, 'quantite', e.target.value)} />
-                <Field type="number" placeholder="Prix U." value={ligne.prixUnitaire} onChange={e => updateLigne(index, 'prixUnitaire', e.target.value)} />
+                <Field type="number" placeholder={t('achats.qte')} value={ligne.quantite} onChange={e => updateLigne(index, 'quantite', e.target.value)} />
+                <Field type="number" placeholder={t('achats.prixU')} value={ligne.prixUnitaire} onChange={e => updateLigne(index, 'prixUnitaire', e.target.value)} />
                 <button type="button" onClick={() => removeLigne(index)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: form.lignes.length === 1 ? 'default' : 'pointer', color: form.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '8px 0' }}>
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
-            <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> Ajouter une ligne</Button>
+            <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('achats.addLigne')}</Button>
           </div>
           <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalForm.toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalForm) })}</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button type="submit" variant="ochre">Enregistrer l’achat</Button>
+              <Button type="submit" variant="ochre">{t('achats.submit')}</Button>
             </div>
           </div>
         </form>
@@ -2716,10 +2718,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
       <Card>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Historique des achats</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{t('achats.historique')}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button small variant="outline" onClick={exportCsv}><Download size={14} /> Export CSV</Button>
-            <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> Export PDF</Button>
+            <Button small variant="outline" onClick={exportCsv}><Download size={14} /> {t('achats.exportCsv')}</Button>
+            <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> {t('achats.exportPdf')}</Button>
           </div>
         </div>
       </Card>
@@ -2727,16 +2729,16 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>Date</th>
-              <th>Fournisseur</th>
-              <th>Statut</th>
-              <th>Total</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
+              <th>{t('common.date')}</th>
+              <th>{t('achats.fournisseur')}</th>
+              <th>{t('common.status')}</th>
+              <th>{t('common.total')}</th>
+              <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {docs.length === 0 ? (
-              <tr><td colSpan={5} style={{ color: COLORS.inkSoft }}>Aucun achat enregistré.</td></tr>
+              <tr><td colSpan={5} style={{ color: COLORS.inkSoft }}>{t('achats.emptyTable')}</td></tr>
             ) : docs.map(doc => {
               const statut = doc.statut || 'Reçu';
               const modifiable = ['Brouillon', 'Commandé'].includes(statut);
@@ -2744,18 +2746,18 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               <tr key={doc.id}>
                 <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(doc.date)}</td>
                 <td>{doc.fournisseurNom}</td>
-                <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{statut}</Badge></td>
-                <td style={{ fontWeight: 600 }}>{doc.total.toLocaleString('fr-FR')} FCFA</td>
+                <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
+                <td style={{ fontWeight: 600 }}>{fmtMoney(doc.total)}</td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
                     {statut === 'Brouillon' && (
-                      <Button small variant="outline" onClick={() => changerStatutDoc(doc.id, 'commander')}>Commander</Button>
+                      <Button small variant="outline" onClick={() => changerStatutDoc(doc.id, 'commander')}>{t('achats.commander')}</Button>
                     )}
                     {statut === 'Commandé' && (
-                      <Button small variant="green" onClick={() => changerStatutDoc(doc.id, 'recevoir')}>Marquer reçu</Button>
+                      <Button small variant="green" onClick={() => changerStatutDoc(doc.id, 'recevoir')}>{t('achats.marquerRecu')}</Button>
                     )}
                     {statut === 'Reçu' && (
-                      <Button small variant="ghost" onClick={() => changerStatutDoc(doc.id, 'annulerReception', 'Annuler la réception ? Le stock et les finances liés à cet achat seront retirés.')}>Annuler réception</Button>
+                      <Button small variant="ghost" onClick={() => changerStatutDoc(doc.id, 'annulerReception', t('achats.confirmAnnulerReception'))}>{t('achats.annulerReception')}</Button>
                     )}
                     <button onClick={() => openDetail(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><ChevronRight size={15} /></button>
                     {modifiable && (
@@ -2778,23 +2780,23 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
-                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{detailDoc.date}</div>
+                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{fmtDate(detailDoc.date)}</div>
               </div>
               <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>Total</strong><div style={{ fontWeight: 700, marginTop: 6 }}>{detailDoc.total.toLocaleString('fr-FR')} FCFA</div></div>
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>Notes</strong><div style={{ marginTop: 6 }}>{detailDoc.notes || 'Aucune note'}</div></div>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: 6 }}>{fmtMoney(detailDoc.total)}</div></div>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>{t('achats.notes')}</strong><div style={{ marginTop: 6 }}>{detailDoc.notes || t('achats.detailNoNote')}</div></div>
             </div>
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Lignes</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t('achats.detailLignes')}</div>
               <table className="data-table">
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-                    <th>Produit</th>
-                    <th>Qté</th>
-                    <th>PU</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th>{t('achats.produit')}</th>
+                    <th>{t('achats.qte')}</th>
+                    <th>{t('achats.pu')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('common.total')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2802,14 +2804,14 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                     <tr key={index}>
                       <td>{ligne.produit}</td>
                       <td>{ligne.quantite}</td>
-                      <td>{Number(ligne.prixUnitaire).toLocaleString('fr-FR')}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(ligne.quantite) * Number(ligne.prixUnitaire)).toLocaleString('fr-FR')} FCFA</td>
+                      <td>{fmtMoney(ligne.prixUnitaire)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(Number(ligne.quantite) * Number(ligne.prixUnitaire))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <Button variant="ghost" onClick={closeDetail}>Fermer</Button>
+            <Button variant="ghost" onClick={closeDetail}>{t('common.close')}</Button>
           </div>
         </div>
       )}
@@ -2818,27 +2820,27 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier un achat</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('achats.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
             <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-              <Select label="Fournisseur" value={editForm.fournisseurId} onChange={e => setEditForm({ ...editForm, fournisseurId: e.target.value, fournisseurNom: '' })}>
-                <option value="">Sélectionner un fournisseur...</option>
+              <Select label={t('achats.fournisseur')} value={editForm.fournisseurId} onChange={e => setEditForm({ ...editForm, fournisseurId: e.target.value, fournisseurNom: '' })}>
+                <option value="">{t('achats.selectFournisseur')}</option>
                 {fournisseurs.map(f => (
                   <option key={f.id} value={f.id}>{f.nom}</option>
                 ))}
-                <option value="__autre__">Autre fournisseur</option>
+                <option value="__autre__">{t('achats.autreFournisseur')}</option>
               </Select>
               {editForm.fournisseurId === '__autre__' && (
-                <Field label="Nom du fournisseur" placeholder="Nom" value={editForm.fournisseurNom} onChange={e => setEditForm({ ...editForm, fournisseurNom: e.target.value })} />
+                <Field label={t('achats.fournisseurNom')} placeholder={t('achats.fournisseurNomPlaceholder')} value={editForm.fournisseurNom} onChange={e => setEditForm({ ...editForm, fournisseurNom: e.target.value })} />
               )}
-              <Field label="Notes" placeholder="Optionnel" value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+              <Field label={t('achats.notes')} placeholder={t('common.optionalPlaceholder')} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
               <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Lignes d’achat</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
                 {editForm.lignes.map((ligne, index) => (
                   <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                    <Field placeholder="Produit" list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                    <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                       const value = e.target.value;
                       updateEditLigne(index, 'produit', value);
                       const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
@@ -2847,21 +2849,21 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                         updateEditLigne(index, 'prixUnitaire', String(match.prixDefaut));
                       }
                     }} />
-                    <Field type="number" placeholder="Qté" value={ligne.quantite} onChange={e => updateEditLigne(index, 'quantite', e.target.value)} />
-                    <Field type="number" placeholder="Prix U." value={ligne.prixUnitaire} onChange={e => updateEditLigne(index, 'prixUnitaire', e.target.value)} />
+                    <Field type="number" placeholder={t('achats.qte')} value={ligne.quantite} onChange={e => updateEditLigne(index, 'quantite', e.target.value)} />
+                    <Field type="number" placeholder={t('achats.prixU')} value={ligne.prixUnitaire} onChange={e => updateEditLigne(index, 'prixUnitaire', e.target.value)} />
                     <button type="button" onClick={() => removeEditLigne(index)} disabled={editForm.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: editForm.lignes.length === 1 ? 'default' : 'pointer', color: editForm.lignes.length === 1 ? COLORS.border : COLORS.red, padding: '8px 0' }}>
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
-                <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> Ajouter une ligne</Button>
+                <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('achats.addLigne')}</Button>
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>Total : {totalEditForm.toLocaleString('fr-FR')} FCFA</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalEditForm) })}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Button type="button" variant="ghost" onClick={cancelEdit}>Annuler</Button>
+                  <Button type="button" variant="ghost" onClick={cancelEdit}>{t('common.cancel')}</Button>
                   <Button type="submit" variant="green" disabled={editSubmitting}>
-                    {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Mettre à jour
+                    {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('achats.update')}
                   </Button>
                 </div>
               </div>
