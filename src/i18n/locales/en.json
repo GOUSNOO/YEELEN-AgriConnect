@@ -781,6 +781,81 @@
       "Traité": "Handled"
     }
   },
+  "help": {
+    "title": "Help",
+    "intro": "A quick reminder of what each module does. A question that isn't answered here? Leave it in Feedback.",
+    "sections": {
+      "accueil": {
+        "title": "Dashboard",
+        "text": "The home page sums up your farm at a glance: revenue and expenses for the month, profit, number of sales, plots to water, egg stock, pending deliveries. The “Important alerts” section lists what needs your attention right now."
+      },
+      "calendrier": {
+        "title": "Calendar",
+        "text": "Note the important dates for your farm (sowing, treatments, appointments...). Events are shared between all employees of your business, not just saved on your phone."
+      },
+      "recoltes": {
+        "title": "Harvests",
+        "text": "Record each harvest: plot, crop, quantity, quality, destination. Choosing the right plot lets you later link a sale to the harvest it came from (visible in a quote's details)."
+      },
+      "cultures": {
+        "title": "Crops & irrigation",
+        "points": [
+          "Plots: soil moisture and temperature (simulated sensors), watering threshold, automatic mode or manual valve.",
+          "Stock: seeds, fertilizers, crop-protection products — quantities, alert thresholds, customizable categories, and a default price per item. That price is suggested automatically as soon as you type the item name in a purchase or a quote.",
+          "Sales / Purchases: go through quotes (Sales module) and the multi-line purchase form (Purchases module — with a real Draft → Ordered → Received cycle, stock and finances only moving on receipt). Every received purchase or signed sale automatically updates your Finances and your stock.",
+          "Accounting: total sales and purchases for the module, and the change history."
+        ]
+      },
+      "poulailler": {
+        "title": "Poultry",
+        "text": "Same logic as Crops, applied to livestock: poultry-house temperature/humidity, stock (feed, eggs, birds) with a price catalog, sales/purchases/deliveries, and automatic accounting."
+      },
+      "clientsFournisseurs": {
+        "title": "Customers & Suppliers",
+        "text": "A single contact record can be a customer, a supplier, or both at once — tick the matching box on the record. Contact details, purchase history for a customer, order history for a supplier. Click a record in the left list to see its details on the right, with the price list possibly assigned to it."
+      },
+      "finances": {
+        "title": "Finances & Banks",
+        "text": "All your transactions: Cash, bank accounts, expenses, net profit. Sales and purchases recorded in Crops, Poultry or via a quote appear here automatically — you can also add a manual operation (salary, fuel, maintenance...). Set a main bank account so sales/purchases are credited there by default."
+      },
+      "devis": {
+        "title": "Quotes & Invoices",
+        "text": "Create a quote by adding product lines (percentage discount possible) or section lines to structure the document, then send it to the customer (by email with an online signing link, or validate it manually if the agreement was given by phone). A product's price is prefilled automatically based on the price list assigned to the customer (managed from Customers), otherwise its default price. Once signed, turn it into an invoice with full payment or instalments — each payment is reflected in Finances. In a quote's details you can also record the quantities actually delivered/invoiced line by line."
+      },
+      "salaries": {
+        "title": "Employees",
+        "text": "Records for your employees: position, salary, personal contact details. Open an employee's “HR record” for detailed tracking: day-by-day attendance, leave requests (to approve/reject), and salary advances. An employee can have a separate login account (with their own role) — that is different from their personal email."
+      },
+      "equipements": {
+        "title": "Equipment",
+        "text": "Inventory of your equipment: name, category, condition, acquisition date, value. Each piece of equipment keeps a history of maintenance interventions (date, description, cost). Visible to everyone, but only admin/director/manager can add or edit."
+      },
+      "observations": {
+        "title": "Observations",
+        "text": "Free-form field notes, with date and location — handy for recording what you notice in the moment (the state of a crop, a sick animal, an incident...) without going through a specific module."
+      },
+      "assistant": {
+        "title": "AI Assistant",
+        "text": "Ask a question in plain language about your farm (profit for the month, feed stock, plot to water, best customer, upcoming expenses): the answer is computed from your real data, not from an external AI."
+      },
+      "previsionsRapports": {
+        "title": "Forecasts & Reports",
+        "text": "Forecasts estimates your sales, expenses, harvests and profit for next month from your recent trends. Reports gives you the same kind of figures for a past period (day, week, month, year), with export to PDF or CSV."
+      },
+      "notifications": {
+        "title": "Notifications",
+        "text": "List of active alerts: low stock, high temperature, dry soil, scheduled delivery, unpaid invoice."
+      },
+      "feedback": {
+        "title": "Feedback",
+        "text": "A suggestion, a frustration, a bug you hit? Say so here — that's what lets us improve the app as we go, with feedback from real users."
+      },
+      "profil": {
+        "title": "Profile & security",
+        "text": "Your account information, and enabling two-factor authentication (MFA) to secure your sign-in with a code on top of your password."
+      }
+    }
+  },
   "observations": {
     "loading": "Loading observations…",
     "errorTitle": "Loading error",
