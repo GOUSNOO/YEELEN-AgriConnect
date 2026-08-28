@@ -7625,7 +7625,7 @@ function ProfilModule({ role }) {
       setQrCode(null);
       setMfaMode(null);
       setCode('');
-      setSuccess('Authentification à deux facteurs activée.');
+      setSuccess(t('profil.mfaEnabled'));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -7640,7 +7640,7 @@ function ProfilModule({ role }) {
     try {
       await disableMfa();
       setMfaEnabled(false);
-      setSuccess('Authentification à deux facteurs désactivée.');
+      setSuccess(t('profil.mfaDisabled'));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -7655,7 +7655,7 @@ function ProfilModule({ role }) {
     try {
       await setMfaCompanyMethod(method);
       setCompanyMethod(method);
-      setMethodSuccess('Méthode de vérification mise à jour pour toute l\'entreprise.');
+      setMethodSuccess(t('profil.companyMethodUpdated'));
     } catch (err) {
       setMethodError(err.message);
     } finally {
@@ -7664,9 +7664,9 @@ function ProfilModule({ role }) {
   };
 
   const methodLabels = {
-    totp: "Application d'authentification (QR code)",
-    email: 'Code par email',
-    sms: 'Code par SMS',
+    totp: t('profil.methodTotp'),
+    email: t('profil.methodEmail'),
+    sms: t('profil.methodSms'),
   };
 
   return (
@@ -7709,10 +7709,10 @@ function ProfilModule({ role }) {
       {isAdmin && (
         <Card>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
-            Méthode de vérification (entreprise)
+            {t('profil.companyMethodTitle')}
           </div>
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
-            Choisissez comment vos salariés recevront leur code de vérification en deux étapes. Ce réglage s'applique à toute l'entreprise.
+            {t('profil.companyMethodHint')}
           </div>
 
           {methodError && (
@@ -7748,7 +7748,7 @@ function ProfilModule({ role }) {
           </div>
           {companyMethod === 'sms' && (
             <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 10 }}>
-              Note : l'envoi SMS n'est pas encore relié à un prestataire, les codes s'afficheront uniquement dans les journaux du serveur pour le moment.
+              {t('profil.smsNote')}
             </div>
           )}
         </Card>
@@ -7756,10 +7756,10 @@ function ProfilModule({ role }) {
 
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
-          Sécurité du compte
+          {t('profil.securityTitle')}
         </div>
         <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
-          Ajoutez une étape de vérification supplémentaire à la connexion.
+          {t('profil.securityHint')}
         </div>
 
         {error && (
@@ -7775,20 +7775,20 @@ function ProfilModule({ role }) {
 
         {!mfaMode && !mfaEnabled && (
           <Button variant="green" onClick={startSetup} disabled={busy}>
-            {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} Activer la vérification en deux étapes
+            {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('profil.mfaEnable')}
           </Button>
         )}
 
         {mfaMode === 'totp' && qrCode && (
           <div>
             <div style={{ fontSize: 13, marginBottom: 10 }}>
-              Scannez ce code avec votre application d'authentification, puis saisissez le code généré :
+              {t('profil.mfaScanHint')}
             </div>
-            <img src={qrCode} alt="QR code MFA" style={{ width: 180, height: 180, marginBottom: 14, borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
+            <img src={qrCode} alt={t("profil.mfaQrAlt")} style={{ width: 180, height: 180, marginBottom: 14, borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
             <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Field label="Code de vérification" placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
+              <Field label={t("auth.mfaCode")} placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
               <Button type="submit" variant="green" disabled={busy}>
-                {busy ? <Loader2 size={15} className="spin" /> : null} Confirmer l'activation
+                {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaConfirm')}
               </Button>
             </form>
           </div>
@@ -7797,12 +7797,12 @@ function ProfilModule({ role }) {
         {(mfaMode === 'email' || mfaMode === 'sms') && (
           <div>
             <div style={{ fontSize: 13, marginBottom: 10 }}>
-              Un code a été envoyé à <strong>{sentTo}</strong>. Saisissez-le ci-dessous :
+              {t('profil.mfaCodeSent', { sentTo })}
             </div>
             <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Field label="Code de vérification" placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
+              <Field label={t("auth.mfaCode")} placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
               <Button type="submit" variant="green" disabled={busy}>
-                {busy ? <Loader2 size={15} className="spin" /> : null} Confirmer l'activation
+                {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaConfirm')}
               </Button>
             </form>
           </div>
@@ -7810,7 +7810,7 @@ function ProfilModule({ role }) {
 
         {mfaEnabled && (
           <Button variant="ghost" onClick={handleDisable} disabled={busy}>
-            {busy ? <Loader2 size={15} className="spin" /> : null} Désactiver la vérification en deux étapes
+            {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaDisable')}
           </Button>
         )}
       </Card>

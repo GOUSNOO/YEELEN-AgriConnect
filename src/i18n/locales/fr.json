@@ -1032,6 +1032,23 @@
     "savePreferences": "Enregistrer les préférences",
     "preferencesSaved": "Préférences mises à jour.",
     "previewMoney": "Aperçu montant",
-    "previewDate": "Aperçu date"
+    "previewDate": "Aperçu date",
+    "companyMethodTitle": "Méthode de vérification (entreprise)",
+    "companyMethodHint": "Choisissez comment vos salariés recevront leur code de vérification en deux étapes. Ce réglage s'applique à toute l'entreprise.",
+    "companyMethodUpdated": "Méthode de vérification mise à jour pour toute l'entreprise.",
+    "smsNote": "Note : l'envoi SMS n'est pas encore relié à un prestataire, les codes s'afficheront uniquement dans les journaux du serveur pour le moment.",
+    "methodTotp": "Application d'authentification (QR code)",
+    "methodEmail": "Code par email",
+    "methodSms": "Code par SMS",
+    "securityTitle": "Sécurité du compte",
+    "securityHint": "Ajoutez une étape de vérification supplémentaire à la connexion.",
+    "mfaEnable": "Activer la vérification en deux étapes",
+    "mfaDisable": "Désactiver la vérification en deux étapes",
+    "mfaEnabled": "Authentification à deux facteurs activée.",
+    "mfaDisabled": "Authentification à deux facteurs désactivée.",
+    "mfaScanHint": "Scannez ce code avec votre application d'authentification, puis saisissez le code généré :",
+    "mfaQrAlt": "QR code MFA",
+    "mfaConfirm": "Confirmer l'activation",
+    "mfaCodeSent": "Un code a été envoyé à {{sentTo}}. Saisissez-le ci-dessous :"
   }
 }
