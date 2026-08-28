@@ -441,6 +441,65 @@ export async function deleteSalarieAvance(avanceId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// RH complète — référentiels entreprise (départements / postes / jours fériés / types de congés)
+// ─────────────────────────────────────────────────────────────────────
+export async function getDepartements() { return request('/rh/departements'); }
+export async function createDepartement(payload) { return request('/rh/departements', { method: 'POST', body: JSON.stringify(payload) }); }
+export async function updateDepartement(id, payload) { return request(`/rh/departements/${id}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+export async function deleteDepartement(id) { return request(`/rh/departements/${id}`, { method: 'DELETE' }); }
+
+export async function getPostes() { return request('/rh/postes'); }
+export async function createPoste(payload) { return request('/rh/postes', { method: 'POST', body: JSON.stringify(payload) }); }
+export async function updatePoste(id, payload) { return request(`/rh/postes/${id}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+export async function deletePoste(id) { return request(`/rh/postes/${id}`, { method: 'DELETE' }); }
+
+export async function getJoursFeries() { return request('/rh/jours-feries'); }
+export async function createJourFerie(payload) { return request('/rh/jours-feries', { method: 'POST', body: JSON.stringify(payload) }); }
+export async function deleteJourFerie(id) { return request(`/rh/jours-feries/${id}`, { method: 'DELETE' }); }
+
+export async function getCongesTypes() { return request('/rh/conges-types'); }
+export async function createCongeType(payload) { return request('/rh/conges-types', { method: 'POST', body: JSON.stringify(payload) }); }
+export async function updateCongeType(id, payload) { return request(`/rh/conges-types/${id}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+export async function deleteCongeType(id) { return request(`/rh/conges-types/${id}`, { method: 'DELETE' }); }
+
+// ─────────────────────────────────────────────────────────────────────
+// RH complète — par salarié (self-service, contrats, droits/solde, temps, bulletin)
+// ─────────────────────────────────────────────────────────────────────
+export async function getMaFicheRh() { return request('/salaries/moi'); }
+export async function getSalarieJournal(salarieId) { return request(`/salaries/${salarieId}/journal`); }
+
+export async function createSalarieConge2(salarieId, payload) {
+  return request(`/salaries/${salarieId}/conges`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function getSalarieCongesSolde(salarieId, annee) {
+  return request(`/salaries/${salarieId}/conges-solde${annee ? `?annee=${annee}` : ''}`);
+}
+export async function getSalarieCongesDroits(salarieId) { return request(`/salaries/${salarieId}/conges-droits`); }
+export async function upsertSalarieCongeDroit(salarieId, payload) {
+  return request(`/salaries/${salarieId}/conges-droits`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function deleteSalarieCongeDroit(droitId) { return request(`/salaries/conges-droits/${droitId}`, { method: 'DELETE' }); }
+
+export async function getSalarieContrats(salarieId) { return request(`/salaries/${salarieId}/contrats`); }
+export async function createSalarieContrat(salarieId, payload) {
+  return request(`/salaries/${salarieId}/contrats`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateSalarieContrat(contratId, payload) {
+  return request(`/salaries/contrats/${contratId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteSalarieContrat(contratId) { return request(`/salaries/contrats/${contratId}`, { method: 'DELETE' }); }
+
+export async function getSalarieTemps(salarieId) { return request(`/salaries/${salarieId}/temps`); }
+export async function createSalarieTemps(salarieId, payload) {
+  return request(`/salaries/${salarieId}/temps`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function deleteSalarieTemps(tempsId) { return request(`/salaries/temps/${tempsId}`, { method: 'DELETE' }); }
+
+export async function getSalarieBulletin(salarieId, mois) {
+  return request(`/salaries/${salarieId}/bulletin${mois ? `?mois=${mois}` : ''}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // BANQUES — comptes bancaires de l'entreprise
 // ─────────────────────────────────────────────────────────────────────
 
@@ -482,6 +541,14 @@ export async function getOnboardingStatus() {
 // Réservé à admin/directeur : confirme explicitement qu'une étape n'est pas nécessaire
 export async function updateOnboardingStatus(payload) {
   return request('/entreprise/onboarding-status', { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+// Fiche entreprise (nom/siret/adresse/secteur + devise/locale). PUT réservé à admin.
+export async function getEntreprise() {
+  return request('/entreprise', { method: 'GET' });
+}
+export async function updateEntreprise(payload) {
+  return request('/entreprise', { method: 'PUT', body: JSON.stringify(payload) });
 }
 
 export async function getAchatsDocuments(module) {

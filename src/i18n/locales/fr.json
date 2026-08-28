@@ -1,0 +1,213 @@
+{
+  "common": {
+    "back": "Retour",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "loading": "Chargement…",
+    "next": "Suivant",
+    "finish": "Terminer",
+    "add": "Ajouter",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "yes": "Oui",
+    "no": "Non",
+    "none": "Aucun",
+    "optional": "optionnel",
+    "search": "Rechercher",
+    "total": "Total",
+    "date": "Date",
+    "amount": "Montant",
+    "status": "Statut",
+    "actions": "Actions",
+    "noData": "Aucune donnée"
+  },
+  "role": {
+    "admin": "Administrateur",
+    "directeur": "Directeur",
+    "gestionnaire": "Gestionnaire",
+    "comptable": "Comptable",
+    "assistant_direction": "Assistant(e) de direction",
+    "ouvrier": "Ouvrier"
+  },
+  "shell": {
+    "manageOptions": "Gérer les options",
+    "globalSearch": "Recherche globale (Ctrl+K)",
+    "online": "En ligne",
+    "offline": "Mode hors ligne",
+    "pendingSync_one": "{{count}} modification à synchroniser",
+    "pendingSync_other": "{{count}} modifications à synchroniser",
+    "lastSync": "Dernière synchronisation : {{date}}",
+    "noSync": "Aucune synchronisation enregistrée",
+    "logout": "Se déconnecter"
+  },
+  "onboarding": {
+    "configTitle": "Configurer votre entreprise",
+    "configDesc": "Ajoutez vos comptes bancaires et vos salariés maintenant, ou passez directement au tableau de bord et configurez-les plus tard depuis « Gérer les options ».",
+    "now": "Configurer maintenant",
+    "later": "Plus tard",
+    "banquesTitle": "Vos comptes bancaires",
+    "banquesDesc": "Ajoutez un ou plusieurs comptes bancaires. Vous pourrez en ajouter d'autres plus tard.",
+    "noBanque": "Je n'ai pas de compte bancaire (caisse uniquement)",
+    "salariesTitle": "Vos salariés",
+    "salariesDesc": "Ajoutez vos employés maintenant, ou passez cette étape et faites-le plus tard depuis l'onglet Employés.",
+    "noSalarie": "Je travaille seul, pas de salarié à ajouter"
+  },
+  "language": {
+    "label": "Langue de l'interface",
+    "fr": "Français",
+    "en": "English"
+  },
+  "auth": {
+    "brand": "YEELEN AgriConnect",
+    "tabLogin": "Connexion",
+    "tabRegister": "Inscription",
+    "titleLogin": "Connexion",
+    "titleRegister": "Créer un compte",
+    "subtitleLogin": "Accédez à vos outils de suivi d'exploitation.",
+    "subtitleRegister": "Quelques informations pour démarrer.",
+    "accountTypeCompany": "Entreprise",
+    "accountTypeIndividual": "Particulier / Auto-entrepreneur",
+    "email": "Adresse e-mail",
+    "emailPlaceholder": "nom@exploitation.example",
+    "password": "Mot de passe",
+    "companyName": "Nom de votre entreprise",
+    "activityName": "Votre nom ou celui de votre activité (optionnel)",
+    "companyNamePlaceholder": "Ex. Ferme Diallo SARL",
+    "activityNamePlaceholder": "Ex. Diallo Agriculture",
+    "siret": "SIRET (optionnel)",
+    "siretPlaceholder": "Ex. 123 456 789 00012",
+    "currency": "Devise",
+    "locale": "Format régional",
+    "submitLogin": "Se connecter",
+    "submitRegister": "S'inscrire",
+    "noAccount": "Pas encore de compte ?",
+    "hasAccount": "Déjà un compte ?",
+    "footer": "Authentification via API backend — connexion sécurisée.",
+    "loginFailed": "Connexion impossible.",
+    "registerFailed": "Inscription impossible.",
+    "mfaTitle": "Vérification en deux étapes",
+    "mfaHint": "Saisissez le code à 6 chiffres généré par votre application d'authentification.",
+    "mfaCode": "Code de vérification",
+    "mfaSubmit": "Valider",
+    "mfaInvalid": "Code invalide."
+  },
+  "optionCard": {
+    "active": "Activée",
+    "deactivate": "Désactiver",
+    "activate": "Activer cette option"
+  },
+  "modulesScreen": {
+    "title": "Choisissez vos options",
+    "subtitle": "Activez un ou deux modules selon les besoins de votre exploitation. Vous pourrez les modifier à tout moment.",
+    "continue": "Continuer",
+    "pricePlaceholder": "Option incluse dans l'abonnement",
+    "cultures": {
+      "title": "Suivi cultures et irrigation",
+      "desc": "Surveillez l'humidité et la température du sol, recevez des recommandations d'arrosage et pilotez vos vannes à distance.",
+      "features": ["Capteurs sol par parcelle", "Recommandation d'arrosage automatique", "Pilotage des vannes (auto ou manuel)", "Historique des arrosages"]
+    },
+    "poulailler": {
+      "title": "Gestion du poulailler",
+      "desc": "Suivez l'ambiance du poulailler et gérez l'ensemble de votre activité avicole au quotidien.",
+      "features": ["Température et humidité du poulailler", "Stocks (aliments, œufs, volailles)", "Ventes, achats et livraisons", "Comptabilité automatique"]
+    },
+    "clients": {
+      "title": "Gestion des clients",
+      "desc": "Enregistrez vos clients, suivez leurs achats, leurs paiements et leur dette restante.",
+      "features": ["Fiche client complète", "Historique des achats", "Suivi des paiements", "Dette restante en temps réel"]
+    },
+    "employees": {
+      "title": "Gestion des employés",
+      "desc": "Suivez les employés, leur poste, leur salaire, leur présence, leurs avances et leurs congés.",
+      "features": ["Fiche employé complète", "Salaire et poste", "Présence", "Avances et congés"]
+    },
+    "fournisseurs": {
+      "title": "Gestion des fournisseurs",
+      "desc": "Enregistrez vos fournisseurs et retrouvez-les facilement lors de vos achats.",
+      "features": ["Fiche fournisseur complète", "Historique des achats", "Coordonnées et SIRET"]
+    },
+    "finances": {
+      "title": "Gestion financière",
+      "desc": "Suivez la caisse, la banque, les dépenses et calculez le bénéfice net de votre exploitation.",
+      "features": ["Caisse", "Banque", "Dépenses diverses", "Carburant", "Salaire", "Entretien", "Bénéfice net"]
+    },
+    "notifications": {
+      "title": "Notifications",
+      "desc": "Recevez une vue synthétique des alertes importantes de l'exploitation.",
+      "features": ["Stock faible", "Température trop élevée", "Sol sec", "Livraison prévue", "Client en retard de paiement"]
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Aucune notification pour le moment.",
+    "lowStockTitle": "Stock faible",
+    "lowStockMsg": "{{name}} est en dessous du seuil ({{qty}} {{unit}})",
+    "highTempTitle": "Température trop élevée",
+    "highTempMsg": "{{name}} dépasse {{temp}}°C",
+    "drySoilTitle": "Sol sec",
+    "drySoilMsg": "{{name}} nécessite un arrosage",
+    "deliveryTitle": "Livraison prévue aujourd'hui",
+    "deliveryMsg": "{{product}} à livrer à {{customer}}",
+    "unpaidTitle": "Facture en attente de paiement",
+    "unpaidMsg": "{{customer}} — {{number}} ({{amount}}, {{status}})",
+    "defaultCustomer": "Client"
+  },
+  "home": {
+    "cardRevenue": "Chiffre d'affaires du mois",
+    "cardExpenses": "Dépenses du mois",
+    "cardProfit": "Bénéfice",
+    "cardSales": "Nombre de ventes",
+    "cardPendingDeliveries": "Livraisons en attente",
+    "cardPlotsToWater": "Parcelles à arroser",
+    "cardEggs": "Nombre d'œufs disponibles",
+    "cardAlerts": "Alertes importantes",
+    "alertsTitle": "Alertes importantes",
+    "noAlerts": "Aucune alerte à signaler pour le moment.",
+    "alertPlotsToWater_one": "{{count}} parcelle à arroser",
+    "alertPlotsToWater_other": "{{count}} parcelles à arroser",
+    "alertLowEggStock": "Stock d'œufs faible ({{count}})",
+    "alertPendingDeliveries_one": "{{count}} livraison en attente",
+    "alertPendingDeliveries_other": "{{count}} livraisons en attente",
+    "alertNegativeProfit": "Bénéfice négatif ({{amount}})"
+  },
+  "nav": {
+    "accueil": "Accueil",
+    "calendar": "Calendrier",
+    "recoltes": "Récoltes",
+    "assistant": "Assistant IA",
+    "forecasting": "Prévisions",
+    "reports": "Rapports",
+    "cultures": "Cultures & irrigation",
+    "poulailler": "Poulailler",
+    "clients": "Clients",
+    "fournisseurs": "Fournisseurs",
+    "employees": "Employés",
+    "monrh": "Mon espace RH",
+    "finances": "Finances",
+    "notifications": "Notifications",
+    "observations": "Observations",
+    "equipements": "Équipements",
+    "feedback": "Feedback",
+    "aide": "Aide",
+    "profil": "Profil"
+  },
+  "navGroup": {
+    "operations": "Opérations",
+    "analyse": "Analyse",
+    "commercial": "Commercial",
+    "finance": "Finance",
+    "rh": "Ressources humaines"
+  },
+  "profil": {
+    "title": "Profil",
+    "sectionPreferences": "Préférences",
+    "sectionPreferencesHint": "La langue s'applique à votre compte uniquement. La devise et le format régional s'appliquent à toute l'entreprise.",
+    "currency": "Devise de l'entreprise",
+    "locale": "Format régional de l'entreprise",
+    "savePreferences": "Enregistrer les préférences",
+    "preferencesSaved": "Préférences mises à jour.",
+    "previewMoney": "Aperçu montant",
+    "previewDate": "Aperçu date"
+  }
+}

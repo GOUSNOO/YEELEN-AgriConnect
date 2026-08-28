@@ -1,6 +1,9 @@
 ﻿import './App.css';
 ﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
+import { useLocale, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES } from './lib/locale.jsx';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, Sun, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -26,6 +29,7 @@ import {
   setupMfa, verifyMfa, disableMfa,
   getMfaCompanyMethod, setMfaCompanyMethod,
   getSalaries, createSalarie, updateSalarie, deleteSalarie,
+  getPostes, getDepartements,
   getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
   getPoulaillerHistorique, getCulturesHistorique,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
@@ -36,7 +40,7 @@ import {
   getMessages, createMessage,
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
-  getOnboardingStatus, updateOnboardingStatus,
+  getOnboardingStatus, updateOnboardingStatus, updateEntreprise,
 } from './lib/api';
 import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
@@ -45,6 +49,8 @@ import { HelpModule } from './components/HelpModule';
 import { EquipementsModule } from './components/EquipementsModule';
 import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
+import RhReferentiels from './components/RhReferentiels';
+import MonEspaceRh from './components/MonEspaceRh';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi, mapUiRoleToBackend } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
 import { FinancesModule, BanquesModule } from './modules/finances.jsx';
@@ -67,12 +73,13 @@ const COLORS = {
 };
 
 // Regroupement de la sidebar — même taxonomie que le champ `category` d'availableTabs.
+// labelKey résolu via i18n au rendu (SidebarNav), le module-level ne peut pas utiliser le hook.
 const NAV_CATEGORIES = [
-  { id: 'operations', label: 'Opérations', color: COLORS.green },
-  { id: 'analyse', label: 'Analyse', color: COLORS.blue },
-  { id: 'commercial', label: 'Commercial', color: COLORS.ochre },
-  { id: 'finance', label: 'Finance', color: COLORS.red },
-  { id: 'rh', label: 'RH', color: '#9B6BD6' },
+  { id: 'operations', labelKey: 'navGroup.operations', color: COLORS.green },
+  { id: 'analyse', labelKey: 'navGroup.analyse', color: COLORS.blue },
+  { id: 'commercial', labelKey: 'navGroup.commercial', color: COLORS.ochre },
+  { id: 'finance', labelKey: 'navGroup.finance', color: COLORS.red },
+  { id: 'rh', labelKey: 'navGroup.rh', color: '#9B6BD6' },
 ];
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
@@ -4139,12 +4146,15 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
 }
 
 function LoginScreen({ onAuth }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nomEntreprise, setNomEntreprise] = useState('');
   const [typeCompte, setTypeCompte] = useState('entreprise'); // 'entreprise' | 'particulier'
   const [siret, setSiret] = useState('');
+  const [devise, setDevise] = useState('XOF');
+  const [locale, setLocale] = useState('fr-FR');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [mfaStep, setMfaStep] = useState(false);
@@ -4157,14 +4167,14 @@ function LoginScreen({ onAuth }) {
     setBusy(true);
     try {
       const extra = mode === 'register'
-        ? { nomEntreprise, typeCompte, siret: typeCompte === 'entreprise' ? siret : undefined }
+        ? { nomEntreprise, typeCompte, siret: typeCompte === 'entreprise' ? siret : undefined, devise, locale }
         : null;
       const result = await onAuth(mode, email, password, extra);
       if (result?.mfaRequired) {
         setMfaStep(true);
       }
     } catch (err) {
-      setError(err.message || (mode === 'login' ? 'Connexion impossible.' : "Inscription impossible."));
+      setError(err.message || (mode === 'login' ? t('auth.loginFailed') : t('auth.registerFailed')));
     } finally {
       setBusy(false);
     }
@@ -4178,7 +4188,7 @@ function LoginScreen({ onAuth }) {
     try {
       await onAuth('login', email, password, null, mfaCode);
     } catch (err) {
-      setError(err.message || 'Code invalide.');
+      setError(err.message || t('auth.mfaInvalid'));
     } finally {
       setBusy(false);
     }
@@ -4190,25 +4200,25 @@ function LoginScreen({ onAuth }) {
         <div style={{ width: '100%', maxWidth: 380 }}>
           <Card>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
-              Vérification en deux étapes
+              {t('auth.mfaTitle')}
             </div>
             <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
-              Saisissez le code à 6 chiffres généré par votre application d'authentification.
+              {t('auth.mfaHint')}
             </div>
             <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Field label="Code de vérification" placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
+              <Field label={t('auth.mfaCode')} placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
               {error && (
                 <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
               <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
-                {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} Valider
+                {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('auth.mfaSubmit')}
               </Button>
             </form>
             <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
               <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
-                Retour
+                {t('common.back')}
               </button>
             </div>
           </Card>
@@ -4224,7 +4234,7 @@ function LoginScreen({ onAuth }) {
           <div style={{ width: 40, height: 40, borderRadius: 11, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={21} color="#fff" />
           </div>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.ink }}>YEELEN AgriConnect</span>
+          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.ink }}>{t('auth.brand')}</span>
         </div>
         <Card>
           <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: COLORS.surfaceAlt, borderRadius: 10, padding: 4 }}>
@@ -4239,7 +4249,7 @@ function LoginScreen({ onAuth }) {
                 boxShadow: mode === 'login' ? `0 1px 2px rgba(0,0,0,0.06)` : 'none',
               }}
             >
-              Connexion
+              {t('auth.tabLogin')}
             </button>
             <button
               type="button"
@@ -4252,14 +4262,14 @@ function LoginScreen({ onAuth }) {
                 boxShadow: mode === 'register' ? `0 1px 2px rgba(0,0,0,0.06)` : 'none',
               }}
             >
-              Inscription
+              {t('auth.tabRegister')}
             </button>
           </div>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
-            {mode === 'login' ? 'Connexion' : 'Créer un compte'}
+            {mode === 'login' ? t('auth.titleLogin') : t('auth.titleRegister')}
           </div>
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
-            {mode === 'login' ? "Accédez à vos outils de suivi d'exploitation." : 'Quelques informations pour démarrer.'}
+            {mode === 'login' ? t('auth.subtitleLogin') : t('auth.subtitleRegister')}
           </div>
 
           {mode === 'register' && (
@@ -4275,7 +4285,7 @@ function LoginScreen({ onAuth }) {
                   fontWeight: 600, fontSize: 13,
                 }}
               >
-                Entreprise
+                {t('auth.accountTypeCompany')}
               </button>
               <button
                 type="button"
@@ -4288,24 +4298,34 @@ function LoginScreen({ onAuth }) {
                   fontWeight: 600, fontSize: 13,
                 }}
               >
-                Particulier / Auto-entrepreneur
+                {t('auth.accountTypeIndividual')}
               </button>
             </div>
           )}
 
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Field label="Adresse e-mail" type="email" placeholder="nom@exploitation.africa" value={email} onChange={e => setEmail(e.target.value)} required />
-            <Field label="Mot de passe" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 6 : undefined} />
+            <Field label={t('auth.email')} type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={e => setEmail(e.target.value)} required />
+            <Field label={t('auth.password')} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 6 : undefined} />
             {mode === 'register' && (
               <Field
-                label={typeCompte === 'entreprise' ? "Nom de votre entreprise" : "Votre nom ou celui de votre activité (optionnel)"}
-                placeholder={typeCompte === 'entreprise' ? 'Ex. Ferme Diallo SARL' : 'Ex. Diallo Agriculture'}
+                label={typeCompte === 'entreprise' ? t('auth.companyName') : t('auth.activityName')}
+                placeholder={typeCompte === 'entreprise' ? t('auth.companyNamePlaceholder') : t('auth.activityNamePlaceholder')}
                 value={nomEntreprise}
                 onChange={e => setNomEntreprise(e.target.value)}
               />
             )}
             {mode === 'register' && typeCompte === 'entreprise' && (
-              <Field label="SIRET (optionnel)" placeholder="Ex. 123 456 789 00012" value={siret} onChange={e => setSiret(e.target.value)} />
+              <Field label={t('auth.siret')} placeholder={t('auth.siretPlaceholder')} value={siret} onChange={e => setSiret(e.target.value)} />
+            )}
+            {mode === 'register' && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Select label={t('auth.currency')} value={devise} onChange={e => setDevise(e.target.value)} style={{ flex: 1 }}>
+                  {DEVISES.map(d => <option key={d.code} value={d.code}>{d.label}</option>)}
+                </Select>
+                <Select label={t('auth.locale')} value={locale} onChange={e => setLocale(e.target.value)} style={{ flex: 1 }}>
+                  {LOCALES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                </Select>
+              </div>
             )}
             {error && (
               <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -4313,18 +4333,18 @@ function LoginScreen({ onAuth }) {
               </div>
             )}
             <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
-              {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {mode === 'login' ? 'Se connecter' : "S'inscrire"}
+              {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {mode === 'login' ? t('auth.submitLogin') : t('auth.submitRegister')}
             </Button>
           </form>
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
             {mode === 'login' ? (
-              <>Pas encore de compte ? <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>S'inscrire</button></>
+              <>{t('auth.noAccount')} <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>{t('auth.submitRegister')}</button></>
             ) : (
-              <>Déjà un compte ? <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>Se connecter</button></>
+              <>{t('auth.hasAccount')} <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>{t('auth.submitLogin')}</button></>
             )}
           </div>
           <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' }}>
-            Authentification via API backend — connexion sécurisée.
+            {t('auth.footer')}
           </div>
         </Card>
       </div>
@@ -4333,6 +4353,7 @@ function LoginScreen({ onAuth }) {
 }
 
 function OptionCard({ icon: Icon, title, description, features, price, active, onToggle, accent }) {
+  const { t } = useTranslation();
   const accentColor = accent === 'green' ? COLORS.green : COLORS.ochre;
   const accentSoft = accent === 'green' ? COLORS.greenSoft : COLORS.ochreSoft;
   return (
@@ -4344,7 +4365,7 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
         <div style={{ width: 42, height: 42, borderRadius: 11, background: accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon size={21} color={accentColor} />
         </div>
-        {active && <Badge tone={accent}>Activée</Badge>}
+        {active && <Badge tone={accent}>{t('optionCard.active')}</Badge>}
       </div>
       <div>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>{title}</div>
@@ -4360,7 +4381,7 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
       <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 13, color: COLORS.inkSoft }}>{price}</span>
         <Button variant={active ? 'outline' : accent} onClick={onToggle}>
-          {active ? 'Désactiver' : 'Activer cette option'}
+          {active ? t('optionCard.deactivate') : t('optionCard.activate')}
         </Button>
       </div>
     </Card>
@@ -5214,6 +5235,8 @@ function ReportsModule({ farmId, activated }) {
 }
 
 function HomeOverview({ farmId, activated }) {
+  const { t } = useTranslation();
+  const { fmtMoney } = useLocale();
   const [stats, setStats] = useState({
     chiffreAffaires: 0,
     depenses: 0,
@@ -5271,10 +5294,10 @@ function HomeOverview({ farmId, activated }) {
       const livraisonsEnAttente = livraisons.filter(l => l.statut === 'En attente').length;
 
       const alertes = [];
-      if (parcellesAArroser > 0) alertes.push(`${parcellesAArroser} parcelle${parcellesAArroser > 1 ? 's' : ''} à arroser`);
-      if (oeufsDisponibles < 100) alertes.push(`Stock d'œufs faible (${oeufsDisponibles})`);
-      if (livraisonsEnAttente > 0) alertes.push(`${livraisonsEnAttente} livraison${livraisonsEnAttente > 1 ? 's' : ''} en attente`);
-      if (benefice < 0) alertes.push(`Bénéfice négatif (${benefice.toLocaleString('fr-FR')} FCFA)`);
+      if (parcellesAArroser > 0) alertes.push(t('home.alertPlotsToWater', { count: parcellesAArroser }));
+      if (oeufsDisponibles < 100) alertes.push(t('home.alertLowEggStock', { count: oeufsDisponibles }));
+      if (livraisonsEnAttente > 0) alertes.push(t('home.alertPendingDeliveries', { count: livraisonsEnAttente }));
+      if (benefice < 0) alertes.push(t('home.alertNegativeProfit', { amount: fmtMoney(benefice) }));
 
       setStats({
         chiffreAffaires,
@@ -5290,16 +5313,17 @@ function HomeOverview({ farmId, activated }) {
       console.error('[Dashboard stats]', err);
     }
   })();
-}, [activated]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activated, t]);
   const cards = [
-    { label: 'Chiffre d’affaires du mois', value: `${stats.chiffreAffaires.toLocaleString('fr-FR')} FCFA`, icon: Wallet, tone: 'green' },
-    { label: 'Dépenses du mois', value: `${stats.depenses.toLocaleString('fr-FR')} FCFA`, icon: ShoppingCart, tone: 'red' },
-    { label: 'Bénéfice', value: `${stats.benefice.toLocaleString('fr-FR')} FCFA`, icon: TrendingUp, tone: stats.benefice >= 0 ? 'green' : 'red' },
-    { label: 'Nombre de ventes', value: stats.ventes, icon: Package, tone: 'blue' },
-    { label: 'Livraisons en attente', value: stats.livraisons, icon: Truck, tone: 'ochre' },
-    { label: 'Parcelles à arroser', value: stats.parcelles, icon: Droplet, tone: 'blue' },
-    { label: 'Nombre d’œufs disponibles', value: stats.oeufs, icon: Egg, tone: 'ochre' },
-    { label: 'Alertes importantes', value: stats.alertes.length, icon: AlertTriangle, tone: stats.alertes.length > 0 ? 'red' : 'green' },
+    { label: t('home.cardRevenue'), value: fmtMoney(stats.chiffreAffaires), icon: Wallet, tone: 'green' },
+    { label: t('home.cardExpenses'), value: fmtMoney(stats.depenses), icon: ShoppingCart, tone: 'red' },
+    { label: t('home.cardProfit'), value: fmtMoney(stats.benefice), icon: TrendingUp, tone: stats.benefice >= 0 ? 'green' : 'red' },
+    { label: t('home.cardSales'), value: stats.ventes, icon: Package, tone: 'blue' },
+    { label: t('home.cardPendingDeliveries'), value: stats.livraisons, icon: Truck, tone: 'ochre' },
+    { label: t('home.cardPlotsToWater'), value: stats.parcelles, icon: Droplet, tone: 'blue' },
+    { label: t('home.cardEggs'), value: stats.oeufs, icon: Egg, tone: 'ochre' },
+    { label: t('home.cardAlerts'), value: stats.alertes.length, icon: AlertTriangle, tone: stats.alertes.length > 0 ? 'red' : 'green' },
   ];
 
   return (
@@ -5323,9 +5347,9 @@ function HomeOverview({ farmId, activated }) {
         })}
       </div>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Alertes importantes</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('home.alertsTitle')}</div>
         {stats.alertes.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune alerte à signaler pour le moment.</div>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('home.noAlerts')}</div>
         ) : (
           <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7, color: COLORS.ink }}>
             {stats.alertes.map(alert => <li key={alert} style={{ fontSize: 13 }}>{alert}</li>)}
@@ -5336,17 +5360,25 @@ function HomeOverview({ farmId, activated }) {
   );
 }
 
+const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
 function EmployeesModule({ farmId, role }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rhEmployee, setRhEmployee] = useState(null);
+  const [postes, setPostes] = useState([]);
+  const [departements, setDepartements] = useState([]);
+  const [filterDept, setFilterDept] = useState('');
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid' (trombinoscope)
+  const [showMoreAdd, setShowMoreAdd] = useState(false);
   const canManageRh = role === 'admin';
 
   const emptyForm = {
-    nom: '', prenom: '', poste: '', dateEmbauche: '', salaire: '',
-    presence: 'Présent', avances: '', conges: '',
-    email: '', telephone: '', adresse: '',
+    nom: '', prenom: '', posteId: '', departementId: '', managerId: '',
+    dateEmbauche: '', salaire: '', email: '', telephone: '', adresse: '',
+    photo: '', dateNaissance: '', contactUrgenceNom: '', contactUrgenceTel: '', numPieceIdentite: '',
+    coutHoraire: '', heuresHebdo: '', joursTravailles: '',
     createAccount: false, compteEmail: '', role: 'ouvrier', password: '',
   };
   const [form, setForm] = useState(emptyForm);
@@ -5354,20 +5386,31 @@ function EmployeesModule({ farmId, role }) {
   const [formError, setFormError] = useState('');
 
   const emptyEditForm = {
-    nom: '', prenom: '', poste: '', dateEmbauche: '', salaire: '',
-    presence: 'Présent', avances: '', conges: '',
-    email: '', telephone: '', adresse: '',
+    nom: '', prenom: '', posteId: '', departementId: '', managerId: '',
+    dateEmbauche: '', salaire: '', email: '', telephone: '', adresse: '',
+    photo: '', dateNaissance: '', contactUrgenceNom: '', contactUrgenceTel: '', numPieceIdentite: '',
+    coutHoraire: '', heuresHebdo: '', joursTravailles: '',
+    dateDepart: '', motifDepart: '', statut: 'Actif',
+    linkAccount: false, compteEmail: '', role: 'ouvrier', password: '',
   };
-  const [editingId, setEditingId] = useState(null);
+  const [editingEmp, setEditingEmp] = useState(null);
   const [editForm, setEditForm] = useState(emptyEditForm);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState('');
+  const editingId = editingEmp?.id ?? null;
+
+  const loadRefs = async () => {
+    try {
+      const [p, d] = await Promise.all([getPostes(), getDepartements()]);
+      setPostes(p.postes || []); setDepartements(d.departements || []);
+    } catch { /* non bloquant */ }
+  };
 
   const loadEmployees = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await getSalaries();
+      const data = await getSalaries(filterDept || undefined);
       setEmployees(data.salaries || []);
     } catch (err) {
       setError(err.message);
@@ -5376,7 +5419,21 @@ function EmployeesModule({ farmId, role }) {
     }
   };
 
-  useEffect(() => { loadEmployees(); }, [farmId]);
+  useEffect(() => { loadRefs(); }, [farmId]);
+  useEffect(() => { loadEmployees(); /* eslint-disable-next-line */ }, [farmId, filterDept]);
+
+  const toNumOrNull = (v) => (v === '' || v == null ? null : Number(v));
+  const commonPayload = (f) => ({
+    nom: f.nom, prenom: f.prenom,
+    posteId: f.posteId || null, departementId: f.departementId || null, managerId: f.managerId || null,
+    dateEmbauche: f.dateEmbauche || null, salaire: Number(f.salaire) || 0,
+    email: f.email || null, telephone: f.telephone || null, adresse: f.adresse || null,
+    photo: f.photo || null, dateNaissance: f.dateNaissance || null,
+    contactUrgenceNom: f.contactUrgenceNom || null, contactUrgenceTel: f.contactUrgenceTel || null,
+    numPieceIdentite: f.numPieceIdentite || null,
+    coutHoraire: toNumOrNull(f.coutHoraire), heuresHebdo: toNumOrNull(f.heuresHebdo),
+    joursTravailles: f.joursTravailles || null,
+  });
 
   const addEmployee = async (e) => {
     e.preventDefault();
@@ -5389,23 +5446,14 @@ function EmployeesModule({ farmId, role }) {
     setFormError('');
     try {
       await createSalarie({
-        nom: form.nom,
-        prenom: form.prenom,
-        poste: form.poste || null,
-        dateEmbauche: form.dateEmbauche || null,
-        salaire: Number(form.salaire) || 0,
-        presence: form.presence,
-        avances: Number(form.avances) || 0,
-        conges: Number(form.conges) || 0,
-        email: form.email || null,
-        telephone: form.telephone || null,
-        adresse: form.adresse || null,
+        ...commonPayload(form),
         createAccount: form.createAccount,
         compteEmail: form.createAccount ? form.compteEmail : undefined,
         password: form.createAccount ? form.password : undefined,
         role: form.createAccount ? form.role : undefined,
       });
       setForm(emptyForm);
+      setShowMoreAdd(false);
       await loadEmployees();
     } catch (err) {
       setFormError(err.message);
@@ -5424,25 +5472,28 @@ function EmployeesModule({ farmId, role }) {
   };
 
   const startEditEmployee = (emp) => {
-    setEditingId(emp.id);
+    setEditingEmp(emp);
     setEditError('');
     setEditForm({
-      nom: emp.nom || '',
-      prenom: emp.prenom || '',
-      poste: emp.poste || '',
+      nom: emp.nom || '', prenom: emp.prenom || '',
+      posteId: emp.posteId ?? '', departementId: emp.departementId ?? '', managerId: emp.managerId ?? '',
       dateEmbauche: emp.dateEmbauche ? String(emp.dateEmbauche).slice(0, 10) : '',
       salaire: emp.salaire ?? '',
-      presence: emp.presence || 'Présent',
-      avances: emp.avances ?? '',
-      conges: emp.conges ?? '',
-      email: emp.email || '',
-      telephone: emp.telephone || '',
-      adresse: emp.adresse || '',
+      email: emp.email || '', telephone: emp.telephone || '', adresse: emp.adresse || '',
+      photo: emp.photo || '',
+      dateNaissance: emp.dateNaissance ? String(emp.dateNaissance).slice(0, 10) : '',
+      contactUrgenceNom: emp.contactUrgenceNom || '', contactUrgenceTel: emp.contactUrgenceTel || '',
+      numPieceIdentite: emp.numPieceIdentite || '',
+      coutHoraire: emp.coutHoraire ?? '', heuresHebdo: emp.heuresHebdo ?? '',
+      joursTravailles: emp.joursTravailles || '',
+      dateDepart: emp.dateDepart ? String(emp.dateDepart).slice(0, 10) : '',
+      motifDepart: emp.motifDepart || '', statut: emp.statut || 'Actif',
+      linkAccount: false, compteEmail: '', role: 'ouvrier', password: '',
     });
   };
 
   const cancelEditEmployee = () => {
-    setEditingId(null);
+    setEditingEmp(null);
     setEditForm(emptyEditForm);
     setEditError('');
   };
@@ -5450,21 +5501,22 @@ function EmployeesModule({ farmId, role }) {
   const saveEditEmployee = async (e) => {
     e.preventDefault();
     if (!editForm.nom || !editForm.prenom) return;
+    if (editForm.linkAccount && (!editForm.compteEmail || !editForm.password)) {
+      setEditError('Email et mot de passe requis pour créer le compte de connexion.');
+      return;
+    }
     setEditSubmitting(true);
     setEditError('');
     try {
       await updateSalarie(editingId, {
-        nom: editForm.nom,
-        prenom: editForm.prenom,
-        poste: editForm.poste || null,
-        dateEmbauche: editForm.dateEmbauche || null,
-        salaire: Number(editForm.salaire) || 0,
-        presence: editForm.presence,
-        avances: Number(editForm.avances) || 0,
-        conges: Number(editForm.conges) || 0,
-        email: editForm.email || null,
-        telephone: editForm.telephone || null,
-        adresse: editForm.adresse || null,
+        ...commonPayload(editForm),
+        dateDepart: editForm.dateDepart || null,
+        motifDepart: editForm.motifDepart || null,
+        statut: editForm.statut || null,
+        linkAccount: editForm.linkAccount || undefined,
+        compteEmail: editForm.linkAccount ? editForm.compteEmail : undefined,
+        password: editForm.linkAccount ? editForm.password : undefined,
+        role: editForm.linkAccount ? editForm.role : undefined,
       });
       cancelEditEmployee();
       await loadEmployees();
@@ -5476,11 +5528,66 @@ function EmployeesModule({ farmId, role }) {
   };
 
   const roleLabels = {
-    admin: 'Administrateur',
-    comptable: 'Comptable',
-    ouvrier: 'Ouvrier',
-    gestionnaire: 'Gestionnaire',
+    admin: 'Administrateur', directeur: 'Directeur', comptable: 'Comptable',
+    assistant_direction: 'Assistant(e) de direction', ouvrier: 'Ouvrier', gestionnaire: 'Gestionnaire',
   };
+
+  const toggleJour = (setF, f, j) => {
+    const cur = f.joursTravailles ? f.joursTravailles.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const next = cur.includes(j) ? cur.filter(x => x !== j) : [...cur, j];
+    setF({ ...f, joursTravailles: JOURS_SEMAINE.filter(x => next.includes(x)).join(',') });
+  };
+
+  // Bloc "informations complémentaires" partagé par le formulaire d'ajout et la modale d'édition.
+  const renderInfosPlus = (f, setF) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+      <Field label="Date de naissance" type="date" value={f.dateNaissance} onChange={e => setF({ ...f, dateNaissance: e.target.value })} />
+      <Field label="Contact d'urgence — nom" value={f.contactUrgenceNom} onChange={e => setF({ ...f, contactUrgenceNom: e.target.value })} />
+      <Field label="Contact d'urgence — tél." value={f.contactUrgenceTel} onChange={e => setF({ ...f, contactUrgenceTel: e.target.value })} />
+      <Field label="N° pièce d'identité" value={f.numPieceIdentite} onChange={e => setF({ ...f, numPieceIdentite: e.target.value })} />
+      <Field label="Coût horaire (FCFA)" type="number" value={f.coutHoraire} onChange={e => setF({ ...f, coutHoraire: e.target.value })} />
+      <Field label="Heures / semaine" type="number" value={f.heuresHebdo} onChange={e => setF({ ...f, heuresHebdo: e.target.value })} />
+      <div style={{ gridColumn: '1 / -1' }}>
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>Jours travaillés</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {JOURS_SEMAINE.map(j => {
+            const on = (f.joursTravailles || '').split(',').map(s => s.trim()).includes(j);
+            return (
+              <button key={j} type="button" onClick={() => toggleJour(setF, f, j)} style={{
+                background: on ? COLORS.green : 'transparent', color: on ? '#fff' : COLORS.inkSoft,
+                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: 8, padding: '4px 10px', fontSize: 12.5, cursor: 'pointer',
+              }}>{j}</button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const managerOptions = (excludeId) => employees.filter(e => e.id !== excludeId);
+  const renderIdentite = (f, setF, excludeManagerId) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+      <Field label="Nom" placeholder="Nom" value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required />
+      <Field label="Prénom" placeholder="Prénom" value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })} required />
+      <Select label="Poste" value={f.posteId} onChange={e => setF({ ...f, posteId: e.target.value })}>
+        <option value="">— Aucun —</option>
+        {postes.map(p => <option key={p.id} value={p.id}>{p.intitule}</option>)}
+      </Select>
+      <Select label="Département" value={f.departementId} onChange={e => setF({ ...f, departementId: e.target.value })}>
+        <option value="">— Aucun —</option>
+        {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
+      </Select>
+      <Select label="Manager" value={f.managerId} onChange={e => setF({ ...f, managerId: e.target.value })}>
+        <option value="">— Aucun —</option>
+        {managerOptions(excludeManagerId).map(m => <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+      </Select>
+      <Field label="Date d'embauche" type="date" value={f.dateEmbauche} onChange={e => setF({ ...f, dateEmbauche: e.target.value })} />
+      <Field label="Salaire" type="number" placeholder="Salaire" value={f.salaire} onChange={e => setF({ ...f, salaire: e.target.value })} />
+      <Field label="Email personnel" type="email" placeholder="email@exemple.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
+      <Field label="Téléphone" type="tel" placeholder="Téléphone" value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })} />
+      <Field label="Adresse" placeholder="Adresse" value={f.adresse} onChange={e => setF({ ...f, adresse: e.target.value })} />
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -5494,30 +5601,18 @@ function EmployeesModule({ farmId, role }) {
         )}
 
         <form onSubmit={addEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-            <Field label="Nom" placeholder="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
-            <Field label="Prénom" placeholder="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} required />
-            <Field label="Poste" placeholder="Poste" value={form.poste} onChange={e => setForm({ ...form, poste: e.target.value })} />
-            <Field label="Date d'embauche" type="date" value={form.dateEmbauche} onChange={e => setForm({ ...form, dateEmbauche: e.target.value })} />
-            <Field label="Salaire" type="number" placeholder="Salaire" value={form.salaire} onChange={e => setForm({ ...form, salaire: e.target.value })} />
-            <Select label="Présence" value={form.presence} onChange={e => setForm({ ...form, presence: e.target.value })}>
-              <option>Présent</option>
-              <option>Absent</option>
-              <option>Congé</option>
-            </Select>
-            <Field label="Avances" type="number" placeholder="0" value={form.avances} onChange={e => setForm({ ...form, avances: e.target.value })} />
-            <Field label="Congés" type="number" placeholder="0" value={form.conges} onChange={e => setForm({ ...form, conges: e.target.value })} />
-            <Field label="Email personnel" type="email" placeholder="email@exemple.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-            <Field label="Téléphone" type="tel" placeholder="Téléphone" value={form.telephone} onChange={e => setForm({ ...form, telephone: e.target.value })} />
-            <Field label="Adresse" placeholder="Adresse" value={form.adresse} onChange={e => setForm({ ...form, adresse: e.target.value })} />
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <ContactAvatar photo={form.photo} nom={form.nom} prenom={form.prenom} isCompany={false} size={72} onChange={(b64) => setForm({ ...form, photo: b64 })} />
+            <div style={{ flex: 1, minWidth: 260 }}>{renderIdentite(form, setForm)}</div>
           </div>
 
+          <button type="button" onClick={() => setShowMoreAdd(v => !v)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: 13, alignSelf: 'flex-start', padding: 0 }}>
+            {showMoreAdd ? '− Masquer' : '+ Informations complémentaires'}
+          </button>
+          {showMoreAdd && renderInfosPlus(form, setForm)}
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={form.createAccount}
-              onChange={e => setForm({ ...form, createAccount: e.target.checked })}
-            />
+            <input type="checkbox" checked={form.createAccount} onChange={e => setForm({ ...form, createAccount: e.target.checked })} />
             Créer un compte de connexion pour cet employé
           </label>
 
@@ -5543,12 +5638,21 @@ function EmployeesModule({ farmId, role }) {
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Employés</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Employés</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select className="flat-input" value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ background: '#fff', color: COLORS.ink, fontSize: 12.5 }}>
+              <option value="">Tous les départements</option>
+              {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
+            </select>
+            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '5px 10px', fontSize: 12.5, color: COLORS.inkSoft, cursor: 'pointer' }}>
+              {viewMode === 'list' ? 'Trombinoscope' : 'Liste'}
+            </button>
+          </div>
+        </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
-            {error}
-          </div>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{error}</div>
         )}
 
         {loading ? (
@@ -5556,35 +5660,58 @@ function EmployeesModule({ farmId, role }) {
             <Loader2 size={15} className="spin" /> Chargement...
           </div>
         ) : employees.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun employé pour l'instant.</div>
+          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucun employé{filterDept ? ' dans ce département' : ''} pour l'instant.</div>
+        ) : viewMode === 'grid' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+            {employees.map(emp => (
+              <div key={emp.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
+                {emp.photo
+                  ? <img src={emp.photo} alt="" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
+                  : <div style={{ width: 64, height: 64, borderRadius: 12, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.prenom} {emp.nom}</div>
+                <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{emp.posteNom || emp.poste || '—'}{emp.departementNom ? ` · ${emp.departementNom}` : ''}</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                  <button onClick={() => setRhEmployee(emp)} title="Fiche RH" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><ClipboardList size={15} /></button>
+                  {canManageRh && <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}><Settings2 size={15} /></button>}
+                  {canManageRh && <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={15} /></button>}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {employees.map(emp => (
-              <div key={emp.id} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 12px', borderRadius: 10, border: `1px solid ${COLORS.border}`,
-              }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
-                  <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
-                    {emp.poste || 'Poste non renseigné'}
-                    {emp.telephone && ` · ${emp.telephone}`}
-                    {emp.email && ` · ${emp.email}`}
-                    {emp.compteEmail && ` · Connexion : ${emp.compteEmail}`}
-                    {emp.role && ` · ${roleLabels[emp.role] || emp.role}`}
+              <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  {emp.photo
+                    ? <img src={emp.photo} alt="" style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover' }} />
+                    : <div style={{ width: 38, height: 38, borderRadius: 9, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
+                    <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                      {emp.posteNom || emp.poste || 'Poste non renseigné'}
+                      {emp.departementNom && ` · ${emp.departementNom}`}
+                      {emp.managerNom && ` · Manager : ${emp.managerNom}`}
+                      {emp.telephone && ` · ${emp.telephone}`}
+                      {emp.compteEmail && ` · Connexion : ${emp.compteEmail}`}
+                      {emp.role && ` · ${roleLabels[emp.role] || emp.role}`}
+                    </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{emp.presence}</span>
                   <button onClick={() => setRhEmployee(emp)} title="Fiche RH" style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                     <ClipboardList size={15} />
                   </button>
-                  <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
-                    <Settings2 size={15} />
-                  </button>
-                  <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
-                    <Trash2 size={15} />
-                  </button>
+                  {canManageRh && (
+                    <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
+                      <Settings2 size={15} />
+                    </button>
+                  )}
+                  {canManageRh && (
+                    <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
+                      <Trash2 size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -5592,38 +5719,59 @@ function EmployeesModule({ farmId, role }) {
         )}
       </Card>
 
-      {editingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEmployee}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+      <RhReferentiels canManage={canManageRh} onChanged={() => { loadRefs(); loadEmployees(); }} />
+
+      {editingEmp && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEditEmployee}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier l'employé</div>
               <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
 
             {editError && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
-                {editError}
-              </div>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{editError}</div>
             )}
 
             <form onSubmit={saveEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
-                <Field label="Nom" placeholder="Nom" value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
-                <Field label="Prénom" placeholder="Prénom" value={editForm.prenom} onChange={e => setEditForm({ ...editForm, prenom: e.target.value })} required />
-                <Field label="Poste" placeholder="Poste" value={editForm.poste} onChange={e => setEditForm({ ...editForm, poste: e.target.value })} />
-                <Field label="Date d'embauche" type="date" value={editForm.dateEmbauche} onChange={e => setEditForm({ ...editForm, dateEmbauche: e.target.value })} />
-                <Field label="Salaire" type="number" placeholder="Salaire" value={editForm.salaire} onChange={e => setEditForm({ ...editForm, salaire: e.target.value })} />
-                <Select label="Présence" value={editForm.presence} onChange={e => setEditForm({ ...editForm, presence: e.target.value })}>
-                  <option>Présent</option>
-                  <option>Absent</option>
-                  <option>Congé</option>
-                </Select>
-                <Field label="Avances" type="number" placeholder="0" value={editForm.avances} onChange={e => setEditForm({ ...editForm, avances: e.target.value })} />
-                <Field label="Congés" type="number" placeholder="0" value={editForm.conges} onChange={e => setEditForm({ ...editForm, conges: e.target.value })} />
-                <Field label="Email personnel" type="email" placeholder="email@exemple.com" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
-                <Field label="Téléphone" type="tel" placeholder="Téléphone" value={editForm.telephone} onChange={e => setEditForm({ ...editForm, telephone: e.target.value })} />
-                <Field label="Adresse" placeholder="Adresse" value={editForm.adresse} onChange={e => setEditForm({ ...editForm, adresse: e.target.value })} />
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <ContactAvatar photo={editForm.photo} nom={editForm.nom} prenom={editForm.prenom} isCompany={false} size={72} onChange={(b64) => setEditForm({ ...editForm, photo: b64 })} />
+                <div style={{ flex: 1, minWidth: 260 }}>{renderIdentite(editForm, setEditForm, editingId)}</div>
               </div>
+
+              {renderInfosPlus(editForm, setEditForm)}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+                <Select label="Statut" value={editForm.statut} onChange={e => setEditForm({ ...editForm, statut: e.target.value })}>
+                  <option value="Actif">Actif</option>
+                  <option value="Inactif">Inactif (désactive aussi la connexion)</option>
+                </Select>
+                <Field label="Date de départ" type="date" value={editForm.dateDepart} onChange={e => setEditForm({ ...editForm, dateDepart: e.target.value })} />
+                <Field label="Motif de départ" value={editForm.motifDepart} onChange={e => setEditForm({ ...editForm, motifDepart: e.target.value })} />
+              </div>
+
+              {!editingEmp.compteEmail && (
+                <>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={editForm.linkAccount} onChange={e => setEditForm({ ...editForm, linkAccount: e.target.checked })} />
+                    Créer un compte de connexion pour cet employé
+                  </label>
+                  {editForm.linkAccount && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
+                      <Field label="Email de connexion" type="email" value={editForm.compteEmail} onChange={e => setEditForm({ ...editForm, compteEmail: e.target.value })} required />
+                      <Select label="Rôle" value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
+                        <option value="admin">Administrateur</option>
+                        <option value="directeur">Directeur</option>
+                        <option value="gestionnaire">Gestionnaire</option>
+                        <option value="comptable">Comptable</option>
+                        <option value="assistant_direction">Assistant(e) de direction</option>
+                        <option value="ouvrier">Ouvrier</option>
+                      </Select>
+                      <Field label="Mot de passe temporaire" type="text" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} required />
+                    </div>
+                  )}
+                </>
+              )}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
@@ -5644,6 +5792,8 @@ function EmployeesModule({ farmId, role }) {
 }
 
 function NotificationsModule({ farmId, activated }) {
+  const { t } = useTranslation();
+  const { fmtMoney } = useLocale();
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
@@ -5663,24 +5813,24 @@ function NotificationsModule({ farmId, activated }) {
 
         const items = [];
         stocks.filter(item => item.quantite <= (item.seuil || 0)).forEach(item => {
-          items.push({ id: `stock-${item.id}`, icon: '🔴', title: 'Stock faible', message: `${item.nom} est en dessous du seuil (${item.quantite} ${item.unite || ''})` });
+          items.push({ id: `stock-${item.id}`, icon: '🔴', title: t('notifications.lowStockTitle'), message: t('notifications.lowStockMsg', { name: item.nom, qty: item.quantite, unit: item.unite || '' }) });
         });
 
         parcelles.filter(p => p.temperature > 33).forEach(p => {
-          items.push({ id: `temp-${p.id}`, icon: '⚠️', title: 'Température trop élevée', message: `${p.nom} dépasse ${p.temperature}°C` });
+          items.push({ id: `temp-${p.id}`, icon: '⚠️', title: t('notifications.highTempTitle'), message: t('notifications.highTempMsg', { name: p.nom, temp: p.temperature }) });
         });
 
         parcelles.filter(p => p.humidite < p.seuil).forEach(p => {
-          items.push({ id: `soil-${p.id}`, icon: '💧', title: 'Sol sec', message: `${p.nom} nécessite un arrosage` });
+          items.push({ id: `soil-${p.id}`, icon: '💧', title: t('notifications.drySoilTitle'), message: t('notifications.drySoilMsg', { name: p.nom }) });
         });
 
         livraisons.filter(l => l.statut === 'En attente').forEach(l => {
-          items.push({ id: `delivery-${l.id}`, icon: '🚚', title: 'Livraison prévue aujourd’hui', message: `${l.produit} à livrer à ${l.client}` });
+          items.push({ id: `delivery-${l.id}`, icon: '🚚', title: t('notifications.deliveryTitle'), message: t('notifications.deliveryMsg', { product: l.produit, customer: l.client }) });
         });
 
         devisListe.filter(d => ['Non payé', 'Payé partiellement'].includes(d.statut)).forEach(d => {
-          const nomClient = [d.clientPrenom, d.clientNom].filter(Boolean).join(' ') || 'Client';
-          items.push({ id: `client-${d.id}`, icon: '💰', title: 'Facture en attente de paiement', message: `${nomClient} — ${d.numero} (${Number(d.total).toLocaleString('fr-FR')} FCFA, ${d.statut})` });
+          const nomClient = [d.clientPrenom, d.clientNom].filter(Boolean).join(' ') || t('notifications.defaultCustomer');
+          items.push({ id: `client-${d.id}`, icon: '💰', title: t('notifications.unpaidTitle'), message: t('notifications.unpaidMsg', { customer: nomClient, number: d.numero, amount: fmtMoney(d.total), status: d.statut }) });
         });
 
         setNotifications(items);
@@ -5689,13 +5839,14 @@ function NotificationsModule({ farmId, activated }) {
         setNotifications([]);
       }
     })();
-  }, [farmId, activated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmId, activated, t]);
 
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Notifications</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('notifications.title')}</div>
       {notifications.length === 0 ? (
-        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune notification pour le moment.</div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('notifications.empty')}</div>
       ) : (
         notifications.map(item => (
           <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -6661,75 +6812,41 @@ function ContactsTab({ type, highlightId }) {
 }
 
 function ModulesScreen({ activated, onToggle, onContinue }) {
+  const { t } = useTranslation();
   const anyActive = activated.cultures || activated.poulailler || activated.clients;
+  const price = t('modulesScreen.pricePlaceholder');
+  const feats = (k) => t(`modulesScreen.${k}.features`, { returnObjects: true });
+  const MODULES = [
+    { key: 'cultures', icon: Leaf, accent: 'green' },
+    { key: 'poulailler', icon: Bird, accent: 'ochre' },
+    { key: 'clients', icon: Users, accent: 'blue' },
+    { key: 'employees', icon: Briefcase, accent: 'ochre' },
+    { key: 'fournisseurs', icon: Truck, accent: 'ochre' },
+    { key: 'finances', icon: Landmark, accent: 'blue' },
+    { key: 'notifications', icon: Bell, accent: 'red' },
+  ];
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 24, marginBottom: 6 }}>Choisissez vos options</div>
-        <div style={{ fontSize: 14, color: COLORS.inkSoft }}>Activez un ou deux modules selon les besoins de votre exploitation. Vous pourrez les modifier à tout moment.</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 24, marginBottom: 6 }}>{t('modulesScreen.title')}</div>
+        <div style={{ fontSize: 14, color: COLORS.inkSoft }}>{t('modulesScreen.subtitle')}</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
-        <OptionCard
-          icon={Leaf} accent="green" active={activated.cultures}
-          title="Suivi cultures et irrigation"
-          description="Surveillez l'humidité et la température du sol, recevez des recommandations d'arrosage et pilotez vos vannes à distance."
-          features={['Capteurs sol par parcelle', 'Recommandation d\'arrosage automatique', 'Pilotage des vannes (auto ou manuel)', 'Historique des arrosages']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('cultures')}
-        />
-        <OptionCard
-          icon={Bird} accent="ochre" active={activated.poulailler}
-          title="Gestion du poulailler"
-          description="Suivez l'ambiance du poulailler et gérez l'ensemble de votre activité avicole au quotidien."
-          features={['Température et humidité du poulailler', 'Stocks (aliments, œufs, volailles)', 'Ventes, achats et livraisons', 'Comptabilité automatique']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('poulailler')}
-        />
-        <OptionCard
-          icon={Users} accent="blue" active={activated.clients}
-          title="Gestion des clients"
-          description="Enregistrez vos clients, suivez leurs achats, leurs paiements et leur dette restante."
-          features={['Fiche client complète', 'Historique des achats', 'Suivi des paiements', 'Dette restante en temps réel']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('clients')}
-        />
-        <OptionCard
-          icon={Briefcase} accent="ochre" active={activated.employees}
-          title="Gestion des employés"
-          description="Suivez les employés, leur poste, leur salaire, leur présence, leurs avances et leurs congés."
-          features={['Fiche employé complète', 'Salaire et poste', 'Présence', 'Avances et congés']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('employees')}
-        />
+        {MODULES.map(m => (
           <OptionCard
-          icon={Truck} accent="ochre" active={activated.fournisseurs}
-          title="Gestion des fournisseurs"
-          description="Enregistrez vos fournisseurs et retrouvez-les facilement lors de vos achats."
-          features={['Fiche fournisseur complète', 'Historique des achats', 'Coordonnées et SIRET']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('fournisseurs')}
-        />
-
-        <OptionCard
-          icon={Landmark} accent="blue" active={activated.finances}
-          title="Gestion financière"
-          description="Suivez la caisse, la banque, les dépenses et calculez le bénéfice net de votre exploitation."
-          features={['Caisse', 'Banque', 'Dépenses diverses', 'Carburant', 'Salaire', 'Entretien', 'Bénéfice net']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('finances')}
-        />
-        <OptionCard
-          icon={Bell} accent="red" active={activated.notifications}
-          title="Notifications"
-          description="Recevez une vue synthétique des alertes importantes de l’exploitation."
-          features={['Stock faible', 'Température trop élevée', 'Sol sec', 'Livraison prévue', 'Client en retard de paiement']}
-          price="Option incluse dans l'abonnement"
-          onToggle={() => onToggle('notifications')}
-        />
+            key={m.key}
+            icon={m.icon} accent={m.accent} active={activated[m.key]}
+            title={t(`modulesScreen.${m.key}.title`)}
+            description={t(`modulesScreen.${m.key}.desc`)}
+            features={feats(m.key)}
+            price={price}
+            onToggle={() => onToggle(m.key)}
+          />
+        ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 26 }}>
         <Button variant="default" disabled={!anyActive} onClick={onContinue} style={{ padding: '11px 22px' }}>
-          Continuer <ChevronRight size={16} />
+          {t('modulesScreen.continue')} <ChevronRight size={16} />
         </Button>
       </div>
     </div>
@@ -6737,6 +6854,7 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
 }
 
 function SidebarNav({ tabs, activeTab, onSelect, top }) {
+  const { t: tr } = useTranslation();
   const [collapsed, setCollapsed] = useState({});
   const pinned = tabs.filter(t => !t.category);
   const toggleGroup = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
@@ -6781,7 +6899,7 @@ function SidebarNav({ tabs, activeTab, onSelect, top }) {
             }}>
               <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color, flexShrink: 0 }} />
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft, flex: 1 }}>
-                {cat.label}
+                {tr(cat.labelKey)}
               </span>
               <ChevronRight size={12} style={{ color: COLORS.inkSoft, transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
             </button>
@@ -6968,6 +7086,21 @@ export default function App() {
     }
   };
 
+  const { t } = useTranslation();
+  const { setLocaleConfig, fmtDate } = useLocale();
+
+  // Applique la devise + la locale de l'entreprise (formatage des montants/dates), et —
+  // seulement si l'utilisateur n'a jamais choisi de langue explicitement — aligne la
+  // langue de l'UI sur celle de la locale entreprise ('es-ES' -> 'es', etc.).
+  const applyEntrepriseLocale = (entreprise) => {
+    if (!entreprise) return;
+    setLocaleConfig({ devise: entreprise.devise, locale: entreprise.locale });
+    if (!hasExplicitLanguage() && entreprise.locale) {
+      const lang = String(entreprise.locale).split('-')[0];
+      if (SUPPORTED_LANGS.some(l => l.code === lang)) setLanguage(lang, false);
+    }
+  };
+
   const handleAuth = async (mode, email, password, extra, mfaCode) => {
   const authResult = mode === 'login'
     ? await login(email, password, mfaCode)
@@ -6983,6 +7116,7 @@ export default function App() {
   setUser(authResult.user.email);
   setRole(uiRole);
   setIsPlatformAdmin(authResult.user.isPlatformAdmin === true);
+  applyEntrepriseLocale(authResult.entreprise);
   await checkOnboardingNeeded(uiRole);
   goToScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
   return authResult;
@@ -7040,24 +7174,25 @@ export default function App() {
   // `category` ne pilote encore aucun affichage (pas de sidebar/groupement pour l'instant) —
   // préparation de données pour une future navigation groupée, sans changement visuel aujourd'hui.
   const availableTabs = [
-    roleConfig.permissions.includes('home') && { id: 'accueil', label: 'Accueil', icon: Home, category: null },
-    roleConfig.permissions.includes('calendar') && { id: 'calendar', label: 'Calendrier', icon: CalendarDays, category: 'operations' },
-    roleConfig.permissions.includes('recoltes') && { id: 'recoltes', label: 'Récoltes', icon: Package, category: 'operations' },
-    roleConfig.permissions.includes('assistant') && { id: 'assistant', label: 'Assistant IA', icon: Search, category: 'analyse' },
-    roleConfig.permissions.includes('assistant') && { id: 'forecasting', label: 'Prévisions', icon: TrendingUp, category: 'analyse' },
-    roleConfig.permissions.includes('reports') && { id: 'reports', label: 'Rapports', icon: FileText, category: 'analyse' },
-    activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: 'Cultures & irrigation', icon: Sprout, category: 'operations' },
-    activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: 'Poulailler', icon: Egg, category: 'operations' },
-    activated.clients && roleConfig.permissions.includes('clients') && { id: 'clients', label: 'Clients', icon: Users, category: 'commercial' },
-    activated.fournisseurs && roleConfig.permissions.includes('fournisseurs') && { id: 'fournisseurs', label: 'Fournisseurs', icon: Truck, category: 'commercial' },
-    activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: 'Employés', icon: Briefcase, category: 'rh' },
-    activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: 'Finances', icon: Landmark, category: 'finance' },
-    activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: 'Notifications', icon: Bell, category: 'operations' },
-    { id: 'observations', label: 'Observations', icon: ClipboardList, category: 'operations' },
-    roleConfig.permissions.includes('equipements') && { id: 'equipements', label: 'Équipements', icon: Wrench, category: 'operations' },
-    { id: 'feedback', label: 'Feedback', icon: MessageSquare, category: null },
-    { id: 'aide', label: 'Aide', icon: HelpCircle, category: null },
-    { id: 'profil', label: 'Profil', icon: Settings, category: null },
+    roleConfig.permissions.includes('home') && { id: 'accueil', label: t('nav.accueil'), icon: Home, category: null },
+    roleConfig.permissions.includes('calendar') && { id: 'calendar', label: t('nav.calendar'), icon: CalendarDays, category: 'operations' },
+    roleConfig.permissions.includes('recoltes') && { id: 'recoltes', label: t('nav.recoltes'), icon: Package, category: 'operations' },
+    roleConfig.permissions.includes('assistant') && { id: 'assistant', label: t('nav.assistant'), icon: Search, category: 'analyse' },
+    roleConfig.permissions.includes('assistant') && { id: 'forecasting', label: t('nav.forecasting'), icon: TrendingUp, category: 'analyse' },
+    roleConfig.permissions.includes('reports') && { id: 'reports', label: t('nav.reports'), icon: FileText, category: 'analyse' },
+    activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: t('nav.cultures'), icon: Sprout, category: 'operations' },
+    activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: t('nav.poulailler'), icon: Egg, category: 'operations' },
+    activated.clients && roleConfig.permissions.includes('clients') && { id: 'clients', label: t('nav.clients'), icon: Users, category: 'commercial' },
+    activated.fournisseurs && roleConfig.permissions.includes('fournisseurs') && { id: 'fournisseurs', label: t('nav.fournisseurs'), icon: Truck, category: 'commercial' },
+    activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: t('nav.employees'), icon: Briefcase, category: 'rh' },
+    { id: 'monrh', label: t('nav.monrh'), icon: ClipboardList, category: 'rh' },
+    activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: t('nav.finances'), icon: Landmark, category: 'finance' },
+    activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: t('nav.notifications'), icon: Bell, category: 'operations' },
+    { id: 'observations', label: t('nav.observations'), icon: ClipboardList, category: 'operations' },
+    roleConfig.permissions.includes('equipements') && { id: 'equipements', label: t('nav.equipements'), icon: Wrench, category: 'operations' },
+    { id: 'feedback', label: t('nav.feedback'), icon: MessageSquare, category: null },
+    { id: 'aide', label: t('nav.aide'), icon: HelpCircle, category: null },
+    { id: 'profil', label: t('nav.profil'), icon: Settings, category: null },
   ].filter(Boolean);
 
   useEffect(() => {
@@ -7083,12 +7218,13 @@ export default function App() {
       const token = getToken();
       if (!token) return;
       try {
-        const { user } = await getMe();
+        const { user, entreprise } = await getMe();
         const uiRole = mapBackendRoleToUi(user.role);
         const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
         setUser(user.email);
         setRole(uiRole);
         setIsPlatformAdmin(user.isPlatformAdmin === true);
+        applyEntrepriseLocale(entreprise);
         await checkOnboardingNeeded(uiRole);
         const hasModulesAccess = selectedConfig.permissions.includes('modules');
         const currentScreen = pathnameToScreen(location.pathname);
@@ -7136,18 +7272,18 @@ export default function App() {
               <div style={{ width: 30, height: 30, borderRadius: 8, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Sprout size={16} color="#fff" />
               </div>
-              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>YEELEN AgriConnect</span>
+              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {screen === 'dashboard' && roleConfig.permissions.includes('modules') && (
                 <button onClick={() => { setIsOnboarding(false); goToScreen('modules'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: COLORS.inkSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  Gérer les options
+                  {t('shell.manageOptions')}
                 </button>
               )}
               {screen === 'dashboard' && (
                 <button
                   onClick={() => setSearchOpen(true)}
-                  title="Recherche globale (Ctrl+K)"
+                  title={t('shell.globalSearch')}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 4 }}
                 >
                   <Search size={16} />
@@ -7155,19 +7291,23 @@ export default function App() {
               )}
               <span style={{ fontSize: 12.2, color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{user}</span>
               <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                {roleConfig.label}
+                {t(`role.${role}`, roleConfig.label)}
               </span>
-              <button onClick={() => { clearToken(); navigate('/login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+              <button onClick={() => { clearToken(); navigate('/login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }} title={t('shell.logout')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                 <LogOut size={17} />
               </button>
             </div>
           </div>
           <div style={{ padding: '8px 22px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12.5, padding: '6px 10px', borderRadius: 999, background: isOnline ? COLORS.greenSoft : COLORS.ochreSoft, color: isOnline ? COLORS.green : COLORS.ochre, fontWeight: 600 }}>
-              {isOnline ? 'En ligne' : 'Mode hors ligne'}
+              {isOnline ? t('shell.online') : t('shell.offline')}
             </span>
             <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
-              {pendingSyncCount > 0 ? `${pendingSyncCount} modification(s) à synchroniser` : lastSync ? `Dernière synchronisation : ${new Date(lastSync).toLocaleString('fr-FR')}` : 'Aucune synchronisation enregistrée'}
+              {pendingSyncCount > 0
+                ? t('shell.pendingSync', { count: pendingSyncCount })
+                : lastSync
+                  ? t('shell.lastSync', { date: fmtDate(lastSync, { dateStyle: 'short', timeStyle: 'short' }) })
+                  : t('shell.noSync')}
             </span>
           </div>
         </div>
@@ -7183,17 +7323,17 @@ export default function App() {
 {screen === 'onboarding-choice' && (
   <div style={{ maxWidth: 480, margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
     <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 10 }}>
-      Configurer votre entreprise
+      {t('onboarding.configTitle')}
     </div>
     <div style={{ fontSize: 14, color: COLORS.inkSoft, marginBottom: 26 }}>
-      Ajoutez vos comptes bancaires et vos salariés maintenant, ou passez directement au tableau de bord et configurez-les plus tard depuis "Gérer les options".
+      {t('onboarding.configDesc')}
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <Button variant="green" onClick={goToOnboardingBanques} style={{ justifyContent: 'center' }}>
-        Configurer maintenant
+        {t('onboarding.now')}
       </Button>
       <Button variant="ghost" onClick={goToDashboard} style={{ justifyContent: 'center' }}>
-        Plus tard
+        {t('onboarding.later')}
       </Button>
     </div>
   </div>
@@ -7204,19 +7344,19 @@ export default function App() {
   <div style={{ maxWidth: 700, margin: '0 auto', padding: '36px 16px' }}>
     <div style={{ textAlign: 'center', marginBottom: 22 }}>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
-        Vos comptes bancaires
+        {t('onboarding.banquesTitle')}
       </div>
       <div style={{ fontSize: 14, color: COLORS.inkSoft }}>
-        Ajoutez un ou plusieurs comptes bancaires. Vous pourrez en ajouter d'autres plus tard.
+        {t('onboarding.banquesDesc')}
       </div>
     </div>
     <BanquesModule />
     <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
       <Button variant="ghost" onClick={confirmerPasDeBanque}>
-        Je n'ai pas de compte bancaire (caisse uniquement)
+        {t('onboarding.noBanque')}
       </Button>
       <Button variant="default" onClick={goToOnboardingSalaries}>
-        Suivant <ChevronRight size={16} />
+        {t('common.next')} <ChevronRight size={16} />
       </Button>
     </div>
   </div>
@@ -7227,19 +7367,19 @@ export default function App() {
   <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
     <div style={{ textAlign: 'center', marginBottom: 22 }}>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
-        Vos salariés
+        {t('onboarding.salariesTitle')}
       </div>
       <div style={{ fontSize: 14, color: COLORS.inkSoft }}>
-        Ajoutez vos employés maintenant, ou passez cette étape et faites-le plus tard depuis l'onglet Employés.
+        {t('onboarding.salariesDesc')}
       </div>
     </div>
     <EmployeesModule farmId={user} />
     <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
       <Button variant="ghost" onClick={confirmerPasDeSalarie}>
-        Je travaille seul, pas de salarié à ajouter
+        {t('onboarding.noSalarie')}
       </Button>
       <Button variant="default" onClick={goToDashboard}>
-        Terminer <Check size={16} />
+        {t('common.finish')} <Check size={16} />
       </Button>
     </div>
   </div>
@@ -7272,6 +7412,7 @@ export default function App() {
             {tab === 'clients' && <ContactsTab type="client" highlightId={highlightContactId || highlightFromUrl} />}
             {tab === 'fournisseurs' && <ContactsTab type="fournisseur" highlightId={highlightContactId || highlightFromUrl} />}
             {tab === 'employees' && <EmployeesModule farmId={user} role={role} />}
+            {tab === 'monrh' && <MonEspaceRh />}
             {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
             {tab === 'observations' && <ObservationListView />}
@@ -7290,6 +7431,29 @@ export default function App() {
 
 function ProfilModule({ role }) {
  const isAdmin = role === 'admin';
+  const { t, i18n } = useTranslation();
+  const { devise, locale, setLocaleConfig } = useLocale();
+  const [prefDevise, setPrefDevise] = useState(devise);
+  const [prefLocale, setPrefLocale] = useState(locale);
+  const [prefBusy, setPrefBusy] = useState(false);
+  const [prefMsg, setPrefMsg] = useState('');
+  useEffect(() => { setPrefDevise(devise); setPrefLocale(locale); }, [devise, locale]);
+
+  const savePreferences = async () => {
+    setPrefBusy(true);
+    setPrefMsg('');
+    try {
+      if (isAdmin && (prefDevise !== devise || prefLocale !== locale)) {
+        await updateEntreprise({ devise: prefDevise, locale: prefLocale });
+        setLocaleConfig({ devise: prefDevise, locale: prefLocale });
+      }
+      setPrefMsg(t('profil.preferencesSaved'));
+    } catch (err) {
+      setPrefMsg(err.message);
+    } finally {
+      setPrefBusy(false);
+    }
+  };
 
   const [qrCode, setQrCode] = useState(null);
   const [code, setCode] = useState('');
@@ -7391,6 +7555,40 @@ function ProfilModule({ role }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
+
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+          {t('profil.sectionPreferences')}
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+          {t('profil.sectionPreferencesHint')}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Select
+            label={t('language.label')}
+            value={i18n.resolvedLanguage || i18n.language}
+            onChange={e => setLanguage(e.target.value)}
+          >
+            {SUPPORTED_LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+          </Select>
+          <Select label={t('profil.currency')} value={prefDevise} onChange={e => setPrefDevise(e.target.value)} disabled={!isAdmin}>
+            {DEVISES.map(d => <option key={d.code} value={d.code}>{d.label}</option>)}
+          </Select>
+          <Select label={t('profil.locale')} value={prefLocale} onChange={e => setPrefLocale(e.target.value)} disabled={!isAdmin}>
+            {LOCALES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+          </Select>
+          <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: COLORS.inkSoft }}>
+            <span>{t('profil.previewMoney')} : <b style={{ color: COLORS.ink }}>{previewMoney(prefLocale, prefDevise, 1234567.5)}</b></span>
+            <span>{t('profil.previewDate')} : <b style={{ color: COLORS.ink }}>{previewDate(prefLocale, new Date())}</b></span>
+          </div>
+          {isAdmin && (
+            <Button variant="green" onClick={savePreferences} disabled={prefBusy} style={{ alignSelf: 'flex-start' }}>
+              {prefBusy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('profil.savePreferences')}
+            </Button>
+          )}
+          {prefMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{prefMsg}</div>}
+        </div>
+      </Card>
 
       {isAdmin && (
         <Card>

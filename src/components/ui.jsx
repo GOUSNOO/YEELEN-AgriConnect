@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AlertTriangle, Check, HelpCircle } from 'lucide-react';
 
 let toastListeners = [];
 function notify(message, type = 'error') {
@@ -88,6 +88,80 @@ export function Button({ children, onClick, variant = 'default', small, style, t
   );
 }
 
+// Icône « ? » cliquable à côté d'un libellé de champ, ouvrant une petite bulle
+// d'explication. Ouverture au CLIC (pas au survol) pour rester utilisable au toucher —
+// l'attribut title= natif ne s'affiche jamais sur mobile. Une seule bulle ouverte à la
+// fois dans toute l'app (via un évènement window partagé). Fond + couleur fixés
+// explicitement : un élément sans `color` hérite du blanc sous un thème sombre OS
+// (règle color-scheme déjà documentée pour les <input>/<button> bruts du projet).
+let aideChampSeq = 0;
+export function AideChamp({ texte }) {
+  const [open, setOpen] = useState(false);
+  const idRef = useRef(0);
+  if (idRef.current === 0) idRef.current = ++aideChampSeq;
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onOther = (e) => { if (e.detail !== idRef.current) setOpen(false); };
+    const onDown = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('aidechamp:open', onOther);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('aidechamp:open', onOther);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const toggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(v => {
+      const next = !v;
+      if (next) window.dispatchEvent(new CustomEvent('aidechamp:open', { detail: idRef.current }));
+      return next;
+    });
+  };
+
+  return (
+    <span ref={wrapRef} style={{ position: 'relative', display: 'inline-flex', verticalAlign: 'middle' }}>
+      <button
+        type="button" onClick={toggle} aria-label="Aide sur ce champ"
+        style={{
+          background: 'transparent', border: 'none', padding: 0, marginLeft: 4,
+          cursor: 'pointer', color: open ? '#3F6B3B' : '#9AA093', display: 'inline-flex',
+        }}
+      >
+        <HelpCircle size={14} />
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', top: 'calc(100% + 8px)', left: -4, zIndex: 60,
+            width: 'min(250px, 72vw)', background: '#FFFFFF', color: '#4A5247',
+            border: '1px solid #DAD6C4', borderRadius: 10, padding: '10px 12px',
+            fontSize: 12, fontWeight: 400, lineHeight: 1.45, textAlign: 'left',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.16)', whiteSpace: 'normal',
+          }}
+        >
+          <span style={{
+            position: 'absolute', top: -5, left: 10, width: 9, height: 9,
+            background: '#FFFFFF', borderLeft: '1px solid #DAD6C4', borderTop: '1px solid #DAD6C4',
+            transform: 'rotate(45deg)',
+          }} />
+          {texte}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // Champ façon ERP (project_erp_contact_architecture) : plus de rectangle visible au
 // repos (bordure/fond transparents, `.flat-input` dans App.css reproduit
 // --o-input-border-color: transparent mesuré dans le CSS d'un ERP de référence), une bordure
@@ -95,10 +169,12 @@ export function Button({ children, onClick, variant = 'default', small, style, t
 // d'un traitement au cas par cas par écran) sur demande explicite de l'utilisateur, pour
 // que ce style s'applique automatiquement partout où ces deux composants partagés sont
 // déjà utilisés (une centaine d'endroits dans l'app).
-export function Field({ label, className, style, ...props }) {
+export function Field({ label, aide, className, style, ...props }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
-      {label}
+      {(label || aide) && (
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>{label}{aide ? <AideChamp texte={aide} /> : null}</span>
+      )}
       <input
         {...props}
         className={className ? `flat-input ${className}` : 'flat-input'}
@@ -108,10 +184,12 @@ export function Field({ label, className, style, ...props }) {
   );
 }
 
-export function Select({ label, children, className, style, ...props }) {
+export function Select({ label, aide, children, className, style, ...props }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
-      {label}
+      {(label || aide) && (
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>{label}{aide ? <AideChamp texte={aide} /> : null}</span>
+      )}
       <select
         {...props}
         className={className ? `flat-input ${className}` : 'flat-input'}

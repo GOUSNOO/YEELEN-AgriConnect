@@ -1,0 +1,213 @@
+{
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "next": "Next",
+    "finish": "Finish",
+    "add": "Add",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No",
+    "none": "None",
+    "optional": "optional",
+    "search": "Search",
+    "total": "Total",
+    "date": "Date",
+    "amount": "Amount",
+    "status": "Status",
+    "actions": "Actions",
+    "noData": "No data"
+  },
+  "role": {
+    "admin": "Administrator",
+    "directeur": "Director",
+    "gestionnaire": "Manager",
+    "comptable": "Accountant",
+    "assistant_direction": "Executive assistant",
+    "ouvrier": "Worker"
+  },
+  "shell": {
+    "manageOptions": "Manage options",
+    "globalSearch": "Global search (Ctrl+K)",
+    "online": "Online",
+    "offline": "Offline mode",
+    "pendingSync_one": "{{count}} change to sync",
+    "pendingSync_other": "{{count}} changes to sync",
+    "lastSync": "Last sync: {{date}}",
+    "noSync": "No sync recorded yet",
+    "logout": "Sign out"
+  },
+  "onboarding": {
+    "configTitle": "Set up your business",
+    "configDesc": "Add your bank accounts and employees now, or go straight to the dashboard and set them up later from “Manage options”.",
+    "now": "Set up now",
+    "later": "Later",
+    "banquesTitle": "Your bank accounts",
+    "banquesDesc": "Add one or more bank accounts. You can add more later.",
+    "noBanque": "I have no bank account (cash only)",
+    "salariesTitle": "Your employees",
+    "salariesDesc": "Add your employees now, or skip this step and do it later from the Employees tab.",
+    "noSalarie": "I work alone, no employee to add"
+  },
+  "language": {
+    "label": "Interface language",
+    "fr": "Français",
+    "en": "English"
+  },
+  "auth": {
+    "brand": "YEELEN AgriConnect",
+    "tabLogin": "Sign in",
+    "tabRegister": "Sign up",
+    "titleLogin": "Sign in",
+    "titleRegister": "Create an account",
+    "subtitleLogin": "Access your farm management tools.",
+    "subtitleRegister": "A few details to get started.",
+    "accountTypeCompany": "Business",
+    "accountTypeIndividual": "Individual / Sole trader",
+    "email": "Email address",
+    "emailPlaceholder": "name@farm.example",
+    "password": "Password",
+    "companyName": "Your business name",
+    "activityName": "Your name or your farm's name (optional)",
+    "companyNamePlaceholder": "e.g. Green Valley Farm Ltd",
+    "activityNamePlaceholder": "e.g. Smith Farming",
+    "siret": "Company reg. no. (optional)",
+    "siretPlaceholder": "e.g. 123 456 789 00012",
+    "currency": "Currency",
+    "locale": "Regional format",
+    "submitLogin": "Sign in",
+    "submitRegister": "Sign up",
+    "noAccount": "No account yet?",
+    "hasAccount": "Already have an account?",
+    "footer": "Authentication via backend API — secure connection.",
+    "loginFailed": "Sign-in failed.",
+    "registerFailed": "Sign-up failed.",
+    "mfaTitle": "Two-step verification",
+    "mfaHint": "Enter the 6-digit code from your authenticator app.",
+    "mfaCode": "Verification code",
+    "mfaSubmit": "Verify",
+    "mfaInvalid": "Invalid code."
+  },
+  "optionCard": {
+    "active": "Enabled",
+    "deactivate": "Disable",
+    "activate": "Enable this option"
+  },
+  "modulesScreen": {
+    "title": "Choose your options",
+    "subtitle": "Enable one or more modules depending on your farm's needs. You can change them at any time.",
+    "continue": "Continue",
+    "pricePlaceholder": "Option included in the subscription",
+    "cultures": {
+      "title": "Crop & irrigation monitoring",
+      "desc": "Monitor soil moisture and temperature, get watering recommendations and control your valves remotely.",
+      "features": ["Per-plot soil sensors", "Automatic watering recommendation", "Valve control (auto or manual)", "Watering history"]
+    },
+    "poulailler": {
+      "title": "Poultry management",
+      "desc": "Track the poultry house environment and manage your whole poultry operation day to day.",
+      "features": ["Poultry house temperature and humidity", "Stock (feed, eggs, birds)", "Sales, purchases and deliveries", "Automatic accounting"]
+    },
+    "clients": {
+      "title": "Customer management",
+      "desc": "Record your customers, track their purchases, payments and outstanding balance.",
+      "features": ["Full customer record", "Purchase history", "Payment tracking", "Outstanding balance in real time"]
+    },
+    "employees": {
+      "title": "Employee management",
+      "desc": "Track employees, their position, salary, attendance, advances and leave.",
+      "features": ["Full employee record", "Salary and position", "Attendance", "Advances and leave"]
+    },
+    "fournisseurs": {
+      "title": "Supplier management",
+      "desc": "Record your suppliers and find them easily when purchasing.",
+      "features": ["Full supplier record", "Purchase history", "Contact details and reg. number"]
+    },
+    "finances": {
+      "title": "Financial management",
+      "desc": "Track cash, bank, expenses and compute your farm's net profit.",
+      "features": ["Cash", "Bank", "Miscellaneous expenses", "Fuel", "Salary", "Maintenance", "Net profit"]
+    },
+    "notifications": {
+      "title": "Notifications",
+      "desc": "Get a summary view of the farm's important alerts.",
+      "features": ["Low stock", "Temperature too high", "Dry soil", "Upcoming delivery", "Customer overdue on payment"]
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications at the moment.",
+    "lowStockTitle": "Low stock",
+    "lowStockMsg": "{{name}} is below the threshold ({{qty}} {{unit}})",
+    "highTempTitle": "Temperature too high",
+    "highTempMsg": "{{name}} exceeds {{temp}}°C",
+    "drySoilTitle": "Dry soil",
+    "drySoilMsg": "{{name}} needs watering",
+    "deliveryTitle": "Delivery scheduled today",
+    "deliveryMsg": "{{product}} to deliver to {{customer}}",
+    "unpaidTitle": "Invoice awaiting payment",
+    "unpaidMsg": "{{customer}} — {{number}} ({{amount}}, {{status}})",
+    "defaultCustomer": "Customer"
+  },
+  "home": {
+    "cardRevenue": "Revenue this month",
+    "cardExpenses": "Expenses this month",
+    "cardProfit": "Profit",
+    "cardSales": "Number of sales",
+    "cardPendingDeliveries": "Pending deliveries",
+    "cardPlotsToWater": "Plots to water",
+    "cardEggs": "Eggs available",
+    "cardAlerts": "Important alerts",
+    "alertsTitle": "Important alerts",
+    "noAlerts": "No alerts to report at the moment.",
+    "alertPlotsToWater_one": "{{count}} plot to water",
+    "alertPlotsToWater_other": "{{count}} plots to water",
+    "alertLowEggStock": "Low egg stock ({{count}})",
+    "alertPendingDeliveries_one": "{{count}} delivery pending",
+    "alertPendingDeliveries_other": "{{count}} deliveries pending",
+    "alertNegativeProfit": "Negative profit ({{amount}})"
+  },
+  "nav": {
+    "accueil": "Home",
+    "calendar": "Calendar",
+    "recoltes": "Harvests",
+    "assistant": "AI Assistant",
+    "forecasting": "Forecasts",
+    "reports": "Reports",
+    "cultures": "Crops & irrigation",
+    "poulailler": "Poultry",
+    "clients": "Customers",
+    "fournisseurs": "Suppliers",
+    "employees": "Employees",
+    "monrh": "My HR space",
+    "finances": "Finances",
+    "notifications": "Notifications",
+    "observations": "Observations",
+    "equipements": "Equipment",
+    "feedback": "Feedback",
+    "aide": "Help",
+    "profil": "Profile"
+  },
+  "navGroup": {
+    "operations": "Operations",
+    "analyse": "Analytics",
+    "commercial": "Sales",
+    "finance": "Finance",
+    "rh": "Human resources"
+  },
+  "profil": {
+    "title": "Profile",
+    "sectionPreferences": "Preferences",
+    "sectionPreferencesHint": "Language applies to your account only. Currency and regional format apply to the whole business.",
+    "currency": "Business currency",
+    "locale": "Business regional format",
+    "savePreferences": "Save preferences",
+    "preferencesSaved": "Preferences updated.",
+    "previewMoney": "Amount preview",
+    "previewDate": "Date preview"
+  }
+}

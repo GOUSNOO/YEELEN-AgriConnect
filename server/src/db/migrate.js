@@ -660,6 +660,147 @@ CREATE TABLE IF NOT EXISTS salaries_avances (
 );
 CREATE INDEX IF NOT EXISTS idx_salaries_avances_salarie_id ON salaries_avances(salarie_id);
 
+-- ═══════════════ RH complète — alignement sur le module RH open source de l'ERP ═══════════════
+-- Ajout en 6 volets (voir CLAUDE.md section "RH complète") : structure organisationnelle
+-- (départements/postes/manager), congés réellement décomptés (types + droits + solde +
+-- jours fériés + congé approuvé => absence), fiche employé enrichie (photo, état civil,
+-- départ), contrats (historise le salaire), coût main-d'œuvre + feuilles de temps.
+-- Tout est additif : les tables/colonnes RH pré-existantes ne sont pas retirées.
+
+-- ── Structure organisationnelle ──────────────────────────────
+CREATE TABLE IF NOT EXISTS departements (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom            TEXT NOT NULL,
+  responsable_id INTEGER REFERENCES salaries(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_departements_entreprise_id ON departements(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS postes (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  intitule       TEXT NOT NULL,
+  departement_id INTEGER REFERENCES departements(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, intitule)
+);
+CREATE INDEX IF NOT EXISTS idx_postes_entreprise_id ON postes(entreprise_id);
+
+-- salaries.poste (texte libre) reste en place ; poste_id est la version référentielle,
+-- remplie par migratePostesFromSalaries() plus bas à partir des intitulés distincts existants.
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS poste_id       INTEGER REFERENCES postes(id) ON DELETE SET NULL;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS departement_id INTEGER REFERENCES departements(id) ON DELETE SET NULL;
+-- manager_id : responsable hiérarchique direct. Hiérarchie à un seul niveau exploité côté
+-- appli (validation des congés), garde-fou anti-auto-référence dans la route.
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS manager_id     INTEGER REFERENCES salaries(id) ON DELETE SET NULL;
+
+-- ── Fiche employé enrichie (état civil, contact d'urgence, départ, photo) ──
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS photo                TEXT;   -- base64, comme contacts.photo (pas d'infra de fichiers)
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS date_naissance       DATE;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS contact_urgence_nom  TEXT;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS contact_urgence_tel  TEXT;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS num_piece_identite   TEXT;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS date_depart          DATE;
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS motif_depart         TEXT;
+
+-- ── Coût main-d'œuvre + calendrier de travail simplifié ──────
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS cout_horaire     NUMERIC(10, 2);
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS heures_hebdo     NUMERIC(5, 2);
+-- jours_travailles : liste CSV de jours ('Lun,Mar,Mer,Jeu,Ven,Sam'), sert au calcul du
+-- nombre de jours ouvrés d'un congé quand renseigné (sinon repli : tous les jours sauf dimanche).
+ALTER TABLE salaries ADD COLUMN IF NOT EXISTS jours_travailles TEXT;
+
+-- ── Matériel affecté à un employé (le module Équipements existe déjà) ──
+ALTER TABLE equipements ADD COLUMN IF NOT EXISTS salarie_id INTEGER REFERENCES salaries(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_equipements_salarie_id ON equipements(salarie_id);
+
+-- ── Jours fériés par entreprise (aucune liste pré-remplie : appli multi-continents) ──
+CREATE TABLE IF NOT EXISTS jours_feries (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  date           DATE NOT NULL,
+  nom            TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_jours_feries_entreprise_id ON jours_feries(entreprise_id);
+
+-- ── Congés : types + droits annuels + enrichissement des demandes ──
+CREATE TABLE IF NOT EXISTS conges_types (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom                TEXT NOT NULL,
+  paye               BOOLEAN NOT NULL DEFAULT TRUE,
+  justificatif_requis BOOLEAN NOT NULL DEFAULT FALSE,
+  couleur            TEXT,
+  ordre              INTEGER NOT NULL DEFAULT 0,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_conges_types_entreprise_id ON conges_types(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS conges_droits (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  salarie_id     INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  type_id        INTEGER NOT NULL REFERENCES conges_types(id) ON DELETE CASCADE,
+  annee          INTEGER NOT NULL,
+  jours_alloues  NUMERIC(6, 2) NOT NULL DEFAULT 0,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (salarie_id, type_id, annee)
+);
+CREATE INDEX IF NOT EXISTS idx_conges_droits_salarie_id ON conges_droits(salarie_id);
+
+ALTER TABLE salaries_conges ADD COLUMN IF NOT EXISTS type_id         INTEGER REFERENCES conges_types(id) ON DELETE SET NULL;
+ALTER TABLE salaries_conges ADD COLUMN IF NOT EXISTS nb_jours        NUMERIC(6, 2);
+ALTER TABLE salaries_conges ADD COLUMN IF NOT EXISTS demi_jour_debut BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE salaries_conges ADD COLUMN IF NOT EXISTS demi_jour_fin   BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ── Contrats : historise les termes (type, dates, période d'essai, salaire) ──
+-- salaries.salaire reste la colonne lue partout ; elle est resynchronisée depuis le
+-- contrat actif (routes/salaries.js). migrateContratsFromSalaries() amorce un contrat
+-- 'CDI' par salarié existant ayant un salaire, pour ne pas partir d'un historique vide.
+CREATE TABLE IF NOT EXISTS salaries_contrats (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  salarie_id        INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  type              TEXT NOT NULL DEFAULT 'CDI',
+  date_debut        DATE,
+  date_fin          DATE,
+  fin_periode_essai DATE,
+  salaire           NUMERIC(12, 2),
+  actif             BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_salaries_contrats_salarie_id ON salaries_contrats(salarie_id);
+
+-- ── Feuilles de temps : heures imputables sur une parcelle / un poulailler ──
+CREATE TABLE IF NOT EXISTS salaries_temps (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  salarie_id     INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  date           DATE NOT NULL,
+  heures         NUMERIC(5, 2) NOT NULL,
+  parcelle_id    INTEGER REFERENCES parcelles(id) ON DELETE SET NULL,
+  poulailler_id  INTEGER REFERENCES poulaillers(id) ON DELETE SET NULL,
+  tache          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_salaries_temps_salarie_id ON salaries_temps(salarie_id);
+CREATE INDEX IF NOT EXISTS idx_salaries_temps_date ON salaries_temps(entreprise_id, date);
+
+-- ═══════════════ Localisation — devise + locale par entreprise (i18n / formats) ═══════════════
+-- Première brique de l'internationalisation (appli visée sur tous les continents) : chaque
+-- entreprise tient ses comptes dans UNE devise, et les montants/dates s'affichent selon SA
+-- locale. Les colonnes de montants ne changent pas (pas de multi-devise comptable ici) —
+-- devise/locale ne pilotent que l'affichage (Intl.NumberFormat/DateTimeFormat côté client).
+-- La langue de l'UI est un choix par utilisateur (localStorage), distinct de ces deux-là.
+-- Défauts XOF / fr-FR : valeurs de départ du projet, modifiables dans les réglages entreprise.
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS devise TEXT NOT NULL DEFAULT 'XOF';
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'fr-FR';
+
 -- ═══════════════ Catalogue produit minimal — prix par défaut sur les articles de stock
 -- déjà existants (pas de nouvelle table produits séparée : un article de stock EST déjà
 -- un produit réutilisable, il ne lui manquait qu'un prix par défaut à préremplir dans
@@ -1538,6 +1679,81 @@ async function migrateTaxeDevisVersLignes() {
   }
 }
 
+// ═══════════════ RH complète — amorçage des données dérivées ═══════════════
+// Ces trois fonctions ne retirent aucune colonne (contrairement à migrateRemiseToPourcentage
+// etc.) : elles se contentent de peupler les nouvelles structures à partir de l'existant.
+// Idempotentes : chacune ne touche que les lignes pas encore migrées.
+
+const CONGES_TYPES_DEFAUT = [
+  { nom: 'Congés payés', paye: true, justificatif_requis: false, couleur: '#3F6B3B', ordre: 1 },
+  { nom: 'Maladie', paye: true, justificatif_requis: true, couleur: '#C1861F', ordre: 2 },
+  { nom: 'Sans solde', paye: false, justificatif_requis: false, couleur: '#5B6357', ordre: 3 },
+  { nom: 'Événement familial', paye: true, justificatif_requis: false, couleur: '#2E6E8E', ordre: 4 },
+];
+
+// Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
+async function seedCongesTypesForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM conges_types ct WHERE ct.entreprise_id = e.id)`
+  );
+  for (const { id } of entreprises) {
+    for (const t of CONGES_TYPES_DEFAUT) {
+      await client.query(
+        `INSERT INTO conges_types (entreprise_id, nom, paye, justificatif_requis, couleur, ordre)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (entreprise_id, nom) DO NOTHING`,
+        [id, t.nom, t.paye, t.justificatif_requis, t.couleur, t.ordre]
+      );
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Types de congés par défaut créés pour ${entreprises.length} entreprise(s).`);
+  }
+}
+
+// Crée un `postes` par intitulé distinct déjà présent dans salaries.poste, puis relie
+// salaries.poste_id. Ne touche que les salariés dont poste_id est encore NULL.
+async function migratePostesFromSalaries() {
+  const { rowCount } = await client.query(
+    `SELECT 1 FROM salaries WHERE poste IS NOT NULL AND poste <> '' AND poste_id IS NULL LIMIT 1`
+  );
+  if (rowCount === 0) {
+    console.log('ℹ️  Postes : rien à migrer (tous les salariés avec un poste ont déjà un poste_id).');
+    return;
+  }
+  await client.query(`
+    INSERT INTO postes (entreprise_id, intitule)
+    SELECT DISTINCT s.entreprise_id, s.poste
+    FROM salaries s
+    WHERE s.poste IS NOT NULL AND s.poste <> ''
+    ON CONFLICT (entreprise_id, intitule) DO NOTHING
+  `);
+  const { rowCount: relies } = await client.query(`
+    UPDATE salaries s SET poste_id = p.id
+    FROM postes p
+    WHERE p.entreprise_id = s.entreprise_id AND p.intitule = s.poste
+      AND s.poste IS NOT NULL AND s.poste <> '' AND s.poste_id IS NULL
+  `);
+  console.log(`✅ Postes : ${relies} salarié(s) relié(s) à un poste référentiel.`);
+}
+
+// Amorce un contrat 'CDI' actif par salarié ayant un salaire mais aucun contrat.
+async function migrateContratsFromSalaries() {
+  const { rowCount: inserted } = await client.query(`
+    INSERT INTO salaries_contrats (entreprise_id, salarie_id, type, date_debut, salaire, actif)
+    SELECT s.entreprise_id, s.id, 'CDI', s.date_embauche, s.salaire, TRUE
+    FROM salaries s
+    WHERE s.salaire IS NOT NULL AND s.salaire <> 0
+      AND NOT EXISTS (SELECT 1 FROM salaries_contrats c WHERE c.salarie_id = s.id)
+  `);
+  if (inserted > 0) {
+    console.log(`✅ Contrats : ${inserted} contrat(s) CDI amorcé(s) depuis le salaire existant.`);
+  } else {
+    console.log('ℹ️  Contrats : rien à amorcer.');
+  }
+}
+
 // Toute la variable SQL ci-dessus est envoyée en un seul `query()` — PostgreSQL exécute
 // les instructions séparées par `;` dans l'ordre au sein d'une même requête multi-instructions
 // (pas de vraie transaction globale explicite ici : une instruction en échec arrête tout,
@@ -1556,6 +1772,9 @@ async function migrate() {
     await migrateClientPrixToListesPrix();
     await migrateRemiseToPourcentage();
     await migrateTaxeDevisVersLignes();
+    await seedCongesTypesForExistingEntreprises();
+    await migratePostesFromSalaries();
+    await migrateContratsFromSalaries();
   } catch (err) {
     console.error('❌ Erreur de migration :', err.message);
     process.exit(1);

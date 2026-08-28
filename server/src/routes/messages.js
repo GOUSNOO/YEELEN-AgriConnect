@@ -7,7 +7,7 @@ import { pool } from '../db.js';
 
 const router = express.Router();
 
-const RESSOURCES_VALIDES = ['devis', 'contact'];
+const RESSOURCES_VALIDES = ['devis', 'contact', 'salarie'];
 
 router.get('/', authRequired, async (req, res) => {
   const { ressourceType, ressourceId } = req.query;

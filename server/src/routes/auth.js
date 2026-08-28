@@ -35,13 +35,22 @@ const CATEGORIES_PRODUITS_PAR_DEFAUT = [
   { module: 'Poulailler', nom: 'Autre', ordre: 3 },
 ];
 
+// Types de congés par défaut d'une nouvelle entreprise (mêmes valeurs que
+// CONGES_TYPES_DEFAUT dans migrate.js:seedCongesTypesForExistingEntreprises).
+const CONGES_TYPES_PAR_DEFAUT = [
+  { nom: 'Congés payés', paye: true, justificatif_requis: false, couleur: '#3F6B3B', ordre: 1 },
+  { nom: 'Maladie', paye: true, justificatif_requis: true, couleur: '#C1861F', ordre: 2 },
+  { nom: 'Sans solde', paye: false, justificatif_requis: false, couleur: '#5B6357', ordre: 3 },
+  { nom: 'Événement familial', paye: true, justificatif_requis: false, couleur: '#2E6E8E', ordre: 4 },
+];
+
 // ─── POST /api/auth/register ───────────────────────────────────────────────
 // Crée en une seule transaction : le compte utilisateur, sa nouvelle entreprise, et le
 // lien entre les deux avec le rôle 'admin' — celui qui s'inscrit est toujours admin de
 // la toute nouvelle entreprise qu'il vient de créer (pas de rejoindre une entreprise
 // existante depuis cette route).
 router.post('/register', async (req, res) => {
-  const { email, password, nomEntreprise, typeCompte, siret } = req.body;
+  const { email, password, nomEntreprise, typeCompte, siret, devise, locale } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis.' });
@@ -80,12 +89,15 @@ router.post('/register', async (req, res) => {
     // Nom d'entreprise par défaut si non fourni — dépend du type de compte pour rester
     // cohérent ("Espace de x@y.com" pour un particulier, "Entreprise de x@y.com" sinon).
     const entrepriseResult = await client.query(
-      `INSERT INTO entreprises (nom, siret, type_compte)
-       VALUES ($1, $2, $3) RETURNING id, nom, siret, type_compte`,
+      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale)
+       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'))
+       RETURNING id, nom, siret, type_compte, devise, locale`,
       [
         nomEntreprise || `${compteType === 'particulier' ? 'Espace' : 'Entreprise'} de ${user.email}`,
         compteType === 'entreprise' ? (siret || null) : null,
         compteType,
+        devise || null,
+        locale || null,
       ]
     );
     const entreprise = entrepriseResult.rows[0];
@@ -104,6 +116,15 @@ router.post('/register', async (req, res) => {
       );
     }
 
+    for (const t of CONGES_TYPES_PAR_DEFAUT) {
+      await client.query(
+        `INSERT INTO conges_types (entreprise_id, nom, paye, justificatif_requis, couleur, ordre)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (entreprise_id, nom) DO NOTHING`,
+        [entreprise.id, t.nom, t.paye, t.justificatif_requis, t.couleur, t.ordre]
+      );
+    }
+
     await client.query('COMMIT');
 
     // isPlatformAdmin toujours false ici : ce flag ne peut être activé que
@@ -118,7 +139,7 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({
       token,
       user: { id: user.id, email: user.email, role: 'admin', createdAt: user.created_at, isPlatformAdmin: false },
-      entreprise: { id: entreprise.id, nom: entreprise.nom, typeCompte: entreprise.type_compte },
+      entreprise: { id: entreprise.id, nom: entreprise.nom, typeCompte: entreprise.type_compte, devise: entreprise.devise, locale: entreprise.locale },
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -159,7 +180,7 @@ router.post('/login', async (req, res) => {
     // Récupéré tôt (avant les vérifications) pour pouvoir tracer l'entreprise
     // concernée même sur les tentatives échouées d'un compte existant.
     const rattachement = await pool.query(
-      `SELECT eu.entreprise_id, eu.role, e.nom AS entreprise_nom
+      `SELECT eu.entreprise_id, eu.role, e.nom AS entreprise_nom, e.devise, e.locale
        FROM entreprise_utilisateurs eu
        JOIN entreprises e ON e.id = eu.entreprise_id
        WHERE eu.user_id = $1 AND eu.statut = 'Actif'
@@ -199,7 +220,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Aucune entreprise associée à ce compte.' });
     }
 
-    const { role, entreprise_nom: entrepriseNom } = rattachement.rows[0];
+    const { role, entreprise_nom: entrepriseNom, devise: entrepriseDevise, locale: entrepriseLocale } = rattachement.rows[0];
     const isPlatformAdmin = user.is_platform_admin === true;
 
     // Le JWT porte entrepriseId/role/isPlatformAdmin en dur : une bascule de rôle ou du
@@ -216,7 +237,7 @@ router.post('/login', async (req, res) => {
     return res.json({
       token,
       user: { id: user.id, email: user.email, role, createdAt: user.created_at, isPlatformAdmin },
-      entreprise: { id: entrepriseId, nom: entrepriseNom },
+      entreprise: { id: entrepriseId, nom: entrepriseNom, devise: entrepriseDevise, locale: entrepriseLocale },
     });
   } catch (err) {
     console.error('[login]', err);
@@ -231,7 +252,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom
+  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom, e.devise, e.locale
    FROM users u
    JOIN entreprise_utilisateurs eu ON eu.user_id = u.id
    JOIN entreprises e ON e.id = eu.entreprise_id
@@ -246,7 +267,7 @@ router.get('/me', authRequired, async (req, res) => {
     const row = result.rows[0];
 return res.json({
   user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, mfaEnabled: row.mfa_enabled, isPlatformAdmin: row.is_platform_admin === true },
-  entreprise: { id: row.entreprise_id, nom: row.entreprise_nom },
+  entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, devise: row.devise, locale: row.locale },
 });
   } catch (err) {
     console.error('[me]', err);
