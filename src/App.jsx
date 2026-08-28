@@ -4938,14 +4938,16 @@ function HarvestsModule({ farmId }) {
 }
 
 function AIAssistantModule({ farmId, activated }) {
+  const { t } = useTranslation();
+  const { fmtMoney, fmtDate } = useLocale();
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('Posez une question sur votre exploitation et je vous répondrai à partir des données enregistrées.');
+  const [answer, setAnswer] = useState(() => t('assistant.initialAnswer'));
   const [facts, setFacts] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const monthLabel = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      const monthLabel = fmtDate(new Date(), { month: 'long', year: 'numeric' });
       try {
         const [parcellesData, stocksData, ventesData, financesData] = await Promise.all([
           activated.cultures ? getParcelles() : Promise.resolve({ parcelles: [] }),
@@ -5000,73 +5002,70 @@ function AIAssistantModule({ farmId, activated }) {
     e.preventDefault();
     const q = question.trim().toLowerCase();
     if (!facts) {
-      setAnswer('Les données sont encore en cours de chargement. Veuillez patienter un instant.');
+      setAnswer(t('assistant.loadingAnswer'));
       return;
     }
 
-    if (/bénéfice|profit|benefice|gains/.test(q)) {
-      setAnswer(`Votre bénéfice pour ${facts.monthLabel} est estimé à ${facts.benefit.toLocaleString('fr-FR')} FCFA (${facts.revenues.toLocaleString('fr-FR')} FCFA de revenus, ${facts.expenses.toLocaleString('fr-FR')} FCFA de dépenses).`);
+    if (/b[ée]n[ée]fice|profit|gains?/.test(q)) {
+      setAnswer(t('assistant.answerBenefice', { month: facts.monthLabel, benefit: fmtMoney(facts.benefit), revenues: fmtMoney(facts.revenues), expenses: fmtMoney(facts.expenses) }));
       return;
     }
 
-    if (/sac|aliment|stock/.test(q)) {
-      const units = facts.foodStock > 1 ? 'sacs' : 'sac';
-      setAnswer(`Il reste ${facts.foodStock.toLocaleString('fr-FR')} ${units} d’aliments en stock.`);
+    if (/sacs?|aliment|feed|bags?|stock/.test(q)) {
+      setAnswer(t('assistant.answerStock', { count: facts.foodStock }));
       return;
     }
 
-    if (/arroser|arros|parcelle|eau/.test(q)) {
+    if (/arros|parcelle|plot|eau|water/.test(q)) {
       if (facts.parcelsToWater.length === 0) {
-        setAnswer('Aucune parcelle ne nécessite un arrosage pour le moment.');
+        setAnswer(t('assistant.answerNoWater'));
       } else {
-        const names = facts.parcelsToWater.map(p => p.nom).join(', ');
-        setAnswer(`Les parcelles à arroser sont : ${names}.`);
+        setAnswer(t('assistant.answerWater', { names: facts.parcelsToWater.map(p => p.nom).join(', ') }));
       }
       return;
     }
 
-    if (/client|achete|achats|plus/.test(q)) {
+    if (/client|customer|ach[eè]te|achats|buy|plus|most/.test(q)) {
       if (facts.bestClient) {
-        setAnswer(`${facts.bestClient.nom} est le client qui a le plus dépensé avec ${facts.bestClient.total.toLocaleString('fr-FR')} FCFA.`);
+        setAnswer(t('assistant.answerBestClient', { name: facts.bestClient.nom, total: fmtMoney(facts.bestClient.total) }));
       } else {
-        setAnswer('Aucun client n’a encore d’historique d’achat enregistré.');
+        setAnswer(t('assistant.answerNoClient'));
       }
       return;
     }
 
-    if (/prévois|prévoir|prévision|dépenses|mois prochain|prochain/.test(q)) {
-      const forecast = Math.max(0, facts.expenses * 1.08);
-      setAnswer(`Sur la base des dépenses du mois actuel, je prévois environ ${forecast.toLocaleString('fr-FR')} FCFA de dépenses pour le mois prochain.`);
+    if (/pr[ée]vo|pr[ée]vision|forecast|d[ée]penses?|expense|mois prochain|next month|prochain/.test(q)) {
+      setAnswer(t('assistant.answerForecast', { amount: fmtMoney(Math.max(0, facts.expenses * 1.08)) }));
       return;
     }
 
-    setAnswer('Je peux répondre à des questions sur votre bénéfice, les stocks d’aliments, les parcelles à arroser, le client le plus acheteur ou les dépenses à prévoir.');
+    setAnswer(t('assistant.answerFallback'));
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>Assistant IA agricole</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>{t('assistant.title')}</div>
         <div style={{ fontSize: 13.5, color: COLORS.inkSoft, marginBottom: 12 }}>
-          Posez une question comme “Quel est mon bénéfice ce mois-ci ?” ou “Quelle parcelle doit être arrosée ?”.
+          {t('assistant.hint')}
         </div>
         <form onSubmit={askAssistant} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Field label="Votre question" placeholder="Ex : Quel est mon bénéfice ce mois-ci ?" value={question} onChange={e => setQuestion(e.target.value)} />
-          <Button variant="green" type="submit" disabled={!loaded}><Search size={15} /> Demander</Button>
+          <Field label={t("assistant.questionLabel")} placeholder={t("assistant.questionPlaceholder")} value={question} onChange={e => setQuestion(e.target.value)} />
+          <Button variant="green" type="submit" disabled={!loaded}><Search size={15} /> {t('assistant.ask')}</Button>
         </form>
       </Card>
       <Card>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Réponse</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('assistant.answerTitle')}</div>
         <div style={{ fontSize: 14, color: COLORS.ink, lineHeight: 1.6 }}>{answer}</div>
       </Card>
       <Card>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Exemples de questions</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('assistant.examplesTitle')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
-          <div>• Quel est mon bénéfice ce mois-ci ?</div>
-          <div>• Combien de sacs d’aliments reste-t-il ?</div>
-          <div>• Quelle parcelle doit être arrosée ?</div>
-          <div>• Quel client achète le plus ?</div>
-          <div>• Prévois mes dépenses du mois prochain.</div>
+          <div>• {t('assistant.example1')}</div>
+          <div>• {t('assistant.example2')}</div>
+          <div>• {t('assistant.example3')}</div>
+          <div>• {t('assistant.example4')}</div>
+          <div>• {t('assistant.example5')}</div>
         </div>
       </Card>
     </div>
@@ -5074,6 +5073,8 @@ function AIAssistantModule({ farmId, activated }) {
 }
 
 function ForecastingModule({ farmId, activated }) {
+  const { t } = useTranslation();
+  const { fmtMoney, fmtNumber } = useLocale();
   const [forecast, setForecast] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -5139,22 +5140,22 @@ function ForecastingModule({ farmId, activated }) {
   }, [farmId, activated]);
 
   if (!loaded || !forecast) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Préparation des prévisions…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('forecast.loading')}</div>;
   }
 
   const items = [
-    { label: 'Ventes prévues', value: `${forecast.nextSales.toLocaleString('fr-FR')} FCFA`, tone: 'green' },
-    { label: 'Dépenses prévues', value: `${forecast.nextExpenses.toLocaleString('fr-FR')} FCFA`, tone: 'red' },
-    { label: 'Récoltes prévues', value: `${forecast.nextHarvests.toLocaleString('fr-FR')} kg`, tone: 'ochre' },
-    { label: 'Consommation d’aliments prévue', value: `${forecast.nextFeed.toLocaleString('fr-FR')} kg`, tone: 'blue' },
-    { label: 'Bénéfice prévu', value: `${forecast.nextProfit.toLocaleString('fr-FR')} FCFA`, tone: forecast.nextProfit >= 0 ? 'green' : 'red' },
+    { label: t('forecast.nextSales'), value: fmtMoney(forecast.nextSales), tone: 'green' },
+    { label: t('forecast.nextExpenses'), value: fmtMoney(forecast.nextExpenses), tone: 'red' },
+    { label: t('forecast.nextHarvests'), value: `${fmtNumber(forecast.nextHarvests)} kg`, tone: 'ochre' },
+    { label: t('forecast.nextFeed'), value: `${fmtNumber(forecast.nextFeed)} kg`, tone: 'blue' },
+    { label: t('forecast.nextProfit'), value: fmtMoney(forecast.nextProfit), tone: forecast.nextProfit >= 0 ? 'green' : 'red' },
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>Prévisions de performance</div>
-        <div style={{ fontSize: 13.5, color: COLORS.inkSoft }}>Basées sur les tendances récentes et les données enregistrées.</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>{t('forecast.title')}</div>
+        <div style={{ fontSize: 13.5, color: COLORS.inkSoft }}>{t('forecast.subtitle')}</div>
       </Card>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
         {items.map(item => {
@@ -5174,18 +5175,21 @@ function ForecastingModule({ farmId, activated }) {
         })}
       </div>
       <Card>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Note de prévision</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('forecast.noteTitle')}</div>
         <div style={{ fontSize: 13.5, color: COLORS.inkSoft, lineHeight: 1.6 }}>
-          L’humidité moyenne des parcelles est de {forecast.avgParcelleHumidity.toFixed(0)}% et les clients ont déjà généré {forecast.clientSpend.toLocaleString('fr-FR')} FCFA de chiffre d’affaires historique. Ces éléments servent à ajuster la projection du mois prochain.
+          {t('forecast.note', { humidity: forecast.avgParcelleHumidity.toFixed(0), clientSpend: fmtMoney(forecast.clientSpend) })}
         </div>
       </Card>
     </div>
   );
 }
 
-const REPORT_PERIOD_LABELS = { jour: 'Journalier', semaine: 'Hebdomadaire', mois: 'Mensuel', annee: 'Annuel' };
+const REPORT_PERIODS = ['jour', 'semaine', 'mois', 'annee'];
 
 function ReportsModule({ farmId, activated }) {
+  const { t } = useTranslation();
+  const { fmtMoney, fmtNumber, fmtDate } = useLocale();
+  const periodLabel = (p) => t(`reports.period.${p}`, { defaultValue: p });
   const [period, setPeriod] = useState('jour');
   const [raw, setRaw] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -5223,7 +5227,7 @@ function ReportsModule({ farmId, activated }) {
   }, [raw, period]);
 
   if (!loaded || !filtered) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Préparation du rapport…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('reports.loading')}</div>;
   }
 
   const totalVentes = filtered.ventes.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
@@ -5235,10 +5239,10 @@ function ReportsModule({ farmId, activated }) {
     const printWindow = window.open('', '_blank', 'width=900,height=1000');
     if (!printWindow) return;
     const row = (cols) => `<tr>${cols.map(c => `<td>${c}</td>`).join('')}</tr>`;
-    const rowsVentes = filtered.ventes.map(r => row([r.date, r.partenaire, r.produit, r.quantite, `${(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA`])).join('') || '<tr><td colspan="5">Aucune vente</td></tr>';
-    const rowsAchats = filtered.achats.map(r => row([r.date, r.partenaire, r.produit, r.quantite, `${(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA`])).join('') || '<tr><td colspan="5">Aucun achat</td></tr>';
-    const rowsRecoltes = filtered.recoltes.map(r => row([r.date, r.parcelle, r.culture, `${r.quantite} kg`])).join('') || '<tr><td colspan="4">Aucune récolte</td></tr>';
-    printWindow.document.write(`<!doctype html><html><head><title>Rapport ${REPORT_PERIOD_LABELS[period]}</title>
+    const rowsVentes = filtered.ventes.map(r => row([fmtDate(r.date), r.partenaire, r.produit, r.quantite, fmtMoney(r.quantite * r.prixUnitaire)])).join('') || `<tr><td colspan="5">${t('reports.noVente')}</td></tr>`;
+    const rowsAchats = filtered.achats.map(r => row([fmtDate(r.date), r.partenaire, r.produit, r.quantite, fmtMoney(r.quantite * r.prixUnitaire)])).join('') || `<tr><td colspan="5">${t('reports.noAchat')}</td></tr>`;
+    const rowsRecoltes = filtered.recoltes.map(r => row([fmtDate(r.date), r.parcelle, r.culture, `${r.quantite} kg`])).join('') || `<tr><td colspan="4">${t('reports.noRecolte')}</td></tr>`;
+    printWindow.document.write(`<!doctype html><html><head><title>${t('reports.pdfTitle', { period: periodLabel(period) })}</title>
       <style>
         body{font-family:Arial,sans-serif;padding:28px;color:#1f2937}
         h1{margin-bottom:4px} h2{margin-top:26px;font-size:16px}
@@ -5248,17 +5252,17 @@ function ReportsModule({ farmId, activated }) {
         .card{border:1px solid #ddd;border-radius:8px;padding:10px 14px;min-width:140px}
         .card span{display:block;font-size:11px;color:#6b7280;margin-bottom:3px}
       </style></head><body>
-      <h1>Rapport ${REPORT_PERIOD_LABELS[period]} — YEELEN AgriConnect</h1>
-      <div style="font-size:12.5px;color:#6b7280">Généré le ${new Date().toLocaleString('fr-FR')}</div>
+      <h1>${t('reports.pdfHeading', { period: periodLabel(period) })}</h1>
+      <div style="font-size:12.5px;color:#6b7280">${t('reports.pdfGeneratedAt', { date: fmtDate(new Date(), { dateStyle: 'medium', timeStyle: 'short' }) })}</div>
       <div class="summary">
-        <div class="card"><span>Ventes</span><strong>${totalVentes.toLocaleString('fr-FR')} FCFA</strong></div>
-        <div class="card"><span>Achats</span><strong>${totalAchats.toLocaleString('fr-FR')} FCFA</strong></div>
-        <div class="card"><span>Bénéfice</span><strong>${benefice.toLocaleString('fr-FR')} FCFA</strong></div>
-        <div class="card"><span>Récoltes</span><strong>${totalRecoltes.toLocaleString('fr-FR')} kg</strong></div>
+        <div class="card"><span>${t('reports.cardVentes')}</span><strong>${fmtMoney(totalVentes)}</strong></div>
+        <div class="card"><span>${t('reports.cardAchats')}</span><strong>${fmtMoney(totalAchats)}</strong></div>
+        <div class="card"><span>${t('reports.cardBenefice')}</span><strong>${fmtMoney(benefice)}</strong></div>
+        <div class="card"><span>${t('reports.cardRecoltes')}</span><strong>${totalRecoltes.toLocaleString()} kg</strong></div>
       </div>
-      <h2>Ventes</h2><table><thead><tr><th>Date</th><th>Client</th><th>Produit</th><th>Qté</th><th>Total</th></tr></thead><tbody>${rowsVentes}</tbody></table>
-      <h2>Achats</h2><table><thead><tr><th>Date</th><th>Fournisseur</th><th>Produit</th><th>Qté</th><th>Total</th></tr></thead><tbody>${rowsAchats}</tbody></table>
-      <h2>Récoltes</h2><table><thead><tr><th>Date</th><th>Parcelle</th><th>Culture</th><th>Quantité</th></tr></thead><tbody>${rowsRecoltes}</tbody></table>
+      <h2>${t('reports.pdfSectionVentes')}</h2><table><thead><tr><th>${t('common.date')}</th><th>${t('reports.colClient')}</th><th>${t('reports.colProduit')}</th><th>${t('devis.colQte')}</th><th>${t('common.total')}</th></tr></thead><tbody>${rowsVentes}</tbody></table>
+      <h2>${t('reports.pdfSectionAchats')}</h2><table><thead><tr><th>${t('common.date')}</th><th>${t('reports.colFournisseur')}</th><th>${t('reports.colProduit')}</th><th>${t('devis.colQte')}</th><th>${t('common.total')}</th></tr></thead><tbody>${rowsAchats}</tbody></table>
+      <h2>${t('reports.pdfSectionRecoltes')}</h2><table><thead><tr><th>${t('common.date')}</th><th>${t('reports.colParcelle')}</th><th>${t('reports.colCulture')}</th><th>${t('reports.colQuantite')}</th></tr></thead><tbody>${rowsRecoltes}</tbody></table>
       </body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 300);
@@ -5266,10 +5270,10 @@ function ReportsModule({ farmId, activated }) {
 
   const exportToExcel = () => {
     const rows = [
-      ['Type', 'Date', 'Partenaire', 'Produit', 'Quantité', 'Montant'],
-      ...filtered.ventes.map(r => ['Vente', r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
-      ...filtered.achats.map(r => ['Achat', r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
-      ...filtered.recoltes.map(r => ['Récolte', r.date, r.parcelle, r.culture, Number(r.quantite) || 0, '']),
+      [t('reports.csvType'), t('common.date'), t('reports.csvPartenaire'), t('reports.colProduit'), t('reports.colQuantite'), t('common.amount')],
+      ...filtered.ventes.map(r => [t('reports.csvRowVente'), r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
+      ...filtered.achats.map(r => [t('reports.csvRowAchat'), r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
+      ...filtered.recoltes.map(r => [t('reports.csvRowRecolte'), r.date, r.parcelle, r.culture, Number(r.quantite) || 0, '']),
     ];
 
     const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
@@ -5277,7 +5281,7 @@ function ReportsModule({ farmId, activated }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `rapport-${REPORT_PERIOD_LABELS[period].toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `${t('reports.csvFilename')}-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -5287,15 +5291,15 @@ function ReportsModule({ farmId, activated }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Rapports automatiques</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('reports.title')}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {Object.keys(REPORT_PERIOD_LABELS).map(p => (
+          {REPORT_PERIODS.map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{
               padding: '8px 14px', borderRadius: 999, border: `1px solid ${period === p ? COLORS.green : COLORS.border}`,
               background: period === p ? COLORS.greenSoft : COLORS.surfaceAlt, color: period === p ? COLORS.green : COLORS.inkSoft,
               fontWeight: 600, cursor: 'pointer', fontSize: 13
             }}>
-              {REPORT_PERIOD_LABELS[p]}
+              {periodLabel(p)}
             </button>
           ))}
         </div>
@@ -5303,26 +5307,26 @@ function ReportsModule({ farmId, activated }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Ventes</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{totalVentes.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardVentes')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>Achats</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{totalAchats.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardAchats')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
         </Card>
         <Card style={{ background: benefice >= 0 ? COLORS.blueSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: benefice >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>Bénéfice</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: benefice >= 0 ? COLORS.blue : COLORS.red }}>{benefice.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontSize: 12, color: benefice >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardBenefice')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: benefice >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(benefice)}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>Récoltes</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{totalRecoltes.toLocaleString('fr-FR')} kg</div>
+          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardRecoltes')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{fmtNumber(totalRecoltes)} kg</div>
         </Card>
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <Button variant="green" onClick={generatePdf}><Download size={15} /> Télécharger le rapport {REPORT_PERIOD_LABELS[period].toLowerCase()} (PDF)</Button>
-        <Button variant="blue" onClick={exportToExcel}><Download size={15} /> Exporter en CSV</Button>
+        <Button variant="green" onClick={generatePdf}><Download size={15} /> {t('reports.downloadPdf', { period: periodLabel(period).toLowerCase() })}</Button>
+        <Button variant="blue" onClick={exportToExcel}><Download size={15} /> {t('reports.exportCsv')}</Button>
       </div>
     </div>
   );
