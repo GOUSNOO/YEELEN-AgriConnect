@@ -57,10 +57,10 @@ export async function login(email, password, mfaCode) {
 }
 
 export async function register(email, password, extra) {
-  const { nomEntreprise, typeCompte, siret } = extra || {};
+  const { nomEntreprise, typeCompte, siret, devise, locale } = extra || {};
   return request('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret }),
+    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret, devise, locale }),
   });
 }
 
