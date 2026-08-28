@@ -312,6 +312,23 @@
       "Reçu": "Received"
     }
   },
+  "compta": {
+    "totalVentes": "Total sales",
+    "totalAchats": "Total purchases",
+    "solde": "Balance",
+    "historiqueBtn": "History of edits and deletions",
+    "type": "Type",
+    "detail": "Details",
+    "emptyLedger": "No transactions recorded.",
+    "vente": "Sale",
+    "achat": "Purchase",
+    "historiqueEmpty": "No edits or deletions recorded.",
+    "supprime": "Deleted",
+    "modifie": "Edited",
+    "parUtilisateur": "by {{email}}",
+    "utilisateurInconnu": "unknown user",
+    "raison": "Reason: {{raison}}"
+  },
   "nav": {
     "accueil": "Home",
     "calendar": "Calendar",

@@ -3447,6 +3447,8 @@ function LivraisonsTab({ farmId }) {
 }
 
 function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', remoteVentes, remoteAchats, remoteHistorique }) {
+  const { t } = useTranslation();
+  const { fmtMoney, fmtDate } = useLocale();
   const [localVentes] = useTable(farmId, remoteVentes ? '__unused-ventes' : ventesKey, []);
   const [localAchats] = useTable(farmId, remoteAchats ? '__unused-achats' : achatsKey, []);
   const [fetchedVentes, setFetchedVentes] = useState([]);
@@ -3498,23 +3500,23 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Total ventes</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{totalVentes.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalVentes')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>Total achats</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{totalAchats.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalAchats')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
         </Card>
         <Card style={{ background: solde >= 0 ? COLORS.blueSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: solde >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>Solde</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: solde >= 0 ? COLORS.blue : COLORS.red }}>{solde.toLocaleString('fr-FR')} FCFA</div>
+          <div style={{ fontSize: 12, color: solde >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.solde')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: solde >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(solde)}</div>
         </Card>
       </div>
 
       {/* Bouton d'accès au journal complet des modifications/suppressions */}
       {remoteHistorique && (
         <Button variant="outline" onClick={openHistorique} style={{ alignSelf: 'flex-start' }}>
-          <ClipboardList size={15} /> Historique des modifications et suppressions
+          <ClipboardList size={15} /> {t('compta.historiqueBtn')}
         </Button>
       )}
 
@@ -3522,24 +3524,24 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>Date</th><th>Type</th><th>Détail</th><th style={{ textAlign: 'right' }}>Montant</th>
+              <th>{t('common.date')}</th><th>{t('compta.type')}</th><th>{t('compta.detail')}</th><th style={{ textAlign: 'right' }}>{t('common.amount')}</th>
             </tr>
           </thead>
           <tbody>
             {ledger.length === 0 && (
-              <tr><td colSpan={4} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>Aucune transaction enregistrée.</td></tr>
+              <tr><td colSpan={4} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>{t('compta.emptyLedger')}</td></tr>
             )}
             {ledger.map(l => (
               <tr key={l.type + l.id}>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(l.date)}</td>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{fmtDate(l.date)}</td>
                 <td>
                   {l.type === 'Vente'
-                    ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowUpCircle size={13} /> Vente</span>
-                    : <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowDownCircle size={13} /> Achat</span>}
+                    ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowUpCircle size={13} /> {t('compta.vente')}</span>
+                    : <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowDownCircle size={13} /> {t('compta.achat')}</span>}
                 </td>
                 <td>{l.produit} — {l.partenaire} ({l.quantite})</td>
                 <td style={{ textAlign: 'right', fontWeight: 600, color: l.montant >= 0 ? COLORS.green : COLORS.red }}>
-                  {l.montant >= 0 ? '+' : ''}{l.montant.toLocaleString('fr-FR')} FCFA
+                  {l.montant >= 0 ? '+' : ''}{fmtMoney(l.montant)}
                 </td>
               </tr>
             ))}
@@ -3551,13 +3553,13 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       {historiqueOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>Historique des modifications et suppressions</div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>{t('compta.historiqueBtn')}</div>
             {historiqueLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
-                <Loader2 size={15} className="spin" /> Chargement...
+                <Loader2 size={15} className="spin" /> {t('common.loading')}
               </div>
             ) : historiqueData.length === 0 ? (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune modification ou suppression enregistrée.</div>
+              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('compta.historiqueEmpty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {historiqueData.map(h => {
@@ -3565,22 +3567,22 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
                   return (
                     <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>
-                        <Badge tone={h.action === 'suppression' ? 'red' : 'blue'}>{h.action === 'suppression' ? 'Supprimé' : 'Modifié'}</Badge>
-                        {' '}par {h.utilisateurEmail || 'utilisateur inconnu'}
+                        <Badge tone={h.action === 'suppression' ? 'red' : 'blue'}>{h.action === 'suppression' ? t('compta.supprime') : t('compta.modifie')}</Badge>
+                        {' '}{t('compta.parUtilisateur', { email: h.utilisateurEmail || t('compta.utilisateurInconnu') })}
                       </div>
                       {values && (
                         <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 3 }}>
-                          {values.produit} — {values.partenaire} ({values.quantite} × {values.prixUnitaire?.toLocaleString('fr-FR')} FCFA)
+                          {values.produit} — {values.partenaire} ({values.quantite} × {fmtMoney(values.prixUnitaire)})
                         </div>
                       )}
-                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{new Date(h.date).toLocaleString('fr-FR')}</div>
-                      <div style={{ fontSize: 13, marginTop: 4 }}>Raison : {h.raison}</div>
+                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{fmtDate(h.date, { dateStyle: 'short', timeStyle: 'short' })}</div>
+                      <div style={{ fontSize: 13, marginTop: 4 }}>{t('compta.raison', { raison: h.raison })}</div>
                     </div>
                   );
                 })}
               </div>
             )}
-            <Button variant="ghost" onClick={() => setHistoriqueOpen(false)} style={{ marginTop: 14 }}>Fermer</Button>
+            <Button variant="ghost" onClick={() => setHistoriqueOpen(false)} style={{ marginTop: 14 }}>{t('common.close')}</Button>
           </div>
         </div>
       )}

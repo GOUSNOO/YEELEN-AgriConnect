@@ -312,6 +312,23 @@
       "Reçu": "Reçu"
     }
   },
+  "compta": {
+    "totalVentes": "Total ventes",
+    "totalAchats": "Total achats",
+    "solde": "Solde",
+    "historiqueBtn": "Historique des modifications et suppressions",
+    "type": "Type",
+    "detail": "Détail",
+    "emptyLedger": "Aucune transaction enregistrée.",
+    "vente": "Vente",
+    "achat": "Achat",
+    "historiqueEmpty": "Aucune modification ou suppression enregistrée.",
+    "supprime": "Supprimé",
+    "modifie": "Modifié",
+    "parUtilisateur": "par {{email}}",
+    "utilisateurInconnu": "utilisateur inconnu",
+    "raison": "Raison : {{raison}}"
+  },
   "nav": {
     "accueil": "Accueil",
     "calendar": "Calendrier",
