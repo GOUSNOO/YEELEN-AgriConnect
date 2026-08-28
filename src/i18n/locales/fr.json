@@ -705,6 +705,27 @@
       "deleteError": "Impossible de supprimer le tag."
     }
   },
+  "observations": {
+    "loading": "Chargement des observations…",
+    "errorTitle": "Erreur de chargement",
+    "journalTitle": "Journal des observations",
+    "add": "Ajouter une observation",
+    "empty": "Aucune observation enregistrée.",
+    "createTitle": "Nouvelle observation",
+    "editTitle": "Modifier l'observation",
+    "description": "Description",
+    "localisation": "Localisation",
+    "update": "Mettre à jour",
+    "create": "Créer",
+    "loadError": "Impossible de charger les observations.",
+    "descriptionRequise": "La description est requise.",
+    "updated": "Observation mise à jour.",
+    "created": "Observation créée.",
+    "saveError": "Échec de l'enregistrement de l'observation.",
+    "confirmDelete": "Supprimer cette observation ? Cette action est irréversible.",
+    "deleted": "Observation supprimée.",
+    "deleteError": "Impossible de supprimer l'observation."
+  },
   "calendar": {
     "loading": "Chargement du calendrier…",
     "planTitle": "Planifier une activité",

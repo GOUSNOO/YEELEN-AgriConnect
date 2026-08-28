@@ -3,7 +3,13 @@
 import React from 'react';
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+// Initialise i18next et force le français pour que les t('…') du composant rendent
+// les libellés attendus par les assertions (le détecteur de langue choisirait 'en'
+// dans jsdom, dont navigator.language vaut en-US).
+import i18n from '../i18n/index.js';
 import { ObservationListView } from './ObservationListView';
+
+beforeAll(() => i18n.changeLanguage('fr'));
 import { getObservations, createObservation, updateObservation, deleteObservation } from '../lib/api.js';
 
 jest.mock('../lib/api.js', () => ({

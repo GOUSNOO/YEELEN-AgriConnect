@@ -705,6 +705,27 @@
       "deleteError": "Could not delete the tag."
     }
   },
+  "observations": {
+    "loading": "Loading observations…",
+    "errorTitle": "Loading error",
+    "journalTitle": "Observation log",
+    "add": "Add an observation",
+    "empty": "No observations recorded.",
+    "createTitle": "New observation",
+    "editTitle": "Edit observation",
+    "description": "Description",
+    "localisation": "Location",
+    "update": "Update",
+    "create": "Create",
+    "loadError": "Could not load observations.",
+    "descriptionRequise": "The description is required.",
+    "updated": "Observation updated.",
+    "created": "Observation created.",
+    "saveError": "Failed to save the observation.",
+    "confirmDelete": "Delete this observation? This action cannot be undone.",
+    "deleted": "Observation deleted.",
+    "deleteError": "Could not delete the observation."
+  },
   "calendar": {
     "loading": "Loading calendar…",
     "planTitle": "Schedule an activity",
