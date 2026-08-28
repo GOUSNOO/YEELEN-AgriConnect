@@ -155,44 +155,46 @@ function ParcelMapTab({ parcelles }) {
 }
 
 function EnvironnementTab({ farmId }) {
+  const { t } = useTranslation();
   const [env, setEnv] = useState({ temperature: 28, humidite: 61 });
   useEffect(() => {
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setEnv(prev => ({
         temperature: Math.max(18, Math.min(38, prev.temperature + (Math.random() - 0.5) * 1.2)),
         humidite: Math.max(30, Math.min(90, prev.humidite + (Math.random() - 0.5) * 4)),
       }));
     }, 6000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, []);
   const alerte = env.temperature > 33 || env.humidite > 80;
+  const days = t('common.days', { returnObjects: true });
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Ambiance du poulailler</div>
-        <Badge tone={alerte ? 'red' : 'green'}>{alerte ? 'Conditions à surveiller' : 'Conditions normales'}</Badge>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('poulailler.ambianceTitle')}</div>
+        <Badge tone={alerte ? 'red' : 'green'}>{alerte ? t('poulailler.conditionsWatch') : t('poulailler.conditionsNormal')}</Badge>
       </div>
       <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0' }}>
-        <GaugeDial value={env.temperature} max={45} label="Température" unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
-        <GaugeDial value={env.humidite} label="Humidité" unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
+        <GaugeDial value={env.temperature} max={45} label={t('poulailler.temperature')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
+        <GaugeDial value={env.humidite} label={t('poulailler.humidite')} unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Évolution de la température</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.tempEvolution')}</div>
           <MiniChart data={[
-            { label: 'Lun', value: 27 },
-            { label: 'Mar', value: 29 },
-            { label: 'Mer', value: 31 },
-            { label: 'Jeu', value: 28 },
+            { label: days[0], value: 27 },
+            { label: days[1], value: 29 },
+            { label: days[2], value: 31 },
+            { label: days[3], value: 28 },
           ]} color={COLORS.ochre} />
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Évolution de l'humidité</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.humidityEvolution')}</div>
           <MiniChart data={[
-            { label: 'Lun', value: 62 },
-            { label: 'Mar', value: 58 },
-            { label: 'Mer', value: 54 },
-            { label: 'Jeu', value: 60 },
+            { label: days[0], value: 62 },
+            { label: days[1], value: 58 },
+            { label: days[2], value: 54 },
+            { label: days[3], value: 60 },
           ]} color={COLORS.blue} />
         </div>
       </div>
@@ -3341,6 +3343,7 @@ function renderInvoiceHtml(row, partnerLabel) {
 
 const STATUTS = ['En attente', 'En cours', 'Livré'];
 function LivraisonsTab({ farmId }) {
+  const { t } = useTranslation();
   const [rows, setRows] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [form, setForm] = useState({ client: '', produit: '', quantite: '' });
@@ -3365,23 +3368,23 @@ function LivraisonsTab({ farmId }) {
       const { livraison } = await createPoulaillerLivraison({ client: form.client, produit: form.produit, quantite: Number(form.quantite || 0) });
       if (livraison) {
         setRows(r => [livraison, ...r]);
-        notifySuccess('Livraison planifiée.');
+        notifySuccess(t('poulailler.livraisonPlanifiee'));
       }
     } catch (err) {
       console.error('[LivraisonsTab add]', err);
-      notifyError(err, "Impossible d'enregistrer la livraison.");
+      notifyError(err, t('poulailler.livraisonAddError'));
     }
     setForm({ client: '', produit: '', quantite: '' });
   };
   const remove = async (id, produit) => {
-    if (!window.confirm(`Supprimer la livraison « ${produit} » ?`)) return;
+    if (!window.confirm(t('poulailler.confirmDeleteLivraison', { produit }))) return;
     try {
       await deletePoulaillerLivraison(id);
       setRows(r => r.filter(x => x.id !== id));
-      notifySuccess('Livraison supprimée.');
+      notifySuccess(t('poulailler.livraisonDeleted'));
     } catch (err) {
       console.error('[LivraisonsTab remove]', err);
-      notifyError(err, 'Impossible de supprimer la livraison.');
+      notifyError(err, t('poulailler.livraisonDeleteError'));
     }
   };
   const setStatut = async (id, statut) => {
@@ -3390,31 +3393,31 @@ function LivraisonsTab({ farmId }) {
       await updatePoulaillerLivraison(id, { statut });
     } catch (err) {
       console.error('[LivraisonsTab setStatut]', err);
-      notifyError(err, 'Le statut n\'a pas pu être mis à jour.');
+      notifyError(err, t('poulailler.statutUpdateError'));
     }
   };
 
   const toneFor = (s) => s === 'Livré' ? 'green' : s === 'En cours' ? 'blue' : 'ochre';
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement des livraisons…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('poulailler.livraisonsLoading')}</div>;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Client" placeholder="Nom" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} />
-          <Field label="Produit" placeholder="Ex: Poulets" value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
-          <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
-          <Button variant="ochre" type="submit"><Plus size={15} /> Planifier</Button>
+          <Field label={t('poulailler.client')} placeholder={t('poulailler.clientPlaceholder')} value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} />
+          <Field label={t('poulailler.produit')} placeholder={t('poulailler.produitPlaceholder')} value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
+          <Field label={t('poulailler.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
+          <Button variant="ochre" type="submit"><Plus size={15} /> {t('poulailler.planifier')}</Button>
         </form>
       </Card>
       <Card style={{ padding: 0 }}>
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>Date</th><th>Client</th><th>Produit</th><th>Qté</th><th>Statut</th><th></th>
+              <th>{t('common.date')}</th><th>{t('poulailler.client')}</th><th>{t('poulailler.produit')}</th><th>{t('poulailler.colQte')}</th><th>{t('common.status')}</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -3429,7 +3432,7 @@ function LivraisonsTab({ farmId }) {
                     fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: 999,
                     padding: '4px 8px', background: COLORS.surfaceAlt, color: COLORS.ink
                   }}>
-                    {STATUTS.map(s => <option key={s}>{s}</option>)}
+                    {STATUTS.map(s => <option key={s} value={s}>{t(`poulailler.statut.${s}`, { defaultValue: s })}</option>)}
                   </select>
                 </td>
                 <td style={{ textAlign: 'right' }}>
@@ -3592,6 +3595,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
 
 
 function PoultryMonitoringTab({ farmId }) {
+  const { t } = useTranslation();
   const todayValue = () => {
     const d = new Date();
     const y = d.getFullYear();
@@ -3624,22 +3628,25 @@ function PoultryMonitoringTab({ farmId }) {
       const { entry } = await createPoulaillerSuivi({ date: form.date, type: form.type, quantite: Number(form.quantity), detail: form.detail });
       if (entry) {
         setRecords(prev => [{ id: entry.id, date: entry.date, type: entry.type, quantity: entry.quantite, detail: entry.detail }, ...prev]);
-        notifySuccess('Entrée enregistrée.');
+        notifySuccess(t('poulailler.entrySaved'));
       }
     } catch (err) {
       console.error('[PoultryMonitoringTab addRecord]', err);
-      notifyError(err, "Impossible d'enregistrer cette entrée.");
+      notifyError(err, t('poulailler.entrySaveError'));
     }
     setForm({ date: todayValue(), type: form.type, quantity: '', detail: '' });
   };
 
+  // tone + clé d'unité ; libellé et unité affichés via t('poulailler.type.*'/'poulailler.unit.*')
   const typeMeta = {
-    mortalite: { label: 'Mortalité', tone: 'red', unit: 'têtes' },
-    naissance: { label: 'Naissance', tone: 'green', unit: 'poussins' },
-    vaccination: { label: 'Vaccination', tone: 'blue', unit: 'têtes' },
-    alimentation: { label: 'Consommation d’aliments', tone: 'ochre', unit: 'kg' },
-    oeufs: { label: 'Production d’œufs', tone: 'green', unit: 'œufs' },
+    mortalite: { tone: 'red', unit: 'tetes' },
+    naissance: { tone: 'green', unit: 'poussins' },
+    vaccination: { tone: 'blue', unit: 'tetes' },
+    alimentation: { tone: 'ochre', unit: 'kg' },
+    oeufs: { tone: 'green', unit: 'oeufs' },
   };
+  const typeLabel = (type) => t(`poulailler.type.${type}`, { defaultValue: type });
+  const unitLabel = (type, fallback = 'unite') => t(`poulailler.unit.${typeMeta[type]?.unit || fallback}`);
 
   const summary = records.reduce((acc, item) => {
     if (item.type === 'mortalite') acc.mortalite += item.quantity;
@@ -3650,50 +3657,50 @@ function PoultryMonitoringTab({ farmId }) {
     return acc;
   }, { mortalite: 0, naissance: 0, vaccination: 0, alimentation: 0, oeufs: 0 });
 
-  const quantityLabel = typeMeta[form.type]?.unit || 'unité';
+  const quantityLabel = unitLabel(form.type);
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>Chargement du suivi…</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('poulailler.suiviLoading')}</div>;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>Suivi quotidien du poulailler</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('poulailler.suiviTitle')}</div>
         <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Date" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-          <Select label="Type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
-            <option value="mortalite">Mortalité</option>
-            <option value="naissance">Naissance</option>
-            <option value="vaccination">Vaccination</option>
-            <option value="alimentation">Consommation d’aliments</option>
-            <option value="oeufs">Production d’œufs</option>
+          <Field label={t('common.date')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+          <Select label={t('compta.type')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
+            <option value="mortalite">{typeLabel('mortalite')}</option>
+            <option value="naissance">{typeLabel('naissance')}</option>
+            <option value="vaccination">{typeLabel('vaccination')}</option>
+            <option value="alimentation">{typeLabel('alimentation')}</option>
+            <option value="oeufs">{typeLabel('oeufs')}</option>
           </Select>
-          <Field label={`Quantité (${quantityLabel})`} type="number" placeholder="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} />
-          <Field label="Détail" placeholder="Ex: lot A" value={form.detail} onChange={e => setForm({ ...form, detail: e.target.value })} />
-          <Button variant="ochre" type="submit"><Plus size={15} /> Ajouter</Button>
+          <Field label={t('poulailler.quantiteAvecUnite', { unit: quantityLabel })} type="number" placeholder="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} />
+          <Field label={t('poulailler.detail')} placeholder={t('poulailler.detailPlaceholder')} value={form.detail} onChange={e => setForm({ ...form, detail: e.target.value })} />
+          <Button variant="ochre" type="submit"><Plus size={15} /> {t('common.add')}</Button>
         </form>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>Mortalité</div>
+          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryMortalite')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Naissances</div>
+          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryNaissances')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{summary.naissance}</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>Vaccinations</div>
+          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryVaccinations')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{summary.vaccination}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>Aliments</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} kg</div>
+          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryAliments')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('poulailler.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Œufs</div>
+          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryOeufs')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{summary.oeufs}</div>
         </Card>
       </div>
@@ -3702,20 +3709,20 @@ function PoultryMonitoringTab({ farmId }) {
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Quantité</th>
-              <th>Détail</th>
+              <th>{t('common.date')}</th>
+              <th>{t('compta.type')}</th>
+              <th>{t('poulailler.quantite')}</th>
+              <th>{t('poulailler.detail')}</th>
             </tr>
           </thead>
           <tbody>
             {records.length === 0 ? (
-              <tr><td colSpan="4" style={{ color: COLORS.inkSoft }}>Aucune donnée enregistrée.</td></tr>
+              <tr><td colSpan="4" style={{ color: COLORS.inkSoft }}>{t('poulailler.suiviEmpty')}</td></tr>
             ) : records.map(item => (
               <tr key={item.id}>
                 <td>{formatDateFr(item.date)}</td>
-                <td><Badge tone={typeMeta[item.type]?.tone || 'green'}>{typeMeta[item.type]?.label || item.type}</Badge></td>
-                <td>{item.quantity} {typeMeta[item.type]?.unit || 'u'}</td>
+                <td><Badge tone={typeMeta[item.type]?.tone || 'green'}>{typeLabel(item.type)}</Badge></td>
+                <td>{item.quantity} {unitLabel(item.type, 'u')}</td>
                 <td>{item.detail || '—'}</td>
               </tr>
             ))}
@@ -4113,6 +4120,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
 }
 
 function PoulaillerModule({ farmId, highlightProduitId }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState('environnement');
 
   // Voir le commentaire équivalent dans CulturesModule.
@@ -4120,13 +4128,13 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
     if (highlightProduitId) setTab('stocks');
   }, [highlightProduitId]);
   const tabs = [
-    { id: 'environnement', label: 'Ambiance', icon: Thermometer },
-    { id: 'suivi', label: 'Suivi', icon: ClipboardList },
-    { id: 'stocks', label: 'Stocks', icon: Package },
-    { id: 'ventes', label: 'Ventes', icon: TrendingUp },
-    { id: 'achats', label: 'Achats', icon: ShoppingCart },
-    { id: 'livraisons', label: 'Livraisons', icon: Truck },
-    { id: 'comptabilite', label: 'Comptabilité', icon: Wallet },
+    { id: 'environnement', label: t('poulailler.tabAmbiance'), icon: Thermometer },
+    { id: 'suivi', label: t('poulailler.tabSuivi'), icon: ClipboardList },
+    { id: 'stocks', label: t('poulailler.tabStocks'), icon: Package },
+    { id: 'ventes', label: t('poulailler.tabVentes'), icon: TrendingUp },
+    { id: 'achats', label: t('poulailler.tabAchats'), icon: ShoppingCart },
+    { id: 'livraisons', label: t('poulailler.tabLivraisons'), icon: Truck },
+    { id: 'comptabilite', label: t('poulailler.tabComptabilite'), icon: Wallet },
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
