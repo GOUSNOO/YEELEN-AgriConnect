@@ -11,7 +11,7 @@ const router = express.Router();
 
 const RECOLTE_COLUMNS = `
   id, user_id AS "userId", date_recolte AS "date", parcelle, parcelle_id AS "parcelleId", culture,
-  quantite, qualite, destination, created_at AS "createdAt"
+  quantite::float8 AS quantite, qualite, destination, created_at AS "createdAt"
 `;
 
 /**

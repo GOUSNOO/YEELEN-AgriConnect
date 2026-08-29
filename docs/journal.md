@@ -649,3 +649,25 @@ reconstruit et OK, base de dev `agri_app` intacte, `agri_app_test` supprimée ap
 Vérifs : `npm run test:integration` 45/45 vert, `npm test` unitaire vert, backend Docker
 reconstruit et OK, base de dev `agri_app` intacte (3 banques / 0 équipements inchangés),
 `agri_app_test` supprimée après.
+### Tests d'intégration — extension Observations + Récoltes (2026-08-30)
+
+45 → 53 tests, 9 → 11 fichiers.
+
+- **`observations.test.js`** — CRUD (`notes` requises → 400, `localisation`/`dateObservation`
+  conservées, `PUT` partiel via COALESCE laisse `localisation` inchangée, `PUT`/`DELETE`
+  id inexistant → 404, `DELETE` retire de la liste) ; `POST` en `ouvrier` → 201 (module
+  volontairement ouvert à tous les rôles) ; isolation multi-tenant.
+- **`recoltes.test.js`** — `GET`/`POST` uniquement (pas de `PUT`/`DELETE`) : golden path,
+  chaque champ requis manquant → 400, `quantite: 0` accepté (≠ `''`/`undefined`),
+  `GET` scopé ; **validation d'appartenance de `parcelleId`** — parcelle de la même
+  entreprise → liée, parcelle étrangère ou id bidon → `parcelleId: null` stocké
+  silencieusement (201, défense volontaire) ; isolation multi-tenant.
+
+- **Correctif trouvé par `recoltes.test.js`** : `RECOLTE_COLUMNS` renvoyait `quantite`
+  sans cast → chaîne JSON `"1200.00"` au lieu d'un nombre, contrairement à tous les autres
+  `*_COLUMNS` du code (`::float8` partout). Le frontend le contournait déjà avec
+  `Number(...)` systématiquement. Corrigé : `quantite::float8 AS quantite`.
+
+Vérifs : `npm run test:integration` 53/53 vert, `npm test` unitaire vert, backend Docker
+reconstruit et OK, base de dev `agri_app` intacte (1 observation / 1 récolte inchangées),
+`agri_app_test` supprimée après.
