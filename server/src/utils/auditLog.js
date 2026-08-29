@@ -32,6 +32,26 @@ export async function logAuditEvent({ entrepriseId = null, userId = null, email 
   }
 }
 
+// Compte les événements récents d'un email pour un ensemble d'actions donné — sert à
+// limiter le débit d'envoi/vérification des codes 2FA par email (cf. routes/auth.js,
+// routes/mfa.js). En cas d'erreur SQL on renvoie 0 : le rate-limiting ne doit jamais
+// empêcher une connexion légitime à cause d'un souci d'écriture/lecture du journal.
+export async function countRecentAuditEvents(email, actions, sinceMinutes = 60) {
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM audit_log
+       WHERE LOWER(email) = LOWER($1)
+         AND action = ANY($2)
+         AND created_at > now() - ($3 || ' minutes')::interval`,
+      [email, actions, String(sinceMinutes)]
+    );
+    return result.rows[0]?.n ?? 0;
+  } catch (err) {
+    console.error('[countRecentAuditEvents]', err);
+    return 0;
+  }
+}
+
 // Récupère le journal d'audit d'une entreprise, du plus récent au plus ancien.
 // Utilisé par GET /api/auth/audit-log (réservé aux admins) — `limit` évite de charger
 // un historique potentiellement énorme d'un coup.

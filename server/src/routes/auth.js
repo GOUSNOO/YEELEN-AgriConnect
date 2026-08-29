@@ -13,7 +13,9 @@ import { env } from '../config/env.js';
 import { pool } from '../db.js';
 import { authRequired } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
-import { logAuditEvent, getAuditLog } from '../utils/auditLog.js';
+import { logAuditEvent, getAuditLog, countRecentAuditEvents } from '../utils/auditLog.js';
+import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfaCode.js';
+import { sendMfaCodeEmail } from '../services/mailer.js';
 
 const router = express.Router();
 
@@ -195,17 +197,46 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Identifiants invalides.' });
     }
 
-    // Étape MFA si activée sur le compte — TOTP (Google Authenticator-like) via otplib,
-    // distinct du MFA par email/SMS (voir mailer.js/sendMfaCodeEmail). Si aucun code
-    // n'est fourni, on répond 200 (pas 401) avec mfaRequired:true : c'est une étape
-    // intermédiaire normale du flux, pas un échec d'authentification.
+    // Étape MFA si activée sur le compte. Deux méthodes possibles selon user.mfa_method :
+    //   - 'totp'  : application d'authentification (otplib), le code vient de l'appareil ;
+    //   - 'email' : code envoyé par email, dérivé/vérifié via utils/mfaCode.js (aucun
+    //     stockage). Sans code fourni, on répond 200 (pas 401) avec mfaRequired:true —
+    //     étape intermédiaire normale du flux — et, en mode 'email', on envoie le code.
     if (user.mfa_enabled) {
+      const mfaMethod = user.mfa_method === 'email' ? 'email' : 'totp';
+
       if (!mfaCode) {
+        if (mfaMethod === 'email') {
+          const recent = await countRecentAuditEvents(user.email, ['mfa_email_code_sent'], 60);
+          if (recent >= 5) {
+            return res.status(429).json({ error: "Trop d'envois de code. Réessayez dans une heure." });
+          }
+          const code = generateEmailCode(user.id, user.email);
+          await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'mfa_email_code_sent', req });
+          try {
+            await sendMfaCodeEmail(user.email, code, requestContext(req));
+          } catch (mailErr) {
+            console.error('[login] envoi code MFA email', mailErr);
+          }
+        }
         await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'login_mfa_required', req });
-        return res.status(200).json({ mfaRequired: true });
+        return res.status(200).json({ mfaRequired: true, mfaMethod });
       }
-      const { verify } = require('otplib');
-      const { valid: mfaValid } = await verify({ secret: user.mfa_secret, token: mfaCode });
+
+      // Limite de tentatives de vérification, tous modes confondus (parité avec la
+      // limite `code_check` de l'ERP de référence).
+      const failedRecent = await countRecentAuditEvents(user.email, ['login_failed_mfa'], 60);
+      if (failedRecent >= 5) {
+        return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans une heure.' });
+      }
+
+      let mfaValid;
+      if (mfaMethod === 'email') {
+        mfaValid = verifyEmailCode(user.id, user.email, mfaCode);
+      } else {
+        const { verify } = require('otplib');
+        ({ valid: mfaValid } = await verify({ secret: user.mfa_secret, token: mfaCode }));
+      }
       if (!mfaValid) {
         await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'login_failed_mfa', req });
         return res.status(401).json({ error: 'Code MFA invalide.' });
@@ -252,7 +283,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom, e.devise, e.locale
+  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.mfa_method, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom, e.devise, e.locale
    FROM users u
    JOIN entreprise_utilisateurs eu ON eu.user_id = u.id
    JOIN entreprises e ON e.id = eu.entreprise_id
@@ -266,7 +297,7 @@ router.get('/me', authRequired, async (req, res) => {
 
     const row = result.rows[0];
 return res.json({
-  user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, mfaEnabled: row.mfa_enabled, isPlatformAdmin: row.is_platform_admin === true },
+  user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, mfaEnabled: row.mfa_enabled, mfaMethod: row.mfa_method || 'totp', isPlatformAdmin: row.is_platform_admin === true },
   entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, devise: row.devise, locale: row.locale },
 });
   } catch (err) {

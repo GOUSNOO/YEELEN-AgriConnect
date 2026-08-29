@@ -26,8 +26,7 @@ import {
   getPoulaillerMouvements, createPoulaillerMouvement, updatePoulaillerMouvement, deletePoulaillerMouvement,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
-  setupMfa, verifyMfa, disableMfa,
-  getMfaCompanyMethod, setMfaCompanyMethod,
+  setupMfa, verifyMfa, disableMfa, resendMfaEmail,
   getSalaries, createSalarie, updateSalarie, deleteSalarie,
   getPostes, getDepartements,
   getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
@@ -4247,6 +4246,7 @@ function LoginScreen({ onAuth }) {
   const [error, setError] = useState('');
   const [mfaStep, setMfaStep] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
+  const [mfaMethod, setMfaMethod] = useState('totp');
 
   const submit = async (e) => {
     e.preventDefault();
@@ -4260,6 +4260,7 @@ function LoginScreen({ onAuth }) {
       const result = await onAuth(mode, email, password, extra);
       if (result?.mfaRequired) {
         setMfaStep(true);
+        if (result.mfaMethod) setMfaMethod(result.mfaMethod);
       }
     } catch (err) {
       setError(err.message || (mode === 'login' ? t('auth.loginFailed') : t('auth.registerFailed')));
@@ -4291,7 +4292,7 @@ function LoginScreen({ onAuth }) {
               {t('auth.mfaTitle')}
             </div>
             <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
-              {t('auth.mfaHint')}
+              {mfaMethod === 'email' ? t('auth.mfaHintEmail') : t('auth.mfaHint')}
             </div>
             <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Field label={t('auth.mfaCode')} placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
@@ -7571,24 +7572,18 @@ function ProfilModule({ role }) {
   const [qrCode, setQrCode] = useState(null);
   const [code, setCode] = useState('');
   const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaMethod, setMfaMethod] = useState('totp');       // méthode active une fois la 2FA en place
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [sentTo, setSentTo] = useState('');
-  const [mfaMode, setMfaMode] = useState(null); // 'totp' | 'email' | 'sms'
-
-  const [companyMethod, setCompanyMethod] = useState('totp');
-  const [methodBusy, setMethodBusy] = useState(false);
-  const [methodError, setMethodError] = useState('');
-  const [methodSuccess, setMethodSuccess] = useState('');
+  const [mfaMode, setMfaMode] = useState(null);             // étape d'activation en cours : 'totp' | 'email'
+  const [chosenMethod, setChosenMethod] = useState('totp'); // méthode retenue avant de lancer l'activation
 
   useEffect(() => {
     getMe().then(data => {
       if (data.user?.mfaEnabled) setMfaEnabled(true);
-    }).catch(() => {});
-
-    getMfaCompanyMethod().then(data => {
-      setCompanyMethod(data.method);
+      if (data.user?.mfaMethod) setMfaMethod(data.user.mfaMethod);
     }).catch(() => {});
   }, []);
 
@@ -7597,7 +7592,7 @@ function ProfilModule({ role }) {
     setError('');
     setSuccess('');
     try {
-      const data = await setupMfa();
+      const data = await setupMfa(chosenMethod);
       setMfaMode(data.method);
       if (data.method === 'totp') {
         setQrCode(data.qrCode);
@@ -7611,14 +7606,29 @@ function ProfilModule({ role }) {
     }
   };
 
+  const resendEmailCode = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const data = await resendMfaEmail();
+      if (data?.sentTo) setSentTo(data.sentTo);
+      setSuccess(t('profil.mfaResent'));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const confirmSetup = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError('');
     setSuccess('');
     try {
-      await verifyMfa(code);
+      await verifyMfa(code, mfaMode);
       setMfaEnabled(true);
+      setMfaMethod(mfaMode);
       setQrCode(null);
       setMfaMode(null);
       setCode('');
@@ -7637,6 +7647,8 @@ function ProfilModule({ role }) {
     try {
       await disableMfa();
       setMfaEnabled(false);
+      setMfaMethod('totp');
+      setChosenMethod('totp');
       setSuccess(t('profil.mfaDisabled'));
     } catch (err) {
       setError(err.message);
@@ -7645,25 +7657,9 @@ function ProfilModule({ role }) {
     }
   };
 
-  const changeCompanyMethod = async (method) => {
-    setMethodBusy(true);
-    setMethodError('');
-    setMethodSuccess('');
-    try {
-      await setMfaCompanyMethod(method);
-      setCompanyMethod(method);
-      setMethodSuccess(t('profil.companyMethodUpdated'));
-    } catch (err) {
-      setMethodError(err.message);
-    } finally {
-      setMethodBusy(false);
-    }
-  };
-
   const methodLabels = {
     totp: t('profil.methodTotp'),
     email: t('profil.methodEmail'),
-    sms: t('profil.methodSms'),
   };
 
   return (
@@ -7703,54 +7699,6 @@ function ProfilModule({ role }) {
         </div>
       </Card>
 
-      {isAdmin && (
-        <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
-            {t('profil.companyMethodTitle')}
-          </div>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
-            {t('profil.companyMethodHint')}
-          </div>
-
-          {methodError && (
-            <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
-              {methodError}
-            </div>
-          )}
-          {methodSuccess && (
-            <div style={{ background: COLORS.greenSoft || '#e6f4ea', color: COLORS.green, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
-              {methodSuccess}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {['totp', 'email', 'sms'].map(m => (
-              <button
-                key={m}
-                onClick={() => changeCompanyMethod(m)}
-                disabled={methodBusy || companyMethod === m}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px', borderRadius: 10, cursor: methodBusy ? 'default' : 'pointer',
-                  border: `1px solid ${companyMethod === m ? COLORS.ink : COLORS.border}`,
-                  background: companyMethod === m ? COLORS.ink : '#fff',
-                  color: companyMethod === m ? '#fff' : COLORS.ink,
-                  fontSize: 13.5, fontWeight: 600,
-                }}
-              >
-                {methodLabels[m]}
-                {companyMethod === m && <Check size={15} />}
-              </button>
-            ))}
-          </div>
-          {companyMethod === 'sms' && (
-            <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 10 }}>
-              {t('profil.smsNote')}
-            </div>
-          )}
-        </Card>
-      )}
-
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
           {t('profil.securityTitle')}
@@ -7771,9 +7719,32 @@ function ProfilModule({ role }) {
         )}
 
         {!mfaMode && !mfaEnabled && (
-          <Button variant="green" onClick={startSetup} disabled={busy}>
-            {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('profil.mfaEnable')}
-          </Button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('profil.mfaChooseMethod')}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {['totp', 'email'].map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setChosenMethod(m)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: `1px solid ${chosenMethod === m ? COLORS.ink : COLORS.border}`,
+                    background: chosenMethod === m ? COLORS.ink : '#fff',
+                    color: chosenMethod === m ? '#fff' : COLORS.ink,
+                    fontSize: 13.5, fontWeight: 600,
+                  }}
+                >
+                  {methodLabels[m]}
+                  {chosenMethod === m && <Check size={15} />}
+                </button>
+              ))}
+            </div>
+            <Button variant="green" onClick={startSetup} disabled={busy} style={{ alignSelf: 'flex-start' }}>
+              {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('profil.mfaEnable')}
+            </Button>
+          </div>
         )}
 
         {mfaMode === 'totp' && qrCode && (
@@ -7791,7 +7762,7 @@ function ProfilModule({ role }) {
           </div>
         )}
 
-        {(mfaMode === 'email' || mfaMode === 'sms') && (
+        {mfaMode === 'email' && (
           <div>
             <div style={{ fontSize: 13, marginBottom: 10 }}>
               {t('profil.mfaCodeSent', { sentTo })}
@@ -7802,13 +7773,21 @@ function ProfilModule({ role }) {
                 {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaConfirm')}
               </Button>
             </form>
+            <button type="button" onClick={resendEmailCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13, marginTop: 8, padding: 0 }}>
+              {t('profil.mfaResend')}
+            </button>
           </div>
         )}
 
         {mfaEnabled && (
-          <Button variant="ghost" onClick={handleDisable} disabled={busy}>
-            {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaDisable')}
-          </Button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+              {t('profil.mfaMethodActive', { method: methodLabels[mfaMethod] || mfaMethod })}
+            </div>
+            <Button variant="ghost" onClick={handleDisable} disabled={busy} style={{ alignSelf: 'flex-start' }}>
+              {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaDisable')}
+            </Button>
+          </div>
         )}
       </Card>
     </div>

@@ -94,6 +94,7 @@
     "registerFailed": "Sign-up failed.",
     "mfaTitle": "Two-step verification",
     "mfaHint": "Enter the 6-digit code from your authenticator app.",
+    "mfaHintEmail": "Enter the 6-digit code we just sent to your email.",
     "mfaCode": "Verification code",
     "mfaSubmit": "Verify",
     "mfaInvalid": "Invalid code."
@@ -1200,22 +1201,21 @@
     "preferencesSaved": "Preferences updated.",
     "previewMoney": "Amount preview",
     "previewDate": "Date preview",
-    "companyMethodTitle": "Verification method (business)",
-    "companyMethodHint": "Choose how your employees will receive their two-step verification code. This setting applies to the whole business.",
-    "companyMethodUpdated": "Verification method updated for the whole business.",
-    "smsNote": "Note: SMS sending is not yet connected to a provider; for now codes only appear in the server logs.",
     "methodTotp": "Authenticator app (QR code)",
     "methodEmail": "Code by email",
-    "methodSms": "Code by SMS",
     "securityTitle": "Account security",
     "securityHint": "Add an extra verification step at sign-in.",
+    "mfaChooseMethod": "Choose your verification method:",
     "mfaEnable": "Enable two-step verification",
     "mfaDisable": "Disable two-step verification",
     "mfaEnabled": "Two-factor authentication enabled.",
     "mfaDisabled": "Two-factor authentication disabled.",
+    "mfaMethodActive": "Active method: {{method}}.",
     "mfaScanHint": "Scan this code with your authenticator app, then enter the generated code:",
     "mfaQrAlt": "MFA QR code",
     "mfaConfirm": "Confirm activation",
-    "mfaCodeSent": "A code has been sent to {{sentTo}}. Enter it below:"
+    "mfaCodeSent": "A code has been sent to {{sentTo}}. Enter it below:",
+    "mfaResend": "Resend code",
+    "mfaResent": "A new code has been sent to your email."
   }
 }

@@ -15,10 +15,22 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Envoie le code à usage unique de la double authentification (MFA par email/SMS,
-// distinct de la méthode TOTP qui n'a pas besoin d'email) — le code lui-même est
-// généré et sa durée de vie vérifiée côté appelant (routes/mfa.js), pas ici.
-export async function sendMfaCodeEmail(to, code) {
+// Envoie le code à usage unique de la double authentification par email (distinct de la
+// méthode TOTP, qui n'a pas besoin d'email). Le code lui-même est dérivé et vérifié côté
+// appelant (utils/mfaCode.js), pas ici. `context` (optionnel) porte les infos de la
+// tentative de connexion (appareil / navigateur / IP) pour aider l'utilisateur à repérer
+// une tentative qui ne viendrait pas de lui — même intention que l'email de code de l'ERP
+// de référence.
+export async function sendMfaCodeEmail(to, code, context = {}) {
+  const { device, browser, ip } = context;
+  const contextLine =
+    device || browser || ip
+      ? `<p style="color: #888; font-size: 12px;">Tentative de connexion${
+          browser ? ` depuis ${browser}` : ''
+        }${device ? ` sur ${device}` : ''}${
+          ip ? ` (IP ${ip})` : ''
+        }. Si ce n'est pas vous, ne communiquez ce code à personne et changez votre mot de passe.</p>`
+      : '';
   await transporter.sendMail({
     from: `"YEELEN AgriConnect" <${process.env.EMAIL_USER}>`,
     to,
@@ -29,6 +41,7 @@ export async function sendMfaCodeEmail(to, code) {
         <p>Votre code de vérification est :</p>
         <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${code}</p>
         <p style="color: #888; font-size: 13px;">Ce code expire dans 10 minutes.</p>
+        ${contextLine}
       </div>
     `,
   });

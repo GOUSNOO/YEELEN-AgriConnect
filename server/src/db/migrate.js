@@ -562,6 +562,13 @@ ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS salarie_non_requis BOOLEAN NOT 
 -- propre entreprise) — un utilisateur normal parmi d'autres, pas un rôle à part.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- ═══════════════ 2FA : méthode choisie par l'utilisateur (TOTP ou code par email) ═══════════════
+-- La 2FA par email n'a besoin d'aucune colonne de code : le code est *dérivé* à la
+-- demande (HOTP sur un pas de 10 min, clé HMAC(JWT_SECRET, userId+email)) puis vérifié
+-- côté serveur — cf. server/src/utils/mfaCode.js. Seule la méthode retenue est stockée.
+-- 'totp' par défaut : les comptes ayant déjà activé la 2FA (via mfa_secret) sont en TOTP.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_method VARCHAR(10) NOT NULL DEFAULT 'totp';
+
 CREATE TABLE IF NOT EXISTS feedback (
   id            SERIAL PRIMARY KEY,
   entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,

@@ -365,24 +365,22 @@ export async function safeRequest(path, options = {}) {
 // ─────────────────────────────────────────────────────────────────────
 // MFA
 // ─────────────────────────────────────────────────────────────────────
-export async function setupMfa() {
-  return request('/mfa/setup', { method: 'POST' });
+// method : 'totp' (QR à scanner) ou 'email' (code envoyé par email). Chaque utilisateur
+// choisit sa méthode à l'activation — il n'y a pas de réglage 2FA au niveau entreprise.
+export async function setupMfa(method = 'totp') {
+  return request('/mfa/setup', { method: 'POST', body: JSON.stringify({ method }) });
 }
 
-export async function verifyMfa(code) {
-  return request('/mfa/verify', { method: 'POST', body: JSON.stringify({ code }) });
+export async function resendMfaEmail() {
+  return request('/mfa/resend', { method: 'POST' });
+}
+
+export async function verifyMfa(code, method = 'totp') {
+  return request('/mfa/verify', { method: 'POST', body: JSON.stringify({ code, method }) });
 }
 
 export async function disableMfa() {
   return request('/mfa/disable', { method: 'POST' });
-}
-
-export async function getMfaCompanyMethod() {
-  return request('/mfa/company-method', { method: 'GET' });
-}
-
-export async function setMfaCompanyMethod(method) {
-  return request('/mfa/company-method', { method: 'PUT', body: JSON.stringify({ method }) });
 }
 
 export async function getSalaries() {
