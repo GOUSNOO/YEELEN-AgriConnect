@@ -496,3 +496,34 @@ efface `.last_failure`. `find -mmin` confirmé supporté par le busybox de l'ima
 `RESTORE_TEST_INTERVAL_HOURS` peut être posé sur le service `backup` si besoin). Reste à
 faire : transformer les sentinelles en vraie alerte poussée (email/webhook) — reporté à
 quand l'hébergement + un SMTP existeront.
+### Nettoyage post-audit statique : code mort + trou i18n dates + imports inutilisés (2026-08-29)
+
+Suite à la passe de durcissement statique (pas de navigateur dispo cette session), trois
+points relevés puis traités :
+
+1. **Code mort supprimé** — `MovementTab` (~444 lignes) et son helper `renderInvoiceHtml`
+   (~26 lignes) dans `src/App.jsx`. Confirmé jamais rendu : les onglets « Ventes » de
+   Cultures/Poulailler passent par `VentesWithDevis` → `DevisModule` depuis longtemps, et
+   `MovementTab` n'apparaissait dans aucun JSX. Il traînait 12 occurrences de
+   `' FCFA'` / `toLocaleString('fr-FR')` en dur — sans impact car mort, mais autant les
+   faire disparaître. Net : `App.jsx` −489 / +15 lignes.
+
+2. **Trou i18n sur les dates** — `formatDateFr` / `formatDateTimeFr` (helpers de rendu
+   utilisés par de nombreuses tables) forçaient le format `fr-FR` quelle que soit la
+   locale de l'entreprise → une entreprise `en-US` voyait quand même `JJ/MM/AAAA`.
+   Réécrits pour déléguer à `fmtDate` (de `src/lib/locale.jsx`, fonction autonome au
+   niveau module, tenue à jour par `LocaleProvider` — appelable hors composant). Repli sur
+   la valeur brute conservé pour les entrées illisibles. Résultat : **plus aucune**
+   occurrence de `' FCFA'` / `toLocaleString('fr-FR')` dans `App.jsx`.
+
+3. **Warnings oxlint** — 11 imports inutilisés retirés de `App.jsx` (`Sun`,
+   `TrendingDown`, `Printer`, `createFinance`, `deleteFinance`,
+   `create/update/deleteCulturesMouvement`, `updateProduitCategorie`,
+   `create/update/deletePoulaillerMouvement`, `get{Poulailler,Cultures}MouvementHistorique`,
+   `mapUiRoleToBackend`) + variable morte `toneFor`. Certains n'étaient utilisés que par
+   `MovementTab`. Restent 2 warnings cosmétiques (paramètre `farmId` non utilisé dans
+   deux composants) — laissés tels quels, retirer un prop change le contrat du composant
+   pour un gain nul.
+
+Vérifs : `npx vite build` OK, racine `npm test` (6) vert, `oxlint` sans erreur. Backend
+non touché.

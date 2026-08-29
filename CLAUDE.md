@@ -148,7 +148,7 @@ Still not done: turning the sentinel files into a real push alert (email/webhook
 
 ### Frontend (`src/`)
 - `App.jsx` (4572 lines) is a single-file app containing most views, state, and async data-loading logic — mirrors the backend's flat-file style. Prefer small, targeted edits over broad rewrites; extraction into `src/components/`/`src/modules/` (e.g. `finances.jsx`, `ObservationListView.jsx`) is the existing pattern for pulling pieces out. Full component map (in file order — `App` at 4037 is the default-exported root shell; `ProfilModule` at 4353 is defined *after* `App` but referenced inside it, which works only because `function` declarations hoist):
-  - 64 `ParcelMapTab`, 127 `EnvironnementTab`, 174 `MovementTab` (generic sell/buy ledger, reused by Cultures & Poulailler)
+  - `ParcelMapTab`, `EnvironnementTab` (`MovementTab` + its `renderInvoiceHtml` helper were **deleted 2026-08-29** — confirmed-dead code, never rendered since Ventes tabs switched to `VentesWithDevis`/`DevisModule`; ~470 lines removed)
   - 553 `DevisModule`, 1057 `VentesWithDevis`, 1087 `AchatModule`, 1450 `StocksTab`, 1666 `LivraisonsTab`, 1772 `ComptabiliteTab`, 1915 `PoultryMonitoringTab`
   - 2050 `CulturesModule`, 2325 `PoulaillerModule`, 2368 `LoginScreen`, 2562 `OptionCard`, 2597 `AgriculturalCalendarModule`, 2801 `HarvestsModule`, 2950 `AIAssistantModule`, 3073 `ForecastingModule`, 3169 `ReportsModule`, 3304 `HomeOverview`
   - 3427 `EmployeesModule`, 3607 `NotificationsModule`, 3666 `ClientsModule`, 3852 `FournisseursModule`, 4024 `ModulesScreen`

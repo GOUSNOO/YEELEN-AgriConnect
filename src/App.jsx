@@ -3,33 +3,32 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
-import { useLocale, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES } from './lib/locale.jsx';
+import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES } from './lib/locale.jsx';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
-  Plus, Trash2, Sun, ToggleLeft, ToggleRight, Package, TrendingUp,
-  TrendingDown, ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
+  Plus, Trash2, ToggleLeft, ToggleRight, Package, TrendingUp,
+  ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
-  Search, Printer, FileText, Download, Users, Briefcase, Landmark, Bell,
+  Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
   Camera, Building2, User as UserIcon, Phone as PhoneIcon
 } from 'lucide-react';
 import {
-  clearToken, createFinance, deleteFinance,
+  clearToken,
   getFinances, getMe, getToken, login, register, setToken,
   getContacts, createContact, updateContact, deleteContact,
   getContactTags, createContactTag, deleteContactTag,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique,
-  getCulturesMouvements, createCulturesMouvement, updateCulturesMouvement, deleteCulturesMouvement,
+  getCulturesMouvements,
   getProduits, createProduit, updateProduit, deleteProduit, getProduitMouvements,
-  getProduitCategories, createProduitCategorie, updateProduitCategorie, deleteProduitCategorie,
-  getPoulaillerMouvements, createPoulaillerMouvement, updatePoulaillerMouvement, deletePoulaillerMouvement,
+  getProduitCategories, createProduitCategorie, deleteProduitCategorie,
+  getPoulaillerMouvements,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
   setupMfa, verifyMfa, disableMfa, resendMfaEmail,
   getSalaries, createSalarie, updateSalarie, deleteSalarie,
   getPostes, getDepartements,
-  getPoulaillerMouvementHistorique, getCulturesMouvementHistorique,
   getPoulaillerHistorique, getCulturesHistorique,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
@@ -50,7 +49,7 @@ import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
 import RhReferentiels from './components/RhReferentiels';
 import MonEspaceRh from './components/MonEspaceRh';
-import { ROLE_DEFINITIONS, mapBackendRoleToUi, mapUiRoleToBackend } from './components/roles.js';
+import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
 import { FinancesModule, BanquesModule } from './modules/finances.jsx';
 
@@ -198,452 +197,6 @@ function EnvironnementTab({ farmId }) {
         </div>
       </div>
     </Card>
-  );
-}
-
-// partnerType indique quelle liste charger : 'client' (pour les ventes) ou 'fournisseur' (pour les achats)
-function MovementTab({ farmId, storageKey, partnerLabel, partnerType, icon, accent, defaults, remote }) {
-  const [localRows, setLocalRows] = useTable(farmId, remote ? `__unused-${storageKey}` : storageKey, defaults);
-  const [remoteRows, setRemoteRows] = useState([]);
-  const [remoteLoaded, setRemoteLoaded] = useState(false);
-  const rows = remote ? remoteRows : localRows;
-  const setRows = remote ? setRemoteRows : setLocalRows;
-
-  // Liste des clients ou fournisseurs existants, pour le sélecteur du formulaire
-  const [partners, setPartners] = useState([]);
-
-const [historiqueVisible, setHistoriqueVisible] = useState(null); // id du mouvement dont on affiche l'historique
-  const [historiqueData, setHistoriqueData] = useState([]);
-
-  const showHistorique = async (row) => {
-    if (!remote?.historique) return;
-    try {
-      const data = await remote.historique(row.id);
-      setHistoriqueData(data.historique || []);
-      setHistoriqueVisible(row.id);
-    } catch (err) {
-      console.error('[MovementTab historique]', err);
-      notifyError(err, "Impossible de charger l'historique.");
-    }
-  };
-  
-  useEffect(() => {
-    if (!remote) return;
-    (async () => {
-      try {
-        const data = await remote.list();
-        setRemoteRows(data);
-      } catch (err) {
-        console.error('[MovementTab remote load]', err);
-      } finally {
-        setRemoteLoaded(true);
-      }
-    })();
-  }, [remote]);
-
-  // Charge la liste des clients ou fournisseurs selon partnerType, pour peupler le sélecteur
-  useEffect(() => {
-    if (!partnerType) return;
-    (async () => {
-      try {
-        if (partnerType === 'client' || partnerType === 'fournisseur') {
-          const { contacts } = await getContacts(partnerType);
-          setPartners(contacts || []);
-        }
-      } catch (err) {
-        console.error('[MovementTab partners load]', err);
-      }
-    })();
-  }, [partnerType]);
-
-  const [form, setForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
-  const [period, setPeriod] = useState('mois');
-  const [query, setQuery] = useState('');
-
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: '' });
-  const [editSubmitting, setEditSubmitting] = useState(false);
-
-  const save = async (e) => {
-    e.preventDefault();
-    if (!form.partenaire || !form.produit || form.quantite === '' || form.prixUnitaire === '') return;
-
-    const dateFr = form.date || new Date().toLocaleDateString('fr-FR');
-    const dateIso = dateFr.includes('/')
-      ? dateFr.split('/').reverse().join('-')
-      : dateFr;
-
-    const payload = {
-      date: remote ? dateIso : dateFr,
-      partenaire: form.partenaire,
-      produit: form.produit,
-      quantite: Number(form.quantite),
-      prixUnitaire: Number(form.prixUnitaire),
-      remise: Number(form.remise || 0),
-    };
-    if (remote) {
-      try {
-        const created = await remote.create(payload);
-        if (created) {
-          created.remise = payload.remise;
-          setRows(r => [created, ...r]);
-          notifySuccess('Enregistré.');
-        }
-      } catch (err) {
-        console.error('[MovementTab remote save]', err);
-        notifyError(err, "Impossible d'enregistrer.");
-        return;
-      }
-    } else {
-      setRows(r => [{ id: Date.now(), ...payload }, ...r]);
-    }
-    setForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: new Date().toLocaleDateString('fr-FR') });
-  };
-
-  const remove = async (id, produit) => {
-    if (!window.confirm(`Supprimer « ${produit} » ? Cette action est irréversible.`)) return;
-
-    let raison = null;
-    if (remote) {
-      raison = window.prompt('Raison de la suppression (obligatoire) :');
-      if (!raison || !raison.trim()) {
-        notifyError(new Error('Suppression annulée : une raison est requise.'));
-        return;
-      }
-    }
-
-    if (remote) {
-      try {
-        await remote.remove(id, raison);
-        notifySuccess('Supprimé.');
-      } catch (err) {
-        console.error('[MovementTab remote delete]', err);
-        notifyError(err, 'Impossible de supprimer.');
-        return;
-      }
-    }
-    setRows(r => r.filter(x => x.id !== id));
-  };
-
-  // Ouvre la fenêtre de modification d'une transaction existante
-  const startEdit = (row) => {
-    setEditingId(row.id);
-    setEditForm({
-      partenaire: row.partenaire,
-      produit: row.produit,
-      quantite: row.quantite,
-      prixUnitaire: row.prixUnitaire,
-      remise: row.remise != null ? row.remise : '',
-      // Reconvertit la date ISO (venant de l'API) en format français pour l'affichage dans le formulaire
-      date: remote && row.date && row.date.includes('-') ? String(row.date).slice(0, 10).split('-').reverse().join('/') : row.date,
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm({ partenaire: '', produit: '', quantite: '', prixUnitaire: '', remise: '', date: '' });
-  };
-
-  const saveEdit = async (e) => {
-    e.preventDefault();
-    if (!editForm.partenaire || !editForm.produit || editForm.quantite === '' || editForm.prixUnitaire === '') return;
-
-    // Si on modifie une transaction existante (remote), la raison est obligatoire
-    let raison = null;
-    if (remote) {
-      raison = window.prompt('Raison de la modification (obligatoire) :');
-      if (!raison || !raison.trim()) {
-        notifyError(new Error('Modification annulée : une raison est requise.'));
-        return;
-      }
-    }
-
-    const dateFr = editForm.date || new Date().toLocaleDateString('fr-FR');
-    const dateIso = dateFr.includes('/')
-      ? dateFr.split('/').reverse().join('-')
-      : dateFr;
-
-    const payload = {
-      date: remote ? dateIso : dateFr,
-      partenaire: editForm.partenaire,
-      produit: editForm.produit,
-      quantite: Number(editForm.quantite),
-      prixUnitaire: Number(editForm.prixUnitaire),
-      remise: Number(editForm.remise || 0),
-      raison: raison || undefined,
-    };
-
-    setEditSubmitting(true);
-    if (remote) {
-      try {
-        const updated = await remote.update(editingId, payload);
-        if (updated) {
-          updated.remise = payload.remise;
-          setRows(r => r.map(x => x.id === editingId ? updated : x));
-          notifySuccess('Transaction mise à jour.');
-        }
-      } catch (err) {
-        console.error('[MovementTab remote update]', err);
-        notifyError(err, 'Impossible de mettre à jour.');
-        setEditSubmitting(false);
-        return;
-      }
-    } else {
-      setRows(r => r.map(x => x.id === editingId ? { ...x, ...payload } : x));
-    }
-    setEditSubmitting(false);
-    cancelEdit();
-  };
-
-  const printInvoice = (row) => {
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
-    if (!printWindow) return;
-    printWindow.document.write(renderInvoiceHtml(row, partnerLabel));
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 250);
-  };
-
-  const lineTotal = (row) => {
-    return Math.max(0, (Number(row.quantite) || 0) * (Number(row.prixUnitaire) || 0) - (Number(row.remise) || 0));
-  };
-
-  const exportExcel = () => {
-    const header = ['Date', partnerLabel, 'Produit', 'Quantité', 'Prix unitaire', 'Remise', 'Total'];
-    const body = rows.map(r => [
-      r.date,
-      r.partenaire,
-      r.produit,
-      r.quantite,
-      r.prixUnitaire,
-      Number(r.remise || 0),
-      lineTotal(r),
-    ]);
-    const csv = [header, ...body].map(line => line.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
-    downloadFile(`${storageKey}.csv`, csv, 'text/csv;charset=utf-8;');
-  };
-
-  const exportPdf = () => {
-    const printWindow = window.open('', '_blank', 'width=900,height=1000');
-    if (!printWindow) return;
-    const content = rows.map(r => `<tr><td>${r.date}</td><td>${r.partenaire}</td><td>${r.produit}</td><td>${r.quantite}</td><td>${r.prixUnitaire.toLocaleString('fr-FR')}</td><td>${(Number(r.remise || 0)).toLocaleString('fr-FR')}</td><td>${lineTotal(r).toLocaleString('fr-FR')}</td></tr>`).join('');
-    printWindow.document.write(`<!doctype html><html><head><title>Export PDF</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left} th{background:#f7f7f7}</style></head><body><h2>Historique ${partnerLabel}</h2><table><thead><tr><th>Date</th><th>${partnerLabel}</th><th>Produit</th><th>Qté</th><th>Prix U.</th><th>Remise</th><th>Total</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 250);
-  };
-
-  const filteredRows = useMemo(() => {
-    return rows.filter(r => {
-      const okPeriod = matchesPeriod(r.date, period);
-      const queryText = `${r.partenaire} ${r.produit}`.toLowerCase();
-      const okQuery = queryText.includes(query.toLowerCase());
-      return okPeriod && (query === '' || okQuery);
-    });
-  }, [rows, period, query]);
-
-  const total = filteredRows.reduce((s, r) => s + lineTotal(r), 0);
-  const chartData = useMemo(() => {
-    const byDate = filteredRows.reduce((acc, row) => {
-      const key = row.date;
-      acc[key] = (acc[key] || 0) + lineTotal(row);
-      return acc;
-    }, {});
-    return Object.entries(byDate).slice(0, 8).map(([label, value]) => ({ label, value }));
-  }, [filteredRows]);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card>
-        <form onSubmit={save} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
-          <Field label="Date" type="date" value={form.date ? form.date.split('/').reverse().join('-') : ''} onChange={e => setForm({ ...form, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
-
-          {/* Si une liste de clients/fournisseurs existe, on propose un sélecteur ; sinon, champ texte libre en secours */}
-          {partners.length > 0 ? (
-            <Select label={partnerLabel} value={form.partenaire} onChange={e => setForm({ ...form, partenaire: e.target.value })}>
-              <option value="">Sélectionner...</option>
-              {partners.map(p => (
-                <option key={p.id} value={`${p.prenom ? p.prenom + ' ' : ''}${p.nom}`}>
-                  {p.prenom ? `${p.prenom} ${p.nom}` : p.nom}
-                </option>
-              ))}
-              <option value="__autre__">Autre (saisir un nom)</option>
-            </Select>
-          ) : (
-            <Field label={partnerLabel} placeholder="Nom" value={form.partenaire} onChange={e => setForm({ ...form, partenaire: e.target.value })} />
-          )}
-
-          {/* Si "Autre" est choisi dans le sélecteur, on affiche un champ texte pour saisir le nom manuellement */}
-          {partners.length > 0 && form.partenaire === '__autre__' && (
-            <Field label={`Nom du ${partnerLabel.toLowerCase()}`} placeholder="Nom" value="" onChange={e => setForm({ ...form, partenaire: e.target.value })} />
-          )}
-
-          <Field label="Produit" placeholder="Ex: Œufs" value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
-          <Field label="Quantité" type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
-          <Field label="Prix unitaire (FCFA)" type="number" placeholder="0" value={form.prixUnitaire} onChange={e => setForm({ ...form, prixUnitaire: e.target.value })} />
-          <Field label="Remise (FCFA)" type="number" placeholder="0" value={form.remise} onChange={e => setForm({ ...form, remise: e.target.value })} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant={accent} type="submit"><Plus size={15} /> Enregistrer</Button>
-          </div>
-        </form>
-      </Card>
-
-      <Card>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {['jour', 'semaine', 'mois', 'annee', 'tout'].map(opt => (
-              <button key={opt} onClick={() => setPeriod(opt)} style={{ padding: '7px 10px', borderRadius: 999, border: `1px solid ${period === opt ? COLORS.green : COLORS.border}`, background: period === opt ? COLORS.greenSoft : COLORS.surfaceAlt, color: period === opt ? COLORS.green : COLORS.inkSoft, fontWeight: 600, cursor: 'pointer' }}>
-                {opt === 'tout' ? 'Tout' : opt === 'jour' ? 'Jour' : opt === 'semaine' ? 'Semaine' : opt === 'mois' ? 'Mois' : 'Année'}
-              </button>
-            ))}
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '7px 10px', background: COLORS.surfaceAlt }}>
-            <Search size={14} color={COLORS.inkSoft} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Rechercher ${partnerLabel.toLowerCase()}`} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, minWidth: 180, color: COLORS.ink }} />
-          </label>
-        </div>
-      </Card>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        <Card>
-          <div style={{ fontSize: 12, color: COLORS.inkSoft, fontWeight: 600, marginBottom: 6 }}>Revenus filtrés</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700 }}>{total.toLocaleString('fr-FR')} FCFA</div>
-        </Card>
-        <Card>
-          <div style={{ fontSize: 12, color: COLORS.inkSoft, fontWeight: 600, marginBottom: 8 }}>Graphique des revenus</div>
-          <MiniChart data={chartData} color={COLORS.green} />
-        </Card>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button small variant={accent} onClick={exportExcel}><Download size={14} /> Export Excel</Button>
-        <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> Export PDF</Button>
-      </div>
-
-      <Card style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
-              <th>{partnerLabel}</th>
-              <th>Produit</th>
-              <th>Qté</th>
-              <th>Prix U.</th>
-              <th>Remise</th>
-              <th>Total</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRows.map(r => (
-              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{formatDateFr(r.date)}</td>
-                <td>{r.partenaire}</td>
-                <td>{r.produit}</td>
-                <td>{r.quantite}</td>
-                <td>{r.prixUnitaire.toLocaleString('fr-FR')}</td>
-                <td>{(Number(r.remise) || 0).toLocaleString('fr-FR')}</td>
-                <td style={{ fontWeight: 600 }}>{lineTotal(r).toLocaleString('fr-FR')}</td>
-                <td style={{ textAlign: 'right', paddingRight: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button onClick={() => startEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
-                    {remote?.historique && (
-                      <button onClick={() => showHistorique(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.ochre }}><ClipboardList size={15} /></button>
-                    )}
-                    <button onClick={() => printInvoice(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green }}><Printer size={15} /></button>
-                    <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          {filteredRows.length > 0 && (
-            <tfoot>
-              <tr style={{ borderTop: `2px solid ${COLORS.border}` }}>
-                <td colSpan={6} style={{ padding: '12px 16px', fontWeight: 600 }}>Total</td>
-                <td colSpan={2} style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{total.toLocaleString('fr-FR')} FCFA</td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </Card>
-
-      <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Historique complet</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-          {rows.length === 0 ? <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucun historique enregistré.</div> : rows.map(r => (
-            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
-              <span><strong>{r.partenaire}</strong> — {r.produit} ({r.quantite})</span>
-              <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateFr(r.date)} • {(r.quantite * r.prixUnitaire).toLocaleString('fr-FR')} FCFA</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-      {/* Popup affichant l'historique des modifications/suppressions d'un mouvement précis */}
-      {historiqueVisible && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueVisible(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 500, width: '90%', maxHeight: '70vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>Historique des modifications</div>
-            {historiqueData.length === 0 ? (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>Aucune modification enregistrée pour cette transaction.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {historiqueData.map(h => (
-                  <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 8 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>
-                      {h.action === 'modification' ? 'Modifié' : 'Supprimé'} par {h.utilisateurEmail || 'utilisateur inconnu'}
-                    </div>
-                    <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{new Date(h.date).toLocaleString('fr-FR')}</div>
-                    <div style={{ fontSize: 13, marginTop: 4 }}>Raison : {h.raison}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button variant="ghost" onClick={() => setHistoriqueVisible(null)} style={{ marginTop: 14 }}>Fermer</Button>
-          </div>
-        </div>
-      )}
-      {/* Fenêtre de modification d'une transaction existante, séparée du formulaire d'ajout */}
-      {editingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 560, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>Modifier la transaction</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
-            </div>
-            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
-                <Field label="Date" type="date" value={editForm.date ? editForm.date.split('/').reverse().join('-') : ''} onChange={e => setEditForm({ ...editForm, date: new Date(e.target.value).toLocaleDateString('fr-FR') })} />
-                {partners.length > 0 ? (
-                  <Select label={partnerLabel} value={editForm.partenaire} onChange={e => setEditForm({ ...editForm, partenaire: e.target.value })}>
-                    <option value="">Sélectionner...</option>
-                    {partners.map(p => (
-                      <option key={p.id} value={`${p.prenom ? p.prenom + ' ' : ''}${p.nom}`}>
-                        {p.prenom ? `${p.prenom} ${p.nom}` : p.nom}
-                      </option>
-                    ))}
-                    <option value="__autre__">Autre (saisir un nom)</option>
-                  </Select>
-                ) : (
-                  <Field label={partnerLabel} placeholder="Nom" value={editForm.partenaire} onChange={e => setEditForm({ ...editForm, partenaire: e.target.value })} />
-                )}
-                {partners.length > 0 && editForm.partenaire === '__autre__' && (
-                  <Field label={`Nom du ${partnerLabel.toLowerCase()}`} placeholder="Nom" value="" onChange={e => setEditForm({ ...editForm, partenaire: e.target.value })} />
-                )}
-                <Field label="Produit" placeholder="Ex: Œufs" value={editForm.produit} onChange={e => setEditForm({ ...editForm, produit: e.target.value })} />
-                <Field label="Quantité" type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} />
-                <Field label="Prix unitaire (FCFA)" type="number" placeholder="0" value={editForm.prixUnitaire} onChange={e => setEditForm({ ...editForm, prixUnitaire: e.target.value })} />
-                <Field label="Remise (FCFA)" type="number" placeholder="0" value={editForm.remise} onChange={e => setEditForm({ ...editForm, remise: e.target.value })} />
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <Button type="submit" variant="green" disabled={editSubmitting}>
-                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
-                </Button>
-                <Button type="button" onClick={cancelEdit}>Annuler</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -3347,17 +2900,19 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-// Formate une date ou un timestamp venant du serveur (ISO) en JJ/MM/AAAA pour l'affichage
+// Formate une date venant du serveur (ISO) selon la LOCALE de l'entreprise (fmtDate,
+// src/lib/locale.jsx) — plus de format fr-FR figé. Repli sur la valeur brute si illisible
+// (certains appels s'attendent à une chaîne vide plutôt qu'à un tiret).
 function formatDateFr(value) {
   const d = parseDate(value);
-  return d ? d.toLocaleDateString('fr-FR') : (value || '');
+  return d ? fmtDate(d, { dateStyle: 'short' }) : (value || '');
 }
 
-// Formate un timestamp serveur complet (date + heure) pour l'historique
+// Idem pour un timestamp complet (date + heure) affiché dans les historiques.
 function formatDateTimeFr(value) {
   if (!value) return '';
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('fr-FR');
+  return Number.isNaN(d.getTime()) ? String(value) : fmtDate(d, { dateStyle: 'short', timeStyle: 'short' });
 }
 
 function matchesPeriod(rowDate, period) {
@@ -3390,33 +2945,6 @@ function downloadFile(filename, content, type) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function renderInvoiceHtml(row, partnerLabel) {
-  const remise = Number(row.remise || 0);
-  const total = Math.max(0, row.quantite * row.prixUnitaire - remise);
-  return `
-    <html>
-      <head><title>Facture</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#1f2937}
-        .card{border:1px solid #d1d5db;padding:20px;border-radius:12px}
-        .row{display:flex;justify-content:space-between;margin:8px 0}
-        .title{font-size:24px;font-weight:700;margin-bottom:10px}
-      </style></head>
-      <body>
-        <div class="card">
-          <div class="title">Facture ${partnerLabel}</div>
-          <div class="row"><span>Date</span><strong>${row.date}</strong></div>
-          <div class="row"><span>${partnerLabel}</span><strong>${row.partenaire}</strong></div>
-          <div class="row"><span>Produit</span><strong>${row.produit}</strong></div>
-          <div class="row"><span>Quantité</span><strong>${row.quantite}</strong></div>
-          <div class="row"><span>Prix unitaire</span><strong>${row.prixUnitaire.toLocaleString('fr-FR')} FCFA</strong></div>
-          <div class="row"><span>Remise</span><strong>${remise.toLocaleString('fr-FR')} FCFA</strong></div>
-          <div class="row"><span>Total</span><strong>${total.toLocaleString('fr-FR')} FCFA</strong></div>
-        </div>
-      </body>
-    </html>`;
 }
 
 const STATUTS = ['En attente', 'En cours', 'Livré'];
@@ -3474,8 +3002,6 @@ function LivraisonsTab({ farmId }) {
       notifyError(err, t('poulailler.statutUpdateError'));
     }
   };
-
-  const toneFor = (s) => s === 'Livré' ? 'green' : s === 'En cours' ? 'blue' : 'ochre';
 
   if (!loaded) {
     return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('poulailler.livraisonsLoading')}</div>;
