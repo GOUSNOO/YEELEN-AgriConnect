@@ -36,23 +36,25 @@ export async function registerEntreprise(opts = {}) {
   };
 }
 
-// Crée un compte de connexion supplémentaire dans l'entreprise de `adminToken`
-// (via POST /api/salaries, branche createAccount) puis le connecte. Renvoie son token.
-export async function createEmployeeLogin(adminToken, role = 'ouvrier') {
+// Crée un compte de connexion + une fiche salarié dans l'entreprise de `adminToken`
+// (via POST /api/salaries, branche createAccount) puis connecte cet employé.
+// Renvoie { token, email, role, salarieId } — salarieId sert aux routes /salaries/:id/*.
+export async function createEmployeeLogin(adminToken, role = 'ouvrier', extra = {}) {
   const compteEmail = uniqueEmail(role);
   const password = 'Passw0rd!';
   const res = await request(app)
     .post('/api/salaries')
     .set('Authorization', `Bearer ${adminToken}`)
-    .send({ nom: 'Test', prenom: role, createAccount: true, compteEmail, password, role });
+    .send({ nom: 'Test', prenom: role, createAccount: true, compteEmail, password, role, ...extra });
   if (res.status !== 201) {
     throw new Error(`création employé a échoué (${res.status}): ${JSON.stringify(res.body)}`);
   }
+  const salarieId = res.body.salarie?.id;
   const login = await request(app).post('/api/auth/login').send({ email: compteEmail, password });
   if (login.status !== 200 || !login.body.token) {
     throw new Error(`login employé a échoué (${login.status}): ${JSON.stringify(login.body)}`);
   }
-  return { token: login.body.token, email: compteEmail, role };
+  return { token: login.body.token, email: compteEmail, role, salarieId };
 }
 
 // Crée un contact client et renvoie son id.

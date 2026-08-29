@@ -566,3 +566,29 @@ Docker. Rien ne figeait ces vérifs.
 - Dépendance ajoutée : `supertest` (dev). Vérifié : `npm test` unitaire toujours vert,
   `npm run test:integration` 12/12 vert, base de dev `agri_app` intacte après coup,
   `agri_app_test` bien supprimée.
+### Tests d'intégration — extension Achats + RH (2026-08-29)
+
+Suite de la mise en place supertest : 12 → 23 tests, 3 → 5 fichiers.
+
+- **`achats.test.js`** — cycle document d'achat `Brouillon → Commandé → Reçu → réception
+  annulée` ; vérifie que `recevoir` crée bien une écriture `finances`
+  (`Achat — <fournisseur> (<module>)`, montant négatif = `-total`) et que
+  `annuler-reception` la retire ; garde-fous de transition (`recevoir` sur brouillon → 400,
+  double `commander` → 400) ; validation d'entrée (module invalide / sans fournisseur /
+  sans lignes → 400) ; isolation multi-tenant (B ne peut ni `GET /:id` ni `commander` le
+  document de A → 404, absent de la liste).
+- **`rh.test.js`** — référentiels `/api/rh` : admin crée département + poste rattaché,
+  `GET` les liste, ouvrier sur `POST /departements` → 403 ; `register` seede déjà des
+  types de congé par défaut (asserté) ; **congés self-service** : l'employé (via
+  `GET /salaries/moi`) demande un congé Lun→Ven → `nbJours === 5`, statut `Demandé` ; il
+  **ne peut pas** approuver sa propre demande (403) ; l'admin approuve → `Approuvé` ;
+  `GET /:id/conges-solde` décompte correctement (`alloués 25, pris 5, restant 20`) ;
+  avances réservées admin (ouvrier non lié → 403) ; nouveau contrat → un seul `actif` ;
+  isolation multi-tenant (B ne voit pas l'employé de A, `POST conges-droits` sur son id
+  avec le token de B → 404).
+- **Helper** : `createEmployeeLogin` renvoie désormais aussi `salarieId` (nécessaire aux
+  routes `/salaries/:id/*`).
+
+Vérifs : `npm run test:integration` 23/23 vert, `npm test` unitaire toujours vert, base
+de dev `agri_app` intacte (9 entreprises / 9 salariés / 4 docs d'achat inchangés),
+`agri_app_test` bien supprimée après.
