@@ -752,3 +752,40 @@ Vérifié en local : la suite d'intégration passe (78/78) avec les mêmes varia
 d'environnement explicites que le workflow (host/port/user/pass/jwt), ce qui confirme que
 `testDb.cjs` + `env.js` privilégient bien l'environnement sur le repli `server/.env`
 (absent en CI puisque gitignoré).
+### Tests frontend — batch 1 : modules de logique pure (2026-08-30)
+
+6 → 58 tests, 1 → 5 fichiers. Aucune régression : `vite build` OK, l'unique test
+pré-existant (`ObservationListView`) passe toujours.
+
+- **Infra** : `babel.config.cjs` gagne un bloc `env.test` avec un petit plugin inline qui
+  réécrit `import.meta` → `({})` — **sous Jest uniquement** (Vite gère `import.meta`
+  nativement et n'applique pas `env.test`). Sans ça, `src/lib/api.js` (dont la 1re ligne
+  lit `import.meta.env.VITE_API_URL`) ne peut être chargé sous babel-jest que via un
+  `jest.mock` complet. La ligne d'`api.js` est aussi rendue défensive
+  (`typeof import.meta !== 'undefined' && import.meta.env?.…`), repli d'URL explicite.
+  (Tentative avec `babel-plugin-transform-import-meta` abandonnée : le paquet ne
+  transforme rien avec ce `@babel/core` — remplacé par le plugin inline de 8 lignes.)
+- **`src/components/roles.test.js`** — forme de `ROLE_DEFINITIONS` (chaque rôle a des
+  permissions non vides, `home` commun, `directeur` = `admin`, `gestionnaire` = `admin`
+  moins `employees`, `assistant_direction` = `comptable` + `fournisseurs`, `ouvrier` sans
+  finances/employees/modules) ; `mapUiRoleToBackend`/`mapBackendRoleToUi` (aller-retour
+  stable, alias `worker`/`manager`/`director`/`assistante_direction`, inconnu/vide → `admin`).
+- **`src/lib/locale.test.jsx`** — `fmtNumber`/`fmtMoney`/`fmtDate`/`fmtMoneyWith`/
+  `fmtDateWith` : vide/`NaN` → « — », `0` reste formaté, XOF sans décimale vs EUR à deux
+  décimales, `$`/`€` et séparateurs selon la locale, devise invalide → repli
+  « <n> <devise> », dates ISO/`Date`, `juin` vs `Jun` selon la locale ;
+  `setLocaleConfigGlobal` normalise ; `useLocale` hors `Provider` retombe sur les helpers,
+  dans un `Provider` expose un `setLocaleConfig` réactif.
+- **`src/lib/api.test.js`** (`global.fetch` mocké) — `get/set/clearToken` ;
+  `request` : bearer joint, échec réseau → message convivial, 401 → token vidé +
+  événement `agri-auth-expired` + throw, non-ok → message serveur ; `safeRequest` :
+  erreur réseau → opération en file `agri-offline-queue` + `null`, vraie 4xx/5xx →
+  rethrow sans rien mettre en file ; `flushOfflineQueue` : no-op hors ligne, rejoue et
+  vide + `agri-last-sync`, garde les échecs, JSON corrompu → `{flushed:0}` + nettoyage.
+- **`src/utils/storage.test.js`** (`../lib/api.js` mocké) — `storageGet` parse/fallback,
+  `storageSet` écrit + n'empile dans `agri-sync-queue` que hors ligne + émet
+  `agri-sync-status-changed`, `syncPendingChanges` compte la file hors ligne / délègue à
+  `flushOfflineQueue` en ligne / `synced:false` si le flush jette.
+
+Le job `frontend` du workflow CI exécute déjà ces 58 tests (`npm test`).
+Batch 2 (tests de composants des vues) reste à faire.

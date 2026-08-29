@@ -1,4 +1,8 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+// import.meta.env est fourni par Vite en prod ; sous Jest (babel-plugin-transform-import-meta)
+// import.meta.env vaut undefined — d'où l'accès optionnel + le repli explicite.
+const API_BASE_URL =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
+  'http://localhost:4000/api';
 
 // ─────────────────────────────────────────────────────────────────────
 // Requête HTTP de base avec gestion d'erreur centralisée
