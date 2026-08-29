@@ -71,4 +71,67 @@ router.post("/", authRequired, async (req, res) => {
     }
 });
 
+// Vérifie qu'une parcelle appartient à l'entreprise de l'appelant — renvoie son id, sinon
+// null (id étranger/invalide stocké silencieusement, comme le POST).
+async function resolveParcelleId(parcelleId, entrepriseId) {
+    if (!parcelleId) return null;
+    const check = await pool.query(
+        'SELECT id FROM parcelles WHERE id = $1 AND entreprise_id = $2',
+        [parcelleId, entrepriseId]
+    );
+    return check.rows[0]?.id || null;
+}
+
+/**
+ * @route PUT /api/recoltes/:id
+ * @description Met à jour une récolte de l'entreprise de l'utilisateur connecté (remplacement
+ * complet — mêmes champs requis que la création).
+ * @requires authRequired
+ */
+router.put("/:id", authRequired, async (req, res) => {
+    const { date, parcelle, parcelleId, culture, quantite, qualite, destination } = req.body;
+    if (!date || !parcelle || !culture || quantite === undefined || quantite === '' || !destination) {
+        return res.status(400).json({ error: "La date, la parcelle, la culture, la quantité et la destination sont requises." });
+    }
+    try {
+        const validParcelleId = await resolveParcelleId(parcelleId, req.user.entrepriseId);
+        const result = await pool.query(
+            `UPDATE recoltes SET
+               date_recolte = $1, parcelle = $2, parcelle_id = $3, culture = $4,
+               quantite = $5, qualite = $6, destination = $7
+             WHERE id = $8 AND entreprise_id = $9
+             RETURNING ${RECOLTE_COLUMNS}`,
+            [date, parcelle, validParcelleId, culture, Number(quantite), qualite || null, destination, req.params.id, req.user.entrepriseId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Récolte introuvable." });
+        }
+        res.status(200).json({ recolte: result.rows[0] });
+    } catch (err) {
+        console.error("[PUT /recoltes/:id]", err);
+        res.status(500).json({ error: "Erreur lors de la mise à jour de la récolte." });
+    }
+});
+
+/**
+ * @route DELETE /api/recoltes/:id
+ * @description Supprime une récolte de l'entreprise de l'utilisateur connecté.
+ * @requires authRequired
+ */
+router.delete("/:id", authRequired, async (req, res) => {
+    try {
+        const result = await pool.query(
+            "DELETE FROM recoltes WHERE id = $1 AND entreprise_id = $2",
+            [req.params.id, req.user.entrepriseId]
+        );
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Récolte introuvable." });
+        }
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error("[DELETE /recoltes/:id]", err);
+        res.status(500).json({ error: "Erreur lors de la suppression de la récolte." });
+    }
+});
+
 export default router;

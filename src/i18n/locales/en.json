@@ -994,6 +994,12 @@
     "colDestination": "Destination",
     "emptyTable": "No harvests recorded yet.",
     "addError": "Could not save the harvest.",
+    "editTitle": "Edit harvest",
+    "updated": "Harvest updated.",
+    "updateError": "Could not update the harvest.",
+    "deleteConfirm": "Delete this harvest? This cannot be undone.",
+    "deleted": "Harvest deleted.",
+    "deleteError": "Could not delete the harvest.",
     "qualiteLabels": { "Bonne": "Good", "Moyenne": "Average", "Faible": "Low" }
   },
   "rh": {

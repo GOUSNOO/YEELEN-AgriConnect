@@ -37,7 +37,7 @@ import {
   getActivites, createActivite, updateActivite, deleteActivite,
   getMessages, createMessage,
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
-  getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte,
+  getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte, updateRecolte, deleteRecolte,
   getOnboardingStatus, updateOnboardingStatus, updateEntreprise,
 } from './lib/api';
 import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
@@ -4304,9 +4304,15 @@ function HarvestsModule({ farmId }) {
   });
   const key = `agri-recoltes-${farmId}`;
 
-  const parcelleNomFinal = form.parcelleId === '__autre__'
-    ? form.parcelleNom
-    : parcelles.find(p => String(p.id) === String(form.parcelleId))?.nom || '';
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ date: '', parcelleId: '', parcelleNom: '', culture: '', quantite: '', qualite: 'Bonne', destination: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const nomFinalDe = (f) => f.parcelleId === '__autre__'
+    ? f.parcelleNom
+    : parcelles.find(p => String(p.id) === String(f.parcelleId))?.nom || '';
+
+  const parcelleNomFinal = nomFinalDe(form);
 
   useEffect(() => {
     (async () => {
@@ -4384,6 +4390,73 @@ function HarvestsModule({ farmId }) {
     resetForm();
   };
 
+  const startEdit = (item) => {
+    // Reconstitue la valeur du <select> parcelle : l'id si la parcelle existe encore,
+    // sinon "__autre__" avec le nom libre.
+    const parcelleConnue = item.parcelleId && parcelles.some(p => String(p.id) === String(item.parcelleId));
+    setEditingId(item.id);
+    setEditForm({
+      date: String(item.date).slice(0, 10),
+      parcelleId: parcelleConnue ? String(item.parcelleId) : '__autre__',
+      parcelleNom: parcelleConnue ? '' : (item.parcelle || ''),
+      culture: item.culture || '',
+      quantite: item.quantite ?? '',
+      qualite: item.qualite || 'Bonne',
+      destination: item.destination || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ date: '', parcelleId: '', parcelleNom: '', culture: '', quantite: '', qualite: 'Bonne', destination: '' });
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    const nomFinal = nomFinalDe(editForm);
+    if (!editForm.date || !nomFinal || !editForm.culture || editForm.quantite === '' || !editForm.destination) return;
+    setEditSubmitting(true);
+    try {
+      if (useRemote) {
+        await updateRecolte(editingId, {
+          date: editForm.date,
+          parcelle: nomFinal,
+          parcelleId: editForm.parcelleId === '__autre__' ? null : (Number(editForm.parcelleId) || null),
+          culture: editForm.culture,
+          quantite: editForm.quantite,
+          qualite: editForm.qualite,
+          destination: editForm.destination,
+        });
+        await loadHarvests();
+      } else {
+        setHarvests(prev => prev.map(h => h.id === editingId
+          ? { ...h, date: editForm.date, parcelle: nomFinal, culture: editForm.culture, quantite: Number(editForm.quantite), qualite: editForm.qualite, destination: editForm.destination }
+          : h));
+      }
+      notifySuccess(t('harvests.updated'));
+      cancelEdit();
+    } catch (err) {
+      notifyError(err, t('harvests.updateError'));
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const removeHarvest = async (id) => {
+    if (!window.confirm(t('harvests.deleteConfirm'))) return;
+    try {
+      if (useRemote) {
+        await deleteRecolte(id);
+        await loadHarvests();
+      } else {
+        setHarvests(prev => prev.filter(h => h.id !== id));
+      }
+      notifySuccess(t('harvests.deleted'));
+    } catch (err) {
+      notifyError(err, t('harvests.deleteError'));
+    }
+  };
+
   const totalQuantite = harvests.reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
 
   if (!loaded) {
@@ -4440,12 +4513,13 @@ function HarvestsModule({ farmId }) {
               <th>{t('harvests.colQuantite')}</th>
               <th>{t('harvests.colQualite')}</th>
               <th>{t('harvests.colDestination')}</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {harvests.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ color: COLORS.inkSoft }}>{t("harvests.emptyTable")}</td>
+                <td colSpan="7" style={{ color: COLORS.inkSoft }}>{t("harvests.emptyTable")}</td>
               </tr>
             ) : harvests.map(item => (
               <tr key={item.id}>
@@ -4455,11 +4529,51 @@ function HarvestsModule({ farmId }) {
                 <td>{fmtNumber(item.quantite)} kg</td>
                 <td><Badge tone={item.qualite === 'Bonne' ? 'green' : item.qualite === 'Moyenne' ? 'ochre' : 'red'}>{qualiteLabel(item.qualite)}</Badge></td>
                 <td>{item.destination}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button onClick={() => startEdit(item)} title={t('common.edit')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
+                  <button onClick={() => removeHarvest(item.id)} title={t('common.delete')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, marginLeft: 8 }}><Trash2 size={15} /></button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
+
+      {editingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('harvests.editTitle')}</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+            </div>
+            <form onSubmit={saveEdit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+              <Field label={t("common.date")} type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
+              <Select label={t("harvests.parcelle")} value={editForm.parcelleId} onChange={e => setEditForm({ ...editForm, parcelleId: e.target.value, parcelleNom: '' })}>
+                <option value="">{t("harvests.selectParcelle")}</option>
+                {parcelles.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                <option value="__autre__">{t("harvests.autreParcelle")}</option>
+              </Select>
+              {editForm.parcelleId === '__autre__' && (
+                <Field label={t("harvests.parcelleNom")} placeholder={t("harvests.parcelleNomPlaceholder")} value={editForm.parcelleNom} onChange={e => setEditForm({ ...editForm, parcelleNom: e.target.value })} />
+              )}
+              <Field label={t("harvests.culture")} placeholder={t("harvests.culturePlaceholder")} value={editForm.culture} onChange={e => setEditForm({ ...editForm, culture: e.target.value })} />
+              <Field label={t("harvests.quantite")} type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} />
+              <Select label={t("harvests.qualite")} value={editForm.qualite} onChange={e => setEditForm({ ...editForm, qualite: e.target.value })}>
+                <option value="Bonne">{qualiteLabel("Bonne")}</option>
+                <option value="Moyenne">{qualiteLabel("Moyenne")}</option>
+                <option value="Faible">{qualiteLabel("Faible")}</option>
+              </Select>
+              <Field label={t("harvests.destination")} placeholder={t("harvests.destinationPlaceholder")} value={editForm.destination} onChange={e => setEditForm({ ...editForm, destination: e.target.value })} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button type="submit" variant="green" disabled={editSubmitting}>
+                  {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t("common.save")}
+                </Button>
+                <Button type="button" onClick={cancelEdit}>{t("common.cancel")}</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

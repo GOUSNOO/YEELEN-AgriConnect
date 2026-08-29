@@ -818,3 +818,31 @@ Batch 2 (tests de composants des vues) reste à faire.
 
 Reste hors de portée : les gros modules-vues de `App.jsx` (`EmployeesModule`,
 `DevisModule`, `CulturesModule`…), non extraits donc non testables directement.
+### Récoltes — édition + suppression (2026-08-30)
+
+Constat utilisateur : une récolte ne pouvait pas être corrigée une fois saisie. Ce n'était
+pas un choix métier — `recoltes.js` n'avait jamais eu que `GET`/`POST` (voir l'entrée
+« Calendrier & Récoltes »). Ajouté :
+
+- **`server/src/routes/recoltes.js`** : `PUT /:id` (remplacement complet, mêmes champs
+  requis que le `POST`, `parcelleId` vérifié → `null` si étranger/invalide, `WHERE id
+  AND entreprise_id`, 0 ligne → 404) et `DELETE /:id` (0 ligne → 404). Helper
+  `resolveParcelleId` factorisé entre `POST` et `PUT`.
+- **`src/lib/api.js`** : `updateRecolte(id, payload)` (PUT) et `deleteRecolte(id)` (DELETE),
+  via `safeRequest` comme le reste du module.
+- **`src/App.jsx` `HarvestsModule`** : colonne d'actions dans le tableau — bouton ⚙️
+  (modale d'édition, 7 champs identiques au formulaire d'ajout, patron repris de la
+  modale du Calendrier) et bouton 🗑️ (`window.confirm`). Les deux gèrent le mode
+  hors-ligne (branche `useRemote === false` : maj/filtre du state local, `storageSet` via
+  l'effet existant). Reconstruction de la valeur du `<select>` parcelle à l'ouverture de
+  la modale (id si la parcelle existe encore, sinon « Autre parcelle » + nom libre).
+  Clés i18n `harvests.editTitle` / `updated` / `updateError` / `deleteConfirm` / `deleted`
+  / `deleteError` ajoutées (fr + en).
+- **`server/src/test/integration/recoltes.test.js`** : `PUT` met à jour (relu via `GET`),
+  champ requis manquant → 400, id inexistant → 404, `parcelleId` étranger → `null` ;
+  `DELETE` → 200 + absent, re-`DELETE` → 404 ; isolation multi-tenant (`PUT`/`DELETE` sur
+  la récolte d'une autre entreprise → 404).
+
+Vérifs : `vite build` OK, front `npm test` 87/87, `test:integration` 82/82, back `npm test`
+vert, smoke HTTP réel contre la stack Docker (POST → PUT 200 → DELETE 200 → re-DELETE 404),
+entreprise de test supprimée.

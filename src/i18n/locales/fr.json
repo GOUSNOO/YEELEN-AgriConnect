@@ -994,6 +994,12 @@
     "colDestination": "Destination",
     "emptyTable": "Aucune récolte enregistrée pour le moment.",
     "addError": "Impossible d'enregistrer la récolte.",
+    "editTitle": "Modifier la récolte",
+    "updated": "Récolte mise à jour.",
+    "updateError": "Impossible de mettre à jour la récolte.",
+    "deleteConfirm": "Supprimer cette récolte ? Cette action est irréversible.",
+    "deleted": "Récolte supprimée.",
+    "deleteError": "Impossible de supprimer la récolte.",
     "qualiteLabels": { "Bonne": "Bonne", "Moyenne": "Moyenne", "Faible": "Faible" }
   },
   "rh": {

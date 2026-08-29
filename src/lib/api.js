@@ -847,6 +847,14 @@ export async function createRecolte(payload) {
   return safeRequest('/recoltes', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function updateRecolte(id, payload) {
+  return safeRequest(`/recoltes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteRecolte(id) {
+  return safeRequest(`/recoltes/${id}`, { method: 'DELETE' });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // FEEDBACK (retours des clients sur l'app elle-même)
 // ─────────────────────────────────────────────────────────────────────
