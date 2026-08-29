@@ -234,7 +234,10 @@ router.get('/:id/prix-effectifs', authRequired, async (req, res) => {
 
 router.delete('/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM contacts WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const result = await pool.query('DELETE FROM contacts WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    // Comme PUT /:id : 0 ligne = id inexistant OU appartenant à une autre entreprise → 404,
+    // plutôt qu'un { success: true } trompeur (incohérent avec le reste des routes DELETE).
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Contact introuvable.' });
     return res.json({ success: true });
   } catch (err) {
     if (err.code === '23503') {

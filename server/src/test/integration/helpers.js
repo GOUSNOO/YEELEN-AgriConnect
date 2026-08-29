@@ -68,3 +68,22 @@ export async function createClient(token, nom = `Client ${Date.now()}`) {
   }
   return res.body.contact.id;
 }
+
+// Crée un produit (stock) rattaché à une catégorie seedée à la création de l'entreprise.
+// Renvoie { id, categorieId, nom }.
+export async function createProduit(token, { module = 'Cultures', nom, prixDefaut } = {}) {
+  const cats = await request(app)
+    .get(`/api/produit-categories?module=${module}`)
+    .set('Authorization', `Bearer ${token}`);
+  const categorieId = cats.body.categories?.[0]?.id;
+  if (!categorieId) throw new Error(`aucune catégorie ${module} seedée: ${JSON.stringify(cats.body)}`);
+  const produitNom = nom || `Article ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const res = await request(app)
+    .post('/api/produits')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ module, nom: produitNom, categorieId, prixDefaut });
+  if (res.status !== 201) {
+    throw new Error(`création produit a échoué (${res.status}): ${JSON.stringify(res.body)}`);
+  }
+  return { id: res.body.stock.id, categorieId, nom: produitNom };
+}

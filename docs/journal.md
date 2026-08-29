@@ -592,3 +592,31 @@ Suite de la mise en place supertest : 12 → 23 tests, 3 → 5 fichiers.
 Vérifs : `npm run test:integration` 23/23 vert, `npm test` unitaire toujours vert, base
 de dev `agri_app` intacte (9 entreprises / 9 salariés / 4 docs d'achat inchangés),
 `agri_app_test` bien supprimée après.
+### Tests d'intégration — extension Contacts + Listes de prix (2026-08-30)
+
+23 → 35 tests, 5 → 7 fichiers.
+
+- **`contacts.test.js`** — asymétrie client/fournisseur (création client seul / fournisseur
+  seul / ni l'un ni l'autre → 400 ; filtres `?type=client|fournisseur` ; un contact mixte
+  apparaît des deux côtés ; `PUT` qui bascule client→fournisseur le sort de `?type=client` ;
+  `PUT {false,false}` → 400) ; société + sous-contacts (`parentId`/`parentNom`, filtre
+  `?parentId=`) ; tags (`POST /contact-tags`, création avec `tagIds`, `PUT {tagIds:[]}`
+  détague) ; suppression (simple OK ; contact référencé par un devis → 409) ; isolation
+  multi-tenant.
+- **`listesPrix.test.js`** — CRUD liste (nom en double → 409, `nombreLignes`) ; lignes
+  (ajout, **upsert** sur même article via `ON CONFLICT`, validation → 400, article d'une
+  autre entreprise → 404, liste inexistante → 404, `stockNom`/`module` renvoyés,
+  `DELETE /lignes/:id` puis re-DELETE → 404) ; assignation à un contact
+  (`PUT contacts {listePrixId}`) → `GET /contacts/:id/prix-effectifs` renvoie les lignes ;
+  contact sans liste → `{prix:[]}` ; **supprimer la liste détache le contact**
+  (`ON DELETE SET NULL`) → `prix-effectifs` redevient `[]` ; isolation multi-tenant.
+- **Helper** : `createProduit(token, {module})` (récupère une catégorie seedée puis crée le
+  produit) pour alimenter les lignes de liste de prix.
+
+- **Bug trouvé + corrigé** (par `contacts.test.js`) : `DELETE /api/contacts/:id` était bien
+  cloisonné par `entreprise_id` (pas de suppression cross-tenant) mais ne testait jamais
+  `rowCount` → renvoyait `{ success: true }` / 200 même sur 0 ligne (mauvais tenant ou id
+  bidon), incohérent avec `PUT /:id` et tous les autres `DELETE`. Corrigé : 404 sur 0 ligne.
+
+Vérifs : `npm run test:integration` 35/35 vert, `npm test` unitaire vert, backend Docker
+reconstruit et OK, base de dev `agri_app` intacte, `agri_app_test` supprimée après.
