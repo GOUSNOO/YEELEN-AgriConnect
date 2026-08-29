@@ -1,14 +1,14 @@
 import express from 'express';
-import { createRequire } from 'module';
 import QRCode from 'qrcode';
+// otplib 13 est un paquet dual ESM/CJS — l'import ESM natif fonctionne aussi bien
+// sous `node` qu'avec Jest (--experimental-vm-modules), contrairement au shim
+// createRequire('otplib') qui cassait le chargement d'une dépendance ESM (@scure/base).
+import { generateSecret, generateURI, verify } from 'otplib';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import { logAuditEvent, countRecentAuditEvents } from '../utils/auditLog.js';
 import { generateEmailCode, verifyEmailCode, maskEmail, requestContext } from '../utils/mfaCode.js';
 import { sendMfaCodeEmail } from '../services/mailer.js';
-
-const require = createRequire(import.meta.url);
-const { generateSecret, generateURI, verify } = require('otplib');
 
 const router = express.Router();
 

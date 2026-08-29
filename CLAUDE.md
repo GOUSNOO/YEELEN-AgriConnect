@@ -76,7 +76,8 @@ cd server
 npm install
 npm run dev        # nodemon src/server.js
 npm start          # node src/server.js
-npm test           # jest (own babel.config.cjs — separate from the frontend's, don't merge them)
+npm test           # jest unit tests (own babel.config.cjs — separate from the frontend's, don't merge them)
+npm run test:integration   # supertest against the real app; needs `docker compose up -d db` (see Testing section)
 node src/db/migrate.js   # apply the backend's idempotent migration script (run from server/)
 ```
 
@@ -166,15 +167,17 @@ Still not done: turning the sentinel files into a real push alert (email/webhook
 ### Testing (two independent Jest setups — frontend and backend)
 This is a two-project repo (`src/` and `server/` each have their own `package.json`/`node_modules`), and each now has its own Jest config; they must not be merged.
 - Frontend (root): `babel.config.cjs` + `"jest": { "testEnvironment": "jsdom", "testPathIgnorePatterns": ["/node_modules/", "/server/"] }` in the root `package.json`. Without the `testPathIgnorePatterns` entry, root `npm test` would also walk into `server/` and try to run backend tests under the frontend's jsdom + `node_modules` — that crashes (backend deps like `pdfkit`/`fontkit` aren't set up for a browser-like jsdom environment). `@babel/preset-env`/`@babel/preset-react` and `jest-environment-jsdom`/`@testing-library/dom` are devDependencies for this.
-- Backend (`server/`): its own `server/babel.config.cjs` (`@babel/preset-env` only, no React) + `jest`/`@babel/preset-env` devDependencies + `"test": "jest"` script. Test lives at `server/src/test/devisPdf.test.js`, next to `server/src/utils/devisPdf.js`.
-- `npm install` in either project needs `--legacy-peer-deps` at the root (see `Dockerfile`, which already does this) — `vite-plugin-pwa@0.9.3` declares a `vite@^2` peer while the project uses `vite@^5`.
+- Backend (`server/`) has **two** Jest configs:
+  - **Unit** — `npm test` (`server/babel.config.cjs`, `@babel/preset-env` only). The `"jest"` block in `server/package.json` has `testPathIgnorePatterns: ["/node_modules/", "/src/test/integration/"]` so it stays DB-free and fast. Only test today: `server/src/test/devisPdf.test.js`.
+  - **Integration** — `npm run test:integration` (`server/jest.integration.config.cjs`, added 2026-08-29). Runs `supertest` against the real Express app (`server/src/app.js`, the shared app factory `server.js` also imports) with **native ESM** (`node --experimental-vm-modules …`, `transform: {}`) — not babel — because `auth.js`/`mfa.js` were reworked from `createRequire('otplib')` to plain `import` (otplib 13 is dual ESM/CJS; the CJS path pulls in `@scure/base` which Jest's CJS runtime can't load). `globalSetup` drops+recreates+migrates a dedicated `agri_app_test` DB **on the Docker `db` container (host port 5433)** — never the dev DB; `globalTeardown` drops it (`TEST_DB_KEEP=1` to keep it for post-mortem). Config/creds: `src/test/integration/testDb.cjs` reads `DB_USER`/`DB_PASSWORD`/`JWT_SECRET` from `server/.env`, forces host/port/name to the test DB; `env.js` (setupFiles) blanks `EMAIL_*` (so mail sends fail as expected — asserted). Prereq: `docker compose up -d db`. Coverage: `auth.test.js` (register/login/roles/tenant isolation), `devis.test.js` (full quote→invoice→installment→revert lifecycle + audit-log assertions), `mfa.test.js` (TOTP + email 2FA setup/verify + 2-step login). Helpers in `src/test/integration/helpers.js`.
+- `npm install` in the frontend project needs `--legacy-peer-deps` at the root (see `Dockerfile`, which already does this) — `vite-plugin-pwa@0.9.3` declares a `vite@^2` peer while the project uses `vite@^5`. `server/` installs cleanly without it.
 
 ## Known issues / stray or broken code
 
 **Repo-wide dead-file cleanup done 2026-08-16** (user-requested architecture audit). Everything below was investigated (checked for real imports, not just assumed dead) and removed — this section used to list them as known clutter; now it's a record of what was found and why it was safe to delete, in case similar drift recurs:
 - `backend/routes/employees.js` / `backend/routes/mfa.js` — not stubs, real business logic, but **broken**: imported `../db.js`/`../middleware/auth.js` relative to `backend/`, and neither `backend/db.js` nor `backend/middleware/` ever existed. Never mounted in `server.js`, never imported from anywhere else (confirmed via a full-repo grep excluding `node_modules`). The real, live equivalents are `server/src/routes/salaries.js` and `server/src/routes/mfa.js` — the risk this cleanup removed was a future edit landing in the dead file with the confusingly similar name/purpose instead of the real one.
 - `frontend/` — empty directory, no tracked files.
-- `server/src/app.js` — the file's own top comment said it outright: "Ce fichier est un doublon de server.js — non utilisé."
+- `server/src/app.js` — was deleted here as a stale duplicate of `server.js`; **recreated 2026-08-29** with a genuinely different role: the shared Express app factory (all `/api/*` route mounting), imported by both `server.js` (which now only does `testDatabase()` + `listen()`) and the integration test suite (supertest, no listener). Not dead code anymore.
 - `server/src/data/store.js` + `server/data/app-data.json` — an orphaned pre-Postgres file-based persistence prototype (`readStore`/`writeStore` over a JSON file), confirmed unimported anywhere; the JSON file itself held one fake `admin@agriapp.com` test account, unrelated to the real app.
 - `HEAD_App.jsx` / `HEAD_App_head.txt` — a frozen 3192-line snapshot from the merge-conflict/corruption recovery documented above, stale since (today's real `App.jsx` is 5000+ lines) — kept as-is for a while as a just-in-case reference, but long past the point that made sense.
 - `src/package.json` — stray duplicate of the root `package.json` from an earlier reorg (declared `tailwindcss`, which the app has never used).

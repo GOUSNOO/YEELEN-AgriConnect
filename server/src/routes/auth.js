@@ -2,13 +2,11 @@
 // étape MFA optionnelle), profil courant (me), et lecture du journal d'audit des
 // connexions (audit-log, admin uniquement). Toutes les routes ci-dessous, sauf
 // /register et /login (forcément publiques), sont protégées par authRequired.
-import { createRequire } from 'module';
-// otplib est un module CommonJS — createRequire permet de l'importer avec require()
-// depuis ce fichier ESM (import/export), au lieu d'un import ESM classique.
-const require = createRequire(import.meta.url);
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+// otplib 13 : import ESM natif (dual ESM/CJS). Voir le commentaire équivalent dans mfa.js.
+import { verify as verifyTotp } from 'otplib';
 import { env } from '../config/env.js';
 import { pool } from '../db.js';
 import { authRequired } from '../middleware/auth.js';
@@ -234,8 +232,7 @@ router.post('/login', async (req, res) => {
       if (mfaMethod === 'email') {
         mfaValid = verifyEmailCode(user.id, user.email, mfaCode);
       } else {
-        const { verify } = require('otplib');
-        ({ valid: mfaValid } = await verify({ secret: user.mfa_secret, token: mfaCode }));
+        ({ valid: mfaValid } = await verifyTotp({ secret: user.mfa_secret, token: mfaCode }));
       }
       if (!mfaValid) {
         await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'login_failed_mfa', req });

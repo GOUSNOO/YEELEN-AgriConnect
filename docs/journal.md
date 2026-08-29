@@ -527,3 +527,42 @@ points relevés puis traités :
 
 Vérifs : `npx vite build` OK, racine `npm test` (6) vert, `oxlint` sans erreur. Backend
 non touché.
+### Suite de tests d'intégration backend (2026-08-29)
+
+Avant : 2 fichiers de test pour 25 routes (1 backend `devisPdf`, 1 frontend `ObservationListView`).
+Tout le test d'API se faisait via des scripts jetables lancés à la main contre la stack
+Docker. Rien ne figeait ces vérifs.
+
+- **`server/src/app.js` (recréé)** : fabrique de l'app Express (montage de toutes les
+  routes `/api/*`), sans `listen()` ni `testDatabase()`. `server.js` l'importe et se
+  limite désormais à vérifier la base puis ouvrir le port. Même source de montage pour la
+  prod et pour supertest. (Un ancien `app.js` — simple doublon — avait été supprimé le
+  2026-08-16 ; celui-ci a un rôle différent et assumé.)
+- **otplib `createRequire` → `import` ESM** dans `auth.js` et `mfa.js`. otplib 13 est
+  dual ESM/CJS ; le chemin CJS tire `@scure/base` que le runtime de Jest ne sait pas
+  charger (`Must use import to load ES Module`). L'import ESM natif marche aussi bien
+  sous `node` qu'avec Jest `--experimental-vm-modules`. Vérifié : le serveur Docker
+  reconstruit démarre et `/mfa/setup` renvoie toujours secret + QR.
+- **`npm run test:integration`** (`server/jest.integration.config.cjs`) : supertest en
+  ESM natif (`transform: {}`), `globalSetup` (re)crée + migre une base dédiée
+  `agri_app_test` sur le conteneur `db` (port hôte 5433, **jamais** la base de dev),
+  `globalTeardown` la supprime (`TEST_DB_KEEP=1` pour la garder). `env.js` (setupFiles)
+  force les variables DB et vide `EMAIL_*` (les envois échouent, comportement attendu et
+  asserté). `npm test` (unitaire) reste sans base : `testPathIgnorePatterns` exclut
+  `src/test/integration/`.
+- **Couverture (12 tests, 3 fichiers)** :
+  - `auth.test.js` — register (+ email en double refusé), login (bon/mauvais mot de
+    passe/email inconnu), route protégée sans token → 401, `requireRole` (ouvrier →
+    403 sur `POST /business/finances`), isolation multi-tenant (contacts non listés/non
+    modifiables entre entreprises, devis non lisible entre entreprises).
+  - `devis.test.js` — cycle brouillon → validé manuel → facturé échelonné → paiement
+    d'échéance → suivi quantités → remise en brouillon ; assertions sur chaque ligne
+    `audit_log` (`devis_valide_manuel`/`_facture`/`_echeance_payee`/`_quantites_ajustees`/
+    `_remis_brouillon`/`_annule`, détails + email acteur + IP) ; workflow financier
+    réservé admin (ouvrier → 403).
+  - `mfa.test.js` — TOTP setup/verify + login 2 étapes (mauvais code → 401) ; code par
+    email (setup → 502 sans SMTP mais code dérivable, verify OK, `mfaMethod` renvoyé par
+    `/auth/me` et par l'étape 1 du login, mauvais code → 401).
+- Dépendance ajoutée : `supertest` (dev). Vérifié : `npm test` unitaire toujours vert,
+  `npm run test:integration` 12/12 vert, base de dev `agri_app` intacte après coup,
+  `agri_app_test` bien supprimée.
