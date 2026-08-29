@@ -846,3 +846,25 @@ pas un choix métier — `recoltes.js` n'avait jamais eu que `GET`/`POST` (voir 
 Vérifs : `vite build` OK, front `npm test` 87/87, `test:integration` 82/82, back `npm test`
 vert, smoke HTTP réel contre la stack Docker (POST → PUT 200 → DELETE 200 → re-DELETE 404),
 entreprise de test supprimée.
+### Recherche globale — champ lisible + boutons Rechercher / Fermer (2026-08-30)
+
+Retour utilisateur : dans la modale de recherche globale (loupe de la barre du haut,
+`src/components/GlobalSearch.jsx`), le champ de saisie était mal rendu (forme/couleur) et
+il manquait un bouton pour valider et un bouton pour fermer.
+
+- **Lisibilité du champ** : le panneau de la modale force désormais `colorScheme: 'light'`
+  et l'`<input>` a un `background`/`color` explicites + une classe `.global-search-input`
+  (App.css) pour la couleur du placeholder — sans ça, la règle `color-scheme: light dark`
+  de `index.css` rendait le champ natif illisible sous un thème OS sombre (même gotcha que
+  celui déjà documenté pour les lignes de résultats).
+- **Bouton « Rechercher »** : l'input est maintenant dans un `<form onSubmit>` avec un
+  bouton vert qui déclenche la recherche **immédiatement** (annule la temporisation de
+  250 ms). Extraction d'un `runSearch(q)` partagé entre la frappe temporisée et le submit,
+  avec un compteur de requête pour qu'une réponse lente n'écrase pas une plus récente.
+- **Bouton « Fermer »** : vrai bouton ✕ (`title="Fermer (Échap)"`) dans l'en-tête, en
+  plus du clic sur le fond et de la touche Échap qui ferment toujours.
+- **Tests** (`GlobalSearch.test.jsx`) : bouton Fermer → `onClose` ; submit → appel
+  `rechercheGlobale` immédiat (sans `waitFor`).
+
+Vérifs : `vite build` OK, front `npm test` 88/88, conteneur frontend reconstruit
+(bundle contient bien les nouveaux éléments).

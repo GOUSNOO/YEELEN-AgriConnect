@@ -263,3 +263,15 @@
   padding-top: 6px;
   white-space: nowrap;
 }
+
+/* Champ de la recherche globale (GlobalSearch.jsx) : couleur du placeholder explicite
+   (sinon quasi invisible) et color-scheme figé en clair — le reste du projet subit la
+   règle `color-scheme: light dark` de index.css qui rend les <input> natifs illisibles
+   sous un thème OS sombre. */
+.global-search-input {
+  color-scheme: light;
+}
+.global-search-input::placeholder {
+  color: #9AA093;
+  opacity: 1;
+}

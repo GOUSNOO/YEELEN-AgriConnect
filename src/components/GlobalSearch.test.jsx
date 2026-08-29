@@ -54,7 +54,7 @@ test('aucun résultat → message dédié', async () => {
   expect(await screen.findByText(/Aucun résultat pour « zzz »/)).toBeInTheDocument();
 });
 
-test('Échap dans le champ et clic sur le fond → onClose', () => {
+test('Échap, clic sur le fond et bouton Fermer → onClose', () => {
   const onClose = jest.fn();
   const { container } = render(<GlobalSearch onClose={onClose} onSelect={jest.fn()} />);
 
@@ -63,4 +63,18 @@ test('Échap dans le champ et clic sur le fond → onClose', () => {
 
   fireEvent.click(container.firstChild); // le fond (backdrop)
   expect(onClose).toHaveBeenCalledTimes(2);
+
+  fireEvent.click(screen.getByRole('button', { name: /fermer/i }));
+  expect(onClose).toHaveBeenCalledTimes(3);
+});
+
+test('bouton « Rechercher » (submit) déclenche la recherche sans attendre la temporisation', () => {
+  rechercheGlobale.mockResolvedValue(sample);
+  render(<GlobalSearch onClose={jest.fn()} onSelect={jest.fn()} />);
+
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'diallo' } });
+  expect(rechercheGlobale).not.toHaveBeenCalled(); // debounce pas encore écoulé
+
+  fireEvent.click(screen.getByRole('button', { name: /rechercher/i }));
+  expect(rechercheGlobale).toHaveBeenCalledWith('diallo'); // immédiat, pas de waitFor
 });
