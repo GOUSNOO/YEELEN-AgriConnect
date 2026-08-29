@@ -671,3 +671,26 @@ reconstruit et OK, base de dev `agri_app` intacte (3 banques / 0 équipements in
 Vérifs : `npm run test:integration` 53/53 vert, `npm test` unitaire vert, backend Docker
 reconstruit et OK, base de dev `agri_app` intacte (1 observation / 1 récolte inchangées),
 `agri_app_test` supprimée après.
+### Tests d'intégration — extension Calendrier + Feedback + Planning (2026-08-30)
+
+53 → 62 tests, 11 → 14 fichiers. Aucun bug backend trouvé cette passe.
+
+- **`calendar.test.js`** — `GET`/`POST`/`PUT` uniquement (pas de `DELETE`) : `date` + `type`
+  + `title` requis → 400 ; `description` conservée ; `GET` scopé et trié par date
+  croissante ; `PUT` partiel (COALESCE, `type` non passé inchangé) ; `PUT` id inexistant
+  → 404 ; `POST` en `ouvrier` → 201 (module ouvert) ; isolation multi-tenant.
+- **`feedback.test.js`** — soumission ouverte à tout compte connecté (`message` requis,
+  `type` hors liste → « Autre », renvoie `{ ok: true }`) ; `GET /` et `PATCH /:id`
+  réservés au **platform admin** : un admin d'entreprise normal → 403 ; un platform admin
+  (promu via `pool` + reconnexion pour rafraîchir la claim JWT) lit les retours de **toutes
+  les entreprises** (lecture cross-entreprise volontaire, avec `entrepriseNom`/`userEmail`),
+  `PATCH {statut}` → 200, `statut` invalide → 400, `PATCH` id inexistant → 404.
+- **`planning.test.js`** — `POST` renvoie **200** (pas 201 : la persistance est un TODO
+  commenté) + un plan générique de 5 jalons (Semis → Récolte) trié par date ;
+  `cultureId` = un `parcelles.id` ; sans `cultureId` → 400 ; parcelle d'une autre
+  entreprise ou id bidon → 404 (cloisonnement dans `getCulturePlanDetails`).
+- **Helper** : `createParcelle(token)` promu dans `helpers.js` (était inline dans
+  `recoltes.test.js`), réutilisé par `planning.test.js`.
+
+Vérifs : `npm run test:integration` 62/62 vert, `npm test` unitaire vert, aucun changement
+de code applicatif (fichiers de test + helper uniquement), `agri_app_test` supprimée après.

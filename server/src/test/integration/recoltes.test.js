@@ -1,4 +1,4 @@
-import { app, pool, request, registerEntreprise } from './helpers.js';
+import { app, pool, request, registerEntreprise, createParcelle } from './helpers.js';
 
 afterAll(async () => { await pool.end(); });
 
@@ -9,11 +9,6 @@ const liste = async (token) => (await request(app).get('/api/recoltes').set(bear
 const RECOLTE_OK = { date: '2026-07-01', parcelle: 'Parcelle Nord', culture: 'Maïs', quantite: 1200, destination: 'Silo A' };
 
 // recoltes.js n'expose que GET et POST (pas de PUT/DELETE) — voir CLAUDE.md.
-async function creerParcelle(token, nom = `Parcelle ${Date.now()}`) {
-  const res = await request(app).post('/api/cultures/parcelles').set(bearer(token)).send({ nom, culture: 'Maïs' });
-  expect(res.status).toBe(201);
-  return res.body.parcelle.id;
-}
 
 describe('Récoltes — création', () => {
   let admin;
@@ -42,8 +37,8 @@ describe('Récoltes — lien parcelle (validation d\'appartenance)', () => {
     const a = await registerEntreprise();
     const b = await registerEntreprise();
 
-    const parcelleA = await creerParcelle(a.token);
-    const parcelleB = await creerParcelle(b.token);
+    const parcelleA = await createParcelle(a.token);
+    const parcelleB = await createParcelle(b.token);
 
     const liee = await post(a.token, { ...RECOLTE_OK, parcelleId: parcelleA });
     expect(liee.status).toBe(201);

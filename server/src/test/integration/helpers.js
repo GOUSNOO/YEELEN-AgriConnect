@@ -69,6 +69,18 @@ export async function createClient(token, nom = `Client ${Date.now()}`) {
   return res.body.contact.id;
 }
 
+// Crée une parcelle et renvoie son id.
+export async function createParcelle(token, nom = `Parcelle ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`) {
+  const res = await request(app)
+    .post('/api/cultures/parcelles')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ nom, culture: 'Maïs' });
+  if (res.status !== 201) {
+    throw new Error(`création parcelle a échoué (${res.status}): ${JSON.stringify(res.body)}`);
+  }
+  return res.body.parcelle.id;
+}
+
 // Crée un produit (stock) rattaché à une catégorie seedée à la création de l'entreprise.
 // Renvoie { id, categorieId, nom }.
 export async function createProduit(token, { module = 'Cultures', nom, prixDefaut } = {}) {
