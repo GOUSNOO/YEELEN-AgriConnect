@@ -171,7 +171,9 @@ router.put('/livraisons/:id', authRequired, async (req, res) => {
 
 router.delete('/livraisons/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM poulailler_livraisons WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const result = await pool.query('DELETE FROM poulailler_livraisons WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    // 0 ligne = id inexistant ou d'une autre entreprise → 404, cohérent avec PUT /:id.
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Livraison introuvable.' });
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /poulailler/livraisons]', err);

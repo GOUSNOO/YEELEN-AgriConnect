@@ -62,7 +62,9 @@ router.post('/finances', authRequired, requireRole('admin', 'directeur'), async 
 // Réservé à admin/directeur : seule la direction peut supprimer une écriture financière.
 router.delete('/finances/:id', authRequired, requireRole('admin', 'directeur'), async (req, res) => {
   try {
-    await pool.query('DELETE FROM finances WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const result = await pool.query('DELETE FROM finances WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    // 0 ligne = id inexistant ou d'une autre entreprise → 404, cohérent avec le reste des routes DELETE.
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Écriture financière introuvable.' });
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /finances]', err);

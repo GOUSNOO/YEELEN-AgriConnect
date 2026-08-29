@@ -694,3 +694,40 @@ reconstruit et OK, base de dev `agri_app` intacte (1 observation / 1 récolte in
 
 Vérifs : `npm run test:integration` 62/62 vert, `npm test` unitaire vert, aucun changement
 de code applicatif (fichiers de test + helper uniquement), `agri_app_test` supprimée après.
+### Tests d'intégration — Cultures + Poulailler + Business + 2 correctifs backend (2026-08-30)
+
+62 → 78 tests, 14 → 17 fichiers. **Modules restants tous couverts.**
+
+- **`cultures.test.js`** — parcelles CRUD (nom requis, PUT partiel COALESCE, id inexistant
+  → 404) ; historique des vannes (`parcelleId`+`action` requis, parcelle étrangère → 404) ;
+  mouvements vente/achat ↔ synchro `finances` (POST crée la ligne, montant +qté×PU pour
+  une vente / négatif pour un achat ; PUT avec `raison` la **met à jour sans doublon** +
+  entrée `modification` dans l'historique ; DELETE avec `raison` supprime mouvement +
+  finance + entrée `suppression`) ; filtre `?type=` ; isolation multi-tenant.
+- **`poulailler.test.js`** — mouvements ↔ `finances` `(Poulailler)` (même structure) ;
+  livraisons (client+produit requis, statut initial « En attente », `PUT {statut}`,
+  `PUT`/`DELETE` inexistant → 404) ; suivi quotidien (type+quantite requis) ; isolation
+  multi-tenant.
+- **`business.test.js`** — écritures financières manuelles (montant requis, catégorie
+  défaut `Caisse`, `Banque` sans `banqueId` → 400, avec → `banqueNom` relu) ; gate
+  `admin/directeur` (ouvrier → 403 sur POST/DELETE, GET ouvert) ; `DELETE` + id
+  inexistant → 404 ; isolation multi-tenant.
+
+**Correctif migration — dérive `migrate.js` vs base de dev.** `parcelles_historique`,
+`cultures_mouvements`, `poulailler_mouvements`, `poulailler_livraisons`, `poulailler_suivi`
+filtrent et insèrent tous sur `entreprise_id`, mais leur `CREATE TABLE` ne l'incluait pas
+et aucun `ADD COLUMN IF NOT EXISTS entreprise_id` n'existait — la base de dev l'avait
+acquise par dérive manuelle, un déploiement neuf (et la base de test d'intégration) partait
+cassé (500 sur toute écriture cultures/poulailler mouvement/historique/livraison/suivi).
+Ajout des 5 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS entreprise_id` + backfill (par la
+parcelle pour l'historique, sinon première entreprise) + index. `migrate.js` rejoué sur la
+base de dev : no-op propre (colonnes déjà présentes). La suite d'intégration, qui migre une
+base jetable de zéro à chaque exécution, garde désormais contre les deux sens de dérive.
+
+**Correctifs 404** (même classe que `contacts`/`banques`) : `DELETE /api/cultures/parcelles/:id`,
+`DELETE /api/poulailler/livraisons/:id`, `DELETE /api/business/finances/:id` renvoyaient
+`{ success: true }` / 200 même sur 0 ligne → 404 sur 0 ligne.
+
+Vérifs : `npm run test:integration` 78/78 vert, `npm test` unitaire (back + front) vert,
+`migrate.js` idempotent sur la base de dev, backend Docker reconstruit, base de dev
+`agri_app` intacte, `agri_app_test` supprimée après.

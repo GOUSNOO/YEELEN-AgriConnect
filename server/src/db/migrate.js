@@ -487,6 +487,33 @@ CREATE INDEX IF NOT EXISTS idx_poulailler_suivi_user_id ON poulailler_suivi(user
 CREATE INDEX IF NOT EXISTS idx_finances_user_id ON finances(user_id);
 CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id);
 
+-- ═══════════════ Cloisonnement par entreprise — tables Cultures/Poulailler ═══════════════
+-- Les CREATE TABLE de parcelles_historique / cultures_mouvements / poulailler_mouvements /
+-- poulailler_livraisons / poulailler_suivi ci-dessus n'incluent pas entreprise_id, alors
+-- que toutes leurs routes filtrent et insèrent dessus (WHERE entreprise_id = $1). La base
+-- de dev l'avait acquise par dérive hors migrate.js ; un déploiement neuf partait cassé
+-- sur ces 5 tables — trou révélé par la suite de tests d'intégration (2026-08-30).
+ALTER TABLE parcelles_historique  ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE;
+ALTER TABLE cultures_mouvements   ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE;
+ALTER TABLE poulailler_mouvements ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE;
+ALTER TABLE poulailler_livraisons ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE;
+ALTER TABLE poulailler_suivi      ADD COLUMN IF NOT EXISTS entreprise_id INTEGER REFERENCES entreprises(id) ON DELETE CASCADE;
+
+-- Rattachement des lignes pré-existantes (base déjà en service) : par la parcelle pour
+-- l'historique des vannes, sinon au premier compte entreprise, comme le backfill user_id.
+UPDATE parcelles_historique ph SET entreprise_id = p.entreprise_id
+  FROM parcelles p WHERE p.id = ph.parcelle_id AND ph.entreprise_id IS NULL;
+UPDATE cultures_mouvements   SET entreprise_id = (SELECT id FROM entreprises ORDER BY id ASC LIMIT 1) WHERE entreprise_id IS NULL;
+UPDATE poulailler_mouvements SET entreprise_id = (SELECT id FROM entreprises ORDER BY id ASC LIMIT 1) WHERE entreprise_id IS NULL;
+UPDATE poulailler_livraisons SET entreprise_id = (SELECT id FROM entreprises ORDER BY id ASC LIMIT 1) WHERE entreprise_id IS NULL;
+UPDATE poulailler_suivi      SET entreprise_id = (SELECT id FROM entreprises ORDER BY id ASC LIMIT 1) WHERE entreprise_id IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_parcelles_historique_entreprise_id  ON parcelles_historique(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_cultures_mouvements_entreprise_id   ON cultures_mouvements(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_poulailler_mouvements_entreprise_id ON poulailler_mouvements(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_poulailler_livraisons_entreprise_id ON poulailler_livraisons(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_poulailler_suivi_entreprise_id      ON poulailler_suivi(entreprise_id);
+
 -- ═══════════════ Journal d'audit (connexions, puis actions sensibles) ═══════════════
 -- Généraliste (contrairement à mouvements_historique, lié aux ventes/achats) :
 -- entreprise_id/user_id nullables car une tentative de connexion échouée peut
