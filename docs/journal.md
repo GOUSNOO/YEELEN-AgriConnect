@@ -789,3 +789,32 @@ pré-existant (`ObservationListView`) passe toujours.
 
 Le job `frontend` du workflow CI exécute déjà ces 58 tests (`npm test`).
 Batch 2 (tests de composants des vues) reste à faire.
+### Tests frontend — batch 2 : composants (2026-08-30)
+
+58 → 87 tests, 5 → 9 fichiers. `vite build` OK, aucune régression.
+
+- **`src/components/ui.test.jsx`** — `Card` transmet `onClick` + props DOM (la régression
+  documentée dans CLAUDE.md où `Card` avalait `onClick`) ; `Button` : `type` défaut
+  `button`, `disabled` bloque le clic + curseur, variantes = fonds distincts ;
+  `Field`/`Select` : label rendu, `value`/`onChange`/`placeholder` transmis, `className`
+  fusionné avec `flat-input`, `AideChamp` seulement si `aide` fourni (tooltip au clic) ;
+  `Badge` : ton inconnu → repli `green` ; `MiniChart` : « Aucune donnée » vs une barre par
+  point ; toasts : `notifySuccess`/`notifyError` affichent le message (via `act`), retiré
+  au clic sur ✕, `notifyError` utilise `err.message` sinon le repli.
+- **`src/components/FeedbackModule.test.jsx`** (`../lib/api.js` + `notify*` mockés) —
+  message vide → `notifyError`, aucun appel API ; message rempli → `createFeedback(form)`,
+  textarea réinitialisée, `notifySuccess` ; `isPlatformAdmin=false` → pas de
+  `getAllFeedback`, section admin absente ; `true` → chargement + affichage, erreur
+  affichée, changement de statut → maj optimiste + `updateFeedbackStatus(id, statut)`.
+- **`src/components/GlobalSearch.test.jsx`** (`rechercheGlobale` mocké) — < 2 caractères →
+  invite, pas d'appel ; ≥ 2 caractères → après debounce, `rechercheGlobale(query)` appelé
+  une fois, résultats groupés Contacts/Produits/Devis rendus ; clic → `onSelect({kind,
+  item})` ; `Échap` / clic sur le fond → `onClose` ; réponse vide → « Aucun résultat ».
+- **`src/components/RhReferentiels.test.jsx`** (les 12 fonctions RH de l'api mockées) —
+  `canManage=false` → rien ; `canManage=true` → replié, aucun chargement ; à l'ouverture,
+  `getDepartements/getPostes/getJoursFeries/getCongesTypes` appelés + liste rendue ; ajout
+  d'un département → `createDepartement({nom})` + rechargement + `onChanged` ; suppression
+  → `deleteDepartement(id)`.
+
+Reste hors de portée : les gros modules-vues de `App.jsx` (`EmployeesModule`,
+`DevisModule`, `CulturesModule`…), non extraits donc non testables directement.
