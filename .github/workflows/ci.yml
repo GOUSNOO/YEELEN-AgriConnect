@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# Un seul run par ref à la fois : un nouveau push annule le précédent encore en cours.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (unit + intégration)
+    runs-on: ubuntu-latest
+
+    # Postgres jetable pour la suite d'intégration. globalSetup y crée/migre/détruit
+    # une base agri_app_test à chaque run (cf. server/src/test/integration/). Le mot de
+    # passe est celui d'un conteneur éphémère de CI — aucune valeur, pas besoin de secret.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install
+        working-directory: server
+        run: npm ci
+
+      - name: Unit tests
+        working-directory: server
+        run: npm test
+
+      - name: Integration tests
+        working-directory: server
+        run: npm run test:integration
+        env:
+          # En local le conteneur Docker `db` est remappé sur 5433 (collision avec le
+          # Postgres Windows natif) ; en CI le service écoute directement sur 5432.
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: ci-test-secret
+
+  frontend:
+    name: Frontend (tests + build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --legacy-peer-deps : vite-plugin-pwa@0.9.3 déclare un peer vite@^2 alors que le
+      # projet est en vite@^5 (voir Dockerfile, qui fait déjà pareil).
+      - name: Install
+        run: npm ci --legacy-peer-deps
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

@@ -90,6 +90,11 @@ Spins up: `db` (postgres:18-alpine), `backend` (server/, port 4000), `frontend` 
 
 There is no lint script wired into either `package.json` despite `.oxlintrc.json` existing at the root; run `npx oxlint` directly if linting is needed.
 
+### CI
+`.github/workflows/ci.yml` (added 2026-08-30) runs on every push + PRs to `main`, two jobs:
+- **backend**: spins up a `postgres:18-alpine` service, `npm ci` in `server/`, then `npm test` (unit) + `npm run test:integration` (env overrides `TEST_DB_PORT=5432` / `DB_USER=DB_PASSWORD=postgres` / `JWT_SECRET=ci-test-secret` — no GitHub secret, the DB is an ephemeral CI container). `globalSetup` migrates a fresh `agri_app_test` there, so CI is also the from-scratch-schema guard for the `migrate.js` drift described above.
+- **frontend**: `npm ci --legacy-peer-deps` (root), `npm test` + `npm run build`.
+
 ## Architecture
 
 ### Multi-tenant model

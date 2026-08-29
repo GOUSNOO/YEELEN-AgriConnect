@@ -731,3 +731,24 @@ base jetable de zéro à chaque exécution, garde désormais contre les deux sen
 Vérifs : `npm run test:integration` 78/78 vert, `npm test` unitaire (back + front) vert,
 `migrate.js` idempotent sur la base de dev, backend Docker reconstruit, base de dev
 `agri_app` intacte, `agri_app_test` supprimée après.
+### CI — GitHub Actions (2026-08-30)
+
+`.github/workflows/ci.yml` (nouveau, aucun `.github/` n'existait). Déclenché sur chaque
+`push` et les `pull_request` vers `main`, `concurrency` annule le run précédent d'une même
+ref.
+
+- **Job `backend`** : service `postgres:18-alpine` (user/pass `postgres`, health-check
+  `pg_isready`), Node 22, cache npm sur `server/package-lock.json`, `npm ci` dans
+  `server/`, puis `npm test` (unitaire) + `npm run test:integration`. L'intégration reçoit
+  `TEST_DB_HOST=localhost` / `TEST_DB_PORT=5432` (le service CI écoute directement sur
+  5432, contrairement au remap 5433 local) / `DB_USER=DB_PASSWORD=postgres` /
+  `JWT_SECRET=ci-test-secret`. Pas de secret GitHub : la base est un conteneur éphémère.
+  Le `globalSetup` y migre une base `agri_app_test` de zéro → CI sert aussi de garde
+  contre la dérive `migrate.js` vs base de dev.
+- **Job `frontend`** : Node 22, `npm ci --legacy-peer-deps` (racine, comme le Dockerfile —
+  `vite-plugin-pwa@0.9.3` déclare un peer `vite@^2`), `npm test` + `npm run build`.
+
+Vérifié en local : la suite d'intégration passe (78/78) avec les mêmes variables
+d'environnement explicites que le workflow (host/port/user/pass/jwt), ce qui confirme que
+`testDb.cjs` + `env.js` privilégient bien l'environnement sur le repli `server/.env`
+(absent en CI puisque gitignoré).
