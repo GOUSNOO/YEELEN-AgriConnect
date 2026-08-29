@@ -8,6 +8,7 @@ import { syncDevisPaiement } from '../utils/financeSync.js';
 import { applyVenteLignesToStock, reverseVenteLignesToStock } from '../utils/stockSync.js';
 import { streamDevisPdf } from '../utils/devisPdf.js';
 import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
+import { logAuditEvent } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -389,7 +390,7 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
     return res.status(400).json({ error: 'Précisez qui a donné son accord (nom du client).' });
   }
   try {
-    const check = await pool.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await pool.query('SELECT statut, numero FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
     if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
       return res.status(400).json({ error: 'Ce devis ne peut plus être validé manuellement.' });
@@ -401,6 +402,10 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
     );
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: check.rows[0].statut }, { statut: 'Signé' }, ['statut']);
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_valide_manuel', req,
+      details: { devisId: Number(req.params.id), numero: check.rows[0].numero, statutAvant: check.rows[0].statut, confirmePar: confirmePar.trim() },
+    });
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     await applyVenteLignesToStock(req.user.entrepriseId, devis.lignes, {
@@ -420,7 +425,7 @@ router.post('/:id/valider-manuel', authRequired, requireRole('admin'), async (re
 // depuis Annulé (recréer un nouveau devis plutôt que ressusciter celui-ci).
 router.post('/:id/annuler', authRequired, requireRole('admin'), async (req, res) => {
   try {
-    const check = await pool.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await pool.query('SELECT statut, numero FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
     if (!['Brouillon', 'Devis', 'Envoyé'].includes(check.rows[0].statut)) {
       return res.status(400).json({ error: 'Seul un devis pas encore signé peut être annulé.' });
@@ -428,6 +433,10 @@ router.post('/:id/annuler', authRequired, requireRole('admin'), async (req, res)
     await pool.query(`UPDATE devis SET statut = 'Annulé' WHERE id = $1`, [req.params.id]);
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: check.rows[0].statut }, { statut: 'Annulé' }, ['statut']);
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_annule', req,
+      details: { devisId: Number(req.params.id), numero: check.rows[0].numero, statutAvant: check.rows[0].statut },
+    });
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });
   } catch (err) {
@@ -594,6 +603,14 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
 
     await client.query('COMMIT');
 
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_facture', req,
+      details: {
+        devisId: Number(req.params.id), numero, total: Number(total), modePaiement, modalitePaiement,
+        nbEcheances: modalitePaiement === 'echelonne' ? echeances.length : 1,
+      },
+    });
+
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });
   } catch (err) {
@@ -615,7 +632,7 @@ const STATUTS_APRES_SIGNATURE = ['Signé', 'Facturé', 'Non payé', 'Payé parti
 router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query('SELECT statut, numero FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) {
       client.release();
       return res.status(404).json({ error: 'Devis introuvable.' });
@@ -639,6 +656,10 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     await client.query('COMMIT');
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: statutAvant }, { statut: 'Brouillon' }, ['statut']);
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_remis_brouillon', req,
+      details: { devisId: Number(req.params.id), numero: check.rows[0].numero, statutAvant },
+    });
 
     if (STATUTS_APRES_SIGNATURE.includes(statutAvant)) {
       const lignesResult = await pool.query(
@@ -703,6 +724,13 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
     await pool.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: devisResult.rows[0].statut }, { statut: nouveauStatut }, ['statut']);
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_echeance_payee', req,
+      details: {
+        devisId: Number(req.params.id), numero, echeanceId: Number(req.params.echeanceId),
+        montant: echeanceResult.rows[0].montant, nouveauStatut,
+      },
+    });
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });
@@ -755,7 +783,7 @@ router.patch('/:id/lignes-quantites', authRequired, requireRole('admin'), async 
   }
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT id FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query('SELECT id, numero FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) {
       client.release();
       return res.status(404).json({ error: 'Devis introuvable.' });
@@ -769,6 +797,10 @@ router.patch('/:id/lignes-quantites', authRequired, requireRole('admin'), async 
       );
     }
     await client.query('COMMIT');
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_quantites_ajustees', req,
+      details: { devisId: Number(req.params.id), numero: check.rows[0].numero, nbLignes: lignes.length },
+    });
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });
   } catch (err) {

@@ -427,3 +427,35 @@ identité utilisateur sur un pas de temps, puis recalculé à la vérification. 
   code token) **et** TOTP non régressé (setup QR → verify → login). Entreprises/comptes de test
   supprimés après (nettoyage multi-tables : `produit_categories`, `audit_log`,
   `entreprise_utilisateurs`, `entreprises`, `users`).
+### Journal d'audit — actions financières des devis (2026-08-29)
+
+Dernier trou identifié du chantier « Journal d'audit » du Jalon 1 (cf. CLAUDE.md). Les
+transitions de `routes/devis.js` réservées à l'admin ne laissaient qu'une trace partielle
+(`finances.user_id` + `devis.statut` + le `journal_modifications` par enregistrement) ;
+rien dans `audit_log`, la table de sécurité relue par `GET /api/auth/audit-log`.
+
+- **`routes/devis.js`** : import de `logAuditEvent`, puis un appel après l'`UPDATE`/`COMMIT`
+  réussi de chaque route admin, **en plus** du `logFieldChanges` existant (table et finalité
+  différentes) :
+  - `POST /:id/valider-manuel` → `devis_valide_manuel` (`details`: devisId, numero, statutAvant, confirmePar)
+  - `POST /:id/annuler` → `devis_annule` (devisId, numero, statutAvant)
+  - `POST /:id/facturer` → `devis_facture` (devisId, numero, total, modePaiement, modalitePaiement, nbEcheances)
+  - `POST /:id/remettre-brouillon` → `devis_remis_brouillon` (devisId, numero, statutAvant)
+  - `POST /:id/echeances/:echeanceId/payer` → `devis_echeance_payee` (devisId, numero, echeanceId, montant, nouveauStatut)
+  - `PATCH /:id/lignes-quantites` → `devis_quantites_ajustees` (devisId, numero, nbLignes)
+  - `userId`/`email` de la ligne = l'admin acteur ; IP/User-Agent captés via `req`.
+  - 4 `SELECT` de contrôle étendus pour récupérer `numero` là où le handler ne l'avait pas.
+- **Hors périmètre, assumé** : `POST /:id/envoyer` (pas gated admin, pas une transition
+  financière ; garde son `logFieldChanges` + token public). Pas d'UI : il n'existe aucun
+  écran de journal d'audit dans l'app (les connexions n'en ont pas non plus) — accès
+  uniquement via l'API admin, cohérent avec l'existant.
+- **`logAuditEvent`** avale déjà ses propres erreurs (jamais de throw) → aucun try/catch au
+  point d'appel, le chemin financier ne peut pas casser à cause du journal.
+- **Vérifs** : `server/npm test` vert. Test HTTP e2e contre la stack Docker (17 assertions
+  vertes) : entreprise + admin jetables, un devis passé par valider-manuel → facturer
+  (échelonné, 2 échéances) → payer échéance → lignes-quantites → remettre-brouillon, un
+  second devis annulé, puis `GET /api/auth/audit-log` et assert de chaque action + `details`
+  (devisId, numero, montants, statuts) + présence de l'email acteur et du User-Agent.
+  Données de test supprimées après (nettoyage multi-tables : finances, echeances_paiement,
+  devis_lignes, devis, journal_modifications, contacts, produit_categories, audit_log,
+  entreprise_utilisateurs, entreprises, users).
