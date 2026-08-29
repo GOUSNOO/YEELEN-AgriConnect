@@ -1,0 +1,5 @@
+# Les scripts shell doivent rester en fin de ligne LF : ils sont exécutés dans des
+# conteneurs Linux (server/Dockerfile.backup copie backup.sh tel quel), et un CRLF
+# sur la ligne #!/bin/sh casse l'interpréteur d'Alpine. Sans ceci, un clone Windows
+# avec core.autocrlf=true les récupérerait en CRLF.
+*.sh text eol=lf

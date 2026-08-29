@@ -459,3 +459,40 @@ rien dans `audit_log`, la table de sécurité relue par `GET /api/auth/audit-log
   Données de test supprimées après (nettoyage multi-tables : finances, echeances_paiement,
   devis_lignes, devis, journal_modifications, contacts, produit_categories, audit_log,
   entreprise_utilisateurs, entreprises, users).
+### Backups — alerte à l'échec + test de restauration automatisé (2026-08-29)
+
+Dernier item de code autonome du Jalon 1. Avant : `server/backup.sh` vérifiait déjà le
+code retour de `pg_dump` et la non-vacuité du fichier, mais un cycle en échec ne faisait
+que logger et attendre 6 h ; aucun test de restauration en dehors d'une vérif manuelle
+ponctuelle (cf. section « Backups » de CLAUDE.md).
+
+Le conteneur `backup` est une image `postgres:18-alpine` nue (pas de node → pas d'accès
+au `mailer` de l'app), donc « alerte » = **fichiers sentinelles** dans `./backups/`
+(monté sur l'hôte), à surveiller par un opérateur ou un futur check :
+- `.last_success` — réécrit (horodatage + taille) à chaque dump réussi.
+- `.last_failure` — écrit (horodatage + raison) si `pg_dump` échoue ou rend un fichier
+  vide ; **supprimé** au dump réussi suivant. Présent = un dump est actuellement cassé.
+- `.last_restore_test` — résultat du dernier test de restauration, `"<ts> OK …"` ou
+  `"<ts> FAIL …"`. Volontairement **pas** écrit dans `.last_failure` (qu'un dump réussi
+  ultérieur effacerait, masquant l'échec) — un `FAIL` en tête de ce fichier est sa propre
+  alerte.
+
+Test de restauration (`run_restore_test`, dans le même script) :
+- Ne tourne qu'une fois tous les `RESTORE_TEST_INTERVAL_HOURS` (env, défaut 168 ≈ hebdo ;
+  vérifié via `find -mmin` sur `.last_restore_test`), **après** dump + rotation et jamais
+  de façon bloquante (`run_restore_test || true`).
+- `createdb agri_app_restore_test` → `pg_restore` du dump le plus récent → comparaison
+  base restaurée vs base live : nb de tables du schéma `public` + nb de lignes de `users`
+  et `entreprises` → `dropdb`. `rc != 0` de `pg_restore` **ou** un compteur qui diffère
+  → `FAIL`. `DB_USER` = superuser Postgres (`POSTGRES_USER`), donc create/drop autorisés.
+
+Vérifié de bout en bout contre la stack locale : cycle normal écrit `.last_success` ;
+test de restauration forcé OK (`tables 54/54 users 13/13 entreprises 9/9 rc=0`) et base
+jetable bien supprimée (aucun résidu) ; échec de `pg_dump` simulé (mauvais `DB_NAME`)
+écrit `.last_failure` + `exit 1` sans toucher `.last_success` ; le cycle réussi suivant
+efface `.last_failure`. `find -mmin` confirmé supporté par le busybox de l'image.
+
+`Dockerfile.backup` et `docker-compose.yml` inchangés (boucle 6 h et env identiques ;
+`RESTORE_TEST_INTERVAL_HOURS` peut être posé sur le service `backup` si besoin). Reste à
+faire : transformer les sentinelles en vraie alerte poussée (email/webhook) — reporté à
+quand l'hébergement + un SMTP existeront.
