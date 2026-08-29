@@ -4,8 +4,14 @@
 // passe uniquement par ce GET / inline.
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
+import { requireRole } from '../middleware/requireRole.js';
 import { pool } from '../db.js';
 import banquesService from '../services/banquesService.js';
+
+// Les écritures (création/édition/suppression d'un compte bancaire) sont réservées à
+// admin/directeur — même posture que les écritures financières de business.js. La
+// lecture (GET /) reste ouverte à tous les rôles authentifiés.
+const ecriture = [authRequired, requireRole('admin', 'directeur')];
 
 const router = express.Router();
 
@@ -31,7 +37,7 @@ router.get('/', authRequired, async (req, res) => {
   }
 });
 
-router.post('/', authRequired, async (req, res) => {
+router.post('/', ...ecriture, async (req, res) => {
   const { nomBanque, iban, typeCompte, solde = 0 } = req.body;
   if (!nomBanque) {
     return res.status(400).json({ error: 'Le nom de la banque est requis.' });
@@ -50,10 +56,11 @@ router.post('/', authRequired, async (req, res) => {
 // (nom_banque, type_compte), pas en camelCase — inoffensif tant que rien ne consomme
 // updatedBanque, mais à corriger dans banquesService.js si un formulaire d'édition de
 // compte bancaire est construit un jour dessus.
-router.put('/:id', authRequired, async (req, res) => {
+router.put('/:id', ...ecriture, async (req, res) => {
   const { nomBanque, iban, typeCompte, solde } = req.body;
   try {
     const updatedBanque = await banquesService.updateBanque(req.params.id, nomBanque, iban, typeCompte, solde, req.user.entrepriseId);
+    if (!updatedBanque) return res.status(404).json({ error: 'Compte bancaire introuvable.' });
     return res.json({ banque: updatedBanque });
   } catch (err) {
     console.error('[PUT /banques]', err);
@@ -61,10 +68,11 @@ router.put('/:id', authRequired, async (req, res) => {
   }
 });
 
-router.delete('/:id', authRequired, async (req, res) => {
+router.delete('/:id', ...ecriture, async (req, res) => {
   try {
     const deleted = await banquesService.deleteBanque(req.params.id, req.user.entrepriseId);
-    return res.json({ success: deleted });
+    if (!deleted) return res.status(404).json({ error: 'Compte bancaire introuvable.' });
+    return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /banques]', err);
     return res.status(500).json({ error: 'Erreur lors de la suppression.' });

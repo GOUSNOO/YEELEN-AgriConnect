@@ -52,9 +52,11 @@ async function deleteBanque(id, entrepriseId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM banques WHERE id = $1 AND entreprise_id = $2', [id, entrepriseId]);
+    const result = await client.query('DELETE FROM banques WHERE id = $1 AND entreprise_id = $2', [id, entrepriseId]);
     await client.query('COMMIT');
-    return true;
+    // false si 0 ligne (id inexistant ou appartenant à une autre entreprise) — la route
+    // en fait un 404, cohérent avec PUT et les autres modules.
+    return result.rowCount > 0;
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[deleteBanque]', err);

@@ -620,3 +620,32 @@ de dev `agri_app` intacte (9 entreprises / 9 salariés / 4 docs d'achat inchang�
 
 Vérifs : `npm run test:integration` 35/35 vert, `npm test` unitaire vert, backend Docker
 reconstruit et OK, base de dev `agri_app` intacte, `agri_app_test` supprimée après.
+### Tests d'intégration — extension Banques + Équipements (+ gate /api/banques) (2026-08-30)
+
+35 → 45 tests, 7 → 9 fichiers.
+
+- **`banques.test.js`** — CRUD (nom requis → 400, `GET` scopé, `PUT` met à jour, `DELETE`
+  retire, `PUT`/`DELETE` sur id inexistant → 404) ; **rôles** : ouvrier sur
+  `POST`/`PUT`/`DELETE` → 403, lecture OK ; **compte principal**
+  (`PUT /entreprise/banque-principale` admin, ouvrier → 403) + effet métier : un achat
+  reçu avec banque principale posée → l'écriture `finances` sort en `categorie: 'Banque'`
+  (+ `banqueId`) au lieu de `Caisse` ; isolation multi-tenant.
+- **`equipements.test.js`** — CRUD (nom requis, `PUT`/`DELETE` id inexistant → 404) ;
+  **rôles** : ouvrier → 403 sur les écritures, `gestionnaire` (rôle autorisé) → 201,
+  lecture ouverte ; **maintenance** (description requise, liste, suppression + re-
+  suppression → 404, sous-route sur équipement inexistant → 404) ; isolation multi-tenant
+  y compris les sous-routes.
+
+- **`/api/banques` gated `requireRole('admin', 'directeur')`** (décision utilisateur
+  explicite) sur `POST`/`PUT`/`DELETE` — avant : aucune garde, un `ouvrier` pouvait
+  créer/modifier/supprimer des comptes bancaires, incohérent avec le gate des écritures
+  financières (`/business/finances`) alors que les comptes sont ce que ces écritures
+  référencent. `GET /` reste ouvert à tous les rôles.
+- **Même classe de bug que `DELETE contacts` la veille** : `DELETE /api/banques/:id`
+  renvoyait `{ success: true }` / 200 et `PUT /api/banques/:id` renvoyait `{ banque: null }`
+  / 200 même sur 0 ligne (mauvais tenant / id bidon). Corrigé → 404 sur 0 ligne.
+  `banquesService.deleteBanque` renvoie désormais `rowCount > 0` au lieu de `true`.
+
+Vérifs : `npm run test:integration` 45/45 vert, `npm test` unitaire vert, backend Docker
+reconstruit et OK, base de dev `agri_app` intacte (3 banques / 0 équipements inchangés),
+`agri_app_test` supprimée après.
