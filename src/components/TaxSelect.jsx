@@ -17,33 +17,44 @@ export default function TaxSelect({ value, options, onChange, disabled }) {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  const noms = selected
+  const selectedTaxes = selected
     .map((id) => (options || []).find((o) => o.id === id))
-    .filter(Boolean)
-    .map((o) => o.name);
-  const label = noms.length ? noms.join(', ') : t('taxes.none');
+    .filter(Boolean);
 
   const toggle = (id) => {
     const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
     onChange(next);
   };
 
+  // Puces façon widget many2many_tags d'un ERP de référence : petites étiquettes arrondies
+  // avec un « × » pour retirer, un menu de cases à cocher au clic.
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
-        title={label}
+      <div
+        onClick={() => !disabled && setOpen((o) => !o)}
         style={{
-          width: '100%', textAlign: 'left', fontSize: 12.5, padding: '4px 6px',
-          border: '1px solid transparent', borderRadius: 6, background: 'transparent',
-          cursor: disabled ? 'default' : 'pointer', color: noms.length ? '#22271D' : '#9AA093',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 24,
+          padding: '2px 4px', border: '1px solid transparent', borderRadius: 4,
+          cursor: disabled ? 'default' : 'pointer',
         }}
       >
-        {label}
-      </button>
+        {selectedTaxes.length === 0 && <span style={{ fontSize: 12.5, color: '#9AA5B1' }}>{t('taxes.none')}</span>}
+        {selectedTaxes.map((o) => (
+          <span key={o.id} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11.5, lineHeight: 1.4,
+            background: '#E7EFDF', color: '#3F6B3B', borderRadius: 10, padding: '1px 7px', whiteSpace: 'nowrap',
+          }}>
+            {o.name}
+            {!disabled && (
+              <span
+                role="button"
+                onClick={(e) => { e.stopPropagation(); toggle(o.id); }}
+                style={{ cursor: 'pointer', fontWeight: 700, marginLeft: 1 }}
+              >×</span>
+            )}
+          </span>
+        ))}
+      </div>
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 30, minWidth: 200,

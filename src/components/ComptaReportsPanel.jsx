@@ -6,10 +6,14 @@ import {
   getPaiements, createPaiement, allocatePaiement, getContacts, getFactures,
 } from '../lib/api.js';
 import { useLocale } from '../lib/locale.jsx';
-import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { Card, Button, notifyError, notifySuccess } from './ui.jsx';
 
-// Étape 6 Comptabilité : balance âgée client, factures en retard (relances) et paiements
-// autonomes (avances à affecter). Rendu au-dessus de la liste des factures.
+const INK_SOFT = '#5B6357';
+const BORDER = '#E2E8F0';
+
+// Étape 6 Comptabilité : balance âgée client (façon rapport Aged Receivable d'Odoo),
+// factures en retard (relances) et paiements autonomes (avances à affecter). Tableaux en
+// .data-table partagée, formulaires en field-group libellé-à-gauche.
 function Section({ titre, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -31,18 +35,9 @@ export default function ComptaReportsPanel({ onChange }) {
   const [clients, setClients] = useState([]);
   const [busy, setBusy] = useState(false);
   const [payForm, setPayForm] = useState({ partnerId: '', amount: '', paymentDate: '', ref: '' });
-  const [allocFor, setAllocFor] = useState(null); // paymentId | null
+  const [allocFor, setAllocFor] = useState(null);
   const [allocForm, setAllocForm] = useState({ moveId: '', amount: '' });
   const [facturesPartenaire, setFacturesPartenaire] = useState([]);
-
-  const ouvrirAlloc = (p) => {
-    if (allocFor === p.id) { setAllocFor(null); return; }
-    setAllocFor(p.id);
-    setAllocForm({ moveId: '', amount: '' });
-    getFactures(`?partnerId=${p.partnerId}&state=posted&moveType=out_invoice`)
-      .then((d) => setFacturesPartenaire((d.factures || []).filter((f) => !['paid', 'reversed'].includes(f.paymentState))))
-      .catch(() => setFacturesPartenaire([]));
-  };
 
   const recharger = () => {
     getAgedReceivable().then(setAged).catch(() => {});
@@ -53,6 +48,15 @@ export default function ComptaReportsPanel({ onChange }) {
     recharger();
     getContacts('client').then((d) => setClients(d.contacts || [])).catch(() => {});
   }, []);
+
+  const ouvrirAlloc = (p) => {
+    if (allocFor === p.id) { setAllocFor(null); return; }
+    setAllocFor(p.id);
+    setAllocForm({ moveId: '', amount: '' });
+    getFactures(`?partnerId=${p.partnerId}&state=posted&moveType=out_invoice`)
+      .then((d) => setFacturesPartenaire((d.factures || []).filter((f) => !['paid', 'reversed'].includes(f.paymentState))))
+      .catch(() => setFacturesPartenaire([]));
+  };
 
   const relancer = async (id) => {
     try { await markFactureReminded(id); notifySuccess(t('comptaReports.reminded')); recharger(); }
@@ -99,46 +103,48 @@ export default function ComptaReportsPanel({ onChange }) {
     }
   };
 
-  const th = { padding: '5px 8px', fontSize: 12.5, textAlign: 'right', color: '#5B6357' };
-  const td = { padding: '5px 8px', fontSize: 13, textAlign: 'right' };
   const clientLabel = (c) => [c.prenom, c.nom].filter(Boolean).join(' ') || c.nom || `#${c.id}`;
+  const rAmt = { textAlign: 'right' };
 
   return (
     <Card>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 12 }}>{t('comptaReports.title')}</div>
 
-      <Section titre={t('comptaReports.aged')}>
+      <Section titre={t('comptaReports.aged')} defaultOpen>
         {!aged ? <Loader2 size={14} className="spin" /> : aged.partners.length === 0 ? (
           <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <th style={{ ...th, textAlign: 'left' }}>{t('comptaReports.partner')}</th>
-                <th style={th}>{t('comptaReports.notDue')}</th>
-                <th style={th}>1–30</th><th style={th}>31–60</th><th style={th}>61–90</th><th style={th}>90+</th>
-                <th style={{ ...th, fontWeight: 700 }}>{t('common.total')}</th>
+            <table className="data-table">
+              <thead><tr style={{ color: INK_SOFT }}>
+                <th style={{ width: '28%' }}>{t('comptaReports.partner')}</th>
+                <th style={{ ...rAmt, width: '12%' }}>{t('comptaReports.notDue')}</th>
+                <th style={{ ...rAmt, width: '12%' }}>1–30</th>
+                <th style={{ ...rAmt, width: '12%' }}>31–60</th>
+                <th style={{ ...rAmt, width: '12%' }}>61–90</th>
+                <th style={{ ...rAmt, width: '12%' }}>90+</th>
+                <th style={{ ...rAmt, width: '12%', fontWeight: 700 }}>{t('common.total')}</th>
               </tr></thead>
               <tbody>
                 {aged.partners.map((p) => (
-                  <tr key={p.partnerId} style={{ borderTop: '1px solid #EEE' }}>
-                    <td style={{ ...td, textAlign: 'left' }}>{p.partnerName}</td>
-                    <td style={td}>{fmtMoney(p.buckets.notDue)}</td>
-                    <td style={td}>{fmtMoney(p.buckets.d1_30)}</td>
-                    <td style={td}>{fmtMoney(p.buckets.d31_60)}</td>
-                    <td style={td}>{fmtMoney(p.buckets.d61_90)}</td>
-                    <td style={td}>{fmtMoney(p.buckets.d90plus)}</td>
-                    <td style={{ ...td, fontWeight: 700 }}>{fmtMoney(p.buckets.total)}</td>
+                  <tr key={p.partnerId}>
+                    <td>{p.partnerName}</td>
+                    <td style={rAmt}>{fmtMoney(p.buckets.notDue)}</td>
+                    <td style={rAmt}>{fmtMoney(p.buckets.d1_30)}</td>
+                    <td style={rAmt}>{fmtMoney(p.buckets.d31_60)}</td>
+                    <td style={rAmt}>{fmtMoney(p.buckets.d61_90)}</td>
+                    <td style={rAmt}>{fmtMoney(p.buckets.d90plus)}</td>
+                    <td style={{ ...rAmt, fontWeight: 700 }}>{fmtMoney(p.buckets.total)}</td>
                   </tr>
                 ))}
-                <tr style={{ borderTop: '2px solid #DAD6C4', fontWeight: 700 }}>
-                  <td style={{ ...td, textAlign: 'left' }}>{t('common.total')}</td>
-                  <td style={td}>{fmtMoney(aged.totals.notDue)}</td>
-                  <td style={td}>{fmtMoney(aged.totals.d1_30)}</td>
-                  <td style={td}>{fmtMoney(aged.totals.d31_60)}</td>
-                  <td style={td}>{fmtMoney(aged.totals.d61_90)}</td>
-                  <td style={td}>{fmtMoney(aged.totals.d90plus)}</td>
-                  <td style={td}>{fmtMoney(aged.totals.total)}</td>
+                <tr style={{ borderTop: `2px solid ${BORDER}`, fontWeight: 700 }}>
+                  <td>{t('common.total')}</td>
+                  <td style={rAmt}>{fmtMoney(aged.totals.notDue)}</td>
+                  <td style={rAmt}>{fmtMoney(aged.totals.d1_30)}</td>
+                  <td style={rAmt}>{fmtMoney(aged.totals.d31_60)}</td>
+                  <td style={rAmt}>{fmtMoney(aged.totals.d61_90)}</td>
+                  <td style={rAmt}>{fmtMoney(aged.totals.d90plus)}</td>
+                  <td style={rAmt}>{fmtMoney(aged.totals.total)}</td>
                 </tr>
               </tbody>
             </table>
@@ -147,53 +153,96 @@ export default function ComptaReportsPanel({ onChange }) {
       </Section>
 
       <Section titre={t('comptaReports.overdue', { count: overdue.length })}>
-        {overdue.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : overdue.map((f) => (
-          <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, padding: '5px 0', borderTop: '1px solid #EEE' }}>
-            <strong>{f.name}</strong>
-            <span style={{ color: '#5B6357' }}>{f.partnerName || '—'}</span>
-            <span style={{ color: '#B23B2E' }}>{t('comptaReports.daysLate', { n: f.daysOverdue })}</span>
-            <span style={{ marginLeft: 'auto' }}>{fmtMoney(f.amountResidual)}</span>
-            <span style={{ color: '#5B6357', fontSize: 12 }}>
-              {f.relanceNiveau > 0 ? t('comptaReports.remindedN', { n: f.relanceNiveau, date: fmtDate(f.derniereRelance) }) : ''}
-            </span>
-            <Button small variant="outline" disabled={busy} onClick={() => relancer(f.id)}>{t('comptaReports.markReminded')}</Button>
+        {overdue.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr style={{ color: INK_SOFT }}>
+                <th style={{ width: '15%' }}>{t('comptaReports.invoice')}</th>
+                <th style={{ width: '25%' }}>{t('comptaReports.partner')}</th>
+                <th style={{ width: '15%' }}>{t('factures.invoiceDateDue')}</th>
+                <th style={{ width: '12%' }}>{t('comptaReports.late')}</th>
+                <th style={{ ...rAmt, width: '13%' }}>{t('factures.amountResidual')}</th>
+                <th style={{ width: '10%' }}>{t('comptaReports.remindersCol')}</th>
+                <th style={{ width: '10%' }} />
+              </tr></thead>
+              <tbody>
+                {overdue.map((f) => (
+                  <tr key={f.id}>
+                    <td><strong>{f.name}</strong></td>
+                    <td>{f.partnerName || '—'}</td>
+                    <td>{f.invoiceDateDue ? fmtDate(f.invoiceDateDue) : '—'}</td>
+                    <td style={{ color: '#B23B2E' }}>{t('comptaReports.daysLate', { n: f.daysOverdue })}</td>
+                    <td style={rAmt}>{fmtMoney(f.amountResidual)}</td>
+                    <td style={{ color: INK_SOFT }}>{f.relanceNiveau > 0 ? t('comptaReports.remindedShort', { n: f.relanceNiveau, date: fmtDate(f.derniereRelance) }) : '—'}</td>
+                    <td><Button small variant="outline" disabled={busy} onClick={() => relancer(f.id)}>{t('comptaReports.markReminded')}</Button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
+        )}
       </Section>
 
       <Section titre={t('comptaReports.payments', { count: paiements.length })}>
-        <form onSubmit={submitPaiement} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 12 }}>
-          <Select label={t('comptaReports.partner')} value={payForm.partnerId} onChange={(e) => setPayForm({ ...payForm, partnerId: e.target.value })}>
+        <form onSubmit={submitPaiement} style={{ display: 'grid', gridTemplateColumns: 'fit-content(120px) minmax(0,1fr) fit-content(120px) minmax(0,1fr)', gap: '8px 14px', alignItems: 'center', maxWidth: 620, marginBottom: 14 }}>
+          <div className="field-group-label">{t('comptaReports.partner')}</div>
+          <select className="flat-input" value={payForm.partnerId} onChange={(e) => setPayForm({ ...payForm, partnerId: e.target.value })}>
             <option value="">—</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{clientLabel(c)}</option>)}
-          </Select>
-          <Field label={t('comptaReports.amount')} type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
-          <Field label={t('comptaReports.date')} type="date" value={payForm.paymentDate} onChange={(e) => setPayForm({ ...payForm, paymentDate: e.target.value })} />
-          <Field label={t('comptaReports.ref')} value={payForm.ref} onChange={(e) => setPayForm({ ...payForm, ref: e.target.value })} />
-          <Button type="submit" variant="outline" disabled={busy}>{t('comptaReports.addPayment')}</Button>
+          </select>
+          <div className="field-group-label">{t('comptaReports.amount')}</div>
+          <input className="flat-input" type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
+          <div className="field-group-label">{t('comptaReports.date')}</div>
+          <input className="flat-input" type="date" value={payForm.paymentDate} onChange={(e) => setPayForm({ ...payForm, paymentDate: e.target.value })} />
+          <div className="field-group-label">{t('comptaReports.ref')}</div>
+          <input className="flat-input" value={payForm.ref} onChange={(e) => setPayForm({ ...payForm, ref: e.target.value })} />
+          <div style={{ gridColumn: '1 / -1', textAlign: 'right' }}><Button type="submit" variant="outline" disabled={busy}>{t('comptaReports.addPayment')}</Button></div>
         </form>
-        {paiements.map((p) => (
-          <div key={p.id} style={{ fontSize: 13, padding: '6px 0', borderTop: '1px solid #EEE' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <strong>{p.moveName || `#${p.id}`}</strong>
-              <span style={{ color: '#5B6357' }}>{p.partnerName || '—'}{p.ref ? ` · ${p.ref}` : ''}</span>
-              <span style={{ marginLeft: 'auto' }}>{t('comptaReports.unallocated', { amount: fmtMoney(p.unallocated) })}</span>
-              <Button small variant="outline" disabled={busy} onClick={() => ouvrirAlloc(p)}>{t('comptaReports.allocate')}</Button>
-            </div>
-            {allocFor === p.id && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'end', marginTop: 8, paddingLeft: 12 }}>
-                <Select label={t('comptaReports.invoice')} value={allocForm.moveId} onChange={(e) => setAllocForm({ ...allocForm, moveId: e.target.value })}>
-                  <option value="">—</option>
-                  {facturesPartenaire.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name} · {fmtMoney(f.amountResidual)}</option>
-                  ))}
-                </Select>
-                <Field label={t('comptaReports.amountOptional')} type="number" value={allocForm.amount} onChange={(e) => setAllocForm({ ...allocForm, amount: e.target.value })} />
-                <Button small disabled={busy} onClick={() => submitAlloc(p.id)}>{t('comptaReports.allocate')}</Button>
-              </div>
-            )}
+
+        {paiements.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr style={{ color: INK_SOFT }}>
+                <th style={{ width: '20%' }}>{t('comptaReports.invoice')}</th>
+                <th style={{ width: '30%' }}>{t('comptaReports.partner')}</th>
+                <th style={{ width: '25%' }}>{t('comptaReports.ref')}</th>
+                <th style={{ ...rAmt, width: '15%' }}>{t('comptaReports.toAllocate')}</th>
+                <th style={{ width: '10%' }} />
+              </tr></thead>
+              <tbody>
+                {paiements.map((p) => (
+                  <React.Fragment key={p.id}>
+                    <tr>
+                      <td><strong>{p.moveName || `#${p.id}`}</strong></td>
+                      <td>{p.partnerName || '—'}</td>
+                      <td style={{ color: INK_SOFT }}>{p.ref || ''}</td>
+                      <td style={rAmt}>{fmtMoney(p.unallocated)}</td>
+                      <td><Button small variant="outline" disabled={busy} onClick={() => ouvrirAlloc(p)}>{t('comptaReports.allocate')}</Button></td>
+                    </tr>
+                    {allocFor === p.id && (
+                      <tr>
+                        <td colSpan={5} style={{ background: '#FAFAF7' }}>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+                            <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.invoice')}
+                              <select className="flat-input" value={allocForm.moveId} onChange={(e) => setAllocForm({ ...allocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
+                                <option value="">—</option>
+                                {facturesPartenaire.map((f) => <option key={f.id} value={f.id}>{f.name} · {fmtMoney(f.amountResidual)}</option>)}
+                              </select>
+                            </label>
+                            <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.amountOptional')}
+                              <input className="flat-input" type="number" value={allocForm.amount} onChange={(e) => setAllocForm({ ...allocForm, amount: e.target.value })} style={{ maxWidth: 140, marginTop: 3 }} />
+                            </label>
+                            <Button small disabled={busy} onClick={() => submitAlloc(p.id)}>{t('comptaReports.allocate')}</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
+        )}
       </Section>
     </Card>
   );

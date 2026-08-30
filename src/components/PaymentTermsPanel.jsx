@@ -75,12 +75,24 @@ export default function PaymentTermsPanel({ terms, onChange }) {
             <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
           </form>
 
-          {(terms || []).map((term) => (
-            <div key={term.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: '1px solid #DAD6C4', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
-              <span><strong>{term.name}</strong> <span style={{ color: '#5B6357' }}>· {resume(term)}</span></span>
-              <button onClick={() => supprimer(term.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
-            </div>
-          ))}
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr style={{ color: '#5B6357' }}>
+                <th style={{ width: '38%' }}>{t('paymentTerms.name')}</th>
+                <th style={{ width: '56%' }}>{t('paymentTerms.repartition')}</th>
+                <th style={{ width: '6%' }} />
+              </tr></thead>
+              <tbody>
+                {(terms || []).map((term) => (
+                  <tr key={term.id}>
+                    <td><strong>{term.name}</strong></td>
+                    <td style={{ color: '#5B6357' }}>{resume(term)}</td>
+                    <td><button onClick={() => supprimer(term.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </Card>

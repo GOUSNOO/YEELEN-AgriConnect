@@ -8,12 +8,56 @@ import {
 } from '../lib/api.js';
 import { taxesLigneCalc } from '../lib/taxes.js';
 import { useLocale } from '../lib/locale.jsx';
-import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
+import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
 
 const STATE_TONE = { draft: 'blue', posted: 'green', cancel: 'red' };
 const PAY_TONE = { not_paid: 'ochre', partial: 'ochre', paid: 'green', in_payment: 'ochre', reversed: 'red' };
+const INK_SOFT = '#5B6357';
+const BORDER = '#E2E8F0';
+const NOTCH = 12;
+
+// Barre de statut en chevrons (draft → posted), même géométrie clip-path que DevisStatusBar
+// dans App.jsx — voir project_erp_devis_visual_alignment.
+function MoveStatusBar({ state }) {
+  const { t } = useTranslation();
+  if (state === 'cancel') return <Badge tone="red">{t('factures.state.cancel')}</Badge>;
+  const steps = ['draft', 'posted'];
+  const activeIndex = steps.indexOf(state);
+  return (
+    <div style={{ display: 'flex' }}>
+      {steps.map((k, i) => {
+        const isActive = i === activeIndex;
+        const isFirst = i === 0;
+        const isLast = i === steps.length - 1;
+        let clipPath;
+        if (isFirst && isLast) clipPath = 'none';
+        else if (isFirst) clipPath = `polygon(0 0, calc(100% - ${NOTCH}px) 0, 100% 50%, calc(100% - ${NOTCH}px) 100%, 0 100%)`;
+        else clipPath = `polygon(0 0, 100% 0, 100% 100%, 0 100%, ${NOTCH}px 50%)`;
+        return (
+          <div key={k} style={{
+            clipPath, marginLeft: isFirst ? 0 : -NOTCH,
+            padding: `6px ${NOTCH + 6}px`, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+            background: isActive ? '#3F6B3B' : '#F0EEE6', color: isActive ? '#fff' : INK_SOFT,
+            position: 'relative', zIndex: isActive ? 2 : 1,
+          }}>
+            {t(`factures.state.${k}`)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Annotation d'échéance façon widget remaining_days d'Odoo (« J+3 » / « 5 j de retard »).
+function echeanceLabel(dateStr, t) {
+  if (!dateStr) return '—';
+  const j = Math.round((new Date(dateStr) - new Date(new Date().toISOString().slice(0, 10))) / 864e5);
+  if (j < 0) return t('factures.dueLate', { n: -j });
+  if (j === 0) return t('factures.dueToday');
+  return t('factures.dueIn', { n: j });
+}
 
 export default function FacturesModule() {
   const { t } = useTranslation();
@@ -32,6 +76,7 @@ export default function FacturesModule() {
   const [apiError, setApiError] = useState('');
 
   const [detail, setDetail] = useState(null);
+  const [detailTab, setDetailTab] = useState('lignes'); // 'lignes' | 'ecritures'
   const [detailBusy, setDetailBusy] = useState(false);
   const [payForm, setPayForm] = useState({ amount: '', paymentDate: '' });
   const [avoirForm, setAvoirForm] = useState(null); // null | { reason, refundMethod }
@@ -55,7 +100,6 @@ export default function FacturesModule() {
 
   const clientLabel = (c) => [c.prenom, c.nom].filter(Boolean).join(' ') || c.nom || `#${c.id}`;
 
-  // Total prévisionnel du formulaire (base + taxe par ligne).
   const totalForm = form.lignes.reduce((s, l) => {
     const brut = (Number(l.quantity) || 0) * (Number(l.priceUnit) || 0) * (1 - (Number(l.discount) || 0) / 100);
     const { base, taxe } = taxesLigneCalc(brut, l.quantity, l.taxIds, taxById);
@@ -103,6 +147,7 @@ export default function FacturesModule() {
     try {
       const d = await getFacture(id);
       setDetail(d.facture);
+      setDetailTab('lignes');
       setPayForm({ amount: '', paymentDate: '' });
       setAvoirForm(null);
     } catch (err) { notifyError(err, t('factures.loadError')); }
@@ -139,7 +184,8 @@ export default function FacturesModule() {
       const d = await reverseFacture(detail.id, { reason: avoirForm.reason || undefined, refundMethod: avoirForm.refundMethod });
       notifySuccess(t('factures.avoirCreated'));
       setAvoirForm(null);
-      setDetail(d.facture); // ouvre l'avoir créé
+      setDetail(d.facture);
+      setDetailTab('lignes');
       charger();
     } catch (err) {
       notifyError(err, t('factures.avoirError'));
@@ -158,12 +204,25 @@ export default function FacturesModule() {
     setPayForm({ amount: '', paymentDate: '' });
   };
 
-  const cellStyle = { padding: '6px 8px', fontSize: 13, borderBottom: '1px solid #EEE' };
+  // Récapitulatif de taxes (par nom) pour le bloc oe_subtotal_footer.
+  const taxesRecap = (d) => {
+    const m = new Map();
+    for (const l of (d.lignes || [])) {
+      if (l.displayType !== 'tax') continue;
+      const nom = (d.taxes || []).find((x) => x.id === l.taxLineId)?.name || t('factures.amountTax');
+      const montant = Math.abs(l.debit - l.credit);
+      m.set(nom, (m.get(nom) || 0) + montant);
+    }
+    return [...m.entries()];
+  };
+
+  const flatInput = { width: '100%', boxSizing: 'border-box', border: '1px solid transparent', background: 'transparent', borderRadius: 4, padding: '5px 6px', fontSize: 13.5 };
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <ComptaReportsPanel onChange={charger} />
 
+      {/* ─── Liste des factures (colonnes dans l'ordre du tree Odoo) ─── */}
       <Card>
         <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginRight: 'auto' }}>{t('factures.title')}</div>
@@ -183,30 +242,34 @@ export default function FacturesModule() {
         {apiError && <div style={{ color: '#B23B2E', fontSize: 13, marginBottom: 8 }}>{apiError}</div>}
 
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table className="data-table">
             <thead>
-              <tr style={{ textAlign: 'left', color: '#5B6357' }}>
-                <th style={cellStyle}>{t('factures.colNumber')}</th>
-                <th style={cellStyle}>{t('factures.colPartner')}</th>
-                <th style={cellStyle}>{t('factures.colDate')}</th>
-                <th style={{ ...cellStyle, textAlign: 'right' }}>{t('factures.colTotal')}</th>
-                <th style={{ ...cellStyle, textAlign: 'right' }}>{t('factures.colResidual')}</th>
-                <th style={cellStyle}>{t('factures.colState')}</th>
-                <th style={cellStyle}>{t('factures.colPayment')}</th>
+              <tr style={{ color: INK_SOFT }}>
+                <th style={{ width: '15%' }}>{t('factures.colNumber')}</th>
+                <th style={{ width: '24%' }}>{t('factures.colPartner')}</th>
+                <th style={{ width: '12%' }}>{t('factures.colDate')}</th>
+                <th style={{ width: '15%' }}>{t('factures.invoiceDateDue')}</th>
+                <th style={{ width: '12%', textAlign: 'right' }}>{t('factures.amountUntaxed')}</th>
+                <th style={{ width: '12%', textAlign: 'right' }}>{t('factures.colTotal')}</th>
+                <th style={{ width: '5%' }}>{t('factures.colPayment')}</th>
+                <th style={{ width: '5%' }}>{t('factures.colState')}</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={7} style={cellStyle}><Loader2 size={14} className="spin" /></td></tr>}
-              {!loading && factures.length === 0 && <tr><td colSpan={7} style={{ ...cellStyle, color: '#9AA093' }}>{t('factures.empty')}</td></tr>}
+              {loading && <tr><td colSpan={8}><Loader2 size={14} className="spin" /></td></tr>}
+              {!loading && factures.length === 0 && <tr><td colSpan={8} style={{ color: '#9AA093' }}>{t('factures.empty')}</td></tr>}
               {factures.map((f) => (
                 <tr key={f.id} onClick={() => ouvrirDetail(f.id)} style={{ cursor: 'pointer' }}>
-                  <td style={cellStyle}><strong>{f.name || t('factures.draftPlaceholder')}</strong></td>
-                  <td style={cellStyle}>{f.partnerName || '—'}</td>
-                  <td style={cellStyle}>{f.invoiceDate ? fmtDate(f.invoiceDate) : '—'}</td>
-                  <td style={{ ...cellStyle, textAlign: 'right' }}>{fmtMoney(f.amountTotal)}</td>
-                  <td style={{ ...cellStyle, textAlign: 'right' }}>{fmtMoney(f.amountResidual)}</td>
-                  <td style={cellStyle}><Badge tone={STATE_TONE[f.state]}>{t(`factures.state.${f.state}`)}</Badge></td>
-                  <td style={cellStyle}>{f.state === 'posted' && <Badge tone={PAY_TONE[f.paymentState]}>{t(`factures.pay.${f.paymentState}`)}</Badge>}</td>
+                  <td><strong>{f.name || t('factures.draftPlaceholder')}</strong></td>
+                  <td>{f.partnerName || '—'}</td>
+                  <td>{f.invoiceDate ? fmtDate(f.invoiceDate) : '—'}</td>
+                  <td style={{ color: f.invoiceDateDue && f.state === 'posted' && f.paymentState !== 'paid' && new Date(f.invoiceDateDue) < new Date() ? '#B23B2E' : INK_SOFT }}>
+                    {f.invoiceDateDue ? `${fmtDate(f.invoiceDateDue)} · ${echeanceLabel(f.invoiceDateDue, t)}` : '—'}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{fmtMoney(f.amountUntaxed)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(f.amountTotal)}</td>
+                  <td>{f.state === 'posted' && <Badge tone={PAY_TONE[f.paymentState]}>{t(`factures.pay.${f.paymentState}`)}</Badge>}</td>
+                  <td><Badge tone={STATE_TONE[f.state]}>{t(`factures.state.${f.state}`)}</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -214,33 +277,38 @@ export default function FacturesModule() {
         </div>
       </Card>
 
+      {/* ─── Formulaire de création (brouillon) ─── */}
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('factures.newTitle')}</div>
-        <form onSubmit={submitForm} style={{ display: 'grid', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-            <Select label={t('factures.moveType')} value={form.moveType} onChange={(e) => setForm({ ...form, moveType: e.target.value })}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 12 }}>{t('factures.newTitle')}</div>
+        <form onSubmit={submitForm} style={{ display: 'grid', gap: 12 }}>
+          <div className="field-group" style={{ maxWidth: 620 }}>
+            <div className="field-group-label">{t('factures.moveType')}</div>
+            <select className="flat-input" value={form.moveType} onChange={(e) => setForm({ ...form, moveType: e.target.value })}>
               <option value="out_invoice">{t('factures.type.out_invoice')}</option>
               <option value="out_refund">{t('factures.type.out_refund')}</option>
-            </Select>
-            <Select label={t('factures.partner')} value={form.partnerId} onChange={(e) => setForm({ ...form, partnerId: e.target.value })}>
+            </select>
+            <div className="field-group-label">{t('factures.partner')}</div>
+            <select className="flat-input" value={form.partnerId} onChange={(e) => setForm({ ...form, partnerId: e.target.value })}>
               <option value="">—</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{clientLabel(c)}</option>)}
-            </Select>
-            <Field label={t('factures.invoiceDate')} type="date" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} />
-            <Field label={t('factures.invoiceDateDue')} type="date" value={form.invoiceDateDue} onChange={(e) => setForm({ ...form, invoiceDateDue: e.target.value })} />
+            </select>
+            <div className="field-group-label">{t('factures.invoiceDate')}</div>
+            <input className="flat-input" type="date" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} />
+            <div className="field-group-label">{t('factures.invoiceDateDue')}</div>
+            <input className="flat-input" type="date" value={form.invoiceDateDue} onChange={(e) => setForm({ ...form, invoiceDateDue: e.target.value })} />
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="data-table">
               <thead>
-                <tr style={{ textAlign: 'left', color: '#5B6357' }}>
-                  <th style={{ ...cellStyle, width: '32%' }}>{t('factures.colDesignation')}</th>
-                  <th style={{ ...cellStyle, width: '12%' }}>{t('factures.colQty')}</th>
-                  <th style={{ ...cellStyle, width: '15%' }}>{t('factures.colPU')}</th>
-                  <th style={{ ...cellStyle, width: '10%' }}>{t('factures.colDiscount')}</th>
-                  <th style={{ ...cellStyle, width: '18%' }}>{t('factures.colTaxes')}</th>
-                  <th style={{ ...cellStyle, width: '10%', textAlign: 'right' }}>{t('common.total')}</th>
-                  <th style={{ ...cellStyle, width: '3%' }} />
+                <tr style={{ color: INK_SOFT }}>
+                  <th style={{ width: '34%' }}>{t('factures.colDesignation')}</th>
+                  <th style={{ width: '11%', textAlign: 'right' }}>{t('factures.colQty')}</th>
+                  <th style={{ width: '15%', textAlign: 'right' }}>{t('factures.colPU')}</th>
+                  <th style={{ width: '9%', textAlign: 'right' }}>{t('factures.colDiscount')}</th>
+                  <th style={{ width: '19%' }}>{t('factures.colTaxes')}</th>
+                  <th style={{ width: '12%', textAlign: 'right' }}>{t('factures.amountTotal')}</th>
+                  <th style={{ width: '3%' }} />
                 </tr>
               </thead>
               <tbody>
@@ -249,13 +317,13 @@ export default function FacturesModule() {
                   const { base, taxe } = taxesLigneCalc(brut, l.quantity, l.taxIds, taxById);
                   return (
                     <tr key={i}>
-                      <td style={cellStyle}><input value={l.name} onChange={(e) => updateLigne(i, 'name', e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 13 }} placeholder={t('factures.designationPlaceholder')} /></td>
-                      <td style={cellStyle}><input type="number" value={l.quantity} onChange={(e) => updateLigne(i, 'quantity', e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 13 }} placeholder="0" /></td>
-                      <td style={cellStyle}><input type="number" value={l.priceUnit} onChange={(e) => updateLigne(i, 'priceUnit', e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 13 }} placeholder="0" /></td>
-                      <td style={cellStyle}><input type="number" value={l.discount} onChange={(e) => updateLigne(i, 'discount', e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 13 }} placeholder="0" /></td>
-                      <td style={cellStyle}><TaxSelect value={l.taxIds} options={taxes} onChange={(ids) => updateLigne(i, 'taxIds', ids)} /></td>
-                      <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 600 }}>{fmtMoney(base + taxe)}</td>
-                      <td style={cellStyle}><button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: 'pointer', color: form.lignes.length === 1 ? '#CCC' : '#B23B2E' }}><Trash2 size={14} /></button></td>
+                      <td><input value={l.name} onChange={(e) => updateLigne(i, 'name', e.target.value)} style={flatInput} placeholder={t('factures.designationPlaceholder')} /></td>
+                      <td><input type="number" value={l.quantity} onChange={(e) => updateLigne(i, 'quantity', e.target.value)} style={{ ...flatInput, textAlign: 'right' }} placeholder="0" /></td>
+                      <td><input type="number" value={l.priceUnit} onChange={(e) => updateLigne(i, 'priceUnit', e.target.value)} style={{ ...flatInput, textAlign: 'right' }} placeholder="0" /></td>
+                      <td><input type="number" value={l.discount} onChange={(e) => updateLigne(i, 'discount', e.target.value)} style={{ ...flatInput, textAlign: 'right' }} placeholder="0" /></td>
+                      <td><TaxSelect value={l.taxIds} options={taxes} onChange={(ids) => updateLigne(i, 'taxIds', ids)} /></td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(base + taxe)}</td>
+                      <td><button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: 'pointer', color: form.lignes.length === 1 ? '#CCC' : '#B23B2E' }}><Trash2 size={14} /></button></td>
                     </tr>
                   );
                 })}
@@ -271,109 +339,223 @@ export default function FacturesModule() {
         </form>
       </Card>
 
+      {/* ─── Modal détail (structure façon fiche account.move d'Odoo) ─── */}
       {detail && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={() => setDetail(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 960, maxHeight: '92vh', overflow: 'auto', padding: 24 }}>
-            <button onClick={() => setDetail(null)} aria-label={t('common.close')} style={{ position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 14, border: 'none', background: '#F0EEE6', cursor: 'pointer' }}><X size={15} /></button>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1040, maxHeight: '92vh', overflow: 'auto', padding: 0 }}>
+            <button onClick={() => setDetail(null)} aria-label={t('common.close')} style={{ position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 14, border: 'none', background: '#F0EEE6', cursor: 'pointer', zIndex: 2 }}><X size={15} /></button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <h3 style={{ margin: 0, fontSize: 18 }}>{detail.name || t('factures.draftPlaceholder')}</h3>
-              <Badge tone={STATE_TONE[detail.state]}>{t(`factures.state.${detail.state}`)}</Badge>
-              {detail.state === 'posted' && <Badge tone={PAY_TONE[detail.paymentState]}>{t(`factures.pay.${detail.paymentState}`)}</Badge>}
-              {detail.inalterableHash && (
-                <span title={t('factures.hashTitle', { n: detail.secureSequenceNumber })} style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#3F6B3B', fontSize: 12, fontWeight: 600 }}>
-                  <Lock size={12} /> {t('factures.secured')}
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 13, color: '#5B6357', marginBottom: 14 }}>
-              {detail.partnerName || '—'} · {t(`factures.type.${detail.moveType}`)}
-              {detail.invoiceDate ? ` · ${fmtDate(detail.invoiceDate)}` : ''}
-              {detail.invoiceOrigin ? ` · ${detail.invoiceOrigin}` : ''}
-              {detail.reversedEntryName ? ` · ${t('factures.reversalOf', { name: detail.reversedEntryName })}` : ''}
-              {detail.reversalMoveNames ? ` · ${t('factures.reversedBy', { names: detail.reversalMoveNames })}` : ''}
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            {/* Barre d'action + statut en chevrons (en-tête <header> d'Odoo) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '14px 20px', borderBottom: `1px solid ${BORDER}` }}>
               {detail.state === 'draft' && <Button small disabled={detailBusy} onClick={() => action(() => postFacture(detail.id), t('factures.posted'))}>{t('factures.postBtn')}</Button>}
+              {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.amountResidual > 0.01 && (
+                <Button small variant="outline" disabled={detailBusy} onClick={() => { setPayForm({ amount: String(detail.amountResidual), paymentDate: '' }); document.getElementById('fac-pay-form')?.scrollIntoView({ behavior: 'smooth' }); }}>{t('factures.registerPayment')}</Button>
+              )}
+              {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.paymentState !== 'reversed' && !detail.reversalMoveNames && (
+                <Button small variant="outline" disabled={detailBusy} onClick={() => setAvoirForm({ reason: '', refundMethod: 'cancel' })}>{t('factures.createAvoir')}</Button>
+              )}
               {detail.state === 'posted' && detail.paymentState === 'not_paid' && <Button small variant="outline" disabled={detailBusy} onClick={() => action(() => factureRetourBrouillon(detail.id), t('factures.backToDraft'))}>{t('factures.backToDraftBtn')}</Button>}
               {detail.state !== 'cancel' && <Button small variant="outline" disabled={detailBusy} onClick={() => action(() => annulerFacture(detail.id), t('factures.cancelled'))}>{t('factures.cancelBtn')}</Button>}
               {['draft', 'cancel'].includes(detail.state) && <Button small variant="outline" disabled={detailBusy} onClick={async () => { await action(() => deleteFacture(detail.id).then(() => ({})), t('factures.deleted')); setDetail(null); }}>{t('common.delete')}</Button>}
               {detail.inalterableHash && <Button small variant="outline" disabled={detailBusy} onClick={verifierIntegrite}>{t('factures.verifyHash')}</Button>}
-              {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.paymentState !== 'reversed' && !detail.reversalMoveNames && (
-                <Button small variant="outline" disabled={detailBusy} onClick={() => setAvoirForm({ reason: '', refundMethod: 'cancel' })}>{t('factures.createAvoir')}</Button>
+              <div style={{ marginLeft: 'auto' }}><MoveStatusBar state={detail.state} /></div>
+            </div>
+
+            <div style={{ padding: '18px 20px' }}>
+              {/* Titre + numéro */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <h3 style={{ margin: 0, fontSize: 20 }}>{detail.name || t('factures.draftPlaceholder')}</h3>
+                {detail.state === 'posted' && <Badge tone={PAY_TONE[detail.paymentState]}>{t(`factures.pay.${detail.paymentState}`)}</Badge>}
+                {detail.inalterableHash && (
+                  <span title={t('factures.hashTitle', { n: detail.secureSequenceNumber })} style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#3F6B3B', fontSize: 12, fontWeight: 600 }}>
+                    <Lock size={12} /> {t('factures.secured')}
+                  </span>
+                )}
+              </div>
+
+              {/* En-tête à deux colonnes (comme <group> gauche/droite d'Odoo) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 40px', marginBottom: 16 }}>
+                <div className="field-group">
+                  <div className="field-group-label">{t('factures.partner')}</div>
+                  <div style={{ paddingTop: 6, fontSize: 13.5, fontWeight: 600 }}>{detail.partnerName || '—'}</div>
+                  {detail.invoiceOrigin && (<><div className="field-group-label">{t('factures.origin')}</div><div style={{ paddingTop: 6, fontSize: 13.5 }}>{detail.invoiceOrigin}</div></>)}
+                  {detail.ref && (<><div className="field-group-label">{t('factures.ref')}</div><div style={{ paddingTop: 6, fontSize: 13.5 }}>{detail.ref}</div></>)}
+                  {detail.reversedEntryName && (<><div className="field-group-label">{t('factures.reversalOfLabel')}</div><div style={{ paddingTop: 6, fontSize: 13.5 }}>{detail.reversedEntryName}</div></>)}
+                  {detail.reversalMoveNames && (<><div className="field-group-label">{t('factures.reversedByLabel')}</div><div style={{ paddingTop: 6, fontSize: 13.5 }}>{detail.reversalMoveNames}</div></>)}
+                </div>
+                <div className="field-group">
+                  <div className="field-group-label">{t('factures.invoiceDate')}</div>
+                  <div style={{ paddingTop: 6, fontSize: 13.5 }}>{detail.invoiceDate ? fmtDate(detail.invoiceDate) : '—'}</div>
+                  <div className="field-group-label">{t('factures.invoiceDateDue')}</div>
+                  <div style={{ paddingTop: 6, fontSize: 13.5 }}>
+                    {detail.invoiceDateDue ? `${fmtDate(detail.invoiceDateDue)} · ${echeanceLabel(detail.invoiceDateDue, t)}` : '—'}
+                  </div>
+                  {detail.relanceNiveau > 0 && (<><div className="field-group-label">{t('factures.reminders')}</div><div style={{ paddingTop: 6, fontSize: 13.5 }}>{t('comptaReports.remindedN', { n: detail.relanceNiveau, date: fmtDate(detail.derniereRelance) })}</div></>)}
+                </div>
+              </div>
+
+              {avoirForm && (
+                <form onSubmit={submitAvoir} style={{ display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 14px', alignItems: 'center', border: `1px solid ${BORDER}`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                  <div className="field-group-label">{t('factures.avoirReason')}</div>
+                  <input className="flat-input" value={avoirForm.reason} onChange={(e) => setAvoirForm({ ...avoirForm, reason: e.target.value })} />
+                  <div className="field-group-label">{t('factures.avoirMethod')}</div>
+                  <select className="flat-input" value={avoirForm.refundMethod} onChange={(e) => setAvoirForm({ ...avoirForm, refundMethod: e.target.value })}>
+                    <option value="cancel">{t('factures.avoirMethodCancel')}</option>
+                    <option value="refund">{t('factures.avoirMethodRefund')}</option>
+                  </select>
+                  <div />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button type="submit" disabled={detailBusy}>{t('factures.createAvoir')}</Button>
+                    <Button type="button" variant="outline" disabled={detailBusy} onClick={() => setAvoirForm(null)}>{t('common.cancel')}</Button>
+                  </div>
+                </form>
+              )}
+
+              {/* Onglets façon notebook d'Odoo */}
+              <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${BORDER}`, marginBottom: 12 }}>
+                {['lignes', 'ecritures'].map((k) => (
+                  <button key={k} onClick={() => setDetailTab(k)} style={{
+                    background: 'none', border: 'none', borderBottom: detailTab === k ? '2px solid #3F6B3B' : '2px solid transparent',
+                    padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    color: detailTab === k ? '#22271D' : INK_SOFT,
+                  }}>{t(`factures.tab.${k}`)}</button>
+                ))}
+              </div>
+
+              {detailTab === 'lignes' && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr style={{ color: INK_SOFT }}>
+                        <th style={{ width: '40%' }}>{t('factures.colDesignation')}</th>
+                        <th style={{ width: '10%', textAlign: 'right' }}>{t('factures.colQty')}</th>
+                        <th style={{ width: '14%', textAlign: 'right' }}>{t('factures.colPU')}</th>
+                        <th style={{ width: '9%', textAlign: 'right' }}>{t('factures.colDiscount')}</th>
+                        <th style={{ width: '15%' }}>{t('factures.colTaxes')}</th>
+                        <th style={{ width: '12%', textAlign: 'right' }}>{t('factures.amountTotal')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.lignes.filter((l) => ['product', 'line_section', 'line_note'].includes(l.displayType)).map((l) => {
+                        if (l.displayType !== 'product') {
+                          return <tr key={l.id}><td colSpan={6} style={{ fontWeight: l.displayType === 'line_section' ? 700 : 400, fontStyle: l.displayType === 'line_note' ? 'italic' : 'normal' }}>{l.name}</td></tr>;
+                        }
+                        const taxNoms = (l.taxIds || []).map((id) => (detail.taxes || []).find((x) => x.id === id)?.name).filter(Boolean).join(', ');
+                        return (
+                          <tr key={l.id}>
+                            <td>{l.name || '—'}</td>
+                            <td style={{ textAlign: 'right' }}>{l.quantity}</td>
+                            <td style={{ textAlign: 'right' }}>{fmtMoney(l.priceUnit)}</td>
+                            <td style={{ textAlign: 'right' }}>{l.discount ? `${l.discount} %` : ''}</td>
+                            <td style={{ color: INK_SOFT }}>{taxNoms || '—'}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(l.priceTotal)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {detailTab === 'ecritures' && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr style={{ color: INK_SOFT }}>
+                        <th style={{ width: '30%' }}>{t('factures.colAccount')}</th>
+                        <th style={{ width: '30%' }}>{t('factures.colDesignation')}</th>
+                        <th style={{ width: '13%', textAlign: 'right' }}>{t('factures.colDebit')}</th>
+                        <th style={{ width: '13%', textAlign: 'right' }}>{t('factures.colCredit')}</th>
+                        <th style={{ width: '14%' }}>{t('factures.matching')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.lignes.map((l) => (
+                        <tr key={l.id}>
+                          <td>{l.accountCode ? `${l.accountCode} ${l.accountName || ''}` : (l.displayType !== 'product' ? t(`factures.lineType.${l.displayType}`) : '—')}</td>
+                          <td style={{ color: INK_SOFT }}>{l.name || t(`factures.lineType.${l.displayType}`)}</td>
+                          <td style={{ textAlign: 'right' }}>{l.debit ? fmtMoney(l.debit) : ''}</td>
+                          <td style={{ textAlign: 'right' }}>{l.credit ? fmtMoney(l.credit) : ''}</td>
+                          <td style={{ color: INK_SOFT }}>{l.matchingNumber || ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Bloc totaux bas-droite (oe_subtotal_footer d'Odoo) */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '16px 0' }}>
+                <div style={{ minWidth: 260 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: INK_SOFT, padding: '2px 0' }}>
+                    <span>{t('factures.amountUntaxed')}</span><span>{fmtMoney(detail.amountUntaxed)}</span>
+                  </div>
+                  {taxesRecap(detail).map(([nom, montant]) => (
+                    <div key={nom} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: INK_SOFT, padding: '2px 0' }}>
+                      <span>{nom}</span><span>{fmtMoney(montant)}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${BORDER}`, paddingTop: 8, marginTop: 4 }}>
+                    <span>{t('factures.amountTotal')}</span><span>{fmtMoney(detail.amountTotal)}</span>
+                  </div>
+                  {detail.state === 'posted' && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: INK_SOFT, padding: '3px 0 0' }}>
+                        <span>{t('factures.paid')}</span><span>{fmtMoney(detail.amountTotal - detail.amountResidual)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 13 }}>
+                        <span>{t('factures.amountResidual')}</span><span>{fmtMoney(detail.amountResidual)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {detail.echeances && detail.echeances.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{t('factures.echeances')}</div>
+                  <table className="data-table">
+                    <tbody>
+                      {detail.echeances.map((e) => (
+                        <tr key={e.id}>
+                          <td style={{ width: '40%' }}>{fmtDate(e.dateEcheance)}</td>
+                          <td style={{ width: '40%', textAlign: 'right' }}>{fmtMoney(e.montant)}</td>
+                          <td style={{ width: '20%', color: e.statut === 'Payé' ? '#3F6B3B' : INK_SOFT }}>{e.statut}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {detail.paiements && detail.paiements.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{t('factures.paiements')}</div>
+                  <table className="data-table">
+                    <tbody>
+                      {detail.paiements.map((p) => (
+                        <tr key={p.id}>
+                          <td style={{ width: '45%' }}>{p.paymentMoveName || `#${p.id}`}</td>
+                          <td style={{ width: '30%' }}>{p.paymentDate ? fmtDate(p.paymentDate) : ''}</td>
+                          <td style={{ width: '25%', textAlign: 'right' }}>{fmtMoney(p.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.amountResidual > 0.01 && (
+                <form id="fac-pay-form" onSubmit={submitPaiement} style={{ display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 14px', alignItems: 'center', borderTop: `1px solid ${BORDER}`, paddingTop: 14 }}>
+                  <div className="field-group-label">{t('factures.paymentAmount')}</div>
+                  <input className="flat-input" type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} style={{ maxWidth: 180 }} />
+                  <div className="field-group-label">{t('factures.paymentDate')}</div>
+                  <input className="flat-input" type="date" value={payForm.paymentDate} onChange={(e) => setPayForm({ ...payForm, paymentDate: e.target.value })} style={{ maxWidth: 180 }} />
+                  <div />
+                  <div><Button type="submit" disabled={detailBusy}>{t('factures.registerPayment')}</Button></div>
+                </form>
               )}
             </div>
-
-            {avoirForm && (
-              <form onSubmit={submitAvoir} style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', border: '1px solid #DAD6C4', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                <Field label={t('factures.avoirReason')} value={avoirForm.reason} onChange={(e) => setAvoirForm({ ...avoirForm, reason: e.target.value })} />
-                <Select label={t('factures.avoirMethod')} value={avoirForm.refundMethod} onChange={(e) => setAvoirForm({ ...avoirForm, refundMethod: e.target.value })}>
-                  <option value="cancel">{t('factures.avoirMethodCancel')}</option>
-                  <option value="refund">{t('factures.avoirMethodRefund')}</option>
-                </Select>
-                <Button type="submit" disabled={detailBusy}>{t('factures.createAvoir')}</Button>
-                <Button type="button" variant="outline" disabled={detailBusy} onClick={() => setAvoirForm(null)}>{t('common.cancel') || 'Annuler'}</Button>
-              </form>
-            )}
-
-            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: '#5B6357' }}>
-                  <th style={cellStyle}>{t('factures.colDesignation')}</th>
-                  <th style={cellStyle}>{t('factures.colAccount')}</th>
-                  <th style={{ ...cellStyle, textAlign: 'right' }}>{t('factures.colDebit')}</th>
-                  <th style={{ ...cellStyle, textAlign: 'right' }}>{t('factures.colCredit')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.lignes.map((l) => (
-                  <tr key={l.id}>
-                    <td style={cellStyle}>{l.name || (l.displayType === 'product' ? '—' : t(`factures.lineType.${l.displayType}`))}</td>
-                    <td style={cellStyle}>{l.accountCode ? `${l.accountCode} ${l.accountName || ''}` : '—'}{l.matchingNumber ? ` · ${l.matchingNumber}` : ''}</td>
-                    <td style={{ ...cellStyle, textAlign: 'right' }}>{l.debit ? fmtMoney(l.debit) : ''}</td>
-                    <td style={{ ...cellStyle, textAlign: 'right' }}>{l.credit ? fmtMoney(l.credit) : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13, marginBottom: 16 }}>
-              <div><div style={{ color: '#5B6357' }}>{t('factures.amountUntaxed')}</div><div style={{ fontWeight: 600 }}>{fmtMoney(detail.amountUntaxed)}</div></div>
-              <div><div style={{ color: '#5B6357' }}>{t('factures.amountTax')}</div><div style={{ fontWeight: 600 }}>{fmtMoney(detail.amountTax)}</div></div>
-              <div><div style={{ color: '#5B6357' }}>{t('factures.amountTotal')}</div><div style={{ fontWeight: 700 }}>{fmtMoney(detail.amountTotal)}</div></div>
-              <div><div style={{ color: '#5B6357' }}>{t('factures.amountResidual')}</div><div style={{ fontWeight: 700 }}>{fmtMoney(detail.amountResidual)}</div></div>
-            </div>
-
-            {detail.echeances && detail.echeances.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{t('factures.echeances')}</div>
-                {detail.echeances.map((e) => (
-                  <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
-                    <span>{fmtDate(e.dateEcheance)}</span><span>{fmtMoney(e.montant)}</span><span style={{ color: e.statut === 'Payé' ? '#3F6B3B' : '#5B6357' }}>{e.statut}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {detail.paiements && detail.paiements.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{t('factures.paiements')}</div>
-                {detail.paiements.map((p) => (
-                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
-                    <span>{p.paymentMoveName || `#${p.id}`}</span><span>{p.paymentDate ? fmtDate(p.paymentDate) : ''}</span><span>{fmtMoney(p.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.amountResidual > 0.01 && (
-              <form onSubmit={submitPaiement} style={{ display: 'flex', gap: 10, alignItems: 'end', borderTop: '1px solid #EEE', paddingTop: 12 }}>
-                <Field label={t('factures.paymentAmount')} type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
-                <Field label={t('factures.paymentDate')} type="date" value={payForm.paymentDate} onChange={(e) => setPayForm({ ...payForm, paymentDate: e.target.value })} />
-                <Button type="submit" disabled={detailBusy}>{t('factures.registerPayment')}</Button>
-              </form>
-            )}
           </div>
         </div>
       )}

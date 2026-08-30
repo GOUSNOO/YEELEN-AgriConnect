@@ -13,13 +13,6 @@ export default function TaxesPanel({ taxes, onChange }) {
   const [form, setForm] = useState({ name: '', amountType: 'percent', amount: 20, priceInclude: false });
   const [busy, setBusy] = useState(false);
 
-  const resume = (tax) => {
-    const montant = tax.amountType === 'fixed'
-      ? t('taxes.resumeFixed', { amount: tax.amount })
-      : `${tax.amount} %`;
-    return tax.priceInclude ? `${montant} · ${t('taxes.included')}` : montant;
-  };
-
   const ajouter = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
@@ -75,12 +68,28 @@ export default function TaxesPanel({ taxes, onChange }) {
             <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
           </form>
 
-          {(taxes || []).map((tax) => (
-            <div key={tax.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: '1px solid #DAD6C4', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
-              <span><strong>{tax.name}</strong> <span style={{ color: '#5B6357' }}>· {resume(tax)}</span></span>
-              <button onClick={() => supprimer(tax.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
-            </div>
-          ))}
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr style={{ color: '#5B6357' }}>
+                <th style={{ width: '42%' }}>{t('taxes.name')}</th>
+                <th style={{ width: '20%' }}>{t('taxes.amountType')}</th>
+                <th style={{ width: '18%', textAlign: 'right' }}>{t('taxes.amount')}</th>
+                <th style={{ width: '14%' }}>{t('taxes.included')}</th>
+                <th style={{ width: '6%' }} />
+              </tr></thead>
+              <tbody>
+                {(taxes || []).map((tax) => (
+                  <tr key={tax.id}>
+                    <td><strong>{tax.name}</strong></td>
+                    <td style={{ color: '#5B6357' }}>{tax.amountType === 'fixed' ? t('taxes.amountTypeFixed') : t('taxes.amountTypePercent')}</td>
+                    <td style={{ textAlign: 'right' }}>{tax.amountType === 'fixed' ? tax.amount : `${tax.amount} %`}</td>
+                    <td>{tax.priceInclude ? '✓' : ''}</td>
+                    <td><button onClick={() => supprimer(tax.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </Card>

@@ -77,9 +77,9 @@ export default function ComptaConfigPanel() {
     catch (err) { notifyError(err, t('comptaConfig.hashError')); }
   };
 
-  const ligne = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: '1px solid #DAD6C4', borderRadius: 8, marginBottom: 5, fontSize: 13 };
+  const INK_SOFT = '#5B6357';
   const btnSuppr = { background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' };
-  const gridForm = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 12 };
+  const gridForm = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 10 };
 
   return (
     <Card>
@@ -88,7 +88,7 @@ export default function ComptaConfigPanel() {
       </button>
 
       {open && (
-        <div style={{ marginTop: 14, display: 'grid', gap: 20 }}>
+        <div style={{ marginTop: 14, display: 'grid', gap: 22 }}>
           <div>
             <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>{t('comptaConfig.journals')} ({journals.length})</div>
             <form onSubmit={ajouterJournal} style={gridForm}>
@@ -99,21 +99,36 @@ export default function ComptaConfigPanel() {
               </Select>
               <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
             </form>
-            {journals.map((j) => (
-              <div key={j.id} style={ligne}>
-                <span><strong>{j.code}</strong> <span style={{ color: '#5B6357' }}>· {j.name} · {t(`comptaConfig.journalType.${j.type}`)}</span></span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button
-                    onClick={() => activerHash(j)}
-                    title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
-                    style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? '#3F6B3B' : '#9AA093', display: 'flex' }}
-                  >
-                    <Lock size={13} />
-                  </button>
-                  <button onClick={() => supprJournal(j.id)} style={btnSuppr}><Trash2 size={14} /></button>
-                </span>
-              </div>
-            ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead><tr style={{ color: INK_SOFT }}>
+                  <th style={{ width: '10%' }}>{t('comptaConfig.code')}</th>
+                  <th style={{ width: '40%' }}>{t('comptaConfig.name')}</th>
+                  <th style={{ width: '20%' }}>{t('comptaConfig.type')}</th>
+                  <th style={{ width: '18%' }}>{t('comptaConfig.secured')}</th>
+                  <th style={{ width: '12%' }} />
+                </tr></thead>
+                <tbody>
+                  {journals.map((j) => (
+                    <tr key={j.id}>
+                      <td><strong>{j.code}</strong></td>
+                      <td>{j.name}</td>
+                      <td style={{ color: INK_SOFT }}>{t(`comptaConfig.journalType.${j.type}`)}</td>
+                      <td>
+                        <button
+                          onClick={() => activerHash(j)}
+                          title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
+                          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? '#3F6B3B' : '#9AA093', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                        >
+                          <Lock size={13} /> {j.restrictModeHashTable ? t('comptaConfig.hashActive') : t('comptaConfig.hashInactive')}
+                        </button>
+                      </td>
+                      <td><button onClick={() => supprJournal(j.id)} style={btnSuppr}><Trash2 size={14} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div>
@@ -126,12 +141,28 @@ export default function ComptaConfigPanel() {
               </Select>
               <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
             </form>
-            {accounts.map((a) => (
-              <div key={a.id} style={ligne}>
-                <span><strong>{a.code}</strong> <span style={{ color: '#5B6357' }}>· {a.name} · {t(`comptaConfig.accType.${a.accountType}`)}{a.reconcile ? ` · ${t('comptaConfig.reconcile')}` : ''}</span></span>
-                <button onClick={() => supprCompte(a.id)} style={btnSuppr}><Trash2 size={14} /></button>
-              </div>
-            ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead><tr style={{ color: INK_SOFT }}>
+                  <th style={{ width: '12%' }}>{t('comptaConfig.code')}</th>
+                  <th style={{ width: '40%' }}>{t('comptaConfig.name')}</th>
+                  <th style={{ width: '30%' }}>{t('comptaConfig.accountType')}</th>
+                  <th style={{ width: '12%' }}>{t('comptaConfig.reconcile')}</th>
+                  <th style={{ width: '6%' }} />
+                </tr></thead>
+                <tbody>
+                  {accounts.map((a) => (
+                    <tr key={a.id}>
+                      <td><strong>{a.code}</strong></td>
+                      <td>{a.name}</td>
+                      <td style={{ color: INK_SOFT }}>{t(`comptaConfig.accType.${a.accountType}`)}</td>
+                      <td>{a.reconcile ? '✓' : ''}</td>
+                      <td><button onClick={() => supprCompte(a.id)} style={btnSuppr}><Trash2 size={14} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

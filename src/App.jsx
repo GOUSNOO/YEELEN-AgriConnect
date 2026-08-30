@@ -1116,8 +1116,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <th style={{ width: '9%' }}>{t("devis.colFacture")}</th>
                   <th style={{ width: '6%' }}>{t("devis.colUnite")}</th>
                   <th style={{ width: '9%' }}>{t("devis.colPrixUnit")}</th>
+                  <th style={{ width: '6%' }}>{t("devis.colRemise")}</th>
                   <th style={{ width: '13%' }}>{t("devis.colTaxe")}</th>
-                  <th style={{ width: '5%' }}>{t("devis.colRemise")}</th>
                   <th style={{ width: '10%', textAlign: 'right' }}>{t("devis.colMontant")}</th>
                   <th style={{ width: '3%' }}></th>
                 </tr>
@@ -1161,8 +1161,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
                         <td><input placeholder={t("devis.unitePlaceholder")} value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td><TaxSelect value={ligne.taxIds} options={taxes} onChange={ids => updateLigne(i, 'taxIds', ids)} /></td>
                         <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td><TaxSelect value={ligne.taxIds} options={taxes} onChange={ids => updateLigne(i, 'taxIds', ids)} /></td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(ligneTotalAvecTaxe(ligne))}</td>
                       </>
                     )}
@@ -1508,7 +1508,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <table className="data-table" style={{ marginBottom: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-                    <th style={{ width: '25%' }}>{t("devis.colProduit")}</th><th style={{ width: '10%' }}>{t("devis.colQte")}</th><th style={{ width: '10%' }}>{t("devis.colLivre")}</th><th style={{ width: '10%' }}>{t("devis.colFacture")}</th><th style={{ width: '6%' }}>{t("devis.colUnite")}</th><th style={{ width: '10%' }}>{t("devis.colPU")}</th><th style={{ width: '14%' }}>{t("devis.colTaxe")}</th><th style={{ width: '5%' }}>{t("devis.colRemise")}</th><th style={{ width: '10%', textAlign: 'right' }}>{t("common.total")}</th>
+                    <th style={{ width: '25%' }}>{t("devis.colProduit")}</th><th style={{ width: '10%' }}>{t("devis.colQte")}</th><th style={{ width: '10%' }}>{t("devis.colLivre")}</th><th style={{ width: '10%' }}>{t("devis.colFacture")}</th><th style={{ width: '6%' }}>{t("devis.colUnite")}</th><th style={{ width: '10%' }}>{t("devis.colPU")}</th><th style={{ width: '5%' }}>{t("devis.colRemise")}</th><th style={{ width: '14%' }}>{t("devis.colTaxe")}</th><th style={{ width: '10%', textAlign: 'right' }}>{t("common.total")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1550,8 +1550,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         </td>
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
                         <td>{fmtMoney(l.prixUnitaire)}</td>
-                        <td style={{ color: COLORS.inkSoft }}>{taxesLigne.length ? taxesLigne.map(tx => tx.name).join(', ') : '—'}</td>
                         <td>{pct.toLocaleString(locale)}</td>
+                        <td style={{ color: COLORS.inkSoft }}>{taxesLigne.length ? taxesLigne.map(tx => tx.name).join(', ') : '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(netLigne)}</td>
                       </tr>
                     );
@@ -1821,8 +1821,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       <th style={{ width: '9%' }}>{t("devis.colFacture")}</th>
                       <th style={{ width: '6%' }}>{t("devis.colUnite")}</th>
                       <th style={{ width: '9%' }}>{t("devis.colPrixUnit")}</th>
+                      <th style={{ width: '6%' }}>{t("devis.colRemise")}</th>
                       <th style={{ width: '13%' }}>{t("devis.colTaxe")}</th>
-                      <th style={{ width: '5%' }}>{t("devis.colRemise")}</th>
                       <th style={{ width: '10%', textAlign: 'right' }}>{t("devis.colMontant")}</th>
                       <th style={{ width: '3%' }}></th>
                     </tr>
@@ -1866,8 +1866,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
                             <td><input placeholder={t("devis.unitePlaceholder")} value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td><TaxSelect value={ligne.taxIds} options={taxes} onChange={ids => updateEditLigne(i, 'taxIds', ids)} /></td>
                             <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td><TaxSelect value={ligne.taxIds} options={taxes} onChange={ids => updateEditLigne(i, 'taxIds', ids)} /></td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(ligneTotalAvecTaxe(ligne))}</td>
                           </>
                         )}

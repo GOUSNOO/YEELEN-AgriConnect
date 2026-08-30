@@ -5,6 +5,35 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Passe d'alignement UI sur Odoo — 2026-08-30 (frontend seul)
+
+Sur demande de l'utilisateur (« respecter la même interface qu'Odoo : forme, taille des
+colonnes et des lignes, leur emplacement »), toute l'UI Comptabilité livrée pendant la
+feuille de route a été recalée sur la discipline déjà en place dans l'app : la classe
+partagée `.data-table` (dimensions mesurées, cf. [[project_erp_dimensioning_appwide]]),
+`.flat-input` / `.field-group`, et la structure du modal devis (cf.
+[[project_erp_devis_visual_alignment]]). **Aucun changement backend / schéma / test.**
+
+- **`FacturesModule`** : liste aux colonnes dans l'ordre du tree `account.move` d'Odoo
+  (`Numéro | Client | Date de facture | Échéance | Total HT | Total TTC | État paiement |
+  État`), échéance annotée façon widget `remaining_days` (« J+n » / « n j de retard »,
+  rouge si en retard). Modal détail refait sur le squelette de la fiche `account.move` :
+  barre de statut en chevrons `MoveStatusBar`, barre d'actions dans l'ordre Odoo, en-tête
+  à deux colonnes en `.field-group`, onglets notebook « Lignes de facture » /
+  « Écritures comptables », bloc totaux bas-droite façon `oe_subtotal_footer`
+  (Total HT · par taxe · Total TTC · Payé · Reste dû).
+- **`ComptaReportsPanel` / `ComptaConfigPanel` / `TaxesPanel` / `PaymentTermsPanel`** :
+  les listes en `<div>` deviennent des `.data-table` avec les colonnes des rapports Odoo
+  (balance âgée `Client × non échu / 1-30 / 31-60 / 61-90 / 90+ / Total` + ligne totaux en
+  gras ; journaux `Code | Nom | Type | Sécurisé` ; comptes `Code | Nom | Type |
+  Rapprochable` ; taxes `Nom | Type | Montant | Incluse` ; conditions de paiement
+  `Nom | Répartition`).
+- **`TaxSelect`** : puces arrondies avec `×` façon widget `many2many_tags`.
+- **Tableaux de lignes du devis** : colonne `Taxes` déplacée après `Remise` (ordre de la
+  ligne Sale Order d'Odoo).
+- i18n fr/en complétée (`factures.tab.*`, `factures.due*`, `comptaConfig.hash*`,
+  `comptaReports.*`, `paymentTerms.repartition`). Build front + 88 tests verts.
+
 ### ERP « Comptabilité » — Étape 6 : balance âgée, relances, paiements autonomes — 2026-08-30 (feuille de route COMPLÈTE)
 
 **Schéma** : `account_move.relance_niveau INT DEFAULT 0` + `.derniere_relance DATE` (suivi des
