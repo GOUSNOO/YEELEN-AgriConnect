@@ -15,6 +15,7 @@ const JOURNAL_TYPES = ['sale', 'purchase', 'cash', 'bank', 'general'];
 const COLUMNS = `
   id, entreprise_id AS "entrepriseId", name, code, type, sequence, active,
   refund_sequence AS "refundSequence", default_account_id AS "defaultAccountId",
+  restrict_mode_hash_table AS "restrictModeHashTable", secure_sequence_last AS "secureSequenceLast",
   created_at AS "createdAt"
 `;
 
@@ -38,6 +39,10 @@ function normJournal(body, { partial = false } = {}) {
   else if (!partial) out.sequence = 10;
   if (body.refundSequence !== undefined) out.refundSequence = Boolean(body.refundSequence);
   else if (!partial) out.refundSequence = false;
+  // Mode sécurisé (inaltérabilité par hash) — on ne peut que l'ACTIVER, jamais le
+  // désactiver une fois des écritures hachées : ignoré s'il vaut false en PUT partiel.
+  if (body.restrictModeHashTable === true) out.restrictModeHashTable = true;
+  else if (!partial) out.restrictModeHashTable = false;
   if (body.active !== undefined) out.active = Boolean(body.active);
   else if (!partial) out.active = true;
   if (body.defaultAccountId !== undefined) {
@@ -79,10 +84,10 @@ router.post('/', ...ecriture, async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO account_journal (entreprise_id, name, code, type, sequence, refund_sequence, active, default_account_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${COLUMNS}`,
+      `INSERT INTO account_journal (entreprise_id, name, code, type, sequence, refund_sequence, active, default_account_id, restrict_mode_hash_table)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${COLUMNS}`,
       [req.user.entrepriseId, value.name, value.code, value.type, value.sequence,
-       value.refundSequence, value.active, value.defaultAccountId ?? null]
+       value.refundSequence, value.active, value.defaultAccountId ?? null, value.restrictModeHashTable ?? false]
     );
     return res.status(201).json({ journal: rows[0] });
   } catch (err) {
@@ -106,6 +111,7 @@ router.put('/:id', ...ecriture, async (req, res) => {
   const colonnes = {
     name: 'name', code: 'code', type: 'type', sequence: 'sequence',
     refundSequence: 'refund_sequence', active: 'active', defaultAccountId: 'default_account_id',
+    restrictModeHashTable: 'restrict_mode_hash_table',
   };
   const set = champs.map((c, i) => `${colonnes[c]} = $${i + 1}`).join(', ');
   const params = champs.map((c) => value[c]);

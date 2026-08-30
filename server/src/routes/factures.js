@@ -12,7 +12,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import { pool } from '../db.js';
 import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
 import {
-  round2, chargerTaxMap, journalParType, posterMove, enregistrerPaiementMove,
+  round2, chargerTaxMap, journalParType, posterMove, enregistrerPaiementMove, verifierChaineJournal,
 } from '../utils/accountMove.js';
 
 const router = express.Router();
@@ -30,6 +30,7 @@ const MOVE_COLUMNS = `
   m.amount_untaxed::float8 AS "amountUntaxed", m.amount_tax::float8 AS "amountTax",
   m.amount_total::float8 AS "amountTotal", m.amount_residual::float8 AS "amountResidual",
   m.payment_state AS "paymentState", m.reversed_entry_id AS "reversedEntryId",
+  m.inalterable_hash AS "inalterableHash", m.secure_sequence_number AS "secureSequenceNumber",
   m.created_at AS "createdAt",
   COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom) AS "partnerName"
 `;
@@ -173,6 +174,25 @@ router.get('/', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[GET /factures]', err);
     return res.status(500).json({ error: 'Erreur lors de la récupération des factures.' });
+  }
+});
+
+// ─── GET /api/factures/verify-hash?journalId= ─── (contrôle d'intégrité de la chaîne)
+// Déclarée avant /:id pour ne pas être capturée par celle-ci.
+router.get('/verify-hash', ...ecriture, async (req, res) => {
+  const journalId = Number(req.query.journalId);
+  if (!journalId) return res.status(400).json({ error: 'journalId requis.' });
+  try {
+    const jr = await pool.query(
+      'SELECT restrict_mode_hash_table AS "hashOn" FROM account_journal WHERE id = $1 AND entreprise_id = $2',
+      [journalId, req.user.entrepriseId]
+    );
+    if (jr.rows.length === 0) return res.status(404).json({ error: 'Journal introuvable.' });
+    const result = await verifierChaineJournal(pool, journalId, req.user.entrepriseId);
+    return res.json({ ...result, hashMode: jr.rows[0].hashOn });
+  } catch (err) {
+    console.error('[GET /factures/verify-hash]', err);
+    return res.status(500).json({ error: 'Erreur lors de la vérification.' });
   }
 });
 
@@ -332,10 +352,11 @@ router.post('/:id/post', ...ecriture, async (req, res) => {
 router.post('/:id/button-draft', ...ecriture, async (req, res) => {
   const client = await pool.connect();
   try {
-    const mr = await client.query('SELECT state, payment_state FROM account_move WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const mr = await client.query('SELECT state, payment_state, inalterable_hash AS "hash" FROM account_move WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (mr.rows.length === 0) return res.status(404).json({ error: 'Facture introuvable.' });
     if (mr.rows[0].state !== 'posted') return res.status(400).json({ error: 'Seule une facture postée peut repasser en brouillon.' });
     if (mr.rows[0].payment_state !== 'not_paid') return res.status(400).json({ error: 'Impossible : des paiements sont rattachés. Annulez-les d’abord.' });
+    if (mr.rows[0].hash) return res.status(400).json({ error: 'Facture sécurisée (inaltérable) — créez un avoir plutôt que de la modifier.' });
 
     await client.query('BEGIN');
     // Retire les lignes comptables générées au post (taxe + partenaire) et remet à zéro
@@ -378,10 +399,13 @@ router.post('/:id/cancel', ...ecriture, async (req, res) => {
 // ─── DELETE /api/factures/:id ─── (brouillon ou annulé uniquement — règle Odoo)
 router.delete('/:id', ...ecriture, async (req, res) => {
   try {
-    const mr = await pool.query('SELECT state FROM account_move WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const mr = await pool.query('SELECT state, inalterable_hash AS "hash" FROM account_move WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (mr.rows.length === 0) return res.status(404).json({ error: 'Facture introuvable.' });
     if (!['draft', 'cancel'].includes(mr.rows[0].state)) {
       return res.status(400).json({ error: 'Seule une facture en brouillon ou annulée peut être supprimée.' });
+    }
+    if (mr.rows[0].hash) {
+      return res.status(400).json({ error: 'Facture sécurisée (inaltérable) — suppression impossible.' });
     }
     await pool.query('DELETE FROM account_move WHERE id = $1', [req.params.id]);
     return res.json({ success: true });

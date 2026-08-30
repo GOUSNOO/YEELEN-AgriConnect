@@ -835,13 +835,20 @@ const STATUTS_APRES_SIGNATURE = ['Signé', 'Facturé', 'Non payé', 'Payé parti
 router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut, numero, move_id AS "moveId" FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query(
+      `SELECT d.statut, d.numero, d.move_id AS "moveId", m.inalterable_hash AS "moveHash"
+       FROM devis d LEFT JOIN account_move m ON m.id = d.move_id
+       WHERE d.id = $1 AND d.entreprise_id = $2`,
+      [req.params.id, req.user.entrepriseId]
+    );
     if (check.rows.length === 0) {
-      client.release();
-      return res.status(404).json({ error: 'Devis introuvable.' });
+      return res.status(404).json({ error: 'Devis introuvable.' }); // client libéré par le finally
     }
     const statutAvant = check.rows[0].statut;
     const moveId = check.rows[0].moveId;
+    if (check.rows[0].moveHash) {
+      return res.status(400).json({ error: 'La facture liée est sécurisée (inaltérable) — créez un avoir plutôt que de remettre le devis en brouillon.' });
+    }
 
     await client.query('BEGIN');
 

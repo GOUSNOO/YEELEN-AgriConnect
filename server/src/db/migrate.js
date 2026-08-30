@@ -553,6 +553,16 @@ CREATE INDEX IF NOT EXISTS idx_echeances_paiement_move_id ON echeances_paiement(
 -- l'étape 3b (ceux-là gardent l'ancien flux d'échéances côté devis).
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS move_id INTEGER REFERENCES account_move(id) ON DELETE SET NULL;
 
+-- Étape 4 : inaltérabilité des factures postées (opt-in via account_journal.
+-- restrict_mode_hash_table). inalterable_hash = sha256 chaîné par journal ;
+-- secure_sequence_number = compteur sans trou (distinct du numéro d affichage name qui,
+-- lui, peut sauter). secure_sequence_last vit sur le journal, incrémenté sous verrou au post.
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS inalterable_hash TEXT;
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS secure_sequence_number INTEGER;
+ALTER TABLE account_journal ADD COLUMN IF NOT EXISTS restrict_mode_hash_table BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE account_journal ADD COLUMN IF NOT EXISTS secure_sequence_last INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_account_move_secure_seq ON account_move(journal_id, secure_sequence_number);
+
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
   type                 VARCHAR(50) NOT NULL,

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, Loader2, X, Lock } from 'lucide-react';
 import {
   getFactures, getFacture, createFacture, deleteFacture,
   postFacture, factureRetourBrouillon, annulerFacture, enregistrerPaiementFacture,
-  getContacts, getTaxes,
+  verifyFactureHash, getContacts, getTaxes,
 } from '../lib/api.js';
 import { taxesLigneCalc } from '../lib/taxes.js';
 import { useLocale } from '../lib/locale.jsx';
@@ -116,6 +116,16 @@ export default function FacturesModule() {
       notifyError(err, t('factures.actionError'));
     } finally {
       setDetailBusy(false);
+    }
+  };
+
+  const verifierIntegrite = async () => {
+    try {
+      const r = await verifyFactureHash(detail.journalId);
+      if (r.ok) notifySuccess(t('factures.hashOk', { count: r.count }));
+      else notifyError(null, t('factures.hashBroken', { name: r.brokenAt, reason: r.reason }));
+    } catch (err) {
+      notifyError(err, t('factures.hashCheckError'));
     }
   };
 
@@ -249,6 +259,11 @@ export default function FacturesModule() {
               <h3 style={{ margin: 0, fontSize: 18 }}>{detail.name || t('factures.draftPlaceholder')}</h3>
               <Badge tone={STATE_TONE[detail.state]}>{t(`factures.state.${detail.state}`)}</Badge>
               {detail.state === 'posted' && <Badge tone={PAY_TONE[detail.paymentState]}>{t(`factures.pay.${detail.paymentState}`)}</Badge>}
+              {detail.inalterableHash && (
+                <span title={t('factures.hashTitle', { n: detail.secureSequenceNumber })} style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#3F6B3B', fontSize: 12, fontWeight: 600 }}>
+                  <Lock size={12} /> {t('factures.secured')}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: 13, color: '#5B6357', marginBottom: 14 }}>
               {detail.partnerName || '—'} · {t(`factures.type.${detail.moveType}`)}
@@ -261,6 +276,7 @@ export default function FacturesModule() {
               {detail.state === 'posted' && detail.paymentState === 'not_paid' && <Button small variant="outline" disabled={detailBusy} onClick={() => action(() => factureRetourBrouillon(detail.id), t('factures.backToDraft'))}>{t('factures.backToDraftBtn')}</Button>}
               {detail.state !== 'cancel' && <Button small variant="outline" disabled={detailBusy} onClick={() => action(() => annulerFacture(detail.id), t('factures.cancelled'))}>{t('factures.cancelBtn')}</Button>}
               {['draft', 'cancel'].includes(detail.state) && <Button small variant="outline" disabled={detailBusy} onClick={async () => { await action(() => deleteFacture(detail.id).then(() => ({})), t('factures.deleted')); setDetail(null); }}>{t('common.delete')}</Button>}
+              {detail.inalterableHash && <Button small variant="outline" disabled={detailBusy} onClick={verifierIntegrite}>{t('factures.verifyHash')}</Button>}
             </div>
 
             <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>

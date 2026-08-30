@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import {
-  getJournals, createJournal, deleteJournal,
+  getJournals, createJournal, updateJournal, deleteJournal,
   getAccounts, createAccount, deleteAccount,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
@@ -70,6 +70,12 @@ export default function ComptaConfigPanel() {
     try { await deleteAccount(id); notifySuccess(t('comptaConfig.accountDeleted')); recharger(); }
     catch (err) { notifyError(err, t('comptaConfig.accountDeleteError')); }
   };
+  const activerHash = async (j) => {
+    if (j.restrictModeHashTable) return;
+    if (!window.confirm(t('comptaConfig.hashConfirm'))) return;
+    try { await updateJournal(j.id, { restrictModeHashTable: true }); notifySuccess(t('comptaConfig.hashEnabled')); recharger(); }
+    catch (err) { notifyError(err, t('comptaConfig.hashError')); }
+  };
 
   const ligne = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: '1px solid #DAD6C4', borderRadius: 8, marginBottom: 5, fontSize: 13 };
   const btnSuppr = { background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' };
@@ -96,7 +102,16 @@ export default function ComptaConfigPanel() {
             {journals.map((j) => (
               <div key={j.id} style={ligne}>
                 <span><strong>{j.code}</strong> <span style={{ color: '#5B6357' }}>· {j.name} · {t(`comptaConfig.journalType.${j.type}`)}</span></span>
-                <button onClick={() => supprJournal(j.id)} style={btnSuppr}><Trash2 size={14} /></button>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => activerHash(j)}
+                    title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
+                    style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? '#3F6B3B' : '#9AA093', display: 'flex' }}
+                  >
+                    <Lock size={13} />
+                  </button>
+                  <button onClick={() => supprJournal(j.id)} style={btnSuppr}><Trash2 size={14} /></button>
+                </span>
               </div>
             ))}
           </div>

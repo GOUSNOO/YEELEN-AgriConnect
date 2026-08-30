@@ -7,6 +7,7 @@
 // Toutes ces fonctions prennent un `client` de transaction déjà ouvert (pool.connect()) —
 // c'est l'appelant qui gère BEGIN/COMMIT/ROLLBACK. Elles lèvent une Error avec `.status`
 // (400/404) pour les erreurs métier, à mapper en réponse HTTP par l'appelant.
+import crypto from 'crypto';
 import { pool } from '../db.js';
 import { appliquerTaxesLigne } from './taxeCompute.js';
 import { prochainNumeroJournal } from './journalSequence.js';
@@ -14,6 +15,87 @@ import { genererEcheancesDepuisTerme } from '../routes/paymentTerms.js';
 import { syncFacturePaiement } from './financeSync.js';
 
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// ─── Inaltérabilité (étape 4) ──────────────────────────────────────────────
+// Chaîne d'intégrité d'un move : les champs protégés dans un ordre fixe, puis chaque ligne
+// (account_id|debit|credit|balance) triée par id. Toute modification ultérieure d'un de ces
+// champs casse le hash chaîné.
+export async function chaineIntegriteMove(client, moveId) {
+  const m = await client.query(
+    `SELECT name, to_char(date, 'YYYY-MM-DD') AS date, journal_id,
+            amount_total::text AS amount_total, COALESCE(partner_id::text, '') AS partner_id
+     FROM account_move WHERE id = $1`,
+    [moveId]
+  );
+  const r = m.rows[0];
+  const lignes = await client.query(
+    `SELECT id, COALESCE(account_id::text,'') AS a, debit::text AS d, credit::text AS c, balance::text AS b
+     FROM account_move_line WHERE move_id = $1 ORDER BY id ASC`,
+    [moveId]
+  );
+  const tete = `${r.name}|${r.date}|${r.journal_id}|${r.amount_total}|${r.partner_id}`;
+  const corps = lignes.rows.map((l) => `${l.a}|${l.d}|${l.c}|${l.b}`).join(';');
+  return `${tete}#${corps}`;
+}
+
+export function hashMove(prevHash, chaine) {
+  return crypto.createHash('sha256').update(`${prevHash || ''}${chaine}`).digest('hex');
+}
+
+// Re-parcourt la chaîne d'inaltérabilité d'un journal : recalcule chaque hash à partir du
+// précédent et le compare au hash stocké, et vérifie que secure_sequence_number n'a pas de
+// trou. Renvoie { ok, count } ou { ok:false, brokenAt, reason }.
+export async function verifierChaineJournal(q, journalId, entrepriseId) {
+  const { rows } = await q.query(
+    `SELECT id, name, secure_sequence_number AS n, inalterable_hash AS hash
+     FROM account_move
+     WHERE journal_id = $1 AND entreprise_id = $2 AND secure_sequence_number IS NOT NULL
+     ORDER BY secure_sequence_number ASC`,
+    [journalId, entrepriseId]
+  );
+  let prevHash = '';
+  let attendu = 1;
+  for (const m of rows) {
+    if (m.n !== attendu) {
+      return { ok: false, brokenAt: m.name, reason: 'gap' };
+    }
+    const recalcule = hashMove(prevHash, await chaineIntegriteMove(q, m.id));
+    if (recalcule !== m.hash) {
+      return { ok: false, brokenAt: m.name, reason: 'hash' };
+    }
+    prevHash = m.hash;
+    attendu += 1;
+  }
+  return { ok: true, count: rows.length };
+}
+
+// Si le journal du move est en mode sécurisé (restrict_mode_hash_table), attribue un
+// secure_sequence_number sans trou (verrou de ligne sur le journal) + un inalterable_hash
+// chaîné au hash du move précédent du même journal. No-op sinon. `client` = transaction.
+export async function hacherMoveSiRequis(client, moveId, journalId) {
+  const jr = await client.query(
+    `SELECT restrict_mode_hash_table AS "hashOn" FROM account_journal WHERE id = $1 FOR UPDATE`,
+    [journalId]
+  );
+  if (!jr.rows[0] || !jr.rows[0].hashOn) return null;
+  const seq = await client.query(
+    `UPDATE account_journal SET secure_sequence_last = secure_sequence_last + 1
+     WHERE id = $1 RETURNING secure_sequence_last`,
+    [journalId]
+  );
+  const secureNum = seq.rows[0].secure_sequence_last;
+  const prev = await client.query(
+    `SELECT inalterable_hash FROM account_move WHERE journal_id = $1 AND secure_sequence_number = $2`,
+    [journalId, secureNum - 1]
+  );
+  const prevHash = prev.rows[0] ? prev.rows[0].inalterable_hash : '';
+  const h = hashMove(prevHash, await chaineIntegriteMove(client, moveId));
+  await client.query(
+    `UPDATE account_move SET secure_sequence_number = $1, inalterable_hash = $2 WHERE id = $3`,
+    [secureNum, h, moveId]
+  );
+  return { secureNum, hash: h };
+}
 
 const err400 = (msg) => Object.assign(new Error(msg), { status: 400 });
 const err404 = (msg) => Object.assign(new Error(msg), { status: 404 });
@@ -160,6 +242,9 @@ export async function posterMove(client, moveId, entrepriseId) {
     [name, totalHT, totalTaxe, totalTTC, moveId]
   );
 
+  // Étape 4 : inaltérabilité (no-op si le journal n'est pas en mode sécurisé).
+  await hacherMoveSiRequis(client, moveId, mv.journalId);
+
   // Échéances : régénérées depuis le terme seulement si aucune n'est déjà rattachée
   // (POST /devis/:id/facturer peut les avoir créées lui-même avant d'appeler posterMove).
   const dejaEch = await client.query('SELECT 1 FROM echeances_paiement WHERE move_id = $1 LIMIT 1', [moveId]);
@@ -246,6 +331,9 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
      VALUES ($1,$2,'payment_term',20,'Règlement',$3,$4,$5,$6,$7,$8) RETURNING id`,
     [payMoveId, entrepriseId, comptePartenaire, mv.partnerId, payPartDebit, payPartCredit, payPartDebit - payPartCredit, payPartDebit - payPartCredit]
   );
+
+  // Étape 4 : l'écriture de paiement est hachée aussi si son journal est sécurisé.
+  await hacherMoveSiRequis(client, payMoveId, payJournal.id);
 
   const pay = await client.query(
     `INSERT INTO account_payment (entreprise_id, move_id, journal_id, payment_type, partner_type, partner_id, amount, payment_date, ref, state)

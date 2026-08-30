@@ -707,6 +707,9 @@ export async function annulerFacture(id) {
 export async function enregistrerPaiementFacture(id, payload) {
   return request(`/factures/${id}/register-payment`, { method: 'POST', body: JSON.stringify(payload) });
 }
+export async function verifyFactureHash(journalId) {
+  return request(`/factures/verify-hash?journalId=${journalId}`);
+}
 
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {

@@ -5,6 +5,50 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 4 : inaltérabilité des factures postées — 2026-08-30
+
+Calquée sur le mécanisme d'un ERP de référence : `restrict_mode_hash_table` par journal,
+`inalterable_hash` chaîné + `secure_sequence_number` sans trou. **Opt-in par journal,
+désactivé par défaut** — le flux pré-prod (`remettre-brouillon` qui défait une facture)
+reste utilisable tant qu'une entreprise n'active pas le mode sécurisé.
+
+**Schéma** (`migrate.js`) :
+- `account_journal.restrict_mode_hash_table BOOL DEFAULT FALSE`
+- `account_journal.secure_sequence_last INT DEFAULT 0` (compteur sans trou, verrou de ligne au post)
+- `account_move.inalterable_hash TEXT`, `account_move.secure_sequence_number INT`
+
+**`server/src/utils/accountMove.js`** :
+- `chaineIntegriteMove(client, moveId)` : concatène les champs protégés
+  (`name|date|journal_id|amount_total|partner_id` puis chaque ligne
+  `account_id|debit|credit|balance` triée par id).
+- `hacherMoveSiRequis(client, moveId, journalId)` : si le journal est sécurisé, attribue
+  `secure_sequence_number = last+1` (verrou `FOR UPDATE` sur le journal) et
+  `inalterable_hash = sha256(hash_précédent + chaîne)` chaîné à l'écriture sécurisée
+  précédente du même journal. Appelé par `posterMove` (facture) **et** après l'insertion de
+  l'écriture de paiement dans `enregistrerPaiementMove`.
+- `verifierChaineJournal(q, journalId, entrepriseId)` : re-parcourt la chaîne, recalcule
+  chaque hash et vérifie l'absence de trou → `{ ok, count } | { ok:false, brokenAt, reason }`.
+
+**Garde-fous** : `POST /factures/:id/button-draft` et `DELETE /factures/:id` → 400 si
+`inalterable_hash` non nul ; `POST /devis/:id/remettre-brouillon` → 400 si le move lié est
+haché (message : « créez un avoir » — étape 5). `GET /api/factures/verify-hash?journalId=`
+(admin/directeur, déclarée **avant** `/:id`). `journals.js` PUT/POST acceptent
+`restrictModeHashTable` mais **seulement pour l'activer** (`=== true`) — un `false` en PUT
+partiel est ignoré (on ne dé-sécurise pas un journal qui a des écritures hachées).
+Corrigé au passage : 2 double-`client.release()` préexistants sur les retours anticipés de
+`remettre-brouillon`.
+
+**Frontend** : `ComptaConfigPanel` — bouton 🔒 par journal (`updateJournal({
+restrictModeHashTable:true})`, confirmation, irréversible). `FacturesModule` modal détail —
+puce « Sécurisée » + bouton « Vérifier l'intégrité » (→ `verify-hash`) quand le move est haché.
+i18n fr/en.
+
+**Vérif** : migration ×2 sur copie restaurée (idempotente, 4 colonnes ajoutées, comptes
+devis inchangés) → appliquée. Fumée live : journal INV passé en mode sécurisé, 2 factures
+postées → `secure_sequence_number` 1 puis 2, hashs distincts et chaînés ; `button-draft` →
+400 ; `verify-hash` → `{ok:true, count:2}`. `factureHash.test.js` (5) → suite d'intégration
+**138 tests / 23 fichiers** verte. Front : build OK, 88 verts.
+
 ### ERP « Comptabilité » — Étape 3b : `POST /devis/:id/facturer` produit une vraie facture — 2026-08-30
 
 Rebranchement prévu à l'étape 3. `POST /api/devis/:id/facturer` **crée et poste** désormais
