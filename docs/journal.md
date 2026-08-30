@@ -868,3 +868,48 @@ il manquait un bouton pour valider et un bouton pour fermer.
 
 Vérifs : `vite build` OK, front `npm test` 88/88, conteneur frontend reconstruit
 (bundle contient bien les nouveaux éléments).
+### ERP Comptabilité — Étape 0 : validité devis, suppression Annulé, conditions de paiement (2026-08-30)
+
+Début de la roadmap « Comptabilité » (réplication du modèle `sale`/`account` d'un ERP de
+référence, mêmes rails que `project_erp_full_architecture_alignment` : design → répétition
+contre une copie restaurée → confirmation → exécution → vérif, une étape à la fois).
+Étapes 1-6 (taxes, journaux/plan comptable, `account.move` factures, immuabilité, avoirs,
+paiements/rapprochement) auront chacune leur propre passe.
+
+- **`devis.validity_date`** (`ALTER TABLE` + backfill `date + 30 j`) + booléen calculé
+  `expired` dans `DEVIS_COLUMNS` (`statut IN (Brouillon/Devis/Envoyé) AND validity_date <
+  CURRENT_DATE`, non stocké — comme `is_expired`). `POST /devis` défaut = +30 j, `PUT`
+  modifiable en Brouillon/Devis. Front : champ « Valable jusqu'au » (formulaire + panneau
+  méta du détail) + badge rouge « Expiré » dans la liste.
+- **Suppression d'un devis Annulé** autorisée (`DELETE /:id` : `Brouillon`/`Devis`/`Annulé`
+  — aligné sur « draft or cancel »).
+- **`payment_terms` + `payment_term_lines`** (`account.payment.term`-like : `value`
+  percent/fixed/balance, `delay_type` days_after / days_after_end_of_month, `nb_days`).
+  Route `/api/payment-terms` (GET ouvert, POST/PUT/DELETE `requireRole('admin','directeur')`).
+  Jeu par défaut seedé à `register` **et** par `migrate.js:seedPaymentTermsForExistingEntreprises`
+  (« Paiement immédiat », « 30 jours », « Fin de mois suivant », « 30 % à la commande, solde
+  à 30 j »).
+- **`POST /devis/:id/facturer`** accepte `paymentTermId` (+ `acompte` `{method, value}`
+  optionnel) → génère les `echeances_paiement` depuis le terme (`genererEcheancesDepuisTerme`)
+  au lieu de la saisie manuelle, qui reste en repli. Terme « paiement immédiat » (1 échéance
+  due aujourd'hui, sans acompte) → traité comme paiement complet (échéance déjà réglée +
+  synchro finances). `devis.payment_term_id` (FK `ON DELETE SET NULL`), remis à NULL par
+  `remettre-brouillon`.
+- Front : `PaymentTermsPanel` (référentiel repliable, patron `RhReferentiels`) dans
+  `DevisModule` ; sélecteur « Condition de paiement » + acompte dans la modale de
+  facturation. i18n fr + en.
+- **Bugs corrigés en passant** : double `client.release()` sur les retours anticipés de
+  `facturer` (`pg-pool` `throwOnDoubleRelease` — latent, jamais déclenché par un test
+  avant) ; `validity_date` / `date_echeance` renvoyés via `to_char(…, 'YYYY-MM-DD')` pour
+  éviter le décalage d'un jour DATE Postgres → objet Date JS → `.toISOString()`.
+  `test:integration` passe en `--forceExit` (un handle keep-alive résiduel bloquait la
+  sortie de jest).
+
+Répétition migration : `pg_dump` de `agri_app` → restauration jetable → `migrate.js` ×2
+(idempotent, aucune erreur au 2ᵉ passage) → compteurs inchangés (9 entreprises / 9 devis /
+14 échéances), `payment_terms` = 9×4, `payment_term_lines` = 9×5, tous les devis avec
+`validity_date`. Puis appliquée à `agri_app`.
+
+Vérifs : `vite build` OK, front `npm test` 88/88, `test:integration` 94/94, back `npm test`
+vert, smoke HTTP réel (devis validityDate +30 j / expired ; facturer terme 30 j + acompte
+25 % → échéances 2500 aujourd'hui + 7500 à J+30). Conteneurs backend + frontend reconstruits.

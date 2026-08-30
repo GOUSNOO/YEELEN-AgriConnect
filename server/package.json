@@ -6,7 +6,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "test": "jest",
-    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.integration.config.cjs --runInBand"
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.integration.config.cjs --runInBand --forceExit"
   },
   "jest": {
     "testPathIgnorePatterns": [

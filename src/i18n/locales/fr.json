@@ -501,6 +501,14 @@
     "conditionsPaiement": "Conditions paiement",
     "conditionsPaiementPlaceholder": "Ex: 30 jours",
     "livraisonPromise": "Livraison promise",
+    "validityDate": "Valable jusqu'au",
+    "validityDateAide": "Date au-delà de laquelle le devis n'est plus valable. Par défaut 30 jours après la création.",
+    "expired": "Expiré",
+    "conditionPaiement": "Condition de paiement",
+    "saisieManuelle": "Saisie manuelle des échéances",
+    "acompte": "Acompte",
+    "acompteAucun": "Aucun acompte",
+    "acompteMontant": "Montant fixe",
     "signePar": "Signé par",
     "modePaiement": "Mode de paiement",
     "notesEmpty": "Aucune note — c'est ici que s'affichent les conditions générales ou remarques saisies à la création du devis.",
@@ -542,6 +550,23 @@
       "Payé": "Payé",
       "Annulé": "Annulé"
     }
+  },
+  "paymentTerms": {
+    "title": "Conditions de paiement",
+    "name": "Nom",
+    "shape": "Type",
+    "shapeOnce": "Paiement en une fois",
+    "shapeAcompte": "Acompte + solde",
+    "acomptePct": "Acompte (%)",
+    "nbDays": "Délai (jours)",
+    "solde": "Solde",
+    "immediat": "immédiat",
+    "finDeMois": "fin de mois +{{n}} j",
+    "added": "Condition de paiement ajoutée.",
+    "addError": "Impossible d'ajouter la condition de paiement.",
+    "deleted": "Condition de paiement supprimée.",
+    "deleteError": "Impossible de supprimer la condition de paiement.",
+    "deleteConfirm": "Supprimer cette condition de paiement ?"
   },
   "finances": {
     "loading": "Chargement des finances…",

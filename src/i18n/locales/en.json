@@ -501,6 +501,14 @@
     "conditionsPaiement": "Payment terms",
     "conditionsPaiementPlaceholder": "e.g. 30 days",
     "livraisonPromise": "Promised delivery",
+    "validityDate": "Valid until",
+    "validityDateAide": "Date after which the quotation is no longer valid. Defaults to 30 days after creation.",
+    "expired": "Expired",
+    "conditionPaiement": "Payment term",
+    "saisieManuelle": "Enter installments manually",
+    "acompte": "Down payment",
+    "acompteAucun": "No down payment",
+    "acompteMontant": "Fixed amount",
     "signePar": "Signed by",
     "modePaiement": "Payment method",
     "notesEmpty": "No note — this is where the general terms or remarks entered when creating the quote appear.",
@@ -542,6 +550,23 @@
       "Payé": "Paid",
       "Annulé": "Cancelled"
     }
+  },
+  "paymentTerms": {
+    "title": "Payment terms",
+    "name": "Name",
+    "shape": "Type",
+    "shapeOnce": "Single payment",
+    "shapeAcompte": "Down payment + balance",
+    "acomptePct": "Down payment (%)",
+    "nbDays": "Delay (days)",
+    "solde": "Balance",
+    "immediat": "immediate",
+    "finDeMois": "end of month +{{n}} d",
+    "added": "Payment term added.",
+    "addError": "Could not add the payment term.",
+    "deleted": "Payment term deleted.",
+    "deleteError": "Could not delete the payment term.",
+    "deleteConfirm": "Delete this payment term?"
   },
   "finances": {
     "loading": "Loading finances…",

@@ -625,6 +625,20 @@ export async function getContactPrixEffectifs(contactId) {
   return request(`/contacts/${contactId}/prix-effectifs`);
 }
 
+// Conditions de paiement réutilisables (account.payment.term-like) — étape 0 Comptabilité.
+export async function getPaymentTerms() {
+  return request('/payment-terms');
+}
+export async function createPaymentTerm(payload) {
+  return request('/payment-terms', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updatePaymentTerm(id, payload) {
+  return request(`/payment-terms/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deletePaymentTerm(id) {
+  return request(`/payment-terms/${id}`, { method: 'DELETE' });
+}
+
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {
   return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });

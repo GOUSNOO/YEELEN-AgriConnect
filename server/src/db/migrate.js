@@ -252,6 +252,14 @@ CREATE TABLE IF NOT EXISTS devis_lignes (
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS remise_globale NUMERIC(5, 2) NOT NULL DEFAULT 0;
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS conditions_paiement TEXT;
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS livraison_promise DATE;
+-- Étape 0 Comptabilité (2026-08-30) : date de validité du devis (= validity_date d'un
+-- ERP de référence). Le statut "Expiré" n'est PAS stocké — il est calculé à la volée
+-- (voir DEVIS_COLUMNS.expired dans routes/devis.js), comme is_expired côté ERP.
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS validity_date DATE;
+UPDATE devis SET validity_date = date + INTERVAL '30 days' WHERE validity_date IS NULL;
+-- Terme de paiement rattaché à un devis facturé (nullable : les factures d'avant l'étape 0
+-- et le repli "échéances saisies à la main" n'en ont pas).
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS payment_term_id INTEGER;
 -- Unité de mesure par ligne (ex: "kg", "sacs", "Heures") — préremplie depuis le produit du
 -- catalogue au même titre que le prix, mais reste un simple champ texte libre modifiable.
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS unite TEXT;
@@ -290,6 +298,43 @@ CREATE TABLE IF NOT EXISTS echeances_paiement (
   date_paiement  TIMESTAMP,
   ordre          INTEGER DEFAULT 0
 );
+
+-- ═══════════════ Étape 0 Comptabilité — conditions de paiement réutilisables ═══════════════
+-- Calqué sur account.payment.term / account.payment.term.line d'un ERP de référence :
+-- un terme nommé + des lignes qui répartissent le montant (percent/fixed/balance) et
+-- calculent une date d'échéance (delay_type + nb_days). Utilisé par POST /devis/:id/facturer
+-- pour générer les echeances_paiement, à la place de la saisie manuelle.
+CREATE TABLE IF NOT EXISTS payment_terms (
+  id                  SERIAL PRIMARY KEY,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name                TEXT NOT NULL,
+  active              BOOLEAN NOT NULL DEFAULT TRUE,
+  sequence            INTEGER NOT NULL DEFAULT 10,
+  display_on_invoice  BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_payment_terms_entreprise_id ON payment_terms(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS payment_term_lines (
+  id               SERIAL PRIMARY KEY,
+  payment_term_id  INTEGER NOT NULL REFERENCES payment_terms(id) ON DELETE CASCADE,
+  value            TEXT NOT NULL DEFAULT 'balance' CHECK (value IN ('percent', 'fixed', 'balance')),
+  value_amount     NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  delay_type       TEXT NOT NULL DEFAULT 'days_after' CHECK (delay_type IN ('days_after', 'days_after_end_of_month')),
+  nb_days          INTEGER NOT NULL DEFAULT 0,
+  ordre            INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_payment_term_lines_term_id ON payment_term_lines(payment_term_id);
+
+-- FK de devis.payment_term_id posée ici (après la création de payment_terms) — SET NULL
+-- si le terme est supprimé, la facture garde ses échéances déjà générées.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'devis_payment_term_id_fkey') THEN
+    ALTER TABLE devis ADD CONSTRAINT devis_payment_term_id_fkey
+      FOREIGN KEY (payment_term_id) REFERENCES payment_terms(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
@@ -1725,6 +1770,46 @@ const CONGES_TYPES_DEFAUT = [
   { nom: 'Événement familial', paye: true, justificatif_requis: false, couleur: '#2E6E8E', ordre: 4 },
 ];
 
+// Conditions de paiement par défaut (étape 0 Comptabilité). Même liste que
+// PAYMENT_TERMS_DEFAUT dans routes/auth.js (seed à l'inscription).
+const PAYMENT_TERMS_DEFAUT = [
+  { name: 'Paiement immédiat', sequence: 10, lines: [{ value: 'balance', value_amount: 0, delay_type: 'days_after', nb_days: 0, ordre: 0 }] },
+  { name: '30 jours', sequence: 20, lines: [{ value: 'balance', value_amount: 0, delay_type: 'days_after', nb_days: 30, ordre: 0 }] },
+  { name: 'Fin de mois suivant', sequence: 30, lines: [{ value: 'balance', value_amount: 0, delay_type: 'days_after_end_of_month', nb_days: 0, ordre: 0 }] },
+  { name: '30 % à la commande, solde à 30 jours', sequence: 40, lines: [
+    { value: 'percent', value_amount: 30, delay_type: 'days_after', nb_days: 0, ordre: 0 },
+    { value: 'balance', value_amount: 0, delay_type: 'days_after', nb_days: 30, ordre: 1 },
+  ] },
+];
+
+// Crée les conditions de paiement par défaut pour toute entreprise qui n'en a aucune.
+async function seedPaymentTermsForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM payment_terms pt WHERE pt.entreprise_id = e.id)`
+  );
+  for (const { id } of entreprises) {
+    for (const term of PAYMENT_TERMS_DEFAUT) {
+      const { rows } = await client.query(
+        `INSERT INTO payment_terms (entreprise_id, name, sequence)
+         VALUES ($1, $2, $3) ON CONFLICT (entreprise_id, name) DO NOTHING RETURNING id`,
+        [id, term.name, term.sequence]
+      );
+      if (!rows[0]) continue;
+      for (const l of term.lines) {
+        await client.query(
+          `INSERT INTO payment_term_lines (payment_term_id, value, value_amount, delay_type, nb_days, ordre)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [rows[0].id, l.value, l.value_amount, l.delay_type, l.nb_days, l.ordre]
+        );
+      }
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Conditions de paiement par défaut créées pour ${entreprises.length} entreprise(s).`);
+  }
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -1807,6 +1892,7 @@ async function migrate() {
     await migrateRemiseToPourcentage();
     await migrateTaxeDevisVersLignes();
     await seedCongesTypesForExistingEntreprises();
+    await seedPaymentTermsForExistingEntreprises();
     await migratePostesFromSalaries();
     await migrateContratsFromSalaries();
   } catch (err) {

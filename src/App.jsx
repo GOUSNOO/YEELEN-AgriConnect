@@ -34,6 +34,7 @@ import {
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
+  getPaymentTerms, createPaymentTerm, deletePaymentTerm,
   getActivites, createActivite, updateActivite, deleteActivite,
   getMessages, createMessage,
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
@@ -48,6 +49,7 @@ import { EquipementsModule } from './components/EquipementsModule';
 import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
 import RhReferentiels from './components/RhReferentiels';
+import PaymentTermsPanel from './components/PaymentTermsPanel';
 import MonEspaceRh from './components/MonEspaceRh';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
@@ -481,7 +483,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
   const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', tauxTaxe: '', unite: '', recolteId: '', stockId: null, stockModule: null };
   const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', tauxTaxe: '', unite: '', recolteId: '', stockId: null, stockModule: null };
-  const [form, setForm] = useState({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+  const [form, setForm] = useState({ clientId: '', notes: '', validityDate: '', lignes: [{ ...emptyLigne }] });
+  const [paymentTerms, setPaymentTerms] = useState([]);
   const [draggedLigneIndex, setDraggedLigneIndex] = useState(null);
   const [draggedEditLigneIndex, setDraggedEditLigneIndex] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -517,7 +520,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [detailTab, setDetailTab] = useState('lignes');
   // Remise globale / taxe / conditions de paiement / livraison promise, éditables
   // seulement tant que le devis est en Brouillon — voir handleSaveDetailMeta.
-  const emptyDetailMeta = { remiseGlobale: '0', conditionsPaiement: '', livraisonPromise: '' };
+  const emptyDetailMeta = { remiseGlobale: '0', conditionsPaiement: '', livraisonPromise: '', validityDate: '' };
   const [detailMeta, setDetailMeta] = useState(emptyDetailMeta);
   const [detailMetaSaving, setDetailMetaSaving] = useState(false);
   // Fil de messages (chatter minimal) attaché au devis affiché en détail
@@ -544,6 +547,16 @@ function DevisModule({ clientsListe, filtreStatut }) {
   };
 
   useEffect(() => { loadDevis(); }, []);
+  useEffect(() => { getPaymentTerms().then(d => setPaymentTerms(d.paymentTerms || [])).catch(() => {}); }, []);
+
+  // Résumé lisible des lignes d'une condition de paiement (ex: "30 % à J+0 · solde à J+30").
+  const resumeTerme = (term) => (term.lignes || []).map(l => {
+    const part = l.value === 'percent' ? `${l.valueAmount} %` : l.value === 'fixed' ? fmtMoney(l.valueAmount) : t('paymentTerms.solde');
+    const when = l.delayType === 'days_after_end_of_month'
+      ? t('paymentTerms.finDeMois', { n: l.nbDays })
+      : (l.nbDays === 0 ? t('paymentTerms.immediat') : `J+${l.nbDays}`);
+    return `${part} ${when}`;
+  }).join(' · ');
 
   useEffect(() => {
     (async () => {
@@ -680,7 +693,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   };
 
   const resetForm = () => {
-    setForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+    setForm({ clientId: '', notes: '', validityDate: '', lignes: [{ ...emptyLigne }] });
     setClientSearch('');
   };
 
@@ -696,6 +709,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       const payload = {
         clientId: Number(form.clientId),
         notes: form.notes,
+        validityDate: form.validityDate || undefined,
         lignes: form.lignes.map(l => ({
           produit: l.produit,
           type: l.type === 'section' ? 'section' : 'produit',
@@ -806,6 +820,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         remiseGlobale: String(data.devis.remiseGlobale ?? 0),
         conditionsPaiement: data.devis.conditionsPaiement || '',
         livraisonPromise: data.devis.livraisonPromise ? data.devis.livraisonPromise.slice(0, 10) : '',
+        validityDate: data.devis.validityDate ? data.devis.validityDate.slice(0, 10) : '',
       });
     } catch (err) {
       setApiError(err.message);
@@ -821,6 +836,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         remiseGlobale: Number(detailMeta.remiseGlobale) || 0,
         conditionsPaiement: detailMeta.conditionsPaiement,
         livraisonPromise: detailMeta.livraisonPromise || null,
+        validityDate: detailMeta.validityDate || null,
       });
       notifySuccess(t('devis.updated'));
       await loadDevis();
@@ -917,7 +933,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // Ouvre la popup de paiement avant conversion en facture
   const openPaiementPopup = (id, total) => {
     setPaiementDevisId(id);
-    setPaiementForm({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ montant: total, dateEcheance: '' }] });
+    setPaiementForm({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ montant: total, dateEcheance: '' }], paymentTermId: '', acompteMethod: '', acompteValue: '' });
     setPaiementPopupOpen(true);
   };
 
@@ -928,17 +944,27 @@ function DevisModule({ clientsListe, filtreStatut }) {
   };
 
   const submitFacturer = async () => {
-    if (paiementForm.modalitePaiement === 'echelonne' && paiementForm.echeances.some(e => !e.montant || !e.dateEcheance)) {
+    const parTerme = !!paiementForm.paymentTermId;
+    if (!parTerme && paiementForm.modalitePaiement === 'echelonne' && paiementForm.echeances.some(e => !e.montant || !e.dateEcheance)) {
       notifyError(new Error(t('devis.echeancesIncompletes')));
       return;
     }
     setActionBusy(true);
     try {
-      await facturerDevis(paiementDevisId, {
-        modePaiement: paiementForm.modePaiement,
-        modalitePaiement: paiementForm.modalitePaiement,
-        echeances: paiementForm.modalitePaiement === 'echelonne' ? paiementForm.echeances : undefined,
-      });
+      const payload = parTerme
+        ? {
+            modePaiement: paiementForm.modePaiement,
+            paymentTermId: Number(paiementForm.paymentTermId),
+            acompte: paiementForm.acompteMethod && Number(paiementForm.acompteValue) > 0
+              ? { method: paiementForm.acompteMethod, value: Number(paiementForm.acompteValue) }
+              : undefined,
+          }
+        : {
+            modePaiement: paiementForm.modePaiement,
+            modalitePaiement: paiementForm.modalitePaiement,
+            echeances: paiementForm.modalitePaiement === 'echelonne' ? paiementForm.echeances : undefined,
+          };
+      await facturerDevis(paiementDevisId, payload);
       notifySuccess(t('devis.facture'));
       setPaiementPopupOpen(false);
       await loadDevis();
@@ -1018,6 +1044,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
+      )}
+
+      {!filtreStatut && (
+        <PaymentTermsPanel
+          terms={paymentTerms}
+          onChange={() => getPaymentTerms().then(d => setPaymentTerms(d.paymentTerms || [])).catch(() => {})}
+        />
       )}
 
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
@@ -1147,7 +1180,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </div>
           </div>
 
-          <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+            <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+            <Field label={t("devis.validityDate")} aide={t("devis.validityDateAide")} type="date" value={form.validityDate} onChange={e => setForm({ ...form, validityDate: e.target.value })} />
+          </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalForm) })}</div>
@@ -1209,7 +1245,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
                   <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{d.numero}</td>
                   <td>{d.clientPrenom} {d.clientNom}</td>
-                  <td><Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge></td>
+                  <td>
+                    <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
+                    {d.expired && <span style={{ marginLeft: 6 }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
+                  </td>
                   <td style={{ fontWeight: 600 }}>{fmtMoney(d.total)}</td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -1387,9 +1426,21 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.livraisonPromise")}</span>
                         <input className="flat-input" type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ width: 'auto' }} />
                       </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
+                        <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.validityDate")}</span>
+                        <input className="flat-input" type="date" value={detailMeta.validityDate} onChange={e => setDetailMeta(m => ({ ...m, validityDate: e.target.value }))} style={{ width: 'auto' }} />
+                      </div>
                     </>
                   ) : (
                     <>
+                      {detailData.validityDate && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                          <span style={{ color: COLORS.inkSoft }}>{t("devis.validityDate")}</span>
+                          <span style={detailData.expired ? { color: COLORS.red, fontWeight: 600 } : undefined}>
+                            {fmtDate(detailData.validityDate)}{detailData.expired ? ` — ${t('devis.expired')}` : ''}
+                          </span>
+                        </div>
+                      )}
                       {detailData.conditionsPaiement && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                           <span style={{ color: COLORS.inkSoft }}>{t("devis.conditionsPaiement")}</span>
@@ -1620,7 +1671,32 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <option value="Chèque">{t("devis.modePaiementCheque")}</option>
             </Select>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <Select label={t("devis.conditionPaiement")} value={paiementForm.paymentTermId} onChange={e => setPaiementForm({ ...paiementForm, paymentTermId: e.target.value })} style={{ marginBottom: 12 }}>
+              <option value="">{t("devis.saisieManuelle")}</option>
+              {paymentTerms.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
+            </Select>
+
+            {paiementForm.paymentTermId && (
+              <div style={{ marginBottom: 14, padding: '10px 12px', background: COLORS.surfaceAlt, borderRadius: 10 }}>
+                <div style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 8 }}>
+                  {resumeTerme(paymentTerms.find(pt => String(pt.id) === String(paiementForm.paymentTermId)) || { lignes: [] })}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t("devis.acompte")}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <Select value={paiementForm.acompteMethod} onChange={e => setPaiementForm({ ...paiementForm, acompteMethod: e.target.value })}>
+                    <option value="">{t("devis.acompteAucun")}</option>
+                    <option value="percentage">%</option>
+                    <option value="fixed">{t("devis.acompteMontant")}</option>
+                  </Select>
+                  {paiementForm.acompteMethod && (
+                    <Field type="text" inputMode="decimal" placeholder="0" value={paiementForm.acompteValue}
+                      onChange={e => setPaiementForm({ ...paiementForm, acompteValue: e.target.value.replace(/[^\d.]/g, '') })} />
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: paiementForm.paymentTermId ? 'none' : 'flex', gap: 8, marginBottom: 14 }}>
               <button
                 type="button"
                 onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'complet' })}
@@ -1649,7 +1725,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </button>
             </div>
 
-            {paiementForm.modalitePaiement === 'echelonne' && (
+            {!paiementForm.paymentTermId && paiementForm.modalitePaiement === 'echelonne' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.echeances")}</div>
                 {paiementForm.echeances.map((e, i) => (

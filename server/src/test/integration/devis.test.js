@@ -134,3 +134,106 @@ describe('Devis — cycle de vie complet + journal d\'audit', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('Devis — Étape 0 Comptabilité (validité, suppression Annulé, conditions de paiement)', () => {
+  let admin;
+  let clientId;
+  const bear = (t) => ({ Authorization: `Bearer ${t}` });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const creerDevis = async (prixUnitaire = 1000, quantite = 10) => {
+    const r = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite, prixUnitaire, type: 'produit' }] });
+    return r.body.devis;
+  };
+  const signer = async (id) => {
+    await request(app).post(`/api/devis/${id}/valider-manuel`).set(bear(admin.token)).send({ confirmePar: 'M. Test' });
+  };
+  const termeId = async (nom) => {
+    const terms = (await request(app).get('/api/payment-terms').set(bear(admin.token))).body.paymentTerms;
+    return terms.find((t) => t.name === nom).id;
+  };
+
+  test('validity_date : défaut = date + 30 j ; PUT la modifie ; expired calculé', async () => {
+    const d = await creerDevis();
+    expect(d.validityDate).toBeTruthy();
+    expect(d.expired).toBe(false);
+
+    const put = await request(app).put(`/api/devis/${d.id}`).set(bear(admin.token))
+      .send({ validityDate: '2020-01-01' });
+    expect(put.status).toBe(200);
+    expect(put.body.devis.validityDate.slice(0, 10)).toBe('2020-01-01');
+    expect(put.body.devis.expired).toBe(true); // Brouillon + date passée
+
+    // une fois signé, plus considéré comme expiré même si la date est passée
+    await signer(d.id);
+    const relu = (await request(app).get(`/api/devis/${d.id}`).set(bear(admin.token))).body.devis;
+    expect(relu.expired).toBe(false);
+  });
+
+  test('un devis Annulé peut être supprimé (Odoo : draft OR cancel)', async () => {
+    const d = await creerDevis(200, 1);
+    await request(app).post(`/api/devis/${d.id}/annuler`).set(bear(admin.token)).send({});
+    const del = await request(app).delete(`/api/devis/${d.id}`).set(bear(admin.token));
+    expect(del.status).toBe(200);
+    expect((await request(app).get(`/api/devis/${d.id}`).set(bear(admin.token))).status).toBe(404);
+  });
+
+  test('un devis Signé ne peut toujours pas être supprimé', async () => {
+    const d = await creerDevis(200, 1);
+    await signer(d.id);
+    expect((await request(app).delete(`/api/devis/${d.id}`).set(bear(admin.token))).status).toBe(400);
+  });
+
+  test('facturer avec paymentTermId « 30 jours » → 1 échéance à J+30, statut Non payé', async () => {
+    const d = await creerDevis(); // total 10000
+    await signer(d.id);
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Banque', paymentTermId: await termeId('30 jours') });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.statut).toBe('Non payé');
+    expect(res.body.devis.paymentTermId).toBeTruthy();
+    expect(res.body.devis.echeances).toHaveLength(1);
+    expect(res.body.devis.echeances[0].montant).toBe(10000);
+    const dans30j = new Date(); dans30j.setDate(dans30j.getDate() + 30);
+    expect(res.body.devis.echeances[0].dateEcheance.slice(0, 10)).toBe(dans30j.toISOString().slice(0, 10));
+  });
+
+  test('facturer avec « Paiement immédiat » → traité comme complet (échéance déjà payée)', async () => {
+    const d = await creerDevis(500, 2); // total 1000
+    await signer(d.id);
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Espèces', paymentTermId: await termeId('Paiement immédiat') });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.statut).toBe('Facturé');
+    expect(res.body.devis.echeances[0].statut).toBe('Payé');
+  });
+
+  test('facturer avec acompte 30 % + terme « 30 jours » → 2 échéances (3000 aujourd\'hui, 7000 à J+30)', async () => {
+    const d = await creerDevis(); // total 10000
+    await signer(d.id);
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Banque', paymentTermId: await termeId('30 jours'), acompte: { method: 'percentage', value: 30 } });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.echeances).toHaveLength(2);
+    const montants = res.body.devis.echeances.map((e) => e.montant).sort((a, b) => a - b);
+    expect(montants).toEqual([3000, 7000]);
+  });
+
+  test('facturer avec un paymentTermId d\'une autre entreprise → 400', async () => {
+    const autre = await registerEntreprise();
+    const termeAutre = await (async () => {
+      const terms = (await request(app).get('/api/payment-terms').set(bear(autre.token))).body.paymentTerms;
+      return terms[0].id;
+    })();
+    const d = await creerDevis(200, 1);
+    await signer(d.id);
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Banque', paymentTermId: termeAutre });
+    expect(res.status).toBe(400);
+  });
+});

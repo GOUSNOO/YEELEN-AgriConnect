@@ -44,6 +44,18 @@ const CONGES_TYPES_PAR_DEFAUT = [
   { nom: 'Événement familial', paye: true, justificatif_requis: false, couleur: '#2E6E8E', ordre: 4 },
 ];
 
+// Conditions de paiement par défaut (étape 0 Comptabilité — mêmes valeurs que
+// PAYMENT_TERMS_DEFAUT dans migrate.js:seedPaymentTermsForExistingEntreprises).
+const PAYMENT_TERMS_PAR_DEFAUT = [
+  { name: 'Paiement immédiat', sequence: 10, lines: [{ value: 'balance', value_amount: 0, delay_type: 'days_after', nb_days: 0, ordre: 0 }] },
+  { name: '30 jours', sequence: 20, lines: [{ value: 'balance', value_amount: 0, delay_type: 'days_after', nb_days: 30, ordre: 0 }] },
+  { name: 'Fin de mois suivant', sequence: 30, lines: [{ value: 'balance', value_amount: 0, delay_type: 'days_after_end_of_month', nb_days: 0, ordre: 0 }] },
+  { name: '30 % à la commande, solde à 30 jours', sequence: 40, lines: [
+    { value: 'percent', value_amount: 30, delay_type: 'days_after', nb_days: 0, ordre: 0 },
+    { value: 'balance', value_amount: 0, delay_type: 'days_after', nb_days: 30, ordre: 1 },
+  ] },
+];
+
 // ─── POST /api/auth/register ───────────────────────────────────────────────
 // Crée en une seule transaction : le compte utilisateur, sa nouvelle entreprise, et le
 // lien entre les deux avec le rôle 'admin' — celui qui s'inscrit est toujours admin de
@@ -123,6 +135,22 @@ router.post('/register', async (req, res) => {
          ON CONFLICT (entreprise_id, nom) DO NOTHING`,
         [entreprise.id, t.nom, t.paye, t.justificatif_requis, t.couleur, t.ordre]
       );
+    }
+
+    for (const term of PAYMENT_TERMS_PAR_DEFAUT) {
+      const ptRes = await client.query(
+        `INSERT INTO payment_terms (entreprise_id, name, sequence) VALUES ($1, $2, $3)
+         ON CONFLICT (entreprise_id, name) DO NOTHING RETURNING id`,
+        [entreprise.id, term.name, term.sequence]
+      );
+      if (!ptRes.rows[0]) continue;
+      for (const l of term.lines) {
+        await client.query(
+          `INSERT INTO payment_term_lines (payment_term_id, value, value_amount, delay_type, nb_days, ordre)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [ptRes.rows[0].id, l.value, l.value_amount, l.delay_type, l.nb_days, l.ordre]
+        );
+      }
     }
 
     await client.query('COMMIT');

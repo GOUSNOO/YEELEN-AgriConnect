@@ -9,6 +9,15 @@ import { applyVenteLignesToStock, reverseVenteLignesToStock } from '../utils/sto
 import { streamDevisPdf } from '../utils/devisPdf.js';
 import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 import { logAuditEvent } from '../utils/auditLog.js';
+import { genererEcheancesDepuisTerme } from './paymentTerms.js';
+
+// Date de validité par défaut d'un devis : aujourd'hui + 30 jours (comme default_validity_date
+// d'un ERP de référence). Format 'YYYY-MM-DD'.
+function validiteParDefaut() {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d.toISOString().slice(0, 10);
+}
 
 const router = express.Router();
 
@@ -17,6 +26,8 @@ const DEVIS_COLUMNS = `
   d.signataire_nom AS "signataireNom", d.total::float8 AS total, d.notes,
   d.remise_globale::float8 AS "remiseGlobale",
   d.conditions_paiement AS "conditionsPaiement", d.livraison_promise AS "livraisonPromise",
+  to_char(d.validity_date, 'YYYY-MM-DD') AS "validityDate", d.payment_term_id AS "paymentTermId",
+  (d.statut IN ('Brouillon', 'Devis', 'Envoyé') AND d.validity_date IS NOT NULL AND d.validity_date < CURRENT_DATE) AS expired,
   d.client_id AS "clientId", c.nom AS "clientNom", c.prenom AS "clientPrenom",
   c.email AS "clientEmail", c.telephone AS "clientTelephone", c.adresse AS "clientAdresse",
   c.adresse_rue AS "clientAdresseRue", c.adresse_ville AS "clientAdresseVille",
@@ -127,7 +138,7 @@ async function getDevisComplet(devisId, entrepriseId) {
     [devisId]
   );
   const echeancesResult = await pool.query(
-    `SELECT id, montant::float8 AS montant, date_echeance AS "dateEcheance", statut, date_paiement AS "datePaiement" FROM echeances_paiement WHERE devis_id = $1 ORDER BY ordre ASC`,
+    `SELECT id, montant::float8 AS montant, to_char(date_echeance, 'YYYY-MM-DD') AS "dateEcheance", statut, date_paiement AS "datePaiement" FROM echeances_paiement WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
   return { ...devisResult.rows[0], lignes: lignesResult.rows, echeances: echeancesResult.rows };
@@ -217,7 +228,7 @@ router.get('/:id/journal', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/', authRequired, async (req, res) => {
-  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise, validityDate } = req.body;
   if (!clientId || !Array.isArray(lignes) || lignes.length === 0) {
     return res.status(400).json({ error: 'Un client et au moins une ligne de produit sont requis.' });
   }
@@ -231,10 +242,11 @@ router.post('/', authRequired, async (req, res) => {
     const total = calculerTotal(lignesNormalisees, remiseGlobale);
 
     const devisResult = await client.query(
-      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise)
-       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9) RETURNING id`,
+      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise, validity_date)
+       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9, $10) RETURNING id`,
       [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null,
-       Number(remiseGlobale) || 0, conditionsPaiement || null, livraisonPromise || null]
+       Number(remiseGlobale) || 0, conditionsPaiement || null, livraisonPromise || null,
+       validityDate || validiteParDefaut()]
     );
     const devisId = devisResult.rows[0].id;
     const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
@@ -270,7 +282,7 @@ router.post('/', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.put('/:id', authRequired, async (req, res) => {
-  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise, validityDate } = req.body;
 
   const client = await pool.connect();
   try {
@@ -302,9 +314,10 @@ router.put('/:id', authRequired, async (req, res) => {
     await client.query(
       `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes),
        remise_globale = $4,
-       conditions_paiement = COALESCE($5, conditions_paiement), livraison_promise = COALESCE($6, livraison_promise)
-       WHERE id = $7`,
-      [clientId, total, notes, remiseGlobaleFinale, conditionsPaiement, livraisonPromise, req.params.id]
+       conditions_paiement = COALESCE($5, conditions_paiement), livraison_promise = COALESCE($6, livraison_promise),
+       validity_date = COALESCE($7, validity_date)
+       WHERE id = $8`,
+      [clientId, total, notes, remiseGlobaleFinale, conditionsPaiement, livraisonPromise, validityDate || null, req.params.id]
     );
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { total: check.rows[0].total }, { total }, ['total']);
@@ -343,8 +356,10 @@ router.delete('/:id', authRequired, async (req, res) => {
   try {
     const check = await pool.query('SELECT statut FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
-    if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
-      return res.status(400).json({ error: 'Seul un devis en brouillon peut être supprimé.' });
+    // Brouillon/Devis (jamais engagé) OU Annulé (statut terminal pré-signature, le stock
+    // et les finances n'ont jamais bougé) — aligné sur "draft or cancel" d'un ERP de référence.
+    if (!['Brouillon', 'Devis', 'Annulé'].includes(check.rows[0].statut)) {
+      return res.status(400).json({ error: 'Seul un devis en brouillon ou annulé peut être supprimé.' });
     }
     await pool.query('DELETE FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     return res.json({ success: true });
@@ -517,17 +532,23 @@ router.post('/public/:token/signer', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res) => {
-  const { modePaiement, modalitePaiement, echeances } = req.body;
+  // Deux modes d'entrée :
+  //  - paymentTermId (+ acompte optionnel) : les échéances sont GÉNÉRÉES depuis la
+  //    condition de paiement (account.payment.term-like) ;
+  //  - modalitePaiement + echeances : ancienne saisie manuelle, conservée en repli.
+  const { modePaiement, modalitePaiement, echeances, paymentTermId, acompte } = req.body;
 
   const MODES_VALIDES = ['Espèces', 'Banque', 'Mobile Money', 'Chèque'];
   if (!modePaiement || !MODES_VALIDES.includes(modePaiement)) {
     return res.status(400).json({ error: 'Mode de paiement invalide.' });
   }
-  if (!['complet', 'echelonne'].includes(modalitePaiement)) {
-    return res.status(400).json({ error: 'Modalité de paiement invalide.' });
-  }
-  if (modalitePaiement === 'echelonne' && (!Array.isArray(echeances) || echeances.length === 0)) {
-    return res.status(400).json({ error: 'Au moins une échéance est requise pour un paiement échelonné.' });
+  if (!paymentTermId) {
+    if (!['complet', 'echelonne'].includes(modalitePaiement)) {
+      return res.status(400).json({ error: 'Modalité de paiement invalide.' });
+    }
+    if (modalitePaiement === 'echelonne' && (!Array.isArray(echeances) || echeances.length === 0)) {
+      return res.status(400).json({ error: 'Au moins une échéance est requise pour un paiement échelonné.' });
+    }
   }
 
   const client = await pool.connect();
@@ -539,32 +560,48 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       [req.params.id, req.user.entrepriseId]
     );
     if (check.rows.length === 0) {
-      client.release();
-      return res.status(404).json({ error: 'Devis introuvable.' });
+      return res.status(404).json({ error: 'Devis introuvable.' }); // client libéré par le finally
     }
     if (check.rows[0].statut !== 'Signé') {
-      client.release();
       return res.status(400).json({ error: 'Seul un devis signé peut être converti en facture.' });
     }
 
     const { total, numero, clientNom, clientPrenom } = check.rows[0];
     const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
 
-    if (modalitePaiement === 'echelonne') {
-      const sommeEcheances = echeances.reduce((s, e) => s + Number(e.montant), 0);
-      if (Math.abs(sommeEcheances - Number(total)) > 1) {
-        client.release();
-        return res.status(400).json({ error: `La somme des échéances (${sommeEcheances}) ne correspond pas au total de la facture (${total}).` });
+    // Détermine les échéances + la modalité effective.
+    let echeancesFinales;
+    let modaliteFinale;
+    let paymentTermIdFinal = null;
+    if (paymentTermId) {
+      const gen = await genererEcheancesDepuisTerme(req.user.entrepriseId, paymentTermId, Number(total), new Date(), acompte);
+      if (!gen) {
+        return res.status(400).json({ error: 'Condition de paiement inconnue.' });
+      }
+      echeancesFinales = gen;
+      paymentTermIdFinal = Number(paymentTermId);
+      const auj = new Date().toISOString().slice(0, 10);
+      // Terme "paiement immédiat" (une seule échéance due aujourd'hui, sans acompte) → traité
+      // comme un paiement complet (échéance créée déjà réglée + synchro finances).
+      modaliteFinale = (gen.length === 1 && gen[0].dateEcheance <= auj) ? 'complet' : 'echelonne';
+    } else {
+      echeancesFinales = modalitePaiement === 'echelonne' ? echeances : null;
+      modaliteFinale = modalitePaiement;
+      if (modalitePaiement === 'echelonne') {
+        const sommeEcheances = echeances.reduce((s, e) => s + Number(e.montant), 0);
+        if (Math.abs(sommeEcheances - Number(total)) > 1) {
+          return res.status(400).json({ error: `La somme des échéances (${sommeEcheances}) ne correspond pas au total de la facture (${total}).` });
+        }
       }
     }
 
     await client.query('BEGIN');
 
     // Statut initial : "Facturé" si tout est payé d'un coup, "Non payé" si échelonné
-    const statutInitial = modalitePaiement === 'complet' ? 'Facturé' : 'Non payé';
+    const statutInitial = modaliteFinale === 'complet' ? 'Facturé' : 'Non payé';
     await client.query(
-      `UPDATE devis SET statut = $1, mode_paiement = $2, modalite_paiement = $3 WHERE id = $4`,
-      [statutInitial, modePaiement, modalitePaiement, req.params.id]
+      `UPDATE devis SET statut = $1, mode_paiement = $2, modalite_paiement = $3, payment_term_id = $4 WHERE id = $5`,
+      [statutInitial, modePaiement, modaliteFinale, paymentTermIdFinal, req.params.id]
     );
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: check.rows[0].statut }, { statut: statutInitial }, ['statut']);
@@ -576,9 +613,9 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       [req.params.id]
     );
 
-    if (modalitePaiement === 'echelonne') {
-      for (let i = 0; i < echeances.length; i++) {
-        const e = echeances[i];
+    if (modaliteFinale === 'echelonne') {
+      for (let i = 0; i < echeancesFinales.length; i++) {
+        const e = echeancesFinales[i];
         await client.query(
           `INSERT INTO echeances_paiement (devis_id, montant, date_echeance, ordre) VALUES ($1, $2, $3, $4)`,
           [req.params.id, Number(e.montant), e.dateEcheance, i]
@@ -606,8 +643,9 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
     await logAuditEvent({
       entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email, action: 'devis_facture', req,
       details: {
-        devisId: Number(req.params.id), numero, total: Number(total), modePaiement, modalitePaiement,
-        nbEcheances: modalitePaiement === 'echelonne' ? echeances.length : 1,
+        devisId: Number(req.params.id), numero, total: Number(total), modePaiement,
+        modalitePaiement: modaliteFinale, paymentTermId: paymentTermIdFinal,
+        nbEcheances: modaliteFinale === 'echelonne' ? echeancesFinales.length : 1,
       },
     });
 
@@ -647,7 +685,7 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     await client.query(`DELETE FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
     // Réinitialise le devis en brouillon
     await client.query(
-      `UPDATE devis SET statut = 'Brouillon', mode_paiement = NULL, modalite_paiement = NULL,
+      `UPDATE devis SET statut = 'Brouillon', mode_paiement = NULL, modalite_paiement = NULL, payment_term_id = NULL,
        signature_data = NULL, signataire_nom = NULL, date_signature = NULL, token_public = NULL
        WHERE id = $1`,
       [req.params.id]
