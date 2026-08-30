@@ -422,6 +422,133 @@ CREATE TABLE IF NOT EXISTS account_journal_sequence (
   UNIQUE (journal_id, prefix)
 );
 
+-- ═══════════════ Étape 3 Comptabilité — account.move + account.move.line (double-partie) ═══════════════
+-- La facture devient une pièce comptable à part entière, distincte du devis : un en-tête
+-- account_move (draft → posted → cancel) + des lignes account_move_line dont l'ensemble est
+-- équilibré (Σdébit = Σcrédit) au moment du post. Calqué sur account.move / account.move.line
+-- d'un ERP de référence. POST /api/devis/:id/facturer n'est PAS encore rebranché dessus (étape 3b).
+CREATE TABLE IF NOT EXISTS account_move (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  journal_id         INTEGER NOT NULL REFERENCES account_journal(id) ON DELETE RESTRICT,
+  move_type          TEXT NOT NULL DEFAULT 'entry' CHECK (move_type IN (
+                       'entry', 'out_invoice', 'out_refund', 'in_invoice', 'in_refund')),
+  state              TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'posted', 'cancel')),
+  name               TEXT,
+  ref                TEXT,
+  -- FK vers contacts ajoutée plus bas (contacts est créée après ce bloc dans le script).
+  partner_id         INTEGER,
+  invoice_date       DATE,
+  invoice_date_due   DATE,
+  date               DATE NOT NULL DEFAULT CURRENT_DATE,
+  invoice_origin     TEXT,
+  payment_term_id    INTEGER REFERENCES payment_terms(id) ON DELETE SET NULL,
+  amount_untaxed     NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  amount_tax         NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  amount_total       NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  amount_residual    NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  payment_state      TEXT NOT NULL DEFAULT 'not_paid' CHECK (payment_state IN (
+                       'not_paid', 'in_payment', 'paid', 'partial', 'reversed')),
+  reversed_entry_id  INTEGER REFERENCES account_move(id) ON DELETE SET NULL,
+  user_id            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_account_move_entreprise_id ON account_move(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_journal_id ON account_move(journal_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_partner_id ON account_move(partner_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_type_state ON account_move(entreprise_id, move_type, state);
+-- Un numéro (name) est unique par journal une fois attribué (au post). Index partiel : les
+-- brouillons ont name = NULL et ne sont donc pas contraints.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_account_move_name_journal
+  ON account_move(journal_id, name) WHERE name IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS account_move_line (
+  id                  SERIAL PRIMARY KEY,
+  move_id             INTEGER NOT NULL REFERENCES account_move(id) ON DELETE CASCADE,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  account_id          INTEGER REFERENCES account_account(id) ON DELETE RESTRICT,
+  partner_id          INTEGER, -- FK vers contacts ajoutée plus bas
+  name                TEXT,
+  display_type        TEXT NOT NULL DEFAULT 'product' CHECK (display_type IN (
+                        'product', 'line_section', 'line_note', 'tax', 'payment_term', 'rounding')),
+  sequence            INTEGER NOT NULL DEFAULT 10,
+  quantity            NUMERIC(16, 4) NOT NULL DEFAULT 0,
+  price_unit          NUMERIC(16, 4) NOT NULL DEFAULT 0,
+  discount            NUMERIC(5, 2) NOT NULL DEFAULT 0,
+  price_subtotal      NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  price_total         NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  debit               NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  credit              NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  balance             NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  tax_line_id         INTEGER REFERENCES account_tax(id) ON DELETE SET NULL,
+  amount_residual     NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  reconciled          BOOLEAN NOT NULL DEFAULT FALSE,
+  full_reconcile_id   INTEGER,
+  matching_number     TEXT,
+  date_maturity       DATE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_account_move_line_move_id ON account_move_line(move_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_line_account ON account_move_line(entreprise_id, account_id, reconciled);
+
+-- tax_ids d'une ligne produit (Many2many) — patron devis_lignes_taxes.
+CREATE TABLE IF NOT EXISTS account_move_line_taxes (
+  id             SERIAL PRIMARY KEY,
+  move_line_id   INTEGER NOT NULL REFERENCES account_move_line(id) ON DELETE CASCADE,
+  tax_id         INTEGER NOT NULL REFERENCES account_tax(id) ON DELETE CASCADE,
+  UNIQUE (move_line_id, tax_id)
+);
+CREATE INDEX IF NOT EXISTS idx_account_move_line_taxes_line ON account_move_line_taxes(move_line_id);
+
+-- Lettrage : une écriture de lettrage total (account.full.reconcile) regroupe des
+-- rapprochements partiels (account.partial.reconcile) entre une ligne au débit et une au
+-- crédit, jusqu'à solder les deux.
+CREATE TABLE IF NOT EXISTS account_full_reconcile (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS account_partial_reconcile (
+  id                    SERIAL PRIMARY KEY,
+  entreprise_id         INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  debit_move_line_id    INTEGER NOT NULL REFERENCES account_move_line(id) ON DELETE CASCADE,
+  credit_move_line_id   INTEGER NOT NULL REFERENCES account_move_line(id) ON DELETE CASCADE,
+  amount                NUMERIC(16, 2) NOT NULL,
+  full_reconcile_id     INTEGER REFERENCES account_full_reconcile(id) ON DELETE SET NULL,
+  max_date              DATE,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_apr_debit ON account_partial_reconcile(debit_move_line_id);
+CREATE INDEX IF NOT EXISTS idx_apr_credit ON account_partial_reconcile(credit_move_line_id);
+
+-- account.payment délègue à une account_move (son écriture : banque + créance/dette).
+CREATE TABLE IF NOT EXISTS account_payment (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  move_id        INTEGER REFERENCES account_move(id) ON DELETE SET NULL,
+  journal_id     INTEGER NOT NULL REFERENCES account_journal(id) ON DELETE RESTRICT,
+  payment_type   TEXT NOT NULL CHECK (payment_type IN ('inbound', 'outbound')),
+  partner_type   TEXT NOT NULL DEFAULT 'customer' CHECK (partner_type IN ('customer', 'supplier')),
+  partner_id     INTEGER, -- FK vers contacts ajoutée plus bas
+
+  amount         NUMERIC(16, 2) NOT NULL,
+  payment_date   DATE NOT NULL DEFAULT CURRENT_DATE,
+  ref            TEXT,
+  state          TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'posted', 'cancel')),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_account_payment_entreprise_id ON account_payment(entreprise_id);
+
+-- Une échéance peut désormais appartenir à une facture (account_move) et non plus seulement
+-- à un devis — devis_id devient donc nullable (les échéances générées par /api/factures
+-- portent move_id, devis_id NULL). Le chemin devis existant (POST /devis/:id/facturer) est
+-- inchangé : il continue de créer des échéances avec devis_id renseigné, move_id NULL.
+ALTER TABLE echeances_paiement ADD COLUMN IF NOT EXISTS move_id INTEGER REFERENCES account_move(id) ON DELETE CASCADE;
+ALTER TABLE echeances_paiement ALTER COLUMN devis_id DROP NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_echeances_paiement_move_id ON echeances_paiement(move_id);
+
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
   type                 VARCHAR(50) NOT NULL,
@@ -1160,6 +1287,26 @@ CREATE TABLE IF NOT EXISTS contacts_tags_rel (
   tag_id     INTEGER NOT NULL REFERENCES contact_tags(id) ON DELETE CASCADE,
   PRIMARY KEY (contact_id, tag_id)
 );
+
+-- Étape 3 Comptabilité : FK partner_id → contacts pour account_move / account_move_line /
+-- account_payment. Ajoutées ici (et non inline) parce que ces trois tables sont créées plus
+-- haut dans le script, avant que contacts n'existe (même contrainte que devis.client_id,
+-- posée par ALTER plus bas).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'account_move_partner_id_fkey') THEN
+    ALTER TABLE account_move ADD CONSTRAINT account_move_partner_id_fkey
+      FOREIGN KEY (partner_id) REFERENCES contacts(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'account_move_line_partner_id_fkey') THEN
+    ALTER TABLE account_move_line ADD CONSTRAINT account_move_line_partner_id_fkey
+      FOREIGN KEY (partner_id) REFERENCES contacts(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'account_payment_partner_id_fkey') THEN
+    ALTER TABLE account_payment ADD CONSTRAINT account_payment_partner_id_fkey
+      FOREIGN KEY (partner_id) REFERENCES contacts(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- ═══════════════ Journal des modifications (chatter) + activités planifiées ═══════════════
 -- Round 2 de l'inspiration ERP (après recherche globale/boutons intelligents/routage/nav

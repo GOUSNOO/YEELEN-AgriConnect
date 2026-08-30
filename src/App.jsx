@@ -54,6 +54,8 @@ import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
+import FacturesModule from './components/FacturesModule';
+import { taxesLigneCalc as taxesLigneCalcPure } from './lib/taxes.js';
 import MonEspaceRh from './components/MonEspaceRh';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
@@ -557,34 +559,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const rechargerTaxes = () => getTaxes().then(d => setTaxes(d.taxes || [])).catch(() => {});
   useEffect(() => { rechargerTaxes(); }, []);
 
-  // Base HT réelle + montant de taxe d'une ligne à partir de ses taxIds et du référentiel
-  // `taxes` — réplique appliquerTaxesLigne() côté serveur (utils/taxeCompute.js) dans sa
-  // portée étape 1 : percent / fixed (à l'unité), price_include (extraction), include_base_amount
-  // (cascade). Renvoie { base, taxe } ; total ligne = base + taxe.
-  const taxesLigneCalc = (baseHT, quantite, taxIds) => {
-    const list = (taxIds || []).map(id => taxById.get(id)).filter(Boolean)
-      .sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id));
-    const q = Number(quantite) || 0;
-    let base = Number(baseHT) || 0;
-    if (!list.length) return { base, taxe: 0 };
-    const incFixe = list.filter(tx => tx.priceInclude && tx.amountType === 'fixed');
-    const incPct = list.filter(tx => tx.priceInclude && tx.amountType === 'percent');
-    if (incFixe.length) base -= incFixe.reduce((s, tx) => s + tx.amount * q, 0);
-    if (incPct.length) {
-      const f = incPct.reduce((s, tx) => s + tx.amount / 100, 0);
-      if (1 + f !== 0) base /= (1 + f);
-    }
-    let courant = base;
-    let taxe = 0;
-    for (const tx of list) {
-      let m = 0;
-      if (tx.amountType === 'percent') m = courant * tx.amount / 100;
-      else if (tx.amountType === 'fixed') m = tx.amount * q;
-      taxe += m;
-      if (tx.includeBaseAmount) courant += m;
-    }
-    return { base, taxe };
-  };
+  // Base HT réelle + montant de taxe d'une ligne — voir src/lib/taxes.js (partagé avec
+  // FacturesModule). Fermeture sur le référentiel `taxById` de ce module.
+  const taxesLigneCalc = (baseHT, quantite, taxIds) => taxesLigneCalcPure(baseHT, quantite, taxIds, taxById);
 
   // Résumé lisible des lignes d'une condition de paiement (ex: "30 % à J+0 · solde à J+30").
   const resumeTerme = (term) => (term.lignes || []).map(l => {
@@ -7062,6 +7039,7 @@ export default function App() {
     activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: t('nav.employees'), icon: Briefcase, category: 'rh' },
     { id: 'monrh', label: t('nav.monrh'), icon: ClipboardList, category: 'rh' },
     activated.finances && roleConfig.permissions.includes('finances') && { id: 'finances', label: t('nav.finances'), icon: Landmark, category: 'finance' },
+    activated.finances && roleConfig.permissions.includes('finances') && { id: 'factures', label: t('nav.factures'), icon: FileText, category: 'finance' },
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: t('nav.notifications'), icon: Bell, category: 'operations' },
     { id: 'observations', label: t('nav.observations'), icon: ClipboardList, category: 'operations' },
     roleConfig.permissions.includes('equipements') && { id: 'equipements', label: t('nav.equipements'), icon: Wrench, category: 'operations' },
@@ -7289,6 +7267,7 @@ export default function App() {
             {tab === 'employees' && <EmployeesModule farmId={user} role={role} />}
             {tab === 'monrh' && <MonEspaceRh />}
             {tab === 'finances' && <FinancesModule farmId={user} role={role} />}
+            {tab === 'factures' && <FacturesModule />}
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
             {tab === 'observations' && <ObservationListView />}
             {tab === 'equipements' && <EquipementsModule canManage={['admin', 'directeur', 'gestionnaire'].includes(role)} />}

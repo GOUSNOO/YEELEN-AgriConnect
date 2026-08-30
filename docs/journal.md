@@ -5,6 +5,67 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 3 : `account.move` + `account.move.line` (double-partie) — 2026-08-30
+
+4e étape de [[project_erp_comptabilite_roadmap]]. **Décision prise avec l'utilisateur au
+lancement** : double-partie **complète** (écriture équilibrée + moteur de lettrage), pas le
+modèle-document sur base de trésorerie. Et **`account.move` autonome cette étape** —
+`POST /api/devis/:id/facturer` est **inchangé**, rebranché à l'étape 3b/4.
+
+**Tables** (`migrate.js`, noms de champs calqués sur un ERP de référence) :
+- **`account_move`** : `move_type` (entry/out_invoice/out_refund/in_invoice/in_refund),
+  `state` (draft/posted/cancel), `name` (NULL → `INV/2026/0001` au post), `partner_id`,
+  `invoice_date`/`invoice_date_due`/`date`, `invoice_origin`, `payment_term_id`,
+  `amount_untaxed`/`amount_tax`/`amount_total`/`amount_residual`, `payment_state`
+  (not_paid/partial/paid/in_payment/reversed), `reversed_entry_id` (auto-FK, pour l'étape 5).
+  Index unique partiel sur `(journal_id, name) WHERE name IS NOT NULL`.
+- **`account_move_line`** : `display_type` (product/line_section/line_note/tax/payment_term),
+  `quantity`/`price_unit`/`discount`/`price_subtotal`/`price_total`,
+  **`debit`/`credit`/`balance`/`account_id`**, `tax_line_id`,
+  **`amount_residual`/`reconciled`/`full_reconcile_id`/`matching_number`**, `date_maturity`.
+- **`account_move_line_taxes`** (M2M ligne↔taxe), **`account_full_reconcile`** (`name` =
+  numéro de lettrage `A00001`), **`account_partial_reconcile`**
+  (`debit_move_line_id`/`credit_move_line_id`/`amount`/`full_reconcile_id`),
+  **`account_payment`** (délègue à sa propre `account_move`).
+- `echeances_paiement` : + `move_id` nullable ; `devis_id` passe nullable.
+- **Les FK `partner_id` → `contacts`** sont posées par un bloc `DO $$` **après** la création
+  de `contacts` (les tables `account_*` sont créées plus tôt dans le template SQL unique que
+  `contacts` — même contrainte que `devis.client_id`). Une base *fraîche* 500ait
+  (`relation "contacts" does not exist`) tant que ce n'était pas corrigé — repéré par le
+  `globalSetup` de la suite d'intégration.
+
+**Génération de l'écriture au `post`** (`POST /api/factures/:id/post`, admin/directeur) :
+créance (`asset_receivable`/`121000`) D = total ; produit (compte par défaut du journal, sinon
+`income`/`400000`) C = HT par ligne ; une ligne de taxe par taxe (`liability_current`/`251000`)
+C = montant. **Assertion Σdébit = Σcrédit** (sinon rollback + 400). `name` via
+`prochainNumeroJournal` (étape 2). `out_refund` = signes inversés, préfixe `RINV/…`.
+
+**Moteur de lettrage** (`POST /api/factures/:id/register-payment`) : crée un `account_payment`
++ son écriture (trésorerie D ↔ créance C), un `account_partial_reconcile` contre la ligne
+créance de la facture, recalcule `amount_residual` des deux lignes, et au solde total crée un
+`account_full_reconcile` + tamponne `matching_number` (`A00001`). Puis met à jour
+`move.amount_residual`/`payment_state`, marque les échéances couvertes, et reflète dans
+`finances` via `syncFacturePaiement` (`source_module='Facture'`).
+
+**Routes** `/api/factures` : GET liste (`?moveType=&state=&partnerId=`) + GET `:id` (move +
+lignes + taxes + échéances + paiements), POST/PUT (brouillon seul), `:id/post` /
+`:id/button-draft` (retour brouillon si `not_paid` seulement) / `:id/cancel` /
+`:id/register-payment` (admin/directeur), DELETE (brouillon/annulé seul, règle Odoo).
+
+**Frontend** : nouveau `src/components/FacturesModule.jsx` (liste + formulaire brouillon avec
+`TaxSelect` + modal détail montrant les lignes comptables / échéances / paiements +
+post/cancel/retour-brouillon/suppression/enregistrer-paiement), onglet nav « Factures » gaté
+sur la permission `finances` + `activated.finances`. `taxesLigneCalc` extrait de `App.jsx`
+vers **`src/lib/taxes.js`** (partagé avec `DevisModule`). i18n `factures.*` + `nav.factures` +
+`common.all` fr/en.
+
+**Répétition migration** : `pg_dump agri_app` → base jetable → `migrate.js` ×2 (idempotent
+au 2e passage) → tables créées, `echeances_paiement.devis_id` nullable + `move_id` ajouté,
+comptes devis inchangés → appliqué à `agri_app`. Fumée live : brouillon 10×1000 + TVA 18 %
+→ post `INV/2026/0001`, débit = crédit = 11800 → paiement 11800 → `paid`, résiduel 0,
+`matching_number` `A00001`, entrée `finances` « Banque 11800 ». Tests : `factures.test.js`
+(10) → suite d'intégration **130 tests / 22 fichiers** verte. Front : build OK, 88 verts.
+
 ### ERP « Comptabilité » — Étape 2 : journaux + plan de comptes + séquences — 2026-08-30
 
 3e étape de [[project_erp_comptabilite_roadmap]] (après validité/conditions de paiement à

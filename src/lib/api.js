@@ -679,6 +679,35 @@ export async function deleteAccount(id) {
   return request(`/accounts/${id}`, { method: 'DELETE' });
 }
 
+// Factures (account.move-like) — étape 3 Comptabilité.
+export async function getFactures(params = '') {
+  return request(`/factures${params}`);
+}
+export async function getFacture(id) {
+  return request(`/factures/${id}`);
+}
+export async function createFacture(payload) {
+  return request('/factures', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateFacture(id, payload) {
+  return request(`/factures/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteFacture(id) {
+  return request(`/factures/${id}`, { method: 'DELETE' });
+}
+export async function postFacture(id) {
+  return request(`/factures/${id}/post`, { method: 'POST', body: '{}' });
+}
+export async function factureRetourBrouillon(id) {
+  return request(`/factures/${id}/button-draft`, { method: 'POST', body: '{}' });
+}
+export async function annulerFacture(id) {
+  return request(`/factures/${id}/cancel`, { method: 'POST', body: '{}' });
+}
+export async function enregistrerPaiementFacture(id, payload) {
+  return request(`/factures/${id}/register-payment`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {
   return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });

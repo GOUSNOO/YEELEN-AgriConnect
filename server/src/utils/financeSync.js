@@ -165,3 +165,27 @@ export async function syncDevisPaiement(entrepriseId, userId, { montant, modePai
     console.error('[syncDevisPaiement]', err);
   }
 }
+
+// Étape 3 Comptabilité : miroir Finances d'un paiement enregistré sur une facture
+// (account.move). `journalType` = type du journal de trésorerie du paiement ('bank' → Banque,
+// 'cash' → Caisse). `montant` signé comme partout : positif pour un encaissement client
+// (inbound), négatif pour un décaissement fournisseur (outbound). source_mouvement_id =
+// l'id de l'account_payment, pour pouvoir retirer l'entrée si le paiement est annulé.
+export async function syncFacturePaiement(entrepriseId, userId, { montant, journalType, numero, partenaireNom, paymentId }) {
+  try {
+    let banqueId = null;
+    const categorie = journalType === 'cash' ? 'Caisse' : 'Banque';
+    if (categorie === 'Banque') {
+      const e = await pool.query('SELECT banque_principale_id FROM entreprises WHERE id = $1', [entrepriseId]);
+      banqueId = e.rows[0]?.banque_principale_id || null;
+    }
+    const description = `Règlement facture ${numero} — ${partenaireNom || 'Partenaire'}`;
+    await pool.query(
+      `INSERT INTO finances (entreprise_id, user_id, type, montant, description, source_module, source_mouvement_id, banque_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [entrepriseId, userId, categorie, montant, description, 'Facture', paymentId, banqueId]
+    );
+  } catch (err) {
+    console.error('[syncFacturePaiement]', err);
+  }
+}
