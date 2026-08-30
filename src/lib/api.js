@@ -710,6 +710,9 @@ export async function enregistrerPaiementFacture(id, payload) {
 export async function verifyFactureHash(journalId) {
   return request(`/factures/verify-hash?journalId=${journalId}`);
 }
+export async function reverseFacture(id, payload) {
+  return request(`/factures/${id}/reverse`, { method: 'POST', body: JSON.stringify(payload) });
+}
 
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {

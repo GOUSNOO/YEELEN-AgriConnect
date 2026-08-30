@@ -100,6 +100,52 @@ export async function hacherMoveSiRequis(client, moveId, journalId) {
 const err400 = (msg) => Object.assign(new Error(msg), { status: 400 });
 const err404 = (msg) => Object.assign(new Error(msg), { status: 404 });
 
+// Lettre `amount` entre une ligne "facture" (dont le résidu diminue vers 0) et une ligne
+// "contrepartie" (paiement ou avoir). Le sens débit/crédit du rapprochement est déduit du
+// signe du résidu de la ligne facture (résidu positif = créance = côté débit). Crée le
+// account_partial_reconcile, réduit les deux résidus (sign-aware) et, si la ligne facture
+// est soldée, un account_full_reconcile + matching_number sur les deux lignes.
+// Partagé par enregistrerPaiementMove et reverseMove. `client` = transaction.
+export async function lettrerLignesPartenaire(client, entrepriseId, { ligneFactureId, ligneContreId, amount, date }) {
+  const montant = round2(amount);
+  const lf = await client.query('SELECT amount_residual::float8 AS r FROM account_move_line WHERE id = $1', [ligneFactureId]);
+  const lc = await client.query('SELECT amount_residual::float8 AS r FROM account_move_line WHERE id = $1', [ligneContreId]);
+  const residuFact = lf.rows[0].r;
+  const residuContre = lc.rows[0].r;
+
+  const factCote = residuFact >= 0 ? 'debit' : 'credit';
+  const debitLineId = factCote === 'debit' ? ligneFactureId : ligneContreId;
+  const creditLineId = factCote === 'debit' ? ligneContreId : ligneFactureId;
+  await client.query(
+    `INSERT INTO account_partial_reconcile (entreprise_id, debit_move_line_id, credit_move_line_id, amount, max_date)
+     VALUES ($1,$2,$3,$4,$5)`,
+    [entrepriseId, debitLineId, creditLineId, montant, date]
+  );
+
+  const factApres = round2(Math.abs(residuFact) - montant) * Math.sign(residuFact || 1);
+  const contreApres = round2(Math.abs(residuContre) - montant) * Math.sign(residuContre || 1);
+  await client.query('UPDATE account_move_line SET amount_residual = $1, reconciled = $2 WHERE id = $3',
+    [factApres, Math.abs(factApres) < 0.01, ligneFactureId]);
+  await client.query('UPDATE account_move_line SET amount_residual = $1, reconciled = $2 WHERE id = $3',
+    [contreApres, Math.abs(contreApres) < 0.01, ligneContreId]);
+
+  const factSoldee = Math.abs(factApres) < 0.01;
+  if (factSoldee) {
+    const cnt = await client.query('SELECT COUNT(*)::int AS n FROM account_full_reconcile WHERE entreprise_id = $1', [entrepriseId]);
+    const matching = `A${String(cnt.rows[0].n + 1).padStart(5, '0')}`;
+    const fr = await client.query('INSERT INTO account_full_reconcile (entreprise_id, name) VALUES ($1,$2) RETURNING id', [entrepriseId, matching]);
+    await client.query(
+      `UPDATE account_partial_reconcile SET full_reconcile_id = $1 WHERE debit_move_line_id = $2 OR credit_move_line_id = $2`,
+      [fr.rows[0].id, ligneFactureId]
+    );
+    await client.query(
+      `UPDATE account_move_line SET full_reconcile_id = $1, matching_number = $2 WHERE id IN ($3, $4)`,
+      [fr.rows[0].id, matching, ligneFactureId, ligneContreId]
+    );
+  }
+  return { factApres, contreApres, factSoldee, contreSoldee: Math.abs(contreApres) < 0.01 };
+}
+
 export async function chargerTaxMap(entrepriseId, q = pool) {
   const { rows } = await q.query(
     `SELECT id, amount_type AS "amountType", amount::float8 AS amount,
@@ -276,7 +322,7 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   if (!(montant > 0)) throw err400('Le montant doit être positif.');
 
   const mr = await client.query(
-    `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId", name,
+    `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId", name, payment_state AS "paymentState",
             amount_residual::float8 AS "amountResidual", amount_total::float8 AS "amountTotal"
      FROM account_move WHERE id = $1 AND entreprise_id = $2`,
     [moveId, entrepriseId]
@@ -285,6 +331,7 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   const mv = mr.rows[0];
   if (mv.state !== 'posted') throw err400('La facture doit être postée.');
   if (!['out_invoice', 'in_invoice'].includes(mv.moveType)) throw err400('Paiement applicable seulement à une facture (pas un avoir).');
+  if (mv.paymentState === 'reversed') throw err400('Facture annulée par un avoir — aucun paiement possible.');
   if (mv.amountResidual <= 0) throw err400('Facture déjà soldée.');
   if (montant > mv.amountResidual + 0.01) throw err400(`Montant supérieur au reste dû (${mv.amountResidual}).`);
 
@@ -343,41 +390,15 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   );
 
   const factPartLine = await client.query(
-    `SELECT id, amount_residual::float8 AS "amountResidual"
-     FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    `SELECT id FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
     [moveId]
   );
-  const fpl = factPartLine.rows[0];
-  const debitLineId = estVente ? fpl.id : payPartLine.rows[0].id;
-  const creditLineId = estVente ? payPartLine.rows[0].id : fpl.id;
-  await client.query(
-    `INSERT INTO account_partial_reconcile (entreprise_id, debit_move_line_id, credit_move_line_id, amount, max_date)
-     VALUES ($1,$2,$3,$4,$5)`,
-    [entrepriseId, debitLineId, creditLineId, montant, pdate]
-  );
-
-  const nouveauResidualFact = round2(Math.abs(fpl.amountResidual) - montant) * Math.sign(fpl.amountResidual || 1);
-  await client.query('UPDATE account_move_line SET amount_residual = $1, reconciled = $2 WHERE id = $3',
-    [nouveauResidualFact, Math.abs(nouveauResidualFact) < 0.01, fpl.id]);
-  await client.query('UPDATE account_move_line SET amount_residual = 0, reconciled = TRUE WHERE id = $1', [payPartLine.rows[0].id]);
-
-  if (Math.abs(nouveauResidualFact) < 0.01) {
-    const cnt = await client.query('SELECT COUNT(*)::int AS n FROM account_full_reconcile WHERE entreprise_id = $1', [entrepriseId]);
-    const matching = `A${String(cnt.rows[0].n + 1).padStart(5, '0')}`;
-    const fr = await client.query(
-      `INSERT INTO account_full_reconcile (entreprise_id, name) VALUES ($1,$2) RETURNING id`,
-      [entrepriseId, matching]
-    );
-    await client.query(
-      `UPDATE account_partial_reconcile SET full_reconcile_id = $1
-       WHERE debit_move_line_id = $2 OR credit_move_line_id = $2`,
-      [fr.rows[0].id, fpl.id]
-    );
-    await client.query(
-      `UPDATE account_move_line SET full_reconcile_id = $1, matching_number = $2 WHERE id IN ($3, $4)`,
-      [fr.rows[0].id, matching, fpl.id, payPartLine.rows[0].id]
-    );
-  }
+  await lettrerLignesPartenaire(client, entrepriseId, {
+    ligneFactureId: factPartLine.rows[0].id,
+    ligneContreId: payPartLine.rows[0].id,
+    amount: montant,
+    date: pdate,
+  });
 
   const residualFacture = round2(Math.max(0, mv.amountResidual - montant));
   const paymentState = residualFacture <= 0.01 ? 'paid' : (residualFacture < mv.amountTotal ? 'partial' : 'not_paid');
@@ -409,4 +430,98 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   }
 
   return { paymentId: pay.rows[0].id, paymentState, residual: residualFacture };
+}
+
+// Crée un avoir (out_refund / in_refund) à partir d'une facture postée : copie ses lignes
+// produit/section, pose reversed_entry_id. `refundMethod` :
+//  - 'refund' (défaut) : l'avoir reste en brouillon, éditable, à poster ensuite ;
+//  - 'cancel' : l'avoir est posté (écriture inversée + numéro + hash si journal sécurisé)
+//    puis lettré contre la facture d'origine → origine payment_state 'reversed'.
+// `client` = transaction ouverte. Renvoie { creditNoteId, posted }.
+export async function reverseMove(client, { moveId, entrepriseId, userId, reason, date, refundMethod = 'refund' }) {
+  const mr = await client.query(
+    `SELECT id, move_type AS "moveType", state, journal_id AS "journalId", partner_id AS "partnerId", name
+     FROM account_move WHERE id = $1 AND entreprise_id = $2`,
+    [moveId, entrepriseId]
+  );
+  if (mr.rows.length === 0) throw err404('Facture introuvable.');
+  const mv = mr.rows[0];
+  if (mv.state !== 'posted') throw err400('Seule une facture postée peut être annulée par un avoir.');
+  if (!['out_invoice', 'in_invoice'].includes(mv.moveType)) {
+    throw err400("Un avoir se crée seulement à partir d'une facture (pas d'un avoir).");
+  }
+  const refundType = mv.moveType === 'out_invoice' ? 'out_refund' : 'in_refund';
+  const rdate = date || new Date().toISOString().slice(0, 10);
+
+  const cn = await client.query(
+    `INSERT INTO account_move
+      (entreprise_id, journal_id, move_type, state, partner_id, invoice_date, invoice_date_due,
+       invoice_origin, reversed_entry_id, ref, user_id)
+     VALUES ($1,$2,$3,'draft',$4,$5,$5,$6,$7,$8,$9) RETURNING id`,
+    [entrepriseId, mv.journalId, refundType, mv.partnerId, rdate, mv.name, moveId,
+     `Annulation de : ${mv.name}${reason ? ` — ${reason}` : ''}`, userId || null]
+  );
+  const cnId = cn.rows[0].id;
+
+  const lignes = await client.query(
+    `SELECT id, display_type AS "displayType", sequence, name, quantity::float8 AS quantity,
+            price_unit::float8 AS "priceUnit", discount::float8 AS discount
+     FROM account_move_line WHERE move_id = $1 AND display_type IN ('product','line_section','line_note')
+     ORDER BY sequence ASC, id ASC`,
+    [moveId]
+  );
+  const ids = lignes.rows.map((l) => l.id);
+  const liens = ids.length
+    ? await client.query(
+        `SELECT move_line_id AS "ligneId", tax_id AS "taxId" FROM account_move_line_taxes WHERE move_line_id = ANY($1::int[])`,
+        [ids]
+      )
+    : { rows: [] };
+  const taxByLigne = new Map();
+  for (const { ligneId, taxId } of liens.rows) {
+    if (!taxByLigne.has(ligneId)) taxByLigne.set(ligneId, []);
+    taxByLigne.get(ligneId).push(taxId);
+  }
+  for (const l of lignes.rows) {
+    const ins = await client.query(
+      `INSERT INTO account_move_line (move_id, entreprise_id, display_type, sequence, name, quantity, price_unit, discount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [cnId, entrepriseId, l.displayType, l.sequence, l.name, l.quantity, l.priceUnit, l.discount]
+    );
+    for (const taxId of (taxByLigne.get(l.id) || [])) {
+      await client.query('INSERT INTO account_move_line_taxes (move_line_id, tax_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [ins.rows[0].id, taxId]);
+    }
+  }
+
+  if (refundMethod !== 'cancel') return { creditNoteId: cnId, posted: false };
+
+  await posterMove(client, cnId, entrepriseId);
+
+  const origPart = await client.query(
+    `SELECT id, amount_residual::float8 AS r FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    [moveId]
+  );
+  const cnPart = await client.query(
+    `SELECT id FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    [cnId]
+  );
+  const cnTot = await client.query('SELECT amount_total::float8 AS t FROM account_move WHERE id = $1', [cnId]);
+  const resteOrig = Math.abs(origPart.rows[0].r);
+  const montantLettre = round2(Math.min(resteOrig, cnTot.rows[0].t));
+  if (montantLettre > 0) {
+    const { contreApres } = await lettrerLignesPartenaire(client, entrepriseId, {
+      ligneFactureId: origPart.rows[0].id, ligneContreId: cnPart.rows[0].id, amount: montantLettre, date: rdate,
+    });
+    const origResidu = round2(Math.max(0, resteOrig - montantLettre));
+    await client.query(
+      `UPDATE account_move SET amount_residual = $1, payment_state = $2 WHERE id = $3`,
+      [origResidu, origResidu < 0.01 ? 'reversed' : 'partial', moveId]
+    );
+    const cnResidu = round2(Math.abs(contreApres));
+    await client.query(
+      `UPDATE account_move SET amount_residual = $1, payment_state = $2 WHERE id = $3`,
+      [cnResidu, cnResidu < 0.01 ? 'paid' : 'partial', cnId]
+    );
+  }
+  return { creditNoteId: cnId, posted: true };
 }

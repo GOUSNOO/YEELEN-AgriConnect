@@ -5,6 +5,41 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 5 : avoirs (`out_refund` + reverse) — 2026-08-30
+
+**Aucun changement de schéma** — `reversed_entry_id`, `out_refund`, la séquence `RINV/…`
+existent depuis l'étape 3. Étape code seulement.
+
+**Refacto** : `lettrerLignesPartenaire(client, entrepriseId, {ligneFactureId, ligneContreId,
+amount, date})` extrait d'`enregistrerPaiementMove` — le `account_partial_reconcile` +
+`account_full_reconcile` + `matching_number` au solde, désormais sign-aware sur **les deux**
+lignes (chaque résidu diminué de `amount` vers 0). Partagé par le paiement et le reverse.
+
+**`reverseMove(client, {moveId, entrepriseId, userId, reason, date, refundMethod})`** :
+l'origine doit être une facture postée (`out_invoice`/`in_invoice`) ; crée un `account_move`
+(`out_refund`/`in_refund`, `reversed_entry_id` = origine, `ref` = « Annulation de : <name>
+— <reason> », `invoice_origin` = nom de l'origine), copie ses lignes produit/section + liens
+de taxes.
+- `refundMethod: 'refund'` (défaut) → l'avoir reste **brouillon** (éditable, à poster ensuite)
+- `refundMethod: 'cancel'` → `posterMove` (écriture inversée + numéro `RINV/…` + hash si
+  journal sécurisé) puis `lettrerLignesPartenaire` contre la ligne créance de l'origine →
+  origine `payment_state='reversed'` + `amount_residual=0`, avoir soldé.
+
+**Route** `POST /api/factures/:id/reverse` (admin/directeur). **Garde-fous** :
+`enregistrerPaiementMove` → 400 si l'origine est `reversed` ; `POST /devis/:id/remettre-
+brouillon` → 400 si la facture liée a des avoirs (en plus du garde-fou hash).
+`getFactureComplete` renvoie `reversedEntryName` + `reversalMoveNames`.
+
+**Frontend** : `FacturesModule` modal détail — bouton « Créer un avoir » sur une
+`out_invoice` postée → formulaire inline (motif + méthode), ouvre l'avoir créé ; l'en-tête
+affiche « Avoir de : … » / « Annulée par : … ». i18n fr/en.
+
+**Vérif** : `pg_dump`→restore→`migrate.js` ×2 (formalité, pas de delta de schéma). Fumée
+live : facture postée 2×500 → reverse `cancel` → `RINV/2026/0001` posté, résiduel 0,
+`matching_number` `A00001`, origine `reversed` résiduel 0, `reversalMoveNames` renseigné ;
+`register-payment` sur l'origine → 400. Nouveau `factureAvoir.test.js` (7) → suite
+d'intégration **144 tests / 24 fichiers** verte. Front : build OK, 88 verts.
+
 ### ERP « Comptabilité » — Étape 4 : inaltérabilité des factures postées — 2026-08-30
 
 Calquée sur le mécanisme d'un ERP de référence : `restrict_mode_hash_table` par journal,

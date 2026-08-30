@@ -4,7 +4,7 @@ import { Plus, Trash2, Loader2, X, Lock } from 'lucide-react';
 import {
   getFactures, getFacture, createFacture, deleteFacture,
   postFacture, factureRetourBrouillon, annulerFacture, enregistrerPaiementFacture,
-  verifyFactureHash, getContacts, getTaxes,
+  verifyFactureHash, reverseFacture, getContacts, getTaxes,
 } from '../lib/api.js';
 import { taxesLigneCalc } from '../lib/taxes.js';
 import { useLocale } from '../lib/locale.jsx';
@@ -33,6 +33,7 @@ export default function FacturesModule() {
   const [detail, setDetail] = useState(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [payForm, setPayForm] = useState({ amount: '', paymentDate: '' });
+  const [avoirForm, setAvoirForm] = useState(null); // null | { reason, refundMethod }
 
   const charger = () => {
     setLoading(true);
@@ -102,6 +103,7 @@ export default function FacturesModule() {
       const d = await getFacture(id);
       setDetail(d.facture);
       setPayForm({ amount: '', paymentDate: '' });
+      setAvoirForm(null);
     } catch (err) { notifyError(err, t('factures.loadError')); }
   };
 
@@ -126,6 +128,22 @@ export default function FacturesModule() {
       else notifyError(null, t('factures.hashBroken', { name: r.brokenAt, reason: r.reason }));
     } catch (err) {
       notifyError(err, t('factures.hashCheckError'));
+    }
+  };
+
+  const submitAvoir = async (e) => {
+    e.preventDefault();
+    setDetailBusy(true);
+    try {
+      const d = await reverseFacture(detail.id, { reason: avoirForm.reason || undefined, refundMethod: avoirForm.refundMethod });
+      notifySuccess(t('factures.avoirCreated'));
+      setAvoirForm(null);
+      setDetail(d.facture); // ouvre l'avoir créé
+      charger();
+    } catch (err) {
+      notifyError(err, t('factures.avoirError'));
+    } finally {
+      setDetailBusy(false);
     }
   };
 
@@ -269,6 +287,8 @@ export default function FacturesModule() {
               {detail.partnerName || '—'} · {t(`factures.type.${detail.moveType}`)}
               {detail.invoiceDate ? ` · ${fmtDate(detail.invoiceDate)}` : ''}
               {detail.invoiceOrigin ? ` · ${detail.invoiceOrigin}` : ''}
+              {detail.reversedEntryName ? ` · ${t('factures.reversalOf', { name: detail.reversedEntryName })}` : ''}
+              {detail.reversalMoveNames ? ` · ${t('factures.reversedBy', { names: detail.reversalMoveNames })}` : ''}
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -277,7 +297,22 @@ export default function FacturesModule() {
               {detail.state !== 'cancel' && <Button small variant="outline" disabled={detailBusy} onClick={() => action(() => annulerFacture(detail.id), t('factures.cancelled'))}>{t('factures.cancelBtn')}</Button>}
               {['draft', 'cancel'].includes(detail.state) && <Button small variant="outline" disabled={detailBusy} onClick={async () => { await action(() => deleteFacture(detail.id).then(() => ({})), t('factures.deleted')); setDetail(null); }}>{t('common.delete')}</Button>}
               {detail.inalterableHash && <Button small variant="outline" disabled={detailBusy} onClick={verifierIntegrite}>{t('factures.verifyHash')}</Button>}
+              {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.paymentState !== 'reversed' && !detail.reversalMoveNames && (
+                <Button small variant="outline" disabled={detailBusy} onClick={() => setAvoirForm({ reason: '', refundMethod: 'cancel' })}>{t('factures.createAvoir')}</Button>
+              )}
             </div>
+
+            {avoirForm && (
+              <form onSubmit={submitAvoir} style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', border: '1px solid #DAD6C4', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <Field label={t('factures.avoirReason')} value={avoirForm.reason} onChange={(e) => setAvoirForm({ ...avoirForm, reason: e.target.value })} />
+                <Select label={t('factures.avoirMethod')} value={avoirForm.refundMethod} onChange={(e) => setAvoirForm({ ...avoirForm, refundMethod: e.target.value })}>
+                  <option value="cancel">{t('factures.avoirMethodCancel')}</option>
+                  <option value="refund">{t('factures.avoirMethodRefund')}</option>
+                </Select>
+                <Button type="submit" disabled={detailBusy}>{t('factures.createAvoir')}</Button>
+                <Button type="button" variant="outline" disabled={detailBusy} onClick={() => setAvoirForm(null)}>{t('common.cancel') || 'Annuler'}</Button>
+              </form>
+            )}
 
             <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
               <thead>

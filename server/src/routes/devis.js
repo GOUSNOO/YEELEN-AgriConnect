@@ -836,7 +836,8 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
   const client = await pool.connect();
   try {
     const check = await client.query(
-      `SELECT d.statut, d.numero, d.move_id AS "moveId", m.inalterable_hash AS "moveHash"
+      `SELECT d.statut, d.numero, d.move_id AS "moveId", m.inalterable_hash AS "moveHash",
+              EXISTS (SELECT 1 FROM account_move rm WHERE rm.reversed_entry_id = d.move_id) AS "aDesAvoirs"
        FROM devis d LEFT JOIN account_move m ON m.id = d.move_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
@@ -848,6 +849,9 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     const moveId = check.rows[0].moveId;
     if (check.rows[0].moveHash) {
       return res.status(400).json({ error: 'La facture liée est sécurisée (inaltérable) — créez un avoir plutôt que de remettre le devis en brouillon.' });
+    }
+    if (check.rows[0].aDesAvoirs) {
+      return res.status(400).json({ error: 'La facture liée a des avoirs — remise en brouillon impossible.' });
     }
 
     await client.query('BEGIN');

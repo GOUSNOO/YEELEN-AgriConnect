@@ -12,7 +12,8 @@ import { requireRole } from '../middleware/requireRole.js';
 import { pool } from '../db.js';
 import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
 import {
-  round2, chargerTaxMap, journalParType, posterMove, enregistrerPaiementMove, verifierChaineJournal,
+  round2, chargerTaxMap, journalParType, posterMove, enregistrerPaiementMove,
+  verifierChaineJournal, reverseMove,
 } from '../utils/accountMove.js';
 
 const router = express.Router();
@@ -32,7 +33,9 @@ const MOVE_COLUMNS = `
   m.payment_state AS "paymentState", m.reversed_entry_id AS "reversedEntryId",
   m.inalterable_hash AS "inalterableHash", m.secure_sequence_number AS "secureSequenceNumber",
   m.created_at AS "createdAt",
-  COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom) AS "partnerName"
+  COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom) AS "partnerName",
+  (SELECT name FROM account_move o WHERE o.id = m.reversed_entry_id) AS "reversedEntryName",
+  (SELECT string_agg(rm.name, ', ' ORDER BY rm.id) FROM account_move rm WHERE rm.reversed_entry_id = m.id) AS "reversalMoveNames"
 `;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -412,6 +415,27 @@ router.delete('/:id', ...ecriture, async (req, res) => {
   } catch (err) {
     console.error('[DELETE /factures/:id]', err);
     return res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+// ─── POST /api/factures/:id/reverse ─── (crée un avoir à partir d'une facture postée)
+router.post('/:id/reverse', ...ecriture, async (req, res) => {
+  const { reason, date, refundMethod } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { creditNoteId } = await reverseMove(client, {
+      moveId: req.params.id, entrepriseId: req.user.entrepriseId, userId: req.user.sub,
+      reason, date, refundMethod: refundMethod === 'cancel' ? 'cancel' : 'refund',
+    });
+    await client.query('COMMIT');
+    return res.json({ facture: await getFactureComplete(creditNoteId, req.user.entrepriseId) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (!err.status) console.error('[POST /factures/:id/reverse]', err);
+    return res.status(err.status || 500).json({ error: err.status ? err.message : "Erreur lors de la création de l'avoir." });
+  } finally {
+    client.release();
   }
 });
 
