@@ -4,6 +4,7 @@
 // fonction pour les deux, le contrôle d'accès est fait par l'appelant, pas ici.
 // Seul test unitaire du projet côté backend : server/src/test/devisPdf.test.js.
 import PDFDocument from 'pdfkit';
+import { appliquerTaxesLigne } from './taxeCompute.js';
 
 // Formate un nombre avec des points comme séparateurs de milliers (ex: 1.234.567),
 // pour éviter les problèmes d'affichage de l'espace insécable dans PDFKit
@@ -53,20 +54,27 @@ export function streamDevisPdf(res, devis) {
   doc.y = headerTop + 90;
   doc.moveDown(0.5);
 
-  // Tableau des lignes — en-têtes de colonnes à positions fixes (x=50/250/310/420/490).
+  // Référentiel des taxes de l'entreprise (account.tax-like), indexé par id — sert à
+  // afficher la colonne "Taxes" (noms) et le récapitulatif HT / par taxe / TTC en pied.
+  const taxById = new Map((devis.taxes || []).map(t => [t.id, t]));
+
+  // Tableau des lignes — en-têtes de colonnes à positions fixes.
   const tableTop = doc.y;
   doc.fontSize(10).font('Helvetica-Bold');
   doc.text('Produit', 50, tableTop);
-  doc.text('Qté', 250, tableTop);
-  doc.text('Prix unitaire', 310, tableTop);
-  doc.text('Remise (%)', 420, tableTop);
-  doc.text('Total', 490, tableTop, { width: 80, align: 'right' });
+  doc.text('Qté', 230, tableTop);
+  doc.text('Prix unit.', 280, tableTop);
+  doc.text('Remise', 360, tableTop);
+  doc.text('Taxes', 415, tableTop);
+  doc.text('Total HT', 490, tableTop, { width: 80, align: 'right' });
   doc.moveDown(0.5);
   doc.font('Helvetica');
 
   // Une ligne fixe de 20pt par produit — pas de retour à la ligne géré pour un nom de
   // produit très long (tronqué/débordant visuellement plutôt que redimensionné).
   let y = doc.y;
+  let totalHT = 0;
+  const totauxParTaxe = new Map(); // taxId -> montant cumulé
   (devis.lignes || []).forEach(l => {
     if (l.type === 'section') {
       // Une section n'a pas de quantité/prix — affichée en gras sur toute la largeur,
@@ -77,19 +85,42 @@ export function streamDevisPdf(res, devis) {
       return;
     }
     const pct = Number(l.remisePourcentage) || 0;
-    const ligneTotal = (l.quantite * l.prixUnitaire) * (1 - pct / 100);
-    doc.text(l.produit, 50, y, { width: 220 });
-    doc.text(String(l.quantite), 250, y);
-    doc.text(`${formatMontant(l.prixUnitaire)} FCFA`, 310, y);
-    doc.text(`${pct.toFixed(2)}%`, 420, y);
-    doc.text(`${formatMontant(ligneTotal)} FCFA`, 490, y, { width: 80, align: 'right' });
+    const ligneHT = (l.quantite * l.prixUnitaire) * (1 - pct / 100);
+    const taxesLigne = (l.taxIds || []).map(id => taxById.get(id)).filter(Boolean);
+    const { base, parTaxe } = taxesLigne.length
+      ? appliquerTaxesLigne(ligneHT, l.quantite, taxesLigne)
+      : { base: ligneHT, parTaxe: new Map() };
+    totalHT += base;
+    for (const [taxId, montant] of parTaxe) {
+      totauxParTaxe.set(taxId, (totauxParTaxe.get(taxId) || 0) + montant);
+    }
+    const libTaxes = taxesLigne.map(t => t.name).join(', ') || '—';
+    doc.text(l.produit, 50, y, { width: 170 });
+    doc.text(String(l.quantite), 230, y);
+    doc.text(`${formatMontant(l.prixUnitaire)}`, 280, y);
+    doc.text(`${pct.toFixed(0)}%`, 360, y);
+    doc.fontSize(8).text(libTaxes, 415, y, { width: 70 });
+    doc.fontSize(10).text(`${formatMontant(base)} FCFA`, 490, y, { width: 80, align: 'right' });
     y += 20;
   });
 
-  // Ligne de séparation puis total général, sous le tableau.
+  // Ligne de séparation puis récapitulatif HT / taxes / TTC, sous le tableau.
   doc.moveTo(50, y + 5).lineTo(550, y + 5).stroke();
-  doc.font('Helvetica-Bold').fontSize(12).text(`Total : ${formatMontant(devis.total)} FCFA`, 350, y + 15, { width: 200, align: 'right' });
+  let yr = y + 14;
+  doc.font('Helvetica').fontSize(10);
+  doc.text('Total HT', 350, yr, { width: 120 });
+  doc.text(`${formatMontant(totalHT)} FCFA`, 470, yr, { width: 100, align: 'right' });
+  yr += 15;
+  for (const [taxId, montant] of totauxParTaxe) {
+    const nom = (taxById.get(taxId) || {}).name || 'Taxe';
+    doc.text(nom, 350, yr, { width: 120 });
+    doc.text(`${formatMontant(montant)} FCFA`, 470, yr, { width: 100, align: 'right' });
+    yr += 15;
+  }
+  doc.font('Helvetica-Bold').fontSize(12);
+  doc.text(`Total ${totauxParTaxe.size ? 'TTC' : ''} : ${formatMontant(devis.total)} FCFA`, 350, yr + 4, { width: 220, align: 'right' });
   doc.font('Helvetica');
+  y = yr + 20;
 
   if (devis.notes) {
     doc.moveDown(2);

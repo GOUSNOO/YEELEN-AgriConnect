@@ -435,7 +435,7 @@
     "colUnite": "Unit",
     "colPrixUnit": "Unit price",
     "colPU": "UP",
-    "colTaxe": "Tax (%)",
+    "colTaxe": "Taxes",
     "colRemise": "Discount (%)",
     "colMontant": "Amount",
     "colProduit": "Product",
@@ -567,6 +567,24 @@
     "deleted": "Payment term deleted.",
     "deleteError": "Could not delete the payment term.",
     "deleteConfirm": "Delete this payment term?"
+  },
+  "taxes": {
+    "title": "Taxes",
+    "name": "Name",
+    "amountType": "Type",
+    "amountTypePercent": "Percentage",
+    "amountTypeFixed": "Fixed amount / unit",
+    "amount": "Value",
+    "priceInclude": "Tax-included price",
+    "included": "included",
+    "none": "None",
+    "emptyRef": "No tax defined — use the \"Taxes\" panel.",
+    "resumeFixed": "{{amount}} / unit",
+    "added": "Tax added.",
+    "addError": "Could not add the tax.",
+    "deleted": "Tax deleted.",
+    "deleteError": "Could not delete the tax.",
+    "deleteConfirm": "Delete this tax? It will be removed from the quote lines that use it."
   },
   "finances": {
     "loading": "Loading finances…",

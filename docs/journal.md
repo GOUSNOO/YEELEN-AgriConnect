@@ -5,6 +5,67 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 1 : `account.tax` (taxes réutilisables) — 2026-08-30
+
+2e étape de [[project_erp_comptabilite_roadmap]] (après l'étape 0 : validité devis + conditions
+de paiement). Objectif : remplacer le `%` brut par ligne (`devis_lignes.taux_taxe`) par de
+vraies taxes réutilisables, calquées sur `account.tax` d'un ERP de référence.
+
+**Schéma** (`server/src/db/migrate.js`) :
+- `devis_lignes.taux_taxe` **retirée**. `migrateTaxeDevisLignesVersAccountTax()` : pour chaque
+  `(entreprise_id, taux_taxe)` distinct avec `taux > 0`, crée une `account_tax` `percent`
+  nommée « TVA {taux} % » et relie les lignes concernées via la jointure, puis
+  `ALTER TABLE devis_lignes DROP COLUMN taux_taxe`. Garde d'idempotence sur l'existence de la
+  colonne (même patron que `migrateRemiseToPourcentage` / `migrateTaxeDevisVersLignes`). **0
+  ligne réelle concernée en prod** → no-op de fait. Grep complet de `migrate.js` fait pour
+  écarter une résurrection par un `ADD COLUMN IF NOT EXISTS` traînant (le piège récurrent,
+  cf. [[feedback_migrate_stale_resurrection_bug]]).
+- **`account_tax`** : `entreprise_id`, `name`, `type_tax_use` (sale/purchase/none),
+  `amount_type` (percent/fixed/group/division), `amount NUMERIC(16,4)`, `price_include`,
+  `include_base_amount`, `active`, `sequence`, `description`, `invoice_label`,
+  `UNIQUE(entreprise_id, name)`.
+- **`devis_lignes_taxes`** : jointure `(devis_ligne_id, tax_id)` — Many2many comme
+  `sale.order.line.tax_id`. Cascade sur suppression de ligne.
+
+**Portée du calcul (étape 1)** : `percent` (base × taux) et `fixed` (montant × quantité,
+taxe à l'unité), plus `price_include` (le prix saisi est TTC → extraction de la base) et
+`include_base_amount` (la taxe s'ajoute à la base des suivantes — taxe en cascade).
+`group`/`division` passent le CHECK mais calculent 0 (repris avec les repartition lines
+d'`account.move`, étape 3). **Aucune taxe seedée par défaut** (portée mondiale — pas de TVA
+pays codée en dur, cf. [[feedback_global_scope_not_local]]).
+
+**Calcul unique partagé** : `server/src/utils/taxeCompute.js:appliquerTaxesLigne(baseHT, quantité, taxes)`
+→ `{ base, taxeTotale, parTaxe }`. Utilisé par `routes/devis.js:calculerTotal` (total stocké
+dans `devis.total`) **et** `utils/devisPdf.js` (colonne « Taxes » + récap HT / par taxe / TTC).
+Total ligne = `base + taxeTotale` dans tous les cas (pour une taxe classique `base == baseHT` ;
+pour `price_include`, `base < baseHT`).
+
+**Routes** : `/api/taxes` GET (ouvert, scoping entreprise) + POST/PUT/DELETE gated
+`requireRole('admin','directeur')` — même patron que `routes/paymentTerms.js`. `devis.js`
+`POST`/`PUT` acceptent `lignes[].taxIds` (validés contre l'entreprise appelante via
+`filtrerTaxIds` — un id étranger/inexistant est ignoré en silence, pas d'erreur) et écrivent
+`devis_lignes_taxes` (helper `insererLignes`, factorisé entre POST et PUT). `getDevisComplet`
+agrège `taxIds` par ligne + renvoie un tableau `taxes` (référentiel) sur le devis. La route
+PDF publique par token recharge aussi `taxIds` + référentiel.
+
+**Frontend** (`src/App.jsx` `DevisModule` + nouveaux composants) : l'input `%` par ligne
+devient un `TaxSelect` (menu de cases à cocher, patron `many2many_tags`) ; nouveau
+`TaxesPanel` (référentiel repliable, patron `PaymentTermsPanel`) ; recalcul client-side via
+`taxesLigneCalc` qui réplique `appliquerTaxesLigne` ; i18n `taxes.*` fr/en ; libellé colonne
+« Taxe (%) » → « Taxes ».
+
+**Répétition migration** : `pg_dump agri_app` restauré dans une base jetable → `migrate.js`
+×2 (idempotent au 2e passage) → `taux_taxe` absente des deux tables, `account_tax` +
+`devis_lignes_taxes` présentes, **totaux devis inchangés** (0 taxe = pas de recalcul) →
+appliqué à `agri_app`. Fumée live : devis 10×1000 + « TVA 18 % » → total 11800 ; `taxIds`
+renvoyés, référentiel joint. Tests : `taxes.test.js` (6) + bloc « Étape 1 » dans
+`devis.test.js` (8 : percent, price_include, fixed, 2 taxes, cascade, remise-avant-taxe,
+id étranger ignoré, PUT recalcule). Suite d'intégration : **107 tests / 19 fichiers**, verte.
+Front : build OK, 88 tests verts.
+
+Fait en passant : `appliquerTaxesLigne` extrait de `routes/devis.js` vers `utils/taxeCompute.js`
+pour être partagé avec le PDF (évite une 3e copie de l'algorithme).
+
 ### Calendrier & Récoltes — now backed by the database (fixed 2026-08-13)
 
 Both modules used to be pure `localStorage` (`agri-calendar-${farmId}` / `agri-recoltes-${farmId}`, `farmId` = the logged-in user's email) — see the browser-pass entry above for why that was a real multi-tenant bug, not just a nice-to-have. Fixed by extending the schema and following the exact remote-with-local-fallback pattern `AchatModule` already established (`App.jsx:1086-1214`: try the API, fall back to `storageGet`/`storageSet` only if the network call itself fails — keeps the app usable offline without it being the primary store):

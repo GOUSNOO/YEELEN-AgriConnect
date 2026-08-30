@@ -263,10 +263,13 @@ ALTER TABLE devis ADD COLUMN IF NOT EXISTS payment_term_id INTEGER;
 -- Unité de mesure par ligne (ex: "kg", "sacs", "Heures") — préremplie depuis le produit du
 -- catalogue au même titre que le prix, mais reste un simple champ texte libre modifiable.
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS unite TEXT;
--- Taux de taxe (%) par ligne, comme dans un ERP de référence — remplace la tentative devis.taux_taxe
--- (unique par devis) du même jour. Voir calculerTotal() dans routes/devis.js pour l'ordre
--- d'application (remise globale d'abord, puis taxe sur le montant remisé, ligne par ligne).
-ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS taux_taxe NUMERIC(5, 2) NOT NULL DEFAULT 0;
+-- Étape 1 Comptabilité (2026-08-30) : devis_lignes.taux_taxe (un simple % par ligne) est
+-- RETIRÉE au profit de vraies taxes réutilisables (account_tax, plus bas) reliées par la
+-- table de jointure devis_lignes_taxes — cf. sale.order.line.tax_id (Many2many) d'un ERP de
+-- référence. L ancien ADD COLUMN IF NOT EXISTS taux_taxe a été supprimé d ici (le laisser
+-- l aurait recréée à chaque relance après le DROP — même piège que remise/client_prix/
+-- cultures_stocks aux étapes précédentes). La conversion + le DROP se font dans
+-- migrateTaxeDevisLignesVersAccountTax() plus bas.
 
 -- Étape 4 (2026-08-18) : alignement structurel ERP — remise en pourcentage, lignes de
 -- section/note, suivi manuel livré/facturé. Voir migrateRemiseToPourcentage() plus bas pour
@@ -335,6 +338,39 @@ DO $$ BEGIN
       FOREIGN KEY (payment_term_id) REFERENCES payment_terms(id) ON DELETE SET NULL;
   END IF;
 END $$;
+
+-- ═══════════════ Étape 1 Comptabilité — taxes réutilisables (account.tax) ═══════════════
+-- Calqué sur account.tax d'un ERP de référence. Étape 1 calcule amount_type 'percent' et
+-- 'fixed' (par unité) ; 'group'/'division' sont autorisés par le CHECK mais pas encore
+-- implémentés ni proposés à l'UI (les repartition lines arrivent avec account.move, étape 3).
+CREATE TABLE IF NOT EXISTS account_tax (
+  id                   SERIAL PRIMARY KEY,
+  entreprise_id        INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name                 TEXT NOT NULL,
+  type_tax_use         TEXT NOT NULL DEFAULT 'sale' CHECK (type_tax_use IN ('sale', 'purchase', 'none')),
+  amount_type          TEXT NOT NULL DEFAULT 'percent' CHECK (amount_type IN ('percent', 'fixed', 'group', 'division')),
+  amount               NUMERIC(16, 4) NOT NULL DEFAULT 0,
+  price_include        BOOLEAN NOT NULL DEFAULT FALSE,
+  include_base_amount  BOOLEAN NOT NULL DEFAULT FALSE,
+  active               BOOLEAN NOT NULL DEFAULT TRUE,
+  sequence             INTEGER NOT NULL DEFAULT 1,
+  description          TEXT,
+  invoice_label        TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_account_tax_entreprise_id ON account_tax(entreprise_id);
+
+-- sale.order.line.tax_id est un Many2many → table de jointure. Les lignes de devis sont
+-- supprimées/réinsérées à chaque PUT (voir routes/devis.js), donc ces liens cascadent et
+-- sont reconstruits à chaque enregistrement.
+CREATE TABLE IF NOT EXISTS devis_lignes_taxes (
+  id              SERIAL PRIMARY KEY,
+  devis_ligne_id  INTEGER NOT NULL REFERENCES devis_lignes(id) ON DELETE CASCADE,
+  tax_id          INTEGER NOT NULL REFERENCES account_tax(id) ON DELETE CASCADE,
+  UNIQUE (devis_ligne_id, tax_id)
+);
+CREATE INDEX IF NOT EXISTS idx_devis_lignes_taxes_ligne ON devis_lignes_taxes(devis_ligne_id);
 
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
@@ -1758,6 +1794,89 @@ async function migrateTaxeDevisVersLignes() {
   }
 }
 
+// Étape 1 Comptabilité : bascule du % par ligne (devis_lignes.taux_taxe) vers de vraies
+// taxes réutilisables (account_tax) reliées en Many2many par devis_lignes_taxes — cf.
+// sale.order.line.tax_id d'un ERP de référence. Pour chaque (entreprise, taux) distinct avec
+// taux > 0 : une taxe account_tax « TVA {taux} % » (amount_type 'percent'), puis un lien par
+// ligne concernée. Puis DROP COLUMN taux_taxe. Idempotent sur l'existence de la colonne
+// (même garde que migrateRemiseToPourcentage / migrateTaxeDevisVersLignes). En production
+// 0 ligne réelle a un taux_taxe non nul (confirmé) → no-op de fait, mais la conversion est
+// écrite pour être exacte si une base en contient.
+async function migrateTaxeDevisLignesVersAccountTax() {
+  const { rows: [{ exists: colonneExiste }] } = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'devis_lignes' AND column_name = 'taux_taxe'
+    ) AS exists
+  `);
+  if (!colonneExiste) {
+    console.log('ℹ️  account_tax : colonne devis_lignes.taux_taxe déjà absente — bascule déjà effectuée, étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ count: nbLignesAffectees }] } = await client.query(
+      `SELECT COUNT(*) FROM devis_lignes WHERE taux_taxe IS NOT NULL AND taux_taxe <> 0`
+    );
+
+    // Un couple (entreprise, taux) distinct = une taxe account_tax. entreprise_id vient du
+    // devis parent (devis_lignes n'a pas de colonne entreprise_id propre).
+    const { rows: couples } = await client.query(`
+      SELECT DISTINCT d.entreprise_id AS "entrepriseId", dl.taux_taxe AS "taux"
+      FROM devis_lignes dl
+      JOIN devis d ON d.id = dl.devis_id
+      WHERE dl.taux_taxe IS NOT NULL AND dl.taux_taxe <> 0
+    `);
+
+    for (const { entrepriseId, taux } of couples) {
+      // Nom lisible aligné sur le taux ; le % est formaté sans décimale superflue.
+      const tauxNum = Number(taux);
+      const nom = `TVA ${Number.isInteger(tauxNum) ? tauxNum : tauxNum.toString()} %`;
+      const { rows: [{ id: taxId }] } = await client.query(`
+        INSERT INTO account_tax (entreprise_id, name, type_tax_use, amount_type, amount, sequence)
+        VALUES ($1, $2, 'sale', 'percent', $3, 1)
+        ON CONFLICT (entreprise_id, name) DO UPDATE SET amount_type = EXCLUDED.amount_type
+        RETURNING id
+      `, [entrepriseId, nom, tauxNum]);
+
+      await client.query(`
+        INSERT INTO devis_lignes_taxes (devis_ligne_id, tax_id)
+        SELECT dl.id, $1
+        FROM devis_lignes dl
+        JOIN devis d ON d.id = dl.devis_id
+        WHERE d.entreprise_id = $2 AND dl.taux_taxe = $3
+        ON CONFLICT (devis_ligne_id, tax_id) DO NOTHING
+      `, [taxId, entrepriseId, tauxNum]);
+    }
+
+    // Vérification avant COMMIT : chaque ligne convertie doit avoir exactement une taxe liée
+    // dont amount == l'ancien taux_taxe. Une taxe unique 'percent' est strictement équivalente
+    // à l'ancien facteur (1 + taux/100), donc les totaux stockés (recalculés seulement au PUT)
+    // restent corrects — pas de réécriture de devis.total nécessaire.
+    const { rows: [{ count: nonMigrees }] } = await client.query(`
+      SELECT COUNT(*) FROM devis_lignes dl
+      WHERE dl.taux_taxe IS NOT NULL AND dl.taux_taxe <> 0
+        AND NOT EXISTS (
+          SELECT 1 FROM devis_lignes_taxes dlt
+          JOIN account_tax at ON at.id = dlt.tax_id
+          WHERE dlt.devis_ligne_id = dl.id AND at.amount = dl.taux_taxe
+        )
+    `);
+    if (Number(nonMigrees) > 0) {
+      throw new Error(`Vérification account_tax échouée : ${nonMigrees} ligne(s) avec taux_taxe non reliées à une taxe équivalente.`);
+    }
+
+    await client.query('ALTER TABLE devis_lignes DROP COLUMN taux_taxe');
+    await client.query('COMMIT');
+    console.log(`✅ account_tax : ${nbLignesAffectees} ligne(s) reliées à ${couples.length} taxe(s). Colonne devis_lignes.taux_taxe supprimée.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
+
 // ═══════════════ RH complète — amorçage des données dérivées ═══════════════
 // Ces trois fonctions ne retirent aucune colonne (contrairement à migrateRemiseToPourcentage
 // etc.) : elles se contentent de peupler les nouvelles structures à partir de l'existant.
@@ -1891,6 +2010,7 @@ async function migrate() {
     await migrateClientPrixToListesPrix();
     await migrateRemiseToPourcentage();
     await migrateTaxeDevisVersLignes();
+    await migrateTaxeDevisLignesVersAccountTax();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();
     await migratePostesFromSalaries();

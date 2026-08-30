@@ -35,6 +35,7 @@ import {
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   getPaymentTerms, createPaymentTerm, deletePaymentTerm,
+  getTaxes,
   getActivites, createActivite, updateActivite, deleteActivite,
   getMessages, createMessage,
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
@@ -50,6 +51,8 @@ import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
 import RhReferentiels from './components/RhReferentiels';
 import PaymentTermsPanel from './components/PaymentTermsPanel';
+import TaxesPanel from './components/TaxesPanel';
+import TaxSelect from './components/TaxSelect';
 import MonEspaceRh from './components/MonEspaceRh';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
@@ -481,10 +484,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', tauxTaxe: '', unite: '', recolteId: '', stockId: null, stockModule: null };
-  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', tauxTaxe: '', unite: '', recolteId: '', stockId: null, stockModule: null };
+  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', taxIds: [], unite: '', recolteId: '', stockId: null, stockModule: null };
+  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', taxIds: [], unite: '', recolteId: '', stockId: null, stockModule: null };
   const [form, setForm] = useState({ clientId: '', notes: '', validityDate: '', lignes: [{ ...emptyLigne }] });
   const [paymentTerms, setPaymentTerms] = useState([]);
+  const [taxes, setTaxes] = useState([]);
+  const taxById = useMemo(() => new Map((taxes || []).map(tx => [tx.id, tx])), [taxes]);
   const [draggedLigneIndex, setDraggedLigneIndex] = useState(null);
   const [draggedEditLigneIndex, setDraggedEditLigneIndex] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -548,6 +553,37 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
   useEffect(() => { loadDevis(); }, []);
   useEffect(() => { getPaymentTerms().then(d => setPaymentTerms(d.paymentTerms || [])).catch(() => {}); }, []);
+  const rechargerTaxes = () => getTaxes().then(d => setTaxes(d.taxes || [])).catch(() => {});
+  useEffect(() => { rechargerTaxes(); }, []);
+
+  // Base HT réelle + montant de taxe d'une ligne à partir de ses taxIds et du référentiel
+  // `taxes` — réplique appliquerTaxesLigne() côté serveur (utils/taxeCompute.js) dans sa
+  // portée étape 1 : percent / fixed (à l'unité), price_include (extraction), include_base_amount
+  // (cascade). Renvoie { base, taxe } ; total ligne = base + taxe.
+  const taxesLigneCalc = (baseHT, quantite, taxIds) => {
+    const list = (taxIds || []).map(id => taxById.get(id)).filter(Boolean)
+      .sort((a, b) => (a.sequence - b.sequence) || (a.id - b.id));
+    const q = Number(quantite) || 0;
+    let base = Number(baseHT) || 0;
+    if (!list.length) return { base, taxe: 0 };
+    const incFixe = list.filter(tx => tx.priceInclude && tx.amountType === 'fixed');
+    const incPct = list.filter(tx => tx.priceInclude && tx.amountType === 'percent');
+    if (incFixe.length) base -= incFixe.reduce((s, tx) => s + tx.amount * q, 0);
+    if (incPct.length) {
+      const f = incPct.reduce((s, tx) => s + tx.amount / 100, 0);
+      if (1 + f !== 0) base /= (1 + f);
+    }
+    let courant = base;
+    let taxe = 0;
+    for (const tx of list) {
+      let m = 0;
+      if (tx.amountType === 'percent') m = courant * tx.amount / 100;
+      else if (tx.amountType === 'fixed') m = tx.amount * q;
+      taxe += m;
+      if (tx.includeBaseAmount) courant += m;
+    }
+    return { base, taxe };
+  };
 
   // Résumé lisible des lignes d'une condition de paiement (ex: "30 % à J+0 · solde à J+30").
   const resumeTerme = (term) => (term.lignes || []).map(l => {
@@ -657,8 +693,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // Montant HT + taxe de la ligne (pas de remise globale ici : elle ne se règle qu'après
   // création, dans la popup de détail — voir handleSaveDetailMeta).
   const ligneTotalAvecTaxe = (l) => {
-    const ht = ligneTotal(l);
-    return ht + ht * (Number(l.tauxTaxe) || 0) / 100;
+    const { base, taxe } = taxesLigneCalc(ligneTotal(l), l.quantite, l.taxIds);
+    return base + taxe;
   };
   const totalForm = form.lignes.reduce((s, l) => s + ligneTotalAvecTaxe(l), 0);
   const totalEditForm = editForm.lignes.reduce((s, l) => s + ligneTotalAvecTaxe(l), 0);
@@ -716,7 +752,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remisePourcentage: Number(l.remisePourcentage) || 0,
-          tauxTaxe: Number(l.tauxTaxe) || 0,
+          taxIds: Array.isArray(l.taxIds) ? l.taxIds.map(Number).filter(Boolean) : [],
           unite: l.unite || null,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
@@ -760,7 +796,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       setEditForm({
         clientId: String(devisComplet.clientId),
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', tauxTaxe: l.tauxTaxe || '', unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', taxIds: Array.isArray(l.taxIds) ? l.taxIds : [], unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
       const c = findClientById(devisComplet.clientId);
       setEditClientSearch(c ? clientLabel(c) : (devisComplet.clientPrenom ? `${devisComplet.clientPrenom} ${devisComplet.clientNom}` : (devisComplet.clientNom || '')));
@@ -787,7 +823,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           quantite: Number(l.quantite) || 0,
           prixUnitaire: Number(l.prixUnitaire) || 0,
           remisePourcentage: Number(l.remisePourcentage) || 0,
-          tauxTaxe: Number(l.tauxTaxe) || 0,
+          taxIds: Array.isArray(l.taxIds) ? l.taxIds.map(Number).filter(Boolean) : [],
           unite: l.unite || null,
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
@@ -1053,6 +1089,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
         />
       )}
 
+      {!filtreStatut && (
+        <TaxesPanel taxes={taxes} onChange={rechargerTaxes} />
+      )}
+
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
       {!filtreStatut && (
@@ -1141,7 +1181,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
                         <td><input placeholder={t("devis.unitePlaceholder")} value={ligne.unite} onChange={e => updateLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
-                        <td><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
+                        <td><TaxSelect value={ligne.taxIds} options={taxes} onChange={ids => updateLigne(i, 'taxIds', ids)} /></td>
                         <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(ligneTotalAvecTaxe(ligne))}</td>
                       </>
@@ -1278,13 +1318,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
         const montantHT = detailData.lignes.reduce((s, l) => {
           if (l.type === 'section') return s;
           const pct = Number(l.remisePourcentage) || 0;
-          return s + (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+          const brut = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+          return s + taxesLigneCalc(brut, l.quantite, l.taxIds).base;
         }, 0);
         const montantTaxe = detailData.lignes.reduce((s, l) => {
           if (l.type === 'section') return s;
           const pct = Number(l.remisePourcentage) || 0;
-          const ht = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
-          return s + ht * (Number(l.tauxTaxe) || 0) / 100;
+          const brut = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+          return s + taxesLigneCalc(brut, l.quantite, l.taxIds).taxe;
         }, 0);
         return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={closeDetailPopup}>
@@ -1492,9 +1533,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       );
                     }
                     const pct = Number(l.remisePourcentage) || 0;
-                    const tauxTaxeLigne = Number(l.tauxTaxe) || 0;
-                    const netLigneHT = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
-                    const netLigne = netLigneHT * (1 + tauxTaxeLigne / 100);
+                    const brutLigne = (Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0) * (1 - pct / 100);
+                    const taxesLigne = (l.taxIds || []).map(id => taxById.get(id)).filter(Boolean);
+                    const { base: baseLigne, taxe: taxeLigne } = taxesLigneCalc(brutLigne, l.quantite, l.taxIds);
+                    const netLigne = baseLigne + taxeLigne;
                     const recolteLiee = l.recolteId ? recoltes.find(r => r.id === l.recolteId) : null;
                     const qEdit = quantitesEdit[l.id] || { quantiteLivree: 0, quantiteFacturee: 0 };
                     return (
@@ -1520,7 +1562,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         </td>
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
                         <td>{fmtMoney(l.prixUnitaire)}</td>
-                        <td>{tauxTaxeLigne.toLocaleString(locale)}</td>
+                        <td style={{ color: COLORS.inkSoft }}>{taxesLigne.length ? taxesLigne.map(tx => tx.name).join(', ') : '—'}</td>
                         <td>{pct.toLocaleString(locale)}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(netLigne)}</td>
                       </tr>
@@ -1547,9 +1589,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       <input className="flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
                     ) : <span>{Number(detailData.remiseGlobale) || 0}%</span>}
                   </div>
-                  {/* Taxe désormais définie par ligne (voir la colonne "Taxe (%)" du tableau
-                      ci-dessus), plus un taux unique par devis — ce total n'est donc plus
-                      éditable ici, juste un récapitulatif de ce que chaque ligne applique. */}
+                  {/* Étape 1 Comptabilité : chaque ligne référence des taxes réutilisables
+                      (account.tax-like) via la colonne "Taxes" ci-dessus — ce total n'est
+                      qu'un récapitulatif de ce que l'ensemble des lignes applique. */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
                     <span>{t("devis.montantTaxes")}</span><span>{fmtMoney(montantTaxe)}</span>
                   </div>
@@ -1836,7 +1878,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             <td style={{ textAlign: 'center', color: COLORS.border }}>—</td>
                             <td><input placeholder={t("devis.unitePlaceholder")} value={ligne.unite} onChange={e => updateEditLigne(i, 'unite', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td><input type="number" placeholder="0" value={ligne.prixUnitaire} onChange={e => updateEditLigne(i, 'prixUnitaire', e.target.value)} style={ligneCellInputStyle} /></td>
-                            <td><input type="number" placeholder="0" value={ligne.tauxTaxe} onChange={e => updateEditLigne(i, 'tauxTaxe', e.target.value)} style={ligneCellInputStyle} /></td>
+                            <td><TaxSelect value={ligne.taxIds} options={taxes} onChange={ids => updateEditLigne(i, 'taxIds', ids)} /></td>
                             <td><input type="number" placeholder="0" value={ligne.remisePourcentage} onChange={e => updateEditLigne(i, 'remisePourcentage', e.target.value)} style={ligneCellInputStyle} /></td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(ligneTotalAvecTaxe(ligne))}</td>
                           </>

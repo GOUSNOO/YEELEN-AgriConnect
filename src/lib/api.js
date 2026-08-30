@@ -639,6 +639,20 @@ export async function deletePaymentTerm(id) {
   return request(`/payment-terms/${id}`, { method: 'DELETE' });
 }
 
+// Taxes réutilisables (account.tax-like) — étape 1 Comptabilité.
+export async function getTaxes() {
+  return request('/taxes');
+}
+export async function createTax(payload) {
+  return request('/taxes', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateTax(id, payload) {
+  return request(`/taxes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteTax(id) {
+  return request(`/taxes/${id}`, { method: 'DELETE' });
+}
+
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {
   return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });

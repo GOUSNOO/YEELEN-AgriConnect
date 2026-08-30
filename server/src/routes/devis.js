@@ -10,6 +10,7 @@ import { streamDevisPdf } from '../utils/devisPdf.js';
 import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 import { genererEcheancesDepuisTerme } from './paymentTerms.js';
+import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
 
 // Date de validité par défaut d'un devis : aujourd'hui + 30 jours (comme default_validity_date
 // d'un ERP de référence). Format 'YYYY-MM-DD'.
@@ -79,13 +80,40 @@ function normalizeLigne(l) {
     quantite: isSection ? 0 : (Number(l.quantite) || 0),
     prixUnitaire: isSection ? 0 : (Number(l.prixUnitaire) || 0),
     remisePourcentage: isSection ? 0 : Math.min(100, Math.max(0, Number(l.remisePourcentage) || 0)),
-    tauxTaxe: isSection ? 0 : Math.min(100, Math.max(0, Number(l.tauxTaxe) || 0)),
+    // Étape 1 Comptabilité : plus de taux unique par ligne — une ligne porte des liens vers
+    // des taxes réutilisables account_tax (Many2many, comme sale.order.line.tax_id). Les ids
+    // sont validés contre l'entreprise appelante avant écriture (voir filtrerTaxIds).
+    taxIds: isSection ? [] : [...new Set(
+      (Array.isArray(l.taxIds) ? l.taxIds : []).map(Number).filter((n) => Number.isInteger(n) && n > 0)
+    )],
     unite: isSection ? null : (l.unite || null),
     recolteId: isSection ? null : l.recolteId,
     stockId: isSection ? null : l.stockId,
     stockModule: isSection ? null : l.stockModule,
   };
 }
+
+// Charge les taxes actives de l'entreprise dans une Map<id, config>. `q` est soit le pool,
+// soit un client de transaction en cours.
+async function chargerTaxMap(entrepriseId, q = pool) {
+  const { rows } = await q.query(
+    `SELECT id, amount_type AS "amountType", amount::float8 AS amount,
+            price_include AS "priceInclude", include_base_amount AS "includeBaseAmount", sequence
+     FROM account_tax WHERE entreprise_id = $1 AND active = TRUE`,
+    [entrepriseId]
+  );
+  return new Map(rows.map((t) => [t.id, t]));
+}
+
+// Ne garde d'une liste d'ids que ceux réellement présents dans la taxMap (donc appartenant
+// à l'entreprise et actifs) — défense contre un payload qui référencerait la taxe d'une
+// autre entreprise ou un id inexistant.
+function filtrerTaxIds(taxIds, taxMap) {
+  return (taxIds || []).filter((id) => taxMap.has(id));
+}
+
+// Calcul des taxes d'une ligne : voir utils/taxeCompute.js (source unique, partagée avec
+// devisPdf.js).
 // Montant HT de la ligne (après remise ligne, avant taxe) — c'est ce qu'un ERP de référence appelle
 // "Amount"/"Montant" sur une ligne de commande.
 function ligneTotal(l) {
@@ -101,13 +129,44 @@ function ligneTotal(l) {
 // (ordre comptable standard : remise avant taxe). Stocké dans devis.total (pas recalculé
 // uniquement côté frontend) pour que financeSync/stockSync, qui lisent tous deux devis.total
 // comme source de vérité, restent cohérents avec ce qui s'affiche.
-function calculerTotal(lignesNormalisees, remiseGlobale) {
+function calculerTotal(lignesNormalisees, remiseGlobale, taxMap = new Map()) {
   const facteurRemiseGlobale = 1 - (Number(remiseGlobale) || 0) / 100;
   return lignesNormalisees.reduce((s, l) => {
     const ht = ligneTotal(l) * facteurRemiseGlobale;
-    const taxe = ht * (Number(l.tauxTaxe) || 0) / 100;
-    return s + ht + taxe;
+    const taxes = filtrerTaxIds(l.taxIds, taxMap).map((id) => taxMap.get(id));
+    // base = ht pour une taxe classique ; base < ht pour une taxe price_include (le prix
+    // saisi étant TTC). Total ligne = base + taxe dans les deux cas.
+    const { base, taxeTotale } = taxes.length
+      ? appliquerTaxesLigne(ht, Number(l.quantite) || 0, taxes)
+      : { base: ht, taxeTotale: 0 };
+    return s + base + taxeTotale;
   }, 0);
+}
+
+// Insère les lignes normalisées d'un devis + leurs liens vers account_tax. Factorisé entre
+// POST / et PUT /:id (mêmes règles, y compris la validation d'appartenance des recolte_id /
+// stock_id / tax_id à l'entreprise appelante).
+async function insererLignes(client, devisId, lignesNormalisees, entrepriseId, taxMap) {
+  const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, entrepriseId);
+  const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, entrepriseId);
+  for (let i = 0; i < lignesNormalisees.length; i++) {
+    const l = lignesNormalisees[i];
+    const stockOk = stockLigneValide(l);
+    const { rows: [{ id: ligneId }] } = await client.query(
+      `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
+       recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
+       stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
+    );
+    for (const taxId of filtrerTaxIds(l.taxIds, taxMap)) {
+      await client.query(
+        `INSERT INTO devis_lignes_taxes (devis_ligne_id, tax_id) VALUES ($1, $2)
+         ON CONFLICT (devis_ligne_id, tax_id) DO NOTHING`,
+        [ligneId, taxId]
+      );
+    }
+  }
 }
 
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
@@ -131,17 +190,41 @@ async function getDevisComplet(devisId, entrepriseId) {
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
     `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-            remise_pourcentage::float8 AS "remisePourcentage", taux_taxe::float8 AS "tauxTaxe", unite,
+            remise_pourcentage::float8 AS "remisePourcentage", unite,
             quantite_livree::float8 AS "quantiteLivree", quantite_facturee::float8 AS "quantiteFacturee",
             recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
+  // Liens ligne→taxe (Many2many) rattachés à chaque ligne + référentiel des taxes de
+  // l'entreprise (pour l'affichage/recalcul côté client et le récapitulatif PDF).
+  const ligneIds = lignesResult.rows.map((l) => l.id);
+  const liensResult = ligneIds.length
+    ? await pool.query(
+        `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId"
+         FROM devis_lignes_taxes WHERE devis_ligne_id = ANY($1::int[])`,
+        [ligneIds]
+      )
+    : { rows: [] };
+  const taxIdsParLigne = new Map();
+  for (const { ligneId, taxId } of liensResult.rows) {
+    if (!taxIdsParLigne.has(ligneId)) taxIdsParLigne.set(ligneId, []);
+    taxIdsParLigne.get(ligneId).push(taxId);
+  }
+  const lignes = lignesResult.rows.map((l) => ({ ...l, taxIds: taxIdsParLigne.get(l.id) || [] }));
+  const taxesResult = await pool.query(
+    `SELECT id, name, amount_type AS "amountType", amount::float8 AS amount,
+            price_include AS "priceInclude", include_base_amount AS "includeBaseAmount",
+            sequence, invoice_label AS "invoiceLabel"
+     FROM account_tax WHERE entreprise_id = $1 AND active = TRUE
+     ORDER BY sequence ASC, id ASC`,
+    [entrepriseId]
+  );
   const echeancesResult = await pool.query(
     `SELECT id, montant::float8 AS montant, to_char(date_echeance, 'YYYY-MM-DD') AS "dateEcheance", statut, date_paiement AS "datePaiement" FROM echeances_paiement WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
-  return { ...devisResult.rows[0], lignes: lignesResult.rows, echeances: echeancesResult.rows };
+  return { ...devisResult.rows[0], lignes, taxes: taxesResult.rows, echeances: echeancesResult.rows };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -239,7 +322,8 @@ router.post('/', authRequired, async (req, res) => {
 
     const numero = await genererNumero(req.user.entrepriseId);
     const lignesNormalisees = lignes.map(normalizeLigne);
-    const total = calculerTotal(lignesNormalisees, remiseGlobale);
+    const taxMap = await chargerTaxMap(req.user.entrepriseId, client);
+    const total = calculerTotal(lignesNormalisees, remiseGlobale, taxMap);
 
     const devisResult = await client.query(
       `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise, validity_date)
@@ -249,20 +333,7 @@ router.post('/', authRequired, async (req, res) => {
        validityDate || validiteParDefaut()]
     );
     const devisId = devisResult.rows[0].id;
-    const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
-    const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, req.user.entrepriseId);
-
-    for (let i = 0; i < lignesNormalisees.length; i++) {
-      const l = lignesNormalisees[i];
-      const stockOk = stockLigneValide(l);
-      await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, taux_taxe, unite, ordre, recolte_id, stock_id, stock_module, type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.tauxTaxe, l.unite, i,
-         recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-         stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
-      );
-    }
+    await insererLignes(client, devisId, lignesNormalisees, req.user.entrepriseId, taxMap);
 
     await client.query('COMMIT');
 
@@ -296,20 +367,35 @@ router.put('/:id', authRequired, async (req, res) => {
 
     // Un appel qui ne touche que la remise globale/conditions (sans renvoyer de lignes,
     // ex: le panneau "Totaux" de la popup de détail) ne doit pas faire retomber le total à
-    // 0 — on recharge alors les lignes déjà en base (avec leur propre taux_taxe) pour le
+    // 0 — on recharge alors les lignes déjà en base (avec leurs liens de taxes) pour le
     // recalcul.
-    const lignesSource = Array.isArray(lignes)
-      ? lignes
-      : (await client.query(
-          `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-                  remise_pourcentage::float8 AS "remisePourcentage", taux_taxe::float8 AS "tauxTaxe", unite,
-                  recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
-           FROM devis_lignes WHERE devis_id = $1`,
-          [req.params.id]
-        )).rows;
+    const taxMap = await chargerTaxMap(req.user.entrepriseId, client);
+    let lignesSource;
+    if (Array.isArray(lignes)) {
+      lignesSource = lignes;
+    } else {
+      const { rows: lignesEnBase } = await client.query(
+        `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+                remise_pourcentage::float8 AS "remisePourcentage", unite,
+                recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
+         FROM devis_lignes WHERE devis_id = $1`,
+        [req.params.id]
+      );
+      const { rows: liens } = await client.query(
+        `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId" FROM devis_lignes_taxes
+         WHERE devis_ligne_id = ANY($1::int[])`,
+        [lignesEnBase.map((l) => l.id)]
+      );
+      const parLigne = new Map();
+      for (const { ligneId, taxId } of liens) {
+        if (!parLigne.has(ligneId)) parLigne.set(ligneId, []);
+        parLigne.get(ligneId).push(taxId);
+      }
+      lignesSource = lignesEnBase.map((l) => ({ ...l, taxIds: parLigne.get(l.id) || [] }));
+    }
     const lignesNormalisees = lignesSource.map(normalizeLigne);
     const remiseGlobaleFinale = remiseGlobale != null ? Number(remiseGlobale) || 0 : check.rows[0].remiseGlobale;
-    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale);
+    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale, taxMap);
 
     await client.query(
       `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes),
@@ -323,20 +409,9 @@ router.put('/:id', authRequired, async (req, res) => {
       { total: check.rows[0].total }, { total }, ['total']);
 
     if (Array.isArray(lignes)) {
+      // Les liens devis_lignes_taxes cascadent sur la suppression des lignes.
       await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
-      const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
-      const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, req.user.entrepriseId);
-      for (let i = 0; i < lignesNormalisees.length; i++) {
-        const l = lignesNormalisees[i];
-        const stockOk = stockLigneValide(l);
-        await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, taux_taxe, unite, ordre, recolte_id, stock_id, stock_module, type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.tauxTaxe, l.unite, i,
-           recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-           stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
-        );
-      }
+      await insererLignes(client, req.params.id, lignesNormalisees, req.user.entrepriseId, taxMap);
     }
 
     await client.query('COMMIT');
@@ -796,12 +871,32 @@ router.get('/public/:token/pdf', async (req, res) => {
 
     const devis = devisResult.rows[0];
     const lignesResult = await pool.query(
-      `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+      `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
               remise_pourcentage::float8 AS "remisePourcentage", recolte_id AS "recolteId"
        FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
       [devis.id]
     );
-    devis.lignes = lignesResult.rows;
+    const ligneIds = lignesResult.rows.map((l) => l.id);
+    const liensResult = ligneIds.length
+      ? await pool.query(
+          `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId" FROM devis_lignes_taxes
+           WHERE devis_ligne_id = ANY($1::int[])`,
+          [ligneIds]
+        )
+      : { rows: [] };
+    const taxIdsParLigne = new Map();
+    for (const { ligneId, taxId } of liensResult.rows) {
+      if (!taxIdsParLigne.has(ligneId)) taxIdsParLigne.set(ligneId, []);
+      taxIdsParLigne.get(ligneId).push(taxId);
+    }
+    devis.lignes = lignesResult.rows.map((l) => ({ ...l, taxIds: taxIdsParLigne.get(l.id) || [] }));
+    const { rows: taxesRef } = await pool.query(
+      `SELECT id, name, amount_type AS "amountType", amount::float8 AS amount,
+              price_include AS "priceInclude", include_base_amount AS "includeBaseAmount", sequence
+       FROM account_tax WHERE entreprise_id = (SELECT entreprise_id FROM devis WHERE id = $1) AND active = TRUE`,
+      [devis.id]
+    );
+    devis.taxes = taxesRef;
 
     streamDevisPdf(res, devis);
   } catch (err) {

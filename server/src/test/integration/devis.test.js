@@ -237,3 +237,85 @@ describe('Devis — Étape 0 Comptabilité (validité, suppression Annulé, cond
     expect(res.status).toBe(400);
   });
 });
+
+describe('Devis — Étape 1 Comptabilité (taxes account.tax-like)', () => {
+  let admin;
+  let clientId;
+  const bear = (t) => ({ Authorization: `Bearer ${t}` });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const creerTaxe = async (payload, token = admin.token) =>
+    (await request(app).post('/api/taxes').set(bear(token)).send(payload)).body.tax;
+
+  const devisAvecLigne = async (ligne, remiseGlobale) => {
+    const r = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, remiseGlobale, lignes: [{ produit: 'Maïs', type: 'produit', ...ligne }] });
+    return r.body.devis;
+  };
+
+  test('taxe percent : total = HT + HT * taux / 100, taxIds renvoyés, référentiel taxes joint', async () => {
+    const tva = await creerTaxe({ name: 'TVA 20 %', amount: 20, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 10, prixUnitaire: 1000, taxIds: [tva.id] });
+    expect(d.total).toBeCloseTo(12000, 2);
+    expect(d.lignes[0].taxIds).toEqual([tva.id]);
+    expect(d.taxes.map((t) => t.id)).toContain(tva.id);
+  });
+
+  test('taxe price_include (percent) : la base est extraite du prix TTC', async () => {
+    const tvaInc = await creerTaxe({ name: 'TVA 20 % incluse', amount: 20, amountType: 'percent', priceInclude: true });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 120, taxIds: [tvaInc.id] });
+    // base HT = 100, taxe = 20 → total (TTC) = 120, inchangé
+    expect(d.total).toBeCloseTo(120, 2);
+  });
+
+  test('taxe fixed : montant = amount * quantité', async () => {
+    const eco = await creerTaxe({ name: 'Éco-contribution', amount: 5, amountType: 'fixed' });
+    const d = await devisAvecLigne({ quantite: 3, prixUnitaire: 100, taxIds: [eco.id] });
+    expect(d.total).toBeCloseTo(315, 2); // 300 HT + 5*3
+  });
+
+  test('deux taxes percent sur une ligne : chacune sur la base', async () => {
+    const a = await creerTaxe({ name: 'Taxe A 10 %', amount: 10, amountType: 'percent' });
+    const b = await creerTaxe({ name: 'Taxe B 5 %', amount: 5, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000, taxIds: [a.id, b.id] });
+    expect(d.total).toBeCloseTo(1150, 2); // 1000 + 100 + 50
+  });
+
+  test('include_base_amount : la 2e taxe porte sur base + 1re taxe (cascade)', async () => {
+    const a = await creerTaxe({ name: 'Cascade A 10 %', amount: 10, amountType: 'percent', includeBaseAmount: true, sequence: 1 });
+    const b = await creerTaxe({ name: 'Cascade B 5 %', amount: 5, amountType: 'percent', sequence: 2 });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000, taxIds: [a.id, b.id] });
+    // A = 100 → base 1100 ; B = 55 → total 1000 + 155
+    expect(d.total).toBeCloseTo(1155, 2);
+  });
+
+  test('remise globale appliquée avant la taxe', async () => {
+    const tva = await creerTaxe({ name: 'TVA 20 % remise', amount: 20, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 10, prixUnitaire: 1000, taxIds: [tva.id] }, 10);
+    // HT 10000 - 10% = 9000 ; taxe 1800 → 10800
+    expect(d.total).toBeCloseTo(10800, 2);
+  });
+
+  test('un taxId d\'une autre entreprise est ignoré silencieusement (total = HT)', async () => {
+    const autre = await registerEntreprise();
+    const taxeAutre = await creerTaxe({ name: `Autre ${Date.now()}`, amount: 50, amountType: 'percent' }, autre.token);
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000, taxIds: [taxeAutre.id] });
+    expect(d.total).toBeCloseTo(1000, 2);
+    expect(d.lignes[0].taxIds).toEqual([]);
+  });
+
+  test('PUT recalcule le total à partir des taxIds mis à jour', async () => {
+    const tva = await creerTaxe({ name: 'TVA PUT 20 %', amount: 20, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000 });
+    expect(d.total).toBeCloseTo(1000, 2);
+    const put = await request(app).put(`/api/devis/${d.id}`).set(bear(admin.token))
+      .send({ lignes: [{ produit: 'Maïs', type: 'produit', quantite: 1, prixUnitaire: 1000, taxIds: [tva.id] }] });
+    expect(put.status).toBe(200);
+    expect(put.body.devis.total).toBeCloseTo(1200, 2);
+    expect(put.body.devis.lignes[0].taxIds).toEqual([tva.id]);
+  });
+});

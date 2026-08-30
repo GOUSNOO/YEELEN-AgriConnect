@@ -435,7 +435,7 @@
     "colUnite": "Unité",
     "colPrixUnit": "Prix unit.",
     "colPU": "P.U.",
-    "colTaxe": "Taxe (%)",
+    "colTaxe": "Taxes",
     "colRemise": "Remise (%)",
     "colMontant": "Montant",
     "colProduit": "Produit",
@@ -567,6 +567,24 @@
     "deleted": "Condition de paiement supprimée.",
     "deleteError": "Impossible de supprimer la condition de paiement.",
     "deleteConfirm": "Supprimer cette condition de paiement ?"
+  },
+  "taxes": {
+    "title": "Taxes",
+    "name": "Nom",
+    "amountType": "Type",
+    "amountTypePercent": "Pourcentage",
+    "amountTypeFixed": "Montant fixe / unité",
+    "amount": "Valeur",
+    "priceInclude": "Prix TTC (taxe incluse)",
+    "included": "incluse",
+    "none": "Aucune",
+    "emptyRef": "Aucune taxe définie — utilisez le panneau « Taxes ».",
+    "resumeFixed": "{{amount}} / unité",
+    "added": "Taxe ajoutée.",
+    "addError": "Impossible d'ajouter la taxe.",
+    "deleted": "Taxe supprimée.",
+    "deleteError": "Impossible de supprimer la taxe.",
+    "deleteConfirm": "Supprimer cette taxe ? Elle sera retirée des lignes de devis qui l'utilisent."
   },
   "finances": {
     "loading": "Chargement des finances…",
