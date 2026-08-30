@@ -653,6 +653,32 @@ export async function deleteTax(id) {
   return request(`/taxes/${id}`, { method: 'DELETE' });
 }
 
+// Journaux + plan de comptes (account.journal / account.account-like) — étape 2 Comptabilité.
+export async function getJournals() {
+  return request('/journals');
+}
+export async function createJournal(payload) {
+  return request('/journals', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateJournal(id, payload) {
+  return request(`/journals/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteJournal(id) {
+  return request(`/journals/${id}`, { method: 'DELETE' });
+}
+export async function getAccounts() {
+  return request('/accounts');
+}
+export async function createAccount(payload) {
+  return request('/accounts', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateAccount(id, payload) {
+  return request(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteAccount(id) {
+  return request(`/accounts/${id}`, { method: 'DELETE' });
+}
+
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {
   return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });

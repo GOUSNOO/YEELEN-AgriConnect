@@ -19,6 +19,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 
 // Ce script tourne en dehors du serveur Express (invoqué directement via `node
 // src/db/migrate.js`), donc db.js (qui charge son propre .env via un chemin relatif
@@ -371,6 +372,55 @@ CREATE TABLE IF NOT EXISTS devis_lignes_taxes (
   UNIQUE (devis_ligne_id, tax_id)
 );
 CREATE INDEX IF NOT EXISTS idx_devis_lignes_taxes_ligne ON devis_lignes_taxes(devis_ligne_id);
+
+-- ═══════════════ Étape 2 Comptabilité — journaux + plan de comptes + séquences ═══════════════
+-- Objets de configuration calqués sur account.journal / account.account d'un ERP de référence.
+-- Aucune écriture comptable ne s'y rattache encore (account.move arrive à l'étape 3) : ce sont
+-- les référentiels + le numérotateur que l'étape 3 consommera. Le plan de comptes seedé suit
+-- le chart générique (codes 1xxxxx/2xxxxx/4xxxxx/5xxxxx), pas un PCG national — portée mondiale.
+CREATE TABLE IF NOT EXISTS account_account (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  code           VARCHAR(64) NOT NULL,
+  name           TEXT NOT NULL,
+  account_type   TEXT NOT NULL CHECK (account_type IN (
+                   'asset_receivable', 'asset_cash', 'asset_current', 'asset_non_current',
+                   'asset_prepayments', 'asset_fixed', 'liability_payable', 'liability_credit_card',
+                   'liability_current', 'liability_non_current', 'equity', 'equity_unaffected',
+                   'income', 'income_other', 'expense', 'expense_other', 'expense_depreciation',
+                   'expense_direct_cost', 'off_balance')),
+  reconcile      BOOLEAN NOT NULL DEFAULT FALSE,
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_account_account_entreprise_id ON account_account(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS account_journal (
+  id                  SERIAL PRIMARY KEY,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name                TEXT NOT NULL,
+  code                VARCHAR(5) NOT NULL,
+  type                TEXT NOT NULL CHECK (type IN ('sale', 'purchase', 'cash', 'bank', 'general')),
+  sequence            INTEGER NOT NULL DEFAULT 10,
+  active              BOOLEAN NOT NULL DEFAULT TRUE,
+  refund_sequence     BOOLEAN NOT NULL DEFAULT FALSE,
+  default_account_id  INTEGER REFERENCES account_account(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_account_journal_entreprise_id ON account_journal(entreprise_id);
+
+-- Compteur par (journal, préfixe). Le préfixe porte l'année → remise à zéro annuelle
+-- automatique (un nouveau préfixe = un nouveau compteur), comme le sequence.mixin d'un ERP
+-- de référence. Alimenté par utils/journalSequence.js (verrou de ligne pour l'incrément).
+CREATE TABLE IF NOT EXISTS account_journal_sequence (
+  id           SERIAL PRIMARY KEY,
+  journal_id   INTEGER NOT NULL REFERENCES account_journal(id) ON DELETE CASCADE,
+  prefix       TEXT NOT NULL,
+  last_number  INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (journal_id, prefix)
+);
 
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
@@ -1929,6 +1979,42 @@ async function seedPaymentTermsForExistingEntreprises() {
   }
 }
 
+// Étape 2 Comptabilité : crée le plan de comptes + les journaux par défaut pour toute
+// entreprise qui n'a aucun journal. Idempotent (garde sur l'absence de account_journal +
+// ON CONFLICT DO NOTHING sur les deux tables). Mêmes listes que routes/auth.js (seed à
+// l'inscription) via utils/comptaDefauts.js.
+async function seedComptaConfigForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM account_journal j WHERE j.entreprise_id = e.id)`
+  );
+  for (const { id } of entreprises) {
+    const compteIdParCode = {};
+    for (const c of COMPTES_DEFAUT) {
+      const { rows } = await client.query(
+        `INSERT INTO account_account (entreprise_id, code, name, account_type, reconcile)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (entreprise_id, code) DO UPDATE SET code = EXCLUDED.code
+         RETURNING id`,
+        [id, c.code, c.name, c.account_type, c.reconcile]
+      );
+      compteIdParCode[c.code] = rows[0].id;
+    }
+    for (const j of JOURNAUX_DEFAUT) {
+      await client.query(
+        `INSERT INTO account_journal (entreprise_id, name, code, type, sequence, refund_sequence, default_account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (entreprise_id, code) DO NOTHING`,
+        [id, j.name, j.code, j.type, j.sequence, j.refund_sequence,
+         j.defaultAccountCode ? compteIdParCode[j.defaultAccountCode] : null]
+      );
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Plan de comptes + journaux par défaut créés pour ${entreprises.length} entreprise(s).`);
+  }
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -2011,6 +2097,7 @@ async function migrate() {
     await migrateRemiseToPourcentage();
     await migrateTaxeDevisVersLignes();
     await migrateTaxeDevisLignesVersAccountTax();
+    await seedComptaConfigForExistingEntreprises();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();
     await migratePostesFromSalaries();

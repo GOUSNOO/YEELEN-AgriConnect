@@ -5,6 +5,56 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 2 : journaux + plan de comptes + séquences — 2026-08-30
+
+3e étape de [[project_erp_comptabilite_roadmap]] (après validité/conditions de paiement à
+l'étape 0 et `account.tax` à l'étape 1). **Objets de configuration uniquement** : aucun
+`account.move`, aucune écriture au grand livre, aucun changement du calcul devis/factures ni
+de `finances`. C'est le socle que l'étape 3 (`account.move`) consommera. La décision
+« double-partie complète vs modèle-document sur base de trésorerie » reste reportée à
+l'entrée de l'étape 3.
+
+**Schéma** (`server/src/db/migrate.js`, noms de champs calqués sur un ERP de référence) :
+- **`account_account`** : `code`, `name`, `account_type` (les 19 valeurs Odoo, CHECK),
+  `reconcile`, `active`, `UNIQUE(entreprise_id, code)`.
+- **`account_journal`** : `name`, `code` (≤5 car.), `type` (sale/purchase/cash/bank/general),
+  `sequence`, `refund_sequence`, `default_account_id` (FK `ON DELETE SET NULL`),
+  `UNIQUE(entreprise_id, code)`.
+- **`account_journal_sequence`** : compteur `(journal_id, prefix, last_number)`,
+  `UNIQUE(journal_id, prefix)`.
+
+**Seed** (`server/src/utils/comptaDefauts.js`, importé par `routes/auth.js` à l'inscription
+**et** `migrate.js:seedComptaConfigForExistingEntreprises` rétroactivement) :
+- `COMPTES_DEFAUT` = plan **générique** (codes `121000` Clients / `211000` Fournisseurs /
+  `101401` Banque / `101402` Caisse / `400000` Ventes / `500000` Coût des ventes /
+  `251000` TVA collectée / `131000` TVA déductible) — **pas un PCG national**, portée mondiale
+  (cf. [[feedback_global_scope_not_local]]).
+- `JOURNAUX_DEFAUT` = `INV` (sale, refund_sequence) / `BILL` (purchase, refund_sequence) /
+  `BNK` (bank) / `CSH` (cash) / `MISC` (general), chacun relié à son compte par défaut.
+
+**Numérotateur** : `server/src/utils/journalSequence.js:prochainNumeroJournal(client, journalId, entrepriseId, date, {refund})`
+→ `CODE/AAAA/NNNN` (ou `RCODE/AAAA/NNNN` pour un avoir si le journal a `refund_sequence`).
+L'année est dans le préfixe → remise à zéro annuelle automatique (nouveau préfixe = nouveau
+compteur). Incrément sous verrou de ligne (`INSERT ... ON CONFLICT DO NOTHING` puis
+`UPDATE ... RETURNING`) dans la transaction de l'appelant → deux pièces concurrentes sur le
+même journal ne peuvent pas recevoir le même numéro. **Aucun appelant pour l'instant** —
+l'étape 3 (`account.move`) le branchera.
+
+**Routes** : `/api/journals` + `/api/accounts` — GET ouvert (scoping entreprise),
+POST/PUT/DELETE gated `requireRole('admin','directeur')`, même patron que `routes/taxes.js`.
+`journals.js` valide que `defaultAccountId` (si fourni) appartient à l'entreprise → 400 sinon.
+
+**Frontend** : `ComptaConfigPanel` (repliable, dans `DevisModule` à côté de `PaymentTermsPanel`/
+`TaxesPanel`) : liste journaux + comptes, ajout/suppression. i18n `comptaConfig.*` fr/en
+(libellés des 19 `account_type` + 5 types de journal).
+
+**Répétition migration** : `pg_dump agri_app` → base jetable → `migrate.js` ×2 (idempotent au
+2e passage) → 9×8 comptes + 9×5 journaux seedés, 9×4 journaux avec compte par défaut résolu,
+compteur vide, **totaux devis inchangés** → appliqué à `agri_app`. Fumée live : inscription
+→ 5 journaux + 8 comptes seedés, `POST /api/journals` code `exp` → normalisé `EXP`. Tests :
+`journals.test.js` + `accounts.test.js` (13) → suite d'intégration **120 tests / 21 fichiers**
+verte. Front : build OK, 88 tests verts.
+
 ### ERP « Comptabilité » — Étape 1 : `account.tax` (taxes réutilisables) — 2026-08-30
 
 2e étape de [[project_erp_comptabilite_roadmap]] (après l'étape 0 : validité devis + conditions

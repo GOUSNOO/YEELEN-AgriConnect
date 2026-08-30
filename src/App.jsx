@@ -53,6 +53,7 @@ import RhReferentiels from './components/RhReferentiels';
 import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
+import ComptaConfigPanel from './components/ComptaConfigPanel';
 import MonEspaceRh from './components/MonEspaceRh';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
@@ -1092,6 +1093,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {!filtreStatut && (
         <TaxesPanel taxes={taxes} onChange={rechargerTaxes} />
       )}
+
+      {!filtreStatut && <ComptaConfigPanel />}
 
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
