@@ -319,3 +319,77 @@ describe('Devis — Étape 1 Comptabilité (taxes account.tax-like)', () => {
     expect(put.body.devis.lignes[0].taxIds).toEqual([tva.id]);
   });
 });
+
+describe('Devis — Étape 3b : facturer produit une facture comptable (account.move)', () => {
+  let admin;
+  let clientId;
+  const bear = (t) => ({ Authorization: `Bearer ${t}` });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const devisSigne = async (prixUnitaire = 1000, quantite = 10) => {
+    const r = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite, prixUnitaire, type: 'produit' }] });
+    await request(app).post(`/api/devis/${r.body.devis.id}/valider-manuel`).set(bear(admin.token)).send({ confirmePar: 'M. Test' });
+    return r.body.devis;
+  };
+  const termeId = async (nom) => {
+    const terms = (await request(app).get('/api/payment-terms').set(bear(admin.token))).body.paymentTerms;
+    return terms.find((t) => t.name === nom).id;
+  };
+
+  test('facturer (paiement complet) → devis.move lié, posté, équilibré, soldé', async () => {
+    const d = await devisSigne(500, 2); // total 1000
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.statut).toBe('Facturé');
+    expect(res.body.devis.move).toBeTruthy();
+    expect(res.body.devis.move.name).toMatch(/^INV\/\d{4}\/\d{4}$/);
+    expect(res.body.devis.move.state).toBe('posted');
+    expect(res.body.devis.move.paymentState).toBe('paid');
+    expect(res.body.devis.move.amountResidual).toBeCloseTo(0, 2);
+
+    // la facture est consultable via /api/factures et son écriture est équilibrée
+    const f = (await request(app).get(`/api/factures/${res.body.devis.move.id}`).set(bear(admin.token))).body.facture;
+    const dd = f.lignes.reduce((s, l) => s + l.debit, 0);
+    const cc = f.lignes.reduce((s, l) => s + l.credit, 0);
+    expect(dd).toBeCloseTo(cc, 2);
+    expect(f.invoiceOrigin).toBe(d.numero);
+  });
+
+  test('facturer échelonné (terme 30 jours + acompte) → move non soldé, 2 échéances partagées', async () => {
+    const d = await devisSigne(); // total 10000
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Banque', paymentTermId: await termeId('30 jours'), acompte: { method: 'percentage', value: 30 } });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.move.paymentState).toBe('not_paid');
+    expect(res.body.devis.move.amountResidual).toBeCloseTo(10000, 2);
+    expect(res.body.devis.echeances).toHaveLength(2);
+
+    // payer la 1re échéance → devis "Payé partiellement" ET move "partial"
+    const eid = res.body.devis.echeances[0].id;
+    const payer = await request(app).post(`/api/devis/${d.id}/echeances/${eid}/payer`).set(bear(admin.token)).send({});
+    expect(payer.status).toBe(200);
+    expect(payer.body.devis.statut).toBe('Payé partiellement');
+    expect(payer.body.devis.move.paymentState).toBe('partial');
+    expect(payer.body.devis.move.amountResidual).toBeCloseTo(7000, 2);
+  });
+
+  test('remettre-brouillon défait aussi la facture comptable', async () => {
+    const d = await devisSigne(200, 1);
+    const fac = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+    const moveId = fac.body.devis.move.id;
+    expect((await request(app).get(`/api/factures/${moveId}`).set(bear(admin.token))).status).toBe(200);
+
+    const remise = await request(app).post(`/api/devis/${d.id}/remettre-brouillon`).set(bear(admin.token)).send({});
+    expect(remise.status).toBe(200);
+    expect(remise.body.devis.statut).toBe('Brouillon');
+    expect(remise.body.devis.move).toBeNull();
+    expect((await request(app).get(`/api/factures/${moveId}`).set(bear(admin.token))).status).toBe(404);
+  });
+});

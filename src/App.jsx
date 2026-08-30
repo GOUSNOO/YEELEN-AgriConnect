@@ -1389,6 +1389,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     {t("devis.voirContact")}
                   </button>
                 )}
+                {detailData.move && (
+                  <button
+                    onClick={() => { navigate('/app/factures'); closeDetailPopup(); }}
+                    style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
+                  >
+                    {t("devis.voirFacture", { name: detailData.move.name })} · {t(`factures.pay.${detailData.move.paymentState}`)}
+                  </button>
+                )}
               </div>
 
               {/* Onglets façon ERP au-dessus du tableau — Générateur de devis/Autres

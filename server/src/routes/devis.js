@@ -11,6 +11,7 @@ import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 import { genererEcheancesDepuisTerme } from './paymentTerms.js';
 import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
+import { posterMove, enregistrerPaiementMove, journalParType } from '../utils/accountMove.js';
 
 // Date de validité par défaut d'un devis : aujourd'hui + 30 jours (comme default_validity_date
 // d'un ERP de référence). Format 'YYYY-MM-DD'.
@@ -224,7 +225,21 @@ async function getDevisComplet(devisId, entrepriseId) {
     `SELECT id, montant::float8 AS montant, to_char(date_echeance, 'YYYY-MM-DD') AS "dateEcheance", statut, date_paiement AS "datePaiement" FROM echeances_paiement WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
-  return { ...devisResult.rows[0], lignes, taxes: taxesResult.rows, echeances: echeancesResult.rows };
+  // Étape 3b : facture comptable liée (account_move), si le devis a été facturé.
+  const moveResult = await pool.query(
+    `SELECT m.id, m.name, m.state, m.payment_state AS "paymentState",
+            m.amount_residual::float8 AS "amountResidual", m.amount_total::float8 AS "amountTotal"
+     FROM devis d JOIN account_move m ON m.id = d.move_id
+     WHERE d.id = $1 AND d.entreprise_id = $2`,
+    [devisId, entrepriseId]
+  );
+  return {
+    ...devisResult.rows[0],
+    lignes,
+    taxes: taxesResult.rows,
+    echeances: echeancesResult.rows,
+    move: moveResult.rows[0] || null,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -713,6 +728,81 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       });
     }
 
+    // ─── Étape 3b : produit une vraie facture comptable (account.move) ───
+    // Le devis reste l'objet commercial ; la facture posée est la pièce comptable de
+    // référence (numéro de journal, écriture équilibrée, lettrage). Les échéances déjà
+    // créées ci-dessus sont rattachées AUX DEUX (devis_id + move_id).
+    const journalVente = await journalParType(client, req.user.entrepriseId, 'sale');
+    if (!journalVente) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Aucun journal de vente configuré — complétez la configuration comptable.' });
+    }
+    const lignesDevis = await client.query(
+      `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+              remise_pourcentage::float8 AS "remisePourcentage", ordre
+       FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC, id ASC`,
+      [req.params.id]
+    );
+    const ligneIds = lignesDevis.rows.map((l) => l.id);
+    const liensTaxes = ligneIds.length
+      ? await client.query(
+          `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId" FROM devis_lignes_taxes
+           WHERE devis_ligne_id = ANY($1::int[])`,
+          [ligneIds]
+        )
+      : { rows: [] };
+    const taxParLigne = new Map();
+    for (const { ligneId, taxId } of liensTaxes.rows) {
+      if (!taxParLigne.has(ligneId)) taxParLigne.set(ligneId, []);
+      taxParLigne.get(ligneId).push(taxId);
+    }
+    const dueDate = echeancesFinales && echeancesFinales.length
+      ? echeancesFinales[echeancesFinales.length - 1].dateEcheance
+      : new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+
+    const mv = await client.query(
+      `INSERT INTO account_move
+        (entreprise_id, journal_id, move_type, state, partner_id, invoice_date, invoice_date_due,
+         invoice_origin, payment_term_id, user_id)
+       VALUES ($1, $2, 'out_invoice', 'draft', (SELECT client_id FROM devis WHERE id = $3),
+               CURRENT_DATE, $4, $5, $6, $7) RETURNING id`,
+      [req.user.entrepriseId, journalVente.id, req.params.id, dueDate, numero, paymentTermIdFinal, req.user.sub]
+    );
+    const moveId = mv.rows[0].id;
+    let seqLigne = 0;
+    for (const l of lignesDevis.rows) {
+      seqLigne += 10;
+      const isSection = l.type === 'section';
+      const ins = await client.query(
+        `INSERT INTO account_move_line
+          (move_id, entreprise_id, display_type, sequence, name, quantity, price_unit, discount)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [moveId, req.user.entrepriseId, isSection ? 'line_section' : 'product', seqLigne, l.produit,
+         isSection ? 0 : l.quantite, isSection ? 0 : l.prixUnitaire, isSection ? 0 : l.remisePourcentage]
+      );
+      for (const taxId of (taxParLigne.get(l.id) || [])) {
+        await client.query(
+          `INSERT INTO account_move_line_taxes (move_line_id, tax_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [ins.rows[0].id, taxId]
+        );
+      }
+    }
+    // Rattache les échéances (créées plus haut, devis_id) aussi au move avant le post
+    // pour que posterMove ne les régénère pas depuis le terme.
+    await client.query('UPDATE echeances_paiement SET move_id = $1 WHERE devis_id = $2', [moveId, req.params.id]);
+    await posterMove(client, moveId, req.user.entrepriseId);
+    // Paiement complet : on solde la facture comptablement (lettrage), sans redoubler le
+    // miroir Finances déjà écrit par syncDevisPaiement ci-dessus.
+    if (modaliteFinale === 'complet') {
+      const pj = await journalParType(client, req.user.entrepriseId, modePaiement === 'Espèces' ? 'cash' : 'bank');
+      await enregistrerPaiementMove(client, {
+        moveId, entrepriseId: req.user.entrepriseId, userId: req.user.sub,
+        amount: Number(total), paymentDate: new Date().toISOString().slice(0, 10),
+        journalId: pj ? pj.id : undefined, skipFinanceMirror: true,
+      });
+    }
+    await client.query('UPDATE devis SET move_id = $1 WHERE id = $2', [moveId, req.params.id]);
+
     await client.query('COMMIT');
 
     await logAuditEvent({
@@ -745,12 +835,13 @@ const STATUTS_APRES_SIGNATURE = ['Signé', 'Facturé', 'Non payé', 'Payé parti
 router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut, numero FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query('SELECT statut, numero, move_id AS "moveId" FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) {
       client.release();
       return res.status(404).json({ error: 'Devis introuvable.' });
     }
     const statutAvant = check.rows[0].statut;
+    const moveId = check.rows[0].moveId;
 
     await client.query('BEGIN');
 
@@ -758,9 +849,37 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     await client.query(`DELETE FROM finances WHERE source_module = 'Devis' AND source_mouvement_id IN (SELECT id FROM echeances_paiement WHERE devis_id = $1)`, [req.params.id]);
     // Supprime les échéances elles-mêmes
     await client.query(`DELETE FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
+
+    // Étape 3b : défait aussi la facture comptable liée (undo pré-production). On retire les
+    // écritures de paiement lettrées contre elle, puis la facture elle-même (ses lignes +
+    // liens de taxes + partiels de lettrage cascadent). Le numéro de journal consommé n'est
+    // pas restitué (un trou de séquence est acceptable ici).
+    if (moveId) {
+      const payMoves = await client.query(
+        `SELECT DISTINCT pml.move_id AS id
+         FROM account_partial_reconcile apr
+         JOIN account_move_line iml ON iml.id IN (apr.debit_move_line_id, apr.credit_move_line_id) AND iml.move_id = $1
+         JOIN account_move_line pml ON pml.id IN (apr.debit_move_line_id, apr.credit_move_line_id) AND pml.move_id <> $1`,
+        [moveId]
+      );
+      const payMoveIds = payMoves.rows.map((r) => r.id);
+      if (payMoveIds.length) {
+        await client.query('DELETE FROM finances WHERE source_module = $1 AND source_mouvement_id IN (SELECT id FROM account_payment WHERE move_id = ANY($2::int[]))', ['Facture', payMoveIds]);
+        await client.query('DELETE FROM account_payment WHERE move_id = ANY($1::int[])', [payMoveIds]);
+        await client.query('DELETE FROM account_move WHERE id = ANY($1::int[])', [payMoveIds]);
+      }
+      await client.query('DELETE FROM account_move WHERE id = $1 AND entreprise_id = $2', [moveId, req.user.entrepriseId]);
+      await client.query(
+        `DELETE FROM account_full_reconcile fr WHERE fr.entreprise_id = $1
+           AND NOT EXISTS (SELECT 1 FROM account_partial_reconcile apr WHERE apr.full_reconcile_id = fr.id)`,
+        [req.user.entrepriseId]
+      );
+    }
+
     // Réinitialise le devis en brouillon
     await client.query(
       `UPDATE devis SET statut = 'Brouillon', mode_paiement = NULL, modalite_paiement = NULL, payment_term_id = NULL,
+       move_id = NULL,
        signature_data = NULL, signataire_nom = NULL, date_signature = NULL, token_public = NULL
        WHERE id = $1`,
       [req.params.id]
@@ -796,16 +915,18 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
 });
 
 router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin'), async (req, res) => {
+  const client = await pool.connect();
   try {
-    const devisResult = await pool.query(
-      `SELECT d.mode_paiement AS "modePaiement", d.numero, d.statut, c.nom AS "clientNom", c.prenom AS "clientPrenom"
+    const devisResult = await client.query(
+      `SELECT d.mode_paiement AS "modePaiement", d.numero, d.statut, d.move_id AS "moveId",
+              c.nom AS "clientNom", c.prenom AS "clientPrenom"
        FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
     );
     if (devisResult.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
 
-    const echeanceResult = await pool.query(
+    const echeanceResult = await client.query(
       `SELECT id, montant::float8 AS montant, statut FROM echeances_paiement WHERE id = $1 AND devis_id = $2`,
       [req.params.echeanceId, req.params.id]
     );
@@ -814,10 +935,11 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
       return res.status(400).json({ error: 'Cette échéance est déjà marquée comme payée.' });
     }
 
-    await pool.query(`UPDATE echeances_paiement SET statut = 'Payé', date_paiement = now() WHERE id = $1`, [req.params.echeanceId]);
-
-    const { modePaiement, numero, clientNom, clientPrenom } = devisResult.rows[0];
+    const { modePaiement, numero, clientNom, clientPrenom, moveId } = devisResult.rows[0];
     const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
+
+    await client.query('BEGIN');
+    await client.query(`UPDATE echeances_paiement SET statut = 'Payé', date_paiement = now() WHERE id = $1`, [req.params.echeanceId]);
 
     await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
       montant: echeanceResult.rows[0].montant,
@@ -828,13 +950,27 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
       echeanceId: req.params.echeanceId,
     });
 
+    // Étape 3b : si une facture comptable est liée, on y enregistre le paiement (lettrage,
+    // payment_state) — le miroir Finances a déjà été écrit ci-dessus (skipFinanceMirror).
+    // Si ça échoue, toute la transaction est annulée : pas de paiement enregistré sans
+    // son écriture comptable.
+    if (moveId) {
+      await enregistrerPaiementMove(client, {
+        moveId, entrepriseId: req.user.entrepriseId, userId: req.user.sub,
+        amount: echeanceResult.rows[0].montant,
+        skipFinanceMirror: true, skipEcheanceAllocation: true,
+      });
+    }
+
     // Recalcule le statut global du devis selon l'état de toutes ses échéances
-    const toutesEcheances = await pool.query(`SELECT statut FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
+    const toutesEcheances = await client.query(`SELECT statut FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
     const toutesPayees = toutesEcheances.rows.every(e => e.statut === 'Payé');
     const auMoinsUnePayee = toutesEcheances.rows.some(e => e.statut === 'Payé');
     const nouveauStatut = toutesPayees ? 'Facturé' : auMoinsUnePayee ? 'Payé partiellement' : 'Non payé';
 
-    await pool.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
+    await client.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
+    await client.query('COMMIT');
+
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: devisResult.rows[0].statut }, { statut: nouveauStatut }, ['statut']);
     await logAuditEvent({
@@ -848,8 +984,11 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[POST /devis/:id/echeances/:echeanceId/payer]', err);
     return res.status(500).json({ error: 'Erreur lors du paiement.' });
+  } finally {
+    client.release();
   }
 });
 

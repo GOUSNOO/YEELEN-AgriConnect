@@ -5,6 +5,47 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 3b : `POST /devis/:id/facturer` produit une vraie facture — 2026-08-30
+
+Rebranchement prévu à l'étape 3. `POST /api/devis/:id/facturer` **crée et poste** désormais
+un `account_move` (`out_invoice`) qui reflète le devis :
+- `devis.move_id` (nouvelle colonne nullable) pointe vers la facture ;
+  `account_move.invoice_origin` = le numéro du devis ; les échéances sont **rattachées aux
+  deux** (`echeances_paiement.devis_id` ET `.move_id`).
+- Le devis garde son `statut` / son flux d'échéances comme **miroir commercial**.
+
+**Refacto** : `server/src/utils/accountMove.js` extrait de `routes/factures.js` —
+`posterMove(client, moveId, entrepriseId)` (génération de l'écriture équilibrée + numéro de
+journal) et `enregistrerPaiementMove(client, {…, skipFinanceMirror, skipEcheanceAllocation})`
+(paiement + lettrage). Les handlers `/post` et `/register-payment` de `factures.js` sont
+maintenant de simples enveloppes — comportement inchangé, `factures.test.js` toujours vert.
+
+**Cohérence des paiements** :
+- `facturer` chemin `complet` → `enregistrerPaiementMove(…, skipFinanceMirror:true)` : le move
+  se solde (`paid` + lettrage), et `syncDevisPaiement` reste la **seule** entrée `finances`
+  (`source_module='Devis'`).
+- `POST /devis/:id/echeances/:eid/payer` devient transactionnel et, si `devis.move_id`, appelle
+  `enregistrerPaiementMove(…, skipFinanceMirror:true, skipEcheanceAllocation:true)` pour que
+  `payment_state`/`amount_residual`/lettrage du move suivent les paiements d'échéances côté
+  devis. (`skipEcheanceAllocation` : l'échéance précise est déjà marquée par la route devis —
+  sans ça l'allocation par ordre déborderait sur l'échéance suivante ; bug attrapé par
+  `devis.test.js`.)
+- `POST /devis/:id/remettre-brouillon` défait aussi la facture : supprime les écritures de
+  paiement lettrées + `account_payment` + entrées `finances` `'Facture'`, supprime le move
+  (lignes / liens taxes / partiels cascadent), purge les `account_full_reconcile` orphelins,
+  remet `devis.move_id` à NULL. Le numéro de journal consommé n'est pas restitué (trou de
+  séquence accepté pour cet undo pré-production).
+
+`getDevisComplet` renvoie `move: { id, name, state, paymentState, amountResidual, amountTotal }
+| null`. Front : bouton intelligent « Facture INV/… · <état paiement> » dans le modal détail
+d'un devis, qui bascule sur l'onglet Factures (`devis.voirFacture` i18n fr/en).
+
+**Vérif** : migration répétée ×2 sur copie restaurée (idempotente, `devis.move_id` ajouté,
+comptes devis inchangés) → appliquée. Fumée live : devis signé → `facturer` complet →
+`INV/2026/0001` posté/`paid`, écriture équilibrée D=C=1000, `invoice_origin` = `DEV-2026-0001`
+→ `remettre-brouillon` → move supprimé (404), devis en `Brouillon`. `devis.test.js` +3 →
+suite d'intégration **133 tests / 22 fichiers** verte. Front : build OK, 88 verts.
+
 ### ERP « Comptabilité » — Étape 3 : `account.move` + `account.move.line` (double-partie) — 2026-08-30
 
 4e étape de [[project_erp_comptabilite_roadmap]]. **Décision prise avec l'utilisateur au

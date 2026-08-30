@@ -541,13 +541,17 @@ CREATE TABLE IF NOT EXISTS account_payment (
 );
 CREATE INDEX IF NOT EXISTS idx_account_payment_entreprise_id ON account_payment(entreprise_id);
 
--- Une échéance peut désormais appartenir à une facture (account_move) et non plus seulement
--- à un devis — devis_id devient donc nullable (les échéances générées par /api/factures
--- portent move_id, devis_id NULL). Le chemin devis existant (POST /devis/:id/facturer) est
--- inchangé : il continue de créer des échéances avec devis_id renseigné, move_id NULL.
+-- Une échéance peut appartenir à une facture (account_move) en plus / à la place d'un
+-- devis — devis_id devient donc nullable. Depuis l'étape 3b, POST /devis/:id/facturer crée
+-- une vraie facture account_move et rattache les échéances aux DEUX (devis_id + move_id).
 ALTER TABLE echeances_paiement ADD COLUMN IF NOT EXISTS move_id INTEGER REFERENCES account_move(id) ON DELETE CASCADE;
 ALTER TABLE echeances_paiement ALTER COLUMN devis_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_echeances_paiement_move_id ON echeances_paiement(move_id);
+
+-- Étape 3b : un devis facturé pointe vers la facture comptable (account_move) qu'il a
+-- produite. NULL pour les devis encore en brouillon/signé et pour les devis facturés avant
+-- l'étape 3b (ceux-là gardent l'ancien flux d'échéances côté devis).
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS move_id INTEGER REFERENCES account_move(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
