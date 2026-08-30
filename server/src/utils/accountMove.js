@@ -525,3 +525,123 @@ export async function reverseMove(client, { moveId, entrepriseId, userId, reason
   }
   return { creditNoteId: cnId, posted: true };
 }
+
+// Étape 6 : paiement client autonome (avance / acompte hors facture). Crée un
+// account_payment + son écriture postée (trésorerie D / créance C) SANS lettrage — un
+// crédit non alloué sur le compte client, à affecter plus tard via allouerPaiement().
+// `sens` : 'inbound' (encaissement client, défaut) ou 'outbound' (décaissement fournisseur).
+// `client` = transaction ouverte. Renvoie { paymentId, moveId, moveName }.
+export async function creerPaiementAutonome(client, { entrepriseId, userId, partnerId, amount, paymentDate, journalId, ref, sens = 'inbound' }) {
+  const montant = round2(amount);
+  if (!(montant > 0)) throw err400('Le montant doit être positif.');
+  if (!partnerId) throw err400('Un partenaire est requis.');
+  const pc = await client.query('SELECT 1 FROM contacts WHERE id = $1 AND entreprise_id = $2', [partnerId, entrepriseId]);
+  if (pc.rows.length === 0) throw err400('Partenaire inconnu pour cette entreprise.');
+
+  let payJournal = null;
+  if (journalId) {
+    const j = await client.query(
+      `SELECT id, type, default_account_id AS "defaultAccountId" FROM account_journal
+       WHERE id = $1 AND entreprise_id = $2 AND type IN ('bank','cash')`,
+      [journalId, entrepriseId]
+    );
+    payJournal = j.rows[0] || null;
+    if (!payJournal) throw err400('Journal de paiement invalide (attendu banque ou caisse).');
+  } else {
+    payJournal = (await journalParType(client, entrepriseId, 'bank')) || (await journalParType(client, entrepriseId, 'cash'));
+  }
+  if (!payJournal) throw err400('Aucun journal de trésorerie configuré.');
+
+  const estEncaissement = sens !== 'outbound';
+  const compteTreso = payJournal.defaultAccountId
+    || await compteParType(client, entrepriseId, 'asset_cash', payJournal.type === 'cash' ? '101402' : '101401');
+  const comptePartenaire = await compteParType(client, entrepriseId, estEncaissement ? 'asset_receivable' : 'liability_payable', estEncaissement ? '121000' : '211000');
+
+  const pdate = paymentDate || new Date().toISOString().slice(0, 10);
+  const name = await prochainNumeroJournal(client, payJournal.id, entrepriseId, pdate, {});
+  const pm = await client.query(
+    `INSERT INTO account_move (entreprise_id, journal_id, move_type, state, name, date, partner_id, ref, amount_total, user_id)
+     VALUES ($1,$2,'entry','posted',$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [entrepriseId, payJournal.id, name, pdate, partnerId, ref || 'Paiement client', montant, userId || null]
+  );
+  const payMoveId = pm.rows[0].id;
+
+  const tresoDebit = estEncaissement ? montant : 0;
+  const tresoCredit = estEncaissement ? 0 : montant;
+  await client.query(
+    `INSERT INTO account_move_line (move_id, entreprise_id, display_type, sequence, name, account_id, debit, credit, balance)
+     VALUES ($1,$2,'product',10,'Trésorerie',$3,$4,$5,$6)`,
+    [payMoveId, entrepriseId, compteTreso, tresoDebit, tresoCredit, tresoDebit - tresoCredit]
+  );
+  // Ligne créance/dette non lettrée : amount_residual = son solde signé, réduit plus tard.
+  const partDebit = estEncaissement ? 0 : montant;
+  const partCredit = estEncaissement ? montant : 0;
+  await client.query(
+    `INSERT INTO account_move_line
+      (move_id, entreprise_id, display_type, sequence, name, account_id, partner_id, debit, credit, balance, amount_residual)
+     VALUES ($1,$2,'payment_term',20,'Paiement à affecter',$3,$4,$5,$6,$7,$8)`,
+    [payMoveId, entrepriseId, comptePartenaire, partnerId, partDebit, partCredit, partDebit - partCredit, partDebit - partCredit]
+  );
+
+  await hacherMoveSiRequis(client, payMoveId, payJournal.id);
+
+  const pay = await client.query(
+    `INSERT INTO account_payment (entreprise_id, move_id, journal_id, payment_type, partner_type, partner_id, amount, payment_date, ref, state)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'posted') RETURNING id`,
+    [entrepriseId, payMoveId, payJournal.id, estEncaissement ? 'inbound' : 'outbound',
+     estEncaissement ? 'customer' : 'supplier', partnerId, montant, pdate, ref || null]
+  );
+  return { paymentId: pay.rows[0].id, moveId: payMoveId, moveName: name };
+}
+
+// Étape 6 : affecte (lettre) un montant d'un paiement autonome à une facture postée.
+// `client` = transaction ouverte. Renvoie { montantLettre, factureResidu, factureState }.
+export async function allouerPaiement(client, { paymentId, moveId, amount, entrepriseId }) {
+  const pr = await client.query(
+    `SELECT p.id, p.move_id AS "payMoveId", p.partner_id AS "partnerId"
+     FROM account_payment p WHERE p.id = $1 AND p.entreprise_id = $2`,
+    [paymentId, entrepriseId]
+  );
+  if (pr.rows.length === 0) throw err404('Paiement introuvable.');
+  const payMoveId = pr.rows[0].payMoveId;
+
+  const fr = await client.query(
+    `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId", payment_state AS "paymentState",
+            amount_residual::float8 AS "amountResidual", amount_total::float8 AS "amountTotal"
+     FROM account_move WHERE id = $1 AND entreprise_id = $2`,
+    [moveId, entrepriseId]
+  );
+  if (fr.rows.length === 0) throw err404('Facture introuvable.');
+  const f = fr.rows[0];
+  if (f.state !== 'posted') throw err400('La facture doit être postée.');
+  if (!['out_invoice', 'in_invoice'].includes(f.moveType)) throw err400('Affectation possible seulement sur une facture.');
+  if (f.paymentState === 'reversed') throw err400('Facture annulée par un avoir.');
+  if (f.partnerId !== pr.rows[0].partnerId) throw err400('Le paiement et la facture n\'ont pas le même partenaire.');
+  if (f.amountResidual <= 0) throw err400('Facture déjà soldée.');
+
+  const payPart = await client.query(
+    `SELECT id, amount_residual::float8 AS r FROM account_move_line
+     WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    [payMoveId]
+  );
+  const nonAlloue = Math.abs(payPart.rows[0].r);
+  if (nonAlloue <= 0.01) throw err400('Ce paiement est déjà entièrement affecté.');
+
+  const factPart = await client.query(
+    `SELECT id FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    [moveId]
+  );
+  const demande = amount != null ? round2(amount) : Math.min(nonAlloue, f.amountResidual);
+  const montantLettre = round2(Math.min(demande, nonAlloue, f.amountResidual));
+  if (montantLettre <= 0) throw err400('Montant à affecter invalide.');
+
+  await lettrerLignesPartenaire(client, entrepriseId, {
+    ligneFactureId: factPart.rows[0].id, ligneContreId: payPart.rows[0].id,
+    amount: montantLettre, date: new Date().toISOString().slice(0, 10),
+  });
+
+  const residu = round2(Math.max(0, f.amountResidual - montantLettre));
+  const state = residu <= 0.01 ? 'paid' : 'partial';
+  await client.query('UPDATE account_move SET amount_residual = $1, payment_state = $2 WHERE id = $3', [residu, state, moveId]);
+  return { montantLettre, factureResidu: residu, factureState: state };
+}

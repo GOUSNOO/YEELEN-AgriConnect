@@ -32,6 +32,7 @@ const MOVE_COLUMNS = `
   m.amount_total::float8 AS "amountTotal", m.amount_residual::float8 AS "amountResidual",
   m.payment_state AS "paymentState", m.reversed_entry_id AS "reversedEntryId",
   m.inalterable_hash AS "inalterableHash", m.secure_sequence_number AS "secureSequenceNumber",
+  m.relance_niveau AS "relanceNiveau", to_char(m.derniere_relance, 'YYYY-MM-DD') AS "derniereRelance",
   m.created_at AS "createdAt",
   COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom) AS "partnerName",
   (SELECT name FROM account_move o WHERE o.id = m.reversed_entry_id) AS "reversedEntryName",
@@ -177,6 +178,84 @@ router.get('/', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[GET /factures]', err);
     return res.status(500).json({ error: 'Erreur lors de la récupération des factures.' });
+  }
+});
+
+// ─── GET /api/factures/aged-receivable?date= ─── (balance âgée client)
+// Déclarée avant /:id. Ventile le reste dû des factures client postées par ancienneté vs
+// leur date d'échéance. Les avoirs (out_refund) comptent en négatif ; les factures annulées
+// par un avoir (payment_state 'reversed') sont exclues.
+router.get('/aged-receivable', authRequired, async (req, res) => {
+  const asOf = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : new Date().toISOString().slice(0, 10);
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.partner_id AS "partnerId",
+              COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom, 'Client') AS "partnerName",
+              (CASE WHEN m.move_type = 'out_refund' THEN -1 ELSE 1 END) * m.amount_residual::float8 AS residu,
+              ($1::date - COALESCE(m.invoice_date_due, m.invoice_date, m.date)) AS jours
+       FROM account_move m
+       LEFT JOIN contacts c ON c.id = m.partner_id
+       WHERE m.entreprise_id = $2 AND m.state = 'posted'
+         AND m.move_type IN ('out_invoice', 'out_refund')
+         AND m.payment_state <> 'reversed'
+         AND m.amount_residual > 0`,
+      [asOf, req.user.entrepriseId]
+    );
+    const parPartenaire = new Map();
+    const vide = () => ({ notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90plus: 0, total: 0 });
+    for (const r of rows) {
+      if (!parPartenaire.has(r.partnerId)) parPartenaire.set(r.partnerId, { partnerId: r.partnerId, partnerName: r.partnerName, buckets: vide() });
+      const b = parPartenaire.get(r.partnerId).buckets;
+      const j = Number(r.jours);
+      const k = j <= 0 ? 'notDue' : j <= 30 ? 'd1_30' : j <= 60 ? 'd31_60' : j <= 90 ? 'd61_90' : 'd90plus';
+      b[k] = round2(b[k] + r.residu);
+      b.total = round2(b.total + r.residu);
+    }
+    const partners = [...parPartenaire.values()].sort((a, b) => b.buckets.total - a.buckets.total);
+    const totals = vide();
+    for (const p of partners) for (const k of Object.keys(totals)) totals[k] = round2(totals[k] + p.buckets[k]);
+    return res.json({ asOf, partners, totals });
+  } catch (err) {
+    console.error('[GET /factures/aged-receivable]', err);
+    return res.status(500).json({ error: 'Erreur lors du calcul de la balance âgée.' });
+  }
+});
+
+// ─── GET /api/factures/overdue ─── (factures client en retard, pour les relances)
+router.get('/overdue', authRequired, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${MOVE_COLUMNS},
+              (CURRENT_DATE - COALESCE(m.invoice_date_due, m.invoice_date, m.date)) AS "daysOverdue"
+       FROM account_move m
+       LEFT JOIN contacts c ON c.id = m.partner_id
+       WHERE m.entreprise_id = $1 AND m.state = 'posted' AND m.move_type = 'out_invoice'
+         AND m.payment_state IN ('not_paid', 'partial')
+         AND COALESCE(m.invoice_date_due, m.invoice_date, m.date) < CURRENT_DATE
+       ORDER BY COALESCE(m.invoice_date_due, m.invoice_date, m.date) ASC`,
+      [req.user.entrepriseId]
+    );
+    return res.json({ factures: rows });
+  } catch (err) {
+    console.error('[GET /factures/overdue]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des impayés.' });
+  }
+});
+
+// ─── POST /api/factures/:id/mark-reminded ─── (incrémente le compteur de relance)
+router.post('/:id/mark-reminded', ...ecriture, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE account_move SET relance_niveau = relance_niveau + 1, derniere_relance = CURRENT_DATE
+       WHERE id = $1 AND entreprise_id = $2 AND move_type = 'out_invoice' AND state = 'posted'
+       RETURNING id`,
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Facture introuvable ou non applicable.' });
+    return res.json({ facture: await getFactureComplete(req.params.id, req.user.entrepriseId) });
+  } catch (err) {
+    console.error('[POST /factures/:id/mark-reminded]', err);
+    return res.status(500).json({ error: 'Erreur lors de l’enregistrement de la relance.' });
   }
 });
 

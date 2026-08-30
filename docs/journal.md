@@ -5,6 +5,52 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Étape 6 : balance âgée, relances, paiements autonomes — 2026-08-30 (feuille de route COMPLÈTE)
+
+**Schéma** : `account_move.relance_niveau INT DEFAULT 0` + `.derniere_relance DATE` (suivi des
+relances — pas d'envoi d'email, SMTP différé). Rien d'autre : la balance âgée et la liste des
+retards se calculent à la volée.
+
+**`utils/accountMove.js`** :
+- `creerPaiementAutonome(client, {…, partnerId, amount, paymentDate, journalId, ref, sens})` :
+  `account_payment` + son écriture postée (trésorerie D / créance C) **sans lettrage** → un
+  crédit non alloué sur le compte client (avance / acompte hors facture). Haché si le journal
+  de trésorerie est sécurisé.
+- `allouerPaiement(client, {paymentId, moveId, amount, entrepriseId})` : lettre une tranche
+  de la ligne `payment_term` du paiement contre celle d'une facture via
+  `lettrerLignesPartenaire`, borné à `min(demandé, non-alloué, résiduel facture)`, met à jour
+  le `payment_state` de la facture. Partenaire différent → 400.
+
+**Routes** :
+- `GET /api/factures/aged-receivable?date=` → par partenaire, le reste dû des `out_invoice`/
+  `out_refund` postés, ventilé *non échu / 1-30 / 31-60 / 61-90 / 90+* vs `invoice_date_due`
+  (`reversed` exclues, `out_refund` en négatif) + totaux.
+- `GET /api/factures/overdue` → `out_invoice` postées `not_paid`/`partial` échues, avec
+  `daysOverdue` / `relanceNiveau` / `derniereRelance`.
+- `POST /api/factures/:id/mark-reminded` (admin/directeur) → `relance_niveau += 1`,
+  `derniere_relance = aujourd'hui`.
+- Nouveau `server/src/routes/paiements.js` (`/api/paiements`) : `GET /?partnerId=&unallocated=1`
+  (montant non alloué = |résiduel de la ligne créance du paiement|), `POST /`, `POST
+  /:id/allocate` (admin/directeur).
+- aged-receivable / overdue déclarées **avant** `/:id`.
+
+**Coupe assumée** : `payment_state='in_payment'` (Odoo : payé mais relevé bancaire pas
+rapproché) non utilisé — pas d'import de relevé dans YEELEN, on garde les 4 états.
+
+**Frontend** : nouveau `src/components/ComptaReportsPanel.jsx` (sections repliables : tableau
+balance âgée partenaire × tranche ; liste des retards + bouton « Marquer relancé » ;
+formulaire de paiement autonome + liste des non-alloués + sélecteur « Affecter » inline),
+rendu au-dessus de `FacturesModule`. i18n `comptaReports.*` fr/en.
+
+**Vérif** : migration ×2 sur copie restaurée (2 colonnes, comptes devis inchangés) →
+appliquée. Fumée live : facture échue -40 j → tranche 31-60 = 1000, `overdue` 40 j niveau 0
+→ `mark-reminded` → niveau 1 + date ; paiement autonome `BNK/2026/0001` non alloué = 600 →
+`allocate` contre la facture → lettré 600, résiduel facture 400, `partial`. Nouveaux
+`agedReceivable.test.js` (5) + `paiements.test.js` (7) → suite d'intégration **154 tests /
+26 fichiers** verte. Front : build OK, 88 verts.
+
+**→ La feuille de route [[project_erp_comptabilite_roadmap]] est complète (étapes 0 à 6).**
+
 ### ERP « Comptabilité » — Étape 5 : avoirs (`out_refund` + reverse) — 2026-08-30
 
 **Aucun changement de schéma** — `reversed_entry_id`, `out_refund`, la séquence `RINV/…`

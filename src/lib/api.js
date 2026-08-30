@@ -713,6 +713,25 @@ export async function verifyFactureHash(journalId) {
 export async function reverseFacture(id, payload) {
   return request(`/factures/${id}/reverse`, { method: 'POST', body: JSON.stringify(payload) });
 }
+// Étape 6 : balance âgée, relances, paiements autonomes.
+export async function getAgedReceivable(date) {
+  return request(`/factures/aged-receivable${date ? `?date=${date}` : ''}`);
+}
+export async function getOverdueFactures() {
+  return request('/factures/overdue');
+}
+export async function markFactureReminded(id) {
+  return request(`/factures/${id}/mark-reminded`, { method: 'POST', body: '{}' });
+}
+export async function getPaiements(params = '') {
+  return request(`/paiements${params}`);
+}
+export async function createPaiement(payload) {
+  return request('/paiements', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function allocatePaiement(id, payload) {
+  return request(`/paiements/${id}/allocate`, { method: 'POST', body: JSON.stringify(payload) });
+}
 
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {

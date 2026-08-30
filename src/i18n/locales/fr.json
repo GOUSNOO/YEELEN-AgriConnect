@@ -683,6 +683,32 @@
       "rounding": "Arrondi"
     }
   },
+  "comptaReports": {
+    "title": "Suivi client",
+    "aged": "Balance âgée",
+    "overdue": "En retard ({{count}})",
+    "payments": "Paiements à affecter ({{count}})",
+    "partner": "Client",
+    "notDue": "Non échu",
+    "nothing": "Rien à afficher.",
+    "daysLate": "{{n}} j de retard",
+    "markReminded": "Marquer relancé",
+    "remindedN": "relancé {{n}}× · {{date}}",
+    "reminded": "Relance enregistrée.",
+    "remindError": "Impossible d'enregistrer la relance.",
+    "amount": "Montant",
+    "date": "Date",
+    "ref": "Référence",
+    "addPayment": "Enregistrer le paiement",
+    "payCreated": "Paiement enregistré.",
+    "payError": "Impossible d'enregistrer le paiement.",
+    "unallocated": "{{amount}} à affecter",
+    "allocate": "Affecter",
+    "invoice": "Facture",
+    "amountOptional": "Montant (option)",
+    "allocated": "Paiement affecté.",
+    "allocError": "Impossible d'affecter le paiement."
+  },
   "comptaConfig": {
     "title": "Comptabilité — Configuration",
     "journals": "Journaux",

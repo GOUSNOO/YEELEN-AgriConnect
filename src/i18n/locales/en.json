@@ -683,6 +683,32 @@
       "rounding": "Rounding"
     }
   },
+  "comptaReports": {
+    "title": "Customer follow-up",
+    "aged": "Aged receivable",
+    "overdue": "Overdue ({{count}})",
+    "payments": "Payments to allocate ({{count}})",
+    "partner": "Customer",
+    "notDue": "Not due",
+    "nothing": "Nothing to show.",
+    "daysLate": "{{n}} days late",
+    "markReminded": "Mark reminded",
+    "remindedN": "reminded {{n}}× · {{date}}",
+    "reminded": "Reminder recorded.",
+    "remindError": "Could not record the reminder.",
+    "amount": "Amount",
+    "date": "Date",
+    "ref": "Reference",
+    "addPayment": "Register payment",
+    "payCreated": "Payment registered.",
+    "payError": "Could not register the payment.",
+    "unallocated": "{{amount}} to allocate",
+    "allocate": "Allocate",
+    "invoice": "Invoice",
+    "amountOptional": "Amount (optional)",
+    "allocated": "Payment allocated.",
+    "allocError": "Could not allocate the payment."
+  },
   "comptaConfig": {
     "title": "Accounting — Configuration",
     "journals": "Journals",

@@ -10,6 +10,7 @@ import { taxesLigneCalc } from '../lib/taxes.js';
 import { useLocale } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
+import ComptaReportsPanel from './ComptaReportsPanel';
 
 const STATE_TONE = { draft: 'blue', posted: 'green', cancel: 'red' };
 const PAY_TONE = { not_paid: 'ochre', partial: 'ochre', paid: 'green', in_payment: 'ochre', reversed: 'red' };
@@ -161,6 +162,8 @@ export default function FacturesModule() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      <ComptaReportsPanel onChange={charger} />
+
       <Card>
         <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginRight: 'auto' }}>{t('factures.title')}</div>

@@ -563,6 +563,12 @@ ALTER TABLE account_journal ADD COLUMN IF NOT EXISTS restrict_mode_hash_table BO
 ALTER TABLE account_journal ADD COLUMN IF NOT EXISTS secure_sequence_last INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_account_move_secure_seq ON account_move(journal_id, secure_sequence_number);
 
+-- Étape 6 : base de relances. Combien de fois une facture a été relancée + date de la
+-- dernière relance (l'envoi d'email est différé — SMTP non configuré ; ces champs sont
+-- juste le suivi). La balance âgée et la liste des retards se calculent à la volée.
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS relance_niveau INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS derniere_relance DATE;
+
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
   type                 VARCHAR(50) NOT NULL,
