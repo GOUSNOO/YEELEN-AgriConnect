@@ -5,6 +5,40 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### ERP « Comptabilité » — Fiche facture : valeurs SCSS réelles d'Odoo — 2026-08-30
+
+L'utilisateur : « pars des vraies valeurs SCSS d'Odoo pour la fiche facture ». Les
+dimensions ont été **extraites du SCSS source** du clone `C:\Users\PC\reference-repos\erp-source`,
+pas estimées, et documentées ligne par ligne dans `src/App.css` (bloc `.oe-invoice`, avec
+la source `addons/web/static/src/...` de chaque valeur). Portée limitée à `.oe-invoice`
+(le modal détail de `FacturesModule`) pour ne pas toucher le `.data-table` app-wide.
+
+Valeurs reprises telles quelles :
+- `primary_variables.scss` : `$o-font-size-base` 14px / small 13 / smaller 12,
+  `$o-line-height-base` 1.5, `$o-spacer` 16, `$o-form-spacing-unit` 5, `$o-horizontal-padding`
+  16, `$o-statusbar-height` 33, `$o-border-radius` 4, `$o-gray-300` #dee2e6 (bordure),
+  `$o-gray-100` #f8f9fa (fond thead), `$o-main-text-color` #212529, `$o-brand-primary` #71639e.
+- `statusbar_field.scss` : caret = `1em`, radius `.1rem`, chevron inactif = `.btn-secondary`
+  #dee2e6 / texte #212529 ; **actif** = `$o-component-active-bg` = `mix(#71639e,#f8f9fa,20%)`
+  = **#dddbe8** + bord latéral #71639e, **le texte reste #212529** (pas de fond plein
+  coloré, pas de texte blanc — c'était l'erreur de la version précédente) ;
+  padding chevron `(btn-padding-y+1px) (caret·1.72)` = `7px ~24px`.
+- `form_controller.scss` : `.o_inner_group` = `grid-template-columns: fit-content(150px)
+  minmax(0,1fr)`, `gap: 8px 16px`, `margin-bottom: 8px` ; `.o_form_label` = 14px / lh 1.5 /
+  **weight 400 + opacity .66** en lecture seule ; `.oe_subtotal_footer` = `grid 1fr auto`,
+  `margin-left:auto`, `border-top:1px #dee2e6`, libellés alignés à droite + `":"` +
+  `padding-right:20px`, séparateur total `border-top:1px` + `font-weight:700` +
+  `font-size:1.3em`.
+- `list_renderer.scss` : `thead th` fond #f8f9fa / couleur #000 / `padding-top` 8px /
+  `border-bottom` 1px #dee2e6 ; cellules `padding` y 8px x 4.8px (16px aux bords) ;
+  `border-collapse: collapse` ; ligne `border-bottom` 1px #dee2e6.
+- `notebook.scss` : `.nav-tabs` `border-bottom:1px #dee2e6`, `.nav-link` `padding:.5rem 1rem`,
+  onglet actif bordé #dee2e6 avec bord bas blanc (= fond sheet).
+
+Modal `FacturesModule` réécrit en `<dl className="oe-group">` / `<table className="oe-list">`
+/ `<dl className="oe-subtotal">` / `.oe-notebook` / `.oe-statusbar`. Build front + 88 tests
+verts, conteneur reconstruit (CSS + JS servis vérifiés).
+
 ### ERP « Comptabilité » — Passe d'alignement UI sur Odoo — 2026-08-30 (frontend seul)
 
 Sur demande de l'utilisateur (« respecter la même interface qu'Odoo : forme, taille des
