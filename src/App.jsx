@@ -2648,6 +2648,73 @@ function useTable(farmId, key, defaults) {
   return [rows, setRows];
 }
 
+// Étape A « élargissement stock » : typologie des intrants + fiche enrichie par type.
+// Champs à plat sur produits (voir server/src/routes/produits.js). Le sous-formulaire est
+// factorisé ici pour être identique entre le formulaire d'ajout et celui d'édition.
+const TYPES_INTRANT = ['semence', 'engrais', 'phytosanitaire', 'aliment', 'materiel', 'autre'];
+const INTRANT_FORM_DEFAULTS = {
+  typeIntrant: '', variete: '', tauxGermination: '',
+  npkN: '', npkP: '', npkK: '', npkUnit: 'percent', doseHa: '', doseHaUnite: 'kg/ha',
+  matiereActive: '', numeroAmm: '', darJours: '', zntMetres: '', bioAutorise: false,
+};
+const INTRANT_KEYS = Object.keys(INTRANT_FORM_DEFAULTS);
+const pickIntrant = (f) => Object.fromEntries(INTRANT_KEYS.map(k => [k, f[k]]));
+const fillIntrant = (s) => ({
+  typeIntrant: s.typeIntrant || '', variete: s.variete || '',
+  tauxGermination: s.tauxGermination != null ? String(s.tauxGermination) : '',
+  npkN: s.npkN != null ? String(s.npkN) : '', npkP: s.npkP != null ? String(s.npkP) : '',
+  npkK: s.npkK != null ? String(s.npkK) : '', npkUnit: s.npkUnit || 'percent',
+  doseHa: s.doseHa != null ? String(s.doseHa) : '', doseHaUnite: s.doseHaUnite || 'kg/ha',
+  matiereActive: s.matiereActive || '', numeroAmm: s.numeroAmm || '',
+  darJours: s.darJours != null ? String(s.darJours) : '',
+  zntMetres: s.zntMetres != null ? String(s.zntMetres) : '', bioAutorise: !!s.bioAutorise,
+});
+
+function IntrantChamps({ v, patch, t }) {
+  const type = v.typeIntrant;
+  return (
+    <>
+      <Select label={t('stocks.typeIntrant')} value={type} onChange={e => patch({ typeIntrant: e.target.value })}>
+        <option value="">{t('stocks.intrant.none')}</option>
+        {TYPES_INTRANT.map(x => <option key={x} value={x}>{t(`stocks.intrant.${x}`)}</option>)}
+      </Select>
+      {type === 'semence' && (
+        <>
+          <Field label={t('stocks.variete')} value={v.variete} onChange={e => patch({ variete: e.target.value })} />
+          <Field label={t('stocks.tauxGermination')} type="number" value={v.tauxGermination} onChange={e => patch({ tauxGermination: e.target.value })} />
+        </>
+      )}
+      {type === 'engrais' && (
+        <>
+          <Field label="N" type="number" value={v.npkN} onChange={e => patch({ npkN: e.target.value })} />
+          <Field label="P" type="number" value={v.npkP} onChange={e => patch({ npkP: e.target.value })} />
+          <Field label="K" type="number" value={v.npkK} onChange={e => patch({ npkK: e.target.value })} />
+          <Select label={t('stocks.npkUnit')} value={v.npkUnit} onChange={e => patch({ npkUnit: e.target.value })}>
+            <option value="percent">%</option>
+            <option value="ratio">{t('stocks.npkRatio')}</option>
+          </Select>
+          <Field label={t('stocks.doseHa')} type="number" value={v.doseHa} onChange={e => patch({ doseHa: e.target.value })} />
+          <Field label={t('stocks.doseHaUnite')} value={v.doseHaUnite} onChange={e => patch({ doseHaUnite: e.target.value })} />
+        </>
+      )}
+      {type === 'phytosanitaire' && (
+        <>
+          <Field label={t('stocks.matiereActive')} value={v.matiereActive} onChange={e => patch({ matiereActive: e.target.value })} />
+          <Field label={t('stocks.numeroAmm')} value={v.numeroAmm} onChange={e => patch({ numeroAmm: e.target.value })} />
+          <Field label={t('stocks.darJours')} type="number" value={v.darJours} onChange={e => patch({ darJours: e.target.value })} />
+          <Field label={t('stocks.zntMetres')} type="number" value={v.zntMetres} onChange={e => patch({ zntMetres: e.target.value })} />
+        </>
+      )}
+      {['semence', 'engrais', 'phytosanitaire'].includes(type) && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, alignSelf: 'center' }}>
+          <input type="checkbox" checked={v.bioAutorise} onChange={e => patch({ bioAutorise: e.target.checked })} />
+          {t('stocks.bioAutorise')}
+        </label>
+      )}
+    </>
+  );
+}
+
 function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   const { t } = useTranslation();
   const { devise, fmtMoney } = useLocale();
@@ -2696,10 +2763,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
+  const [filtreType, setFiltreType] = useState('');
+  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
+  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [historiqueArticle, setHistoriqueArticle] = useState(null);
@@ -2777,6 +2845,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         nom: form.nom, categorieId: form.categorieId, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
         prixDefaut: form.prixDefaut === '' ? null : Number(form.prixDefaut),
         cout: form.cout === '' ? null : Number(form.cout),
+        ...pickIntrant(form),
       });
       if (stock) {
         setStocks(s => [...s, stock]);
@@ -2786,7 +2855,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       console.error('[StocksTab add]', err);
       notifyError(err, t('stocks.articleAddError'));
     }
-    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
+    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   };
   const remove = async (id, nom) => {
     if (!window.confirm(t('stocks.confirmDeleteArticle', { nom }))) return;
@@ -2802,11 +2871,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '', cout: s.cout != null ? String(s.cout) : '' });
+    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '', cout: s.cout != null ? String(s.cout) : '', ...fillIntrant(s) });
   };
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '' });
+    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   };
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -2817,6 +2886,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         nom: editForm.nom, categorieId: editForm.categorieId, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
         prixDefaut: editForm.prixDefaut === '' ? null : Number(editForm.prixDefaut),
         cout: editForm.cout === '' ? null : Number(editForm.cout),
+        ...pickIntrant(editForm),
       });
       if (stock) {
         setStocks(s => s.map(r => r.id === editingId ? stock : r));
@@ -2857,6 +2927,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           <Field label={t('stocks.seuilAlerte')} type="number" placeholder="0" value={form.seuil} onChange={e => setForm({ ...form, seuil: e.target.value })} />
           <Field label={t('stocks.prixDefautField', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
           <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={form.cout} onChange={e => setForm({ ...form, cout: e.target.value })} />
+          <IntrantChamps v={form} patch={p => setForm(f => ({ ...f, ...p }))} t={t} />
           <Button variant="ochre" type="submit"><Plus size={15} /> {t('common.add')}</Button>
         </form>
         <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12.5, padding: 0, marginTop: 10 }}>
@@ -2886,11 +2957,20 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <MiniChart data={stockEvolution} color={COLORS.blue} />
       </Card>
       <Card style={{ padding: 0 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 12px 0' }}>
+          {['', ...TYPES_INTRANT].map(x => (
+            <button key={x || 'all'} type="button" onClick={() => setFiltreType(x)}
+              style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: 999, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}>
+              {x ? t(`stocks.intrant.${x}`) : t('common.all')}
+            </button>
+          ))}
+        </div>
         <table className="data-table">
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('stocks.article')}</th>
               <th>{t('stocks.categorie')}</th>
+              <th>{t('stocks.typeIntrant')}</th>
               <th>{t('stocks.quantite')}</th>
               <th>{t('stocks.seuil')}</th>
               <th>{t('stocks.prixDefaut')}</th>
@@ -2898,12 +2978,18 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             </tr>
           </thead>
           <tbody>
-            {stocks.length === 0 ? (
-              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>{t('stocks.emptyTable')}</td></tr>
-            ) : stocks.map(s => (
+            {(() => {
+              const rows = filtreType ? stocks.filter(s => s.typeIntrant === filtreType) : stocks;
+              return rows.length === 0 ? (
+              <tr><td colSpan={7} style={{ color: COLORS.inkSoft }}>{t('stocks.emptyTable')}</td></tr>
+            ) : rows.map(s => (
               <tr key={s.id}>
-                <td style={{ fontWeight: 500 }}>{s.nom}</td>
+                <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: 6, color: COLORS.green, fontSize: 11 }}>bio</span> : null}</td>
                 <td><Badge tone="ochre">{s.categorie}</Badge></td>
+                <td style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>
+                  {s.typeIntrant ? t(`stocks.intrant.${s.typeIntrant}`) : '—'}
+                  {s.typeIntrant === 'phytosanitaire' && s.darJours != null ? <span style={{ color: COLORS.ochre }}> · {t('stocks.darShort', { n: s.darJours })}</span> : null}
+                </td>
                 <td>{s.quantite} {s.unite}</td>
                 <td>
                   {s.quantite <= s.seuil
@@ -2925,7 +3011,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                   </div>
                 </td>
               </tr>
-            ))}
+            ));
+            })()}
           </tbody>
         </table>
       </Card>
@@ -2948,6 +3035,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 <Field label={t('stocks.seuilAlerte')} type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
                 <Field label={t('stocks.prixDefautField', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.prixDefaut} onChange={e => setEditForm({ ...editForm, prixDefaut: e.target.value })} />
                 <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.cout} onChange={e => setEditForm({ ...editForm, cout: e.target.value })} />
+                <IntrantChamps v={editForm} patch={p => setEditForm(f => ({ ...f, ...p }))} t={t} />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
