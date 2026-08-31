@@ -164,7 +164,16 @@ router.get('/', authRequired, async (req, res) => {
   const { moveType, state, partnerId } = req.query;
   const cond = ['m.entreprise_id = $1'];
   const params = [req.user.entrepriseId];
-  if (moveType) { params.push(moveType); cond.push(`m.move_type = $${params.length}`); }
+  if (moveType) {
+    params.push(moveType);
+    cond.push(`m.move_type = $${params.length}`);
+  } else {
+    // Par défaut la liste "Factures" ne montre que les factures/avoirs — jamais les
+    // écritures `entry` (contreparties de paiement `account_payment`), qui n'ont pas
+    // de sens comme "facture" et affichaient un chip d'état de paiement trompeur.
+    params.push(INVOICE_TYPES);
+    cond.push(`m.move_type = ANY($${params.length})`);
+  }
   if (state) { params.push(state); cond.push(`m.state = $${params.length}`); }
   if (partnerId) { params.push(partnerId); cond.push(`m.partner_id = $${params.length}`); }
   try {

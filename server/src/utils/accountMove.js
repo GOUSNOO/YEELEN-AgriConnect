@@ -482,18 +482,47 @@ export async function reverseMove(client, { moveId, entrepriseId, userId, reason
     if (!taxByLigne.has(ligneId)) taxByLigne.set(ligneId, []);
     taxByLigne.get(ligneId).push(taxId);
   }
+  const taxMap = await chargerTaxMap(entrepriseId, client);
+  let totalHT = 0;
+  let totalTaxe = 0;
   for (const l of lignes.rows) {
     const ins = await client.query(
       `INSERT INTO account_move_line (move_id, entreprise_id, display_type, sequence, name, quantity, price_unit, discount)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
       [cnId, entrepriseId, l.displayType, l.sequence, l.name, l.quantity, l.priceUnit, l.discount]
     );
-    for (const taxId of (taxByLigne.get(l.id) || [])) {
+    const taxIds = taxByLigne.get(l.id) || [];
+    for (const taxId of taxIds) {
       await client.query('INSERT INTO account_move_line_taxes (move_line_id, tax_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [ins.rows[0].id, taxId]);
     }
+    if (l.displayType === 'product') {
+      const brut = l.quantity * l.priceUnit * (1 - l.discount / 100);
+      const taxes = taxIds.map((id) => taxMap.get(id)).filter(Boolean);
+      const { base, taxeTotale } = taxes.length
+        ? appliquerTaxesLigne(brut, l.quantity, taxes)
+        : { base: brut, taxeTotale: 0 };
+      totalHT += base;
+      totalTaxe += taxeTotale;
+      await client.query(
+        `UPDATE account_move_line SET price_subtotal = $1, price_total = $2 WHERE id = $3`,
+        [round2(base), round2(base + taxeTotale), ins.rows[0].id]
+      );
+    }
   }
+  totalHT = round2(totalHT);
+  totalTaxe = round2(totalTaxe);
+  const totalTTC = round2(totalHT + totalTaxe);
 
-  if (refundMethod !== 'cancel') return { creditNoteId: cnId, posted: false };
+  if (refundMethod !== 'cancel') {
+    // Brouillon d'avoir : renseigner les totaux dès maintenant (comme Odoo qui calcule
+    // les totaux d'un brouillon) plutôt que de laisser 0,00 € affiché jusqu'au post.
+    // posterMove les recalculera de toute façon à la validation.
+    await client.query(
+      `UPDATE account_move SET amount_untaxed = $1, amount_tax = $2, amount_total = $3, amount_residual = $3 WHERE id = $4`,
+      [totalHT, totalTaxe, totalTTC, cnId]
+    );
+    return { creditNoteId: cnId, posted: false };
+  }
 
   await posterMove(client, cnId, entrepriseId);
 

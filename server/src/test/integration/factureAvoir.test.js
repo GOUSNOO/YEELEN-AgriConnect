@@ -32,6 +32,11 @@ describe('Factures — avoirs (étape 5 : out_refund + reverse)', () => {
     expect(cn.reversedEntryName).toBe(f.name);
     expect(cn.lignes.filter((l) => l.displayType === 'product')).toHaveLength(1);
     expect(cn.lignes[0].priceUnit).toBeCloseTo(1200, 2);
+    // totaux renseignés dès le brouillon (et pas seulement au post)
+    expect(cn.lignes[0].priceSubtotal).toBeCloseTo(1200, 2);
+    expect(cn.amountUntaxed).toBeCloseTo(1200, 2);
+    expect(cn.amountTotal).toBeCloseTo(1200, 2);
+    expect(cn.amountResidual).toBeCloseTo(1200, 2);
   });
 
   test('reverse méthode "cancel" → RINV/... posté + lettré ; origine reversed, résiduel 0', async () => {
