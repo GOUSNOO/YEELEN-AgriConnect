@@ -359,6 +359,10 @@ describe('Devis — Étape 3b : facturer produit une facture comptable (account.
     const cc = f.lignes.reduce((s, l) => s + l.credit, 0);
     expect(dd).toBeCloseTo(cc, 2);
     expect(f.invoiceOrigin).toBe(d.numero);
+    // paiement complet → échéance du jour ⇒ invoice_date_due = aujourd'hui (pas un J+30 fictif)
+    const auj = new Date().toISOString().slice(0, 10);
+    expect(f.invoiceDateDue).toBe(auj);
+    expect(f.invoiceDate).toBe(auj);
   });
 
   test('facturer échelonné (terme 30 jours + acompte) → move non soldé, 2 échéances partagées', async () => {

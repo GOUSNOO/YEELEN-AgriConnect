@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import {
   getAgedReceivable, getOverdueFactures, markFactureReminded,
   getPaiements, createPaiement, allocatePaiement, getContacts, getFactures,
+  getUnallocatedCreditNotes, allocateCreditNote,
 } from '../lib/api.js';
 import { useLocale } from '../lib/locale.jsx';
 import { Card, Button, notifyError, notifySuccess } from './ui.jsx';
@@ -38,11 +39,16 @@ export default function ComptaReportsPanel({ onChange }) {
   const [allocFor, setAllocFor] = useState(null);
   const [allocForm, setAllocForm] = useState({ moveId: '', amount: '' });
   const [facturesPartenaire, setFacturesPartenaire] = useState([]);
+  const [creditNotes, setCreditNotes] = useState([]);
+  const [cnAllocFor, setCnAllocFor] = useState(null);
+  const [cnAllocForm, setCnAllocForm] = useState({ moveId: '', amount: '' });
+  const [cnFactures, setCnFactures] = useState([]);
 
   const recharger = () => {
     getAgedReceivable().then(setAged).catch(() => {});
     getOverdueFactures().then((d) => setOverdue(d.factures || [])).catch(() => {});
     getPaiements('?unallocated=1').then((d) => setPaiements(d.paiements || [])).catch(() => {});
+    getUnallocatedCreditNotes().then((d) => setCreditNotes(d.creditNotes || [])).catch(() => {});
   };
   useEffect(() => {
     recharger();
@@ -94,6 +100,35 @@ export default function ComptaReportsPanel({ onChange }) {
       notifySuccess(t('comptaReports.allocated'));
       setAllocFor(null);
       setAllocForm({ moveId: '', amount: '' });
+      recharger();
+      if (onChange) onChange();
+    } catch (err) {
+      notifyError(err, t('comptaReports.allocError'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ouvrirCnAlloc = (cn) => {
+    if (cnAllocFor === cn.id) { setCnAllocFor(null); return; }
+    setCnAllocFor(cn.id);
+    setCnAllocForm({ moveId: '', amount: '' });
+    getFactures(`?partnerId=${cn.partnerId}&state=posted&moveType=out_invoice`)
+      .then((d) => setCnFactures((d.factures || []).filter((f) => !['paid', 'reversed'].includes(f.paymentState))))
+      .catch(() => setCnFactures([]));
+  };
+
+  const submitCnAlloc = async (creditNoteId) => {
+    if (!cnAllocForm.moveId) return;
+    setBusy(true);
+    try {
+      await allocateCreditNote(creditNoteId, {
+        invoiceId: Number(cnAllocForm.moveId),
+        amount: cnAllocForm.amount ? Number(cnAllocForm.amount) : undefined,
+      });
+      notifySuccess(t('comptaReports.allocated'));
+      setCnAllocFor(null);
+      setCnAllocForm({ moveId: '', amount: '' });
       recharger();
       if (onChange) onChange();
     } catch (err) {
@@ -233,6 +268,53 @@ export default function ComptaReportsPanel({ onChange }) {
                               <input className="flat-input" type="number" value={allocForm.amount} onChange={(e) => setAllocForm({ ...allocForm, amount: e.target.value })} style={{ maxWidth: 140, marginTop: 3 }} />
                             </label>
                             <Button small disabled={busy} onClick={() => submitAlloc(p.id)}>{t('comptaReports.allocate')}</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      <Section titre={t('comptaReports.creditNotes', { count: creditNotes.length })}>
+        {creditNotes.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr style={{ color: INK_SOFT }}>
+                <th style={{ width: '20%' }}>{t('comptaReports.creditNote')}</th>
+                <th style={{ width: '30%' }}>{t('comptaReports.partner')}</th>
+                <th style={{ width: '25%' }}>{t('comptaReports.ref')}</th>
+                <th style={{ ...rAmt, width: '15%' }}>{t('comptaReports.toAllocate')}</th>
+                <th style={{ width: '10%' }} />
+              </tr></thead>
+              <tbody>
+                {creditNotes.map((cn) => (
+                  <React.Fragment key={cn.id}>
+                    <tr>
+                      <td><strong>{cn.name || `#${cn.id}`}</strong></td>
+                      <td>{cn.partnerName || '—'}</td>
+                      <td style={{ color: INK_SOFT }}>{cn.ref || ''}</td>
+                      <td style={rAmt}>{fmtMoney(cn.unallocated)}</td>
+                      <td><Button small variant="outline" disabled={busy} onClick={() => ouvrirCnAlloc(cn)}>{t('comptaReports.allocate')}</Button></td>
+                    </tr>
+                    {cnAllocFor === cn.id && (
+                      <tr>
+                        <td colSpan={5} style={{ background: '#FAFAF7' }}>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+                            <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.invoice')}
+                              <select className="flat-input" value={cnAllocForm.moveId} onChange={(e) => setCnAllocForm({ ...cnAllocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
+                                <option value="">—</option>
+                                {cnFactures.map((f) => <option key={f.id} value={f.id}>{f.name} · {fmtMoney(f.amountResidual)}</option>)}
+                              </select>
+                            </label>
+                            <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.amountOptional')}
+                              <input className="flat-input" type="number" value={cnAllocForm.amount} onChange={(e) => setCnAllocForm({ ...cnAllocForm, amount: e.target.value })} style={{ maxWidth: 140, marginTop: 3 }} />
+                            </label>
+                            <Button small disabled={busy} onClick={() => submitCnAlloc(cn.id)}>{t('comptaReports.allocate')}</Button>
                           </div>
                         </td>
                       </tr>

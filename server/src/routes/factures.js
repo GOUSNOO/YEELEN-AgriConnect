@@ -13,7 +13,7 @@ import { pool } from '../db.js';
 import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
 import {
   round2, chargerTaxMap, journalParType, posterMove, enregistrerPaiementMove,
-  verifierChaineJournal, reverseMove,
+  verifierChaineJournal, reverseMove, allouerAvoir,
 } from '../utils/accountMove.js';
 
 const router = express.Router();
@@ -265,6 +265,53 @@ router.post('/:id/mark-reminded', ...ecriture, async (req, res) => {
   } catch (err) {
     console.error('[POST /factures/:id/mark-reminded]', err);
     return res.status(500).json({ error: 'Erreur lors de l’enregistrement de la relance.' });
+  }
+});
+
+// ─── GET /api/factures/credit-notes-unallocated ─── (avoirs postés à imputer)
+// Déclarée avant /:id. Avoirs out_refund/in_refund postés dont la ligne payment_term
+// garde un résiduel — à affecter sur une facture ouverte du même partenaire.
+router.get('/credit-notes-unallocated', authRequired, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.id, m.name, m.move_type AS "moveType", m.partner_id AS "partnerId",
+              to_char(m.invoice_date, 'YYYY-MM-DD') AS "invoiceDate", m.ref,
+              ABS(pl.amount_residual::float8) AS "unallocated",
+              COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom) AS "partnerName"
+       FROM account_move m
+       JOIN account_move_line pl ON pl.move_id = m.id AND pl.display_type = 'payment_term'
+       LEFT JOIN contacts c ON c.id = m.partner_id
+       WHERE m.entreprise_id = $1 AND m.state = 'posted'
+         AND m.move_type IN ('out_refund', 'in_refund')
+         AND ABS(pl.amount_residual::float8) > 0.01
+       ORDER BY m.id DESC`,
+      [req.user.entrepriseId]
+    );
+    return res.json({ creditNotes: rows });
+  } catch (err) {
+    console.error('[GET /factures/credit-notes-unallocated]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des avoirs.' });
+  }
+});
+
+// ─── POST /api/factures/:id/allocate-credit ─── (:id = l'avoir ; body { invoiceId, amount })
+router.post('/:id/allocate-credit', ...ecriture, async (req, res) => {
+  const { invoiceId, amount } = req.body;
+  if (!invoiceId) return res.status(400).json({ error: 'invoiceId requis.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await allouerAvoir(client, {
+      creditNoteId: Number(req.params.id), moveId: Number(invoiceId), amount, entrepriseId: req.user.entrepriseId,
+    });
+    await client.query('COMMIT');
+    return res.json({ allocation: r });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (!err.status) console.error('[POST /factures/:id/allocate-credit]', err);
+    return res.status(err.status || 500).json({ error: err.status ? err.message : "Erreur lors de l'affectation de l'avoir." });
+  } finally {
+    client.release();
   }
 });
 

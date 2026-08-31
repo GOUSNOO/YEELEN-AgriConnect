@@ -700,6 +700,8 @@
     "aged": "Aged receivable",
     "overdue": "Overdue ({{count}})",
     "payments": "Payments to allocate ({{count}})",
+    "creditNotes": "Credit notes to allocate ({{count}})",
+    "creditNote": "Credit note",
     "partner": "Customer",
     "notDue": "Not due",
     "nothing": "Nothing to show.",

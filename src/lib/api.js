@@ -732,6 +732,12 @@ export async function createPaiement(payload) {
 export async function allocatePaiement(id, payload) {
   return request(`/paiements/${id}/allocate`, { method: 'POST', body: JSON.stringify(payload) });
 }
+export async function getUnallocatedCreditNotes() {
+  return request('/factures/credit-notes-unallocated');
+}
+export async function allocateCreditNote(creditNoteId, payload) {
+  return request(`/factures/${creditNoteId}/allocate-credit`, { method: 'POST', body: JSON.stringify(payload) });
+}
 
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {

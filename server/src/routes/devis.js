@@ -792,9 +792,13 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       if (!taxParLigne.has(ligneId)) taxParLigne.set(ligneId, []);
       taxParLigne.get(ligneId).push(taxId);
     }
+    // Échelonné / terme : la dernière échéance porte la date d'exigibilité.
+    // Paiement complet (pas d'échéancier) : la facture est réglée le jour même —
+    // invoice_date_due = aujourd'hui, aligné sur l'échéance unique créée plus haut
+    // (CURRENT_DATE, statut « Payé »), au lieu d'un J+30 fictif.
     const dueDate = echeancesFinales && echeancesFinales.length
       ? echeancesFinales[echeancesFinales.length - 1].dateEcheance
-      : new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+      : new Date().toISOString().slice(0, 10);
 
     const mv = await client.query(
       `INSERT INTO account_move

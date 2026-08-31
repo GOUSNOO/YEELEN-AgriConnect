@@ -674,3 +674,66 @@ export async function allouerPaiement(client, { paymentId, moveId, amount, entre
   await client.query('UPDATE account_move SET amount_residual = $1, payment_state = $2 WHERE id = $3', [residu, state, moveId]);
   return { montantLettre, factureResidu: residu, factureState: state };
 }
+
+// Étape 6 (compl.) : affecte un avoir POSTÉ non alloué (out_refund/in_refund avec un
+// résiduel) sur une facture ouverte du même partenaire — lettrage direct des deux lignes
+// `payment_term`. Analogue d'allouerPaiement mais entre deux account_move (pas
+// d'account_payment intermédiaire) ; comble le trou UI ou un avoir cree via la methode
+// « refund » restait bloque en negatif sur la balance agee sans moyen de l'imputer.
+export async function allouerAvoir(client, { creditNoteId, moveId, amount, entrepriseId }) {
+  const cr = await client.query(
+    `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId"
+     FROM account_move WHERE id = $1 AND entreprise_id = $2`,
+    [creditNoteId, entrepriseId]
+  );
+  if (cr.rows.length === 0) throw err404('Avoir introuvable.');
+  const cn = cr.rows[0];
+  if (cn.state !== 'posted') throw err400("L'avoir doit être posté.");
+  if (!['out_refund', 'in_refund'].includes(cn.moveType)) throw err400('Affectation possible seulement depuis un avoir.');
+
+  const fr = await client.query(
+    `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId", payment_state AS "paymentState",
+            amount_residual::float8 AS "amountResidual"
+     FROM account_move WHERE id = $1 AND entreprise_id = $2`,
+    [moveId, entrepriseId]
+  );
+  if (fr.rows.length === 0) throw err404('Facture introuvable.');
+  const f = fr.rows[0];
+  if (f.state !== 'posted') throw err400('La facture doit être postée.');
+  const familleAttendue = cn.moveType === 'out_refund' ? 'out_invoice' : 'in_invoice';
+  if (f.moveType !== familleAttendue) throw err400('Type de facture incompatible avec cet avoir.');
+  if (f.paymentState === 'reversed') throw err400('Facture annulée par un avoir.');
+  if (f.partnerId !== cn.partnerId) throw err400("L'avoir et la facture n'ont pas le même partenaire.");
+  if (f.amountResidual <= 0) throw err400('Facture déjà soldée.');
+
+  const cnPart = await client.query(
+    `SELECT id, amount_residual::float8 AS r FROM account_move_line
+     WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    [creditNoteId]
+  );
+  const nonAlloue = Math.abs(cnPart.rows[0].r);
+  if (nonAlloue <= 0.01) throw err400('Cet avoir est déjà entièrement affecté.');
+
+  const factPart = await client.query(
+    `SELECT id FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1`,
+    [moveId]
+  );
+  const demande = amount != null ? round2(amount) : Math.min(nonAlloue, f.amountResidual);
+  const montantLettre = round2(Math.min(demande, nonAlloue, f.amountResidual));
+  if (montantLettre <= 0) throw err400('Montant à affecter invalide.');
+
+  const { contreApres } = await lettrerLignesPartenaire(client, entrepriseId, {
+    ligneFactureId: factPart.rows[0].id, ligneContreId: cnPart.rows[0].id,
+    amount: montantLettre, date: new Date().toISOString().slice(0, 10),
+  });
+
+  const factResidu = round2(Math.max(0, f.amountResidual - montantLettre));
+  const factState = factResidu <= 0.01 ? 'paid' : 'partial';
+  await client.query('UPDATE account_move SET amount_residual = $1, payment_state = $2 WHERE id = $3', [factResidu, factState, moveId]);
+
+  const cnResidu = round2(Math.abs(contreApres));
+  const cnState = cnResidu <= 0.01 ? 'paid' : 'partial';
+  await client.query('UPDATE account_move SET amount_residual = $1, payment_state = $2 WHERE id = $3', [cnResidu, cnState, creditNoteId]);
+
+  return { montantLettre, factureResidu: factResidu, factureState: factState, avoirResidu: cnResidu, avoirState: cnState };
+}

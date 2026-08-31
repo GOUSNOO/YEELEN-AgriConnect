@@ -700,6 +700,8 @@
     "aged": "Balance âgée",
     "overdue": "En retard ({{count}})",
     "payments": "Paiements à affecter ({{count}})",
+    "creditNotes": "Avoirs à affecter ({{count}})",
+    "creditNote": "Avoir",
     "partner": "Client",
     "notDue": "Non échu",
     "nothing": "Rien à afficher.",
