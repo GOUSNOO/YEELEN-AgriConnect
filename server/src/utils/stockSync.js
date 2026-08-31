@@ -100,3 +100,14 @@ export async function reverseVenteLignesToStock(entrepriseId, lignes, ctx) {
     await applyVenteLigne(entrepriseId, ligne.stockModule, ligne.stockId, ligne.produit, Number(ligne.quantite) || 0, ctx);
   }
 }
+
+// Consommation directe d'un seul produit catalogué (apport d'intrant au champ, étape C).
+// delta négatif sur produits.quantite + trace stock_mouvements (raison passée dans ctx).
+export async function consommerProduit(entrepriseId, { stockId, produitNom, stockModule, quantite }, ctx) {
+  await applyToProduit(stockModule || null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx);
+}
+
+// Inverse de consommerProduit — restitue le stock à la suppression d'une application.
+export async function restituerProduit(entrepriseId, { stockId, produitNom, stockModule, quantite }, ctx) {
+  await applyToProduit(stockModule || null, entrepriseId, stockId, produitNom, Number(quantite) || 0, ctx);
+}

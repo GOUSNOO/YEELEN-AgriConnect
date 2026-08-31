@@ -218,6 +218,20 @@ export async function getLotsPerimes(jours = 30) {
   return request(`/produits/lots-perimes?jours=${jours}`);
 }
 
+// Registre des traitements phytosanitaires / apports d'intrants (étape C)
+export async function getApplicationsIntrants() {
+  return request('/applications-intrants');
+}
+export async function createApplicationIntrant(payload) {
+  return safeRequest('/applications-intrants', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateApplicationIntrant(id, payload) {
+  return safeRequest(`/applications-intrants/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteApplicationIntrant(id) {
+  return safeRequest(`/applications-intrants/${id}`, { method: 'DELETE' });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Catégories de produits (par entreprise, par module)
 // ─────────────────────────────────────────────────────────────────────

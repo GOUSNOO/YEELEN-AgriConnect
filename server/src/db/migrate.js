@@ -1277,6 +1277,36 @@ CREATE INDEX IF NOT EXISTS idx_stock_lots_entreprise_id ON stock_lots(entreprise
 CREATE INDEX IF NOT EXISTS idx_stock_lots_produit_id ON stock_lots(produit_id);
 CREATE INDEX IF NOT EXISTS idx_stock_lots_peremption ON stock_lots(entreprise_id, date_peremption);
 
+-- Étape C « élargissement stock » : registre des traitements phytosanitaires / apports
+-- d'intrants (obligation FR/UE). Journal append-only : quelle parcelle a reçu quel produit,
+-- à quelle dose, quand, par qui, avec le DAR calculé (date_application + produit.dar_jours
+-- figé à la saisie) et le respect de la ZNT. Champ cible ≈ pest_control_task.pest_target de
+-- LiteFarm. FK ON DELETE SET NULL : l'entrée du registre survit à la suppression d'une
+-- parcelle / d'un produit (une pièce réglementaire doit persister).
+CREATE TABLE IF NOT EXISTS applications_intrants (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  parcelle_id        INTEGER REFERENCES parcelles(id) ON DELETE SET NULL,
+  produit_id         INTEGER REFERENCES produits(id) ON DELETE SET NULL,
+  lot_id             INTEGER REFERENCES stock_lots(id) ON DELETE SET NULL,
+  produit_nom        TEXT,
+  parcelle_nom       TEXT,
+  date_application   DATE NOT NULL DEFAULT CURRENT_DATE,
+  dose               NUMERIC(12, 3),
+  dose_unite         TEXT,
+  surface_traitee_ha NUMERIC(10, 2),
+  quantite_utilisee  NUMERIC(12, 2),
+  operateur          TEXT,
+  cible              TEXT,
+  dar_calcule        DATE,
+  znt_respectee      BOOLEAN,
+  notes              TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_applications_intrants_entreprise_id ON applications_intrants(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_applications_intrants_parcelle_id ON applications_intrants(parcelle_id);
+
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,

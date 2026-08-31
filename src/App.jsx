@@ -45,6 +45,7 @@ import {
 } from './lib/api';
 import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
+import { RegistreIntrantsView } from './components/RegistreIntrantsView';
 import { FeedbackModule } from './components/FeedbackModule';
 import { HelpModule } from './components/HelpModule';
 import { EquipementsModule } from './components/EquipementsModule';
@@ -3974,6 +3975,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
           { id: 'stocks', label: t('cultures.tabStocks'), icon: Package },
           { id: 'ventes', label: t('cultures.tabVentes'), icon: TrendingUp },
           { id: 'achats', label: t('cultures.tabAchats'), icon: ShoppingCart },
+          { id: 'registre', label: t('cultures.tabRegistre'), icon: ClipboardList },
           { id: 'comptabilite', label: t('cultures.tabComptabilite'), icon: Wallet },
         ]}
         activeTab={tab}
@@ -4069,6 +4071,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Cultures" />}
       {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
+      {tab === 'registre' && <RegistreIntrantsView farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
         remoteVentes={async () => (await getVentesLedger()).mouvements}
         remoteAchats={async () => (await getAchatsLedger('Cultures')).mouvements}
