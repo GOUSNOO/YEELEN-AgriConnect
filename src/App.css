@@ -275,3 +275,153 @@
   color: #9AA093;
   opacity: 1;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Fiche facture — valeurs extraites À LA LETTRE du SCSS d'Odoo (clone local
+   erp-source), pas approximées. Sources :
+     addons/web/static/src/scss/primary_variables.scss
+       $o-font-size-base:14px  -base-small:13px  -base-smaller:12px
+       $o-line-height-base:1.5  $o-spacer:16px  $o-form-spacing-unit:5px
+       $o-horizontal-padding:16px  $o-statusbar-height:33px
+       $o-border-radius:4px  $o-gray-100:#f8f9fa  $o-gray-300:#dee2e6
+       $o-main-text-color:#212529  $o-brand-primary:#71639e
+     addons/web/static/src/views/fields/statusbar/statusbar_field(.variables).scss
+       caret = 1em ; radius .1rem ; inactive bg = btn-secondary #dee2e6 ;
+       active = $o-component-active-bg = mix(#71639e,#f8f9fa,20%) = #dddbe8,
+       border $o-brand-primary #71639e, texte reste #212529 ;
+       padding-arrow = (btn-padding-y+1px) (caret*1.25*1.375) = 7px ~24px
+     addons/web/static/src/views/form/form_controller.scss
+       .o_inner_group  grid-template-columns: fit-content(150px) minmax(0,1fr)
+                       gap: spacers.2 (8px) horizontal-padding (16px) ; mb 8px
+       .o_form_label   font-size:14px ; line-height:1.5 ; readonly -> opacity .66 ; weight 400
+       .oe_subtotal_footer  grid 1fr auto ; margin-left:auto ; border-top:1px #dee2e6
+                       labels align droite + ":" + padding-right 20px
+                       séparateur total : border-top 1px ; font-weight 700 ; font-size 1.3em
+     addons/web/static/src/views/list/list_renderer.scss
+       thead th : bg $o-webclient-background-color #f8f9fa ; color #000 ; padding-top 8px
+       cell padding : y .5rem (8px, défaut BS) ; x .3rem (4.8px) inner / 16px aux bords
+       border-collapse: collapse ; ligne : border-bottom 1px #dee2e6 ; base 14px
+     addons/web/static/src/core/notebook/notebook.scss  (BS .nav-tabs)
+       nav border-bottom 1px #dee2e6 ; .nav-link padding .5rem 1rem (8/16) ; 14px
+       .active : border #dee2e6, bord bas = blanc (fond sheet)
+   Portée limitée à .oe-invoice pour ne pas toucher le reste de l'app. */
+
+.oe-invoice {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, "Noto Sans", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #212529;
+}
+.oe-invoice h3 { color: #000; font-weight: 500; margin: 0; }
+
+/* ── Barre d'action + statut (o_form_statusbar) ── */
+.oe-invoice__cp {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  min-height: 33px;                 /* $o-statusbar-height */
+  padding: 6px 16px;               /* $o-horizontal-padding */
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+}
+.oe-statusbar { display: flex; margin-left: auto; align-self: stretch; }
+.oe-statusbar__arrow {
+  --caret: 1em;
+  position: relative;
+  padding: 7px calc(var(--caret) * 1.72);
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+  background: #dee2e6; color: #212529;
+  border: 0;
+  margin-left: calc(-1 * var(--caret) - 2px);
+  clip-path: polygon(0 0, calc(100% - var(--caret)) 0, 100% 50%, calc(100% - var(--caret)) 100%, 0 100%, var(--caret) 50%);
+}
+.oe-statusbar__arrow.is-first {
+  margin-left: 0; padding-left: calc(var(--caret) * 1.25);
+  border-top-left-radius: 1.6px; border-bottom-left-radius: 1.6px;
+  clip-path: polygon(0 0, calc(100% - var(--caret)) 0, 100% 50%, calc(100% - var(--caret)) 100%, 0 100%);
+}
+.oe-statusbar__arrow.is-last {
+  padding-right: calc(var(--caret) * 1.25);
+  border-top-right-radius: 1.6px; border-bottom-right-radius: 1.6px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--caret) 50%);
+}
+.oe-statusbar__arrow.is-active {
+  z-index: 1;
+  background: #dddbe8;             /* mix($o-brand-primary,$o-gray-100,20%) */
+  box-shadow: inset 1px 0 0 #71639e, inset -1px 0 0 #71639e;
+}
+
+.oe-invoice__body { padding: 24px 16px; }   /* $o-sheet-vpadding = spacer*1.5 */
+.oe-invoice__title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.oe-invoice__title h3 { font-size: 20px; }
+
+/* ── Groupe en-tête à deux colonnes (o_inner_group) ── */
+.oe-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; margin-bottom: 16px; }
+.oe-group {
+  display: grid;
+  grid-template-columns: fit-content(150px) minmax(0, 1fr);
+  gap: 8px 16px;                   /* spacers.2  $o-horizontal-padding */
+  align-content: start;
+}
+.oe-group > dt {
+  font-size: 14px; line-height: 1.5; font-weight: 400;
+  opacity: 0.66;                   /* .o_form_label_readonly */
+  white-space: nowrap; margin: 0;
+}
+.oe-group > dd { margin: 0; font-size: 14px; line-height: 1.5; }
+.oe-group > dd.is-strong { font-weight: 500; }
+
+/* ── Onglets (BS .nav-tabs, notebook.scss) ── */
+.oe-notebook { display: flex; gap: 0; border-bottom: 1px solid #dee2e6; margin-bottom: 12px; }
+.oe-notebook__tab {
+  background: none; border: 1px solid transparent; border-bottom: 0;
+  margin-bottom: -1px;
+  padding: 8px 16px;              /* .nav-link .5rem 1rem */
+  font-size: 14px; cursor: pointer; color: #6c757d;
+  border-top-left-radius: 4px; border-top-right-radius: 4px;
+}
+.oe-notebook__tab.is-active {
+  color: #212529;
+  border-color: #dee2e6 #dee2e6 #fff;
+  background: #fff;
+}
+
+/* ── Table de lignes (list_renderer.scss) ── */
+.oe-list { width: 100%; border-collapse: collapse; font-size: 14px; }
+.oe-list thead th {
+  background: #f8f9fa;            /* $o-webclient-background-color */
+  color: #000; font-weight: 500;
+  padding: 8px 4.8px;
+  border-bottom: 1px solid #dee2e6;
+  text-align: left; white-space: nowrap;
+}
+.oe-list tbody td {
+  padding: 8px 4.8px;
+  border-bottom: 1px solid #dee2e6;
+  vertical-align: top;
+}
+.oe-list thead th:first-child, .oe-list tbody td:first-child { padding-left: 16px; }
+.oe-list thead th:last-child,  .oe-list tbody td:last-child  { padding-right: 16px; }
+.oe-list .num { text-align: right; }
+
+/* ── Bloc totaux (oe_subtotal_footer) ── */
+.oe-subtotal {
+  display: grid; grid-template-columns: 1fr auto;
+  width: auto; margin: 16px 0 16px auto;
+  border-top: 1px solid #dee2e6;
+  column-gap: 20px;
+}
+.oe-subtotal dt { margin: 0; text-align: right; white-space: nowrap; font-size: 14px; }
+.oe-subtotal dt::after { content: ":"; }
+.oe-subtotal dd { margin: 0; text-align: right; font-size: 14px; }
+.oe-subtotal .sep {
+  grid-column: 1 / -1; border-top: 1px solid #dee2e6; margin-top: 4px; padding-top: 4px;
+  display: grid; grid-template-columns: 1fr auto; column-gap: 20px;
+}
+.oe-subtotal .sep > * { font-weight: 700; font-size: 1.3em; text-align: right; }
+
+/* ── Étiquette de taxe (badge many2many_tax_tags) ── */
+.oe-tag {
+  display: inline-block; font-size: 13px; line-height: 1.3;
+  background: #e9ecef; color: #212529;
+  border-radius: 3px; padding: 1px 6px; margin: 1px 2px 1px 0; white-space: nowrap;
+}
+.oe-tag__x { cursor: pointer; font-weight: 700; margin-left: 3px; }

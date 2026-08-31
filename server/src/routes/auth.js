@@ -14,6 +14,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import { logAuditEvent, getAuditLog, countRecentAuditEvents } from '../utils/auditLog.js';
 import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfaCode.js';
 import { sendMfaCodeEmail } from '../services/mailer.js';
+import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 
 const router = express.Router();
 
@@ -151,6 +152,28 @@ router.post('/register', async (req, res) => {
           [ptRes.rows[0].id, l.value, l.value_amount, l.delay_type, l.nb_days, l.ordre]
         );
       }
+    }
+
+    // Étape 2 Comptabilité : plan de comptes + journaux par défaut (mêmes listes que
+    // migrate.js:seedComptaConfigForExistingEntreprises, via utils/comptaDefauts.js).
+    const compteIdParCode = {};
+    for (const c of COMPTES_DEFAUT) {
+      const acc = await client.query(
+        `INSERT INTO account_account (entreprise_id, code, name, account_type, reconcile)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (entreprise_id, code) DO UPDATE SET code = EXCLUDED.code RETURNING id`,
+        [entreprise.id, c.code, c.name, c.account_type, c.reconcile]
+      );
+      compteIdParCode[c.code] = acc.rows[0].id;
+    }
+    for (const j of JOURNAUX_DEFAUT) {
+      await client.query(
+        `INSERT INTO account_journal (entreprise_id, name, code, type, sequence, refund_sequence, default_account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (entreprise_id, code) DO NOTHING`,
+        [entreprise.id, j.name, j.code, j.type, j.sequence, j.refund_sequence,
+         j.defaultAccountCode ? compteIdParCode[j.defaultAccountCode] : null]
+      );
     }
 
     await client.query('COMMIT');

@@ -237,3 +237,159 @@ describe('Devis — Étape 0 Comptabilité (validité, suppression Annulé, cond
     expect(res.status).toBe(400);
   });
 });
+
+describe('Devis — Étape 1 Comptabilité (taxes account.tax-like)', () => {
+  let admin;
+  let clientId;
+  const bear = (t) => ({ Authorization: `Bearer ${t}` });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const creerTaxe = async (payload, token = admin.token) =>
+    (await request(app).post('/api/taxes').set(bear(token)).send(payload)).body.tax;
+
+  const devisAvecLigne = async (ligne, remiseGlobale) => {
+    const r = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, remiseGlobale, lignes: [{ produit: 'Maïs', type: 'produit', ...ligne }] });
+    return r.body.devis;
+  };
+
+  test('taxe percent : total = HT + HT * taux / 100, taxIds renvoyés, référentiel taxes joint', async () => {
+    const tva = await creerTaxe({ name: 'TVA 20 %', amount: 20, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 10, prixUnitaire: 1000, taxIds: [tva.id] });
+    expect(d.total).toBeCloseTo(12000, 2);
+    expect(d.lignes[0].taxIds).toEqual([tva.id]);
+    expect(d.taxes.map((t) => t.id)).toContain(tva.id);
+  });
+
+  test('taxe price_include (percent) : la base est extraite du prix TTC', async () => {
+    const tvaInc = await creerTaxe({ name: 'TVA 20 % incluse', amount: 20, amountType: 'percent', priceInclude: true });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 120, taxIds: [tvaInc.id] });
+    // base HT = 100, taxe = 20 → total (TTC) = 120, inchangé
+    expect(d.total).toBeCloseTo(120, 2);
+  });
+
+  test('taxe fixed : montant = amount * quantité', async () => {
+    const eco = await creerTaxe({ name: 'Éco-contribution', amount: 5, amountType: 'fixed' });
+    const d = await devisAvecLigne({ quantite: 3, prixUnitaire: 100, taxIds: [eco.id] });
+    expect(d.total).toBeCloseTo(315, 2); // 300 HT + 5*3
+  });
+
+  test('deux taxes percent sur une ligne : chacune sur la base', async () => {
+    const a = await creerTaxe({ name: 'Taxe A 10 %', amount: 10, amountType: 'percent' });
+    const b = await creerTaxe({ name: 'Taxe B 5 %', amount: 5, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000, taxIds: [a.id, b.id] });
+    expect(d.total).toBeCloseTo(1150, 2); // 1000 + 100 + 50
+  });
+
+  test('include_base_amount : la 2e taxe porte sur base + 1re taxe (cascade)', async () => {
+    const a = await creerTaxe({ name: 'Cascade A 10 %', amount: 10, amountType: 'percent', includeBaseAmount: true, sequence: 1 });
+    const b = await creerTaxe({ name: 'Cascade B 5 %', amount: 5, amountType: 'percent', sequence: 2 });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000, taxIds: [a.id, b.id] });
+    // A = 100 → base 1100 ; B = 55 → total 1000 + 155
+    expect(d.total).toBeCloseTo(1155, 2);
+  });
+
+  test('remise globale appliquée avant la taxe', async () => {
+    const tva = await creerTaxe({ name: 'TVA 20 % remise', amount: 20, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 10, prixUnitaire: 1000, taxIds: [tva.id] }, 10);
+    // HT 10000 - 10% = 9000 ; taxe 1800 → 10800
+    expect(d.total).toBeCloseTo(10800, 2);
+  });
+
+  test('un taxId d\'une autre entreprise est ignoré silencieusement (total = HT)', async () => {
+    const autre = await registerEntreprise();
+    const taxeAutre = await creerTaxe({ name: `Autre ${Date.now()}`, amount: 50, amountType: 'percent' }, autre.token);
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000, taxIds: [taxeAutre.id] });
+    expect(d.total).toBeCloseTo(1000, 2);
+    expect(d.lignes[0].taxIds).toEqual([]);
+  });
+
+  test('PUT recalcule le total à partir des taxIds mis à jour', async () => {
+    const tva = await creerTaxe({ name: 'TVA PUT 20 %', amount: 20, amountType: 'percent' });
+    const d = await devisAvecLigne({ quantite: 1, prixUnitaire: 1000 });
+    expect(d.total).toBeCloseTo(1000, 2);
+    const put = await request(app).put(`/api/devis/${d.id}`).set(bear(admin.token))
+      .send({ lignes: [{ produit: 'Maïs', type: 'produit', quantite: 1, prixUnitaire: 1000, taxIds: [tva.id] }] });
+    expect(put.status).toBe(200);
+    expect(put.body.devis.total).toBeCloseTo(1200, 2);
+    expect(put.body.devis.lignes[0].taxIds).toEqual([tva.id]);
+  });
+});
+
+describe('Devis — Étape 3b : facturer produit une facture comptable (account.move)', () => {
+  let admin;
+  let clientId;
+  const bear = (t) => ({ Authorization: `Bearer ${t}` });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const devisSigne = async (prixUnitaire = 1000, quantite = 10) => {
+    const r = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite, prixUnitaire, type: 'produit' }] });
+    await request(app).post(`/api/devis/${r.body.devis.id}/valider-manuel`).set(bear(admin.token)).send({ confirmePar: 'M. Test' });
+    return r.body.devis;
+  };
+  const termeId = async (nom) => {
+    const terms = (await request(app).get('/api/payment-terms').set(bear(admin.token))).body.paymentTerms;
+    return terms.find((t) => t.name === nom).id;
+  };
+
+  test('facturer (paiement complet) → devis.move lié, posté, équilibré, soldé', async () => {
+    const d = await devisSigne(500, 2); // total 1000
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.statut).toBe('Facturé');
+    expect(res.body.devis.move).toBeTruthy();
+    expect(res.body.devis.move.name).toMatch(/^INV\/\d{4}\/\d{4}$/);
+    expect(res.body.devis.move.state).toBe('posted');
+    expect(res.body.devis.move.paymentState).toBe('paid');
+    expect(res.body.devis.move.amountResidual).toBeCloseTo(0, 2);
+
+    // la facture est consultable via /api/factures et son écriture est équilibrée
+    const f = (await request(app).get(`/api/factures/${res.body.devis.move.id}`).set(bear(admin.token))).body.facture;
+    const dd = f.lignes.reduce((s, l) => s + l.debit, 0);
+    const cc = f.lignes.reduce((s, l) => s + l.credit, 0);
+    expect(dd).toBeCloseTo(cc, 2);
+    expect(f.invoiceOrigin).toBe(d.numero);
+  });
+
+  test('facturer échelonné (terme 30 jours + acompte) → move non soldé, 2 échéances partagées', async () => {
+    const d = await devisSigne(); // total 10000
+    const res = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Banque', paymentTermId: await termeId('30 jours'), acompte: { method: 'percentage', value: 30 } });
+    expect(res.status).toBe(200);
+    expect(res.body.devis.move.paymentState).toBe('not_paid');
+    expect(res.body.devis.move.amountResidual).toBeCloseTo(10000, 2);
+    expect(res.body.devis.echeances).toHaveLength(2);
+
+    // payer la 1re échéance → devis "Payé partiellement" ET move "partial"
+    const eid = res.body.devis.echeances[0].id;
+    const payer = await request(app).post(`/api/devis/${d.id}/echeances/${eid}/payer`).set(bear(admin.token)).send({});
+    expect(payer.status).toBe(200);
+    expect(payer.body.devis.statut).toBe('Payé partiellement');
+    expect(payer.body.devis.move.paymentState).toBe('partial');
+    expect(payer.body.devis.move.amountResidual).toBeCloseTo(7000, 2);
+  });
+
+  test('remettre-brouillon défait aussi la facture comptable', async () => {
+    const d = await devisSigne(200, 1);
+    const fac = await request(app).post(`/api/devis/${d.id}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+    const moveId = fac.body.devis.move.id;
+    expect((await request(app).get(`/api/factures/${moveId}`).set(bear(admin.token))).status).toBe(200);
+
+    const remise = await request(app).post(`/api/devis/${d.id}/remettre-brouillon`).set(bear(admin.token)).send({});
+    expect(remise.status).toBe(200);
+    expect(remise.body.devis.statut).toBe('Brouillon');
+    expect(remise.body.devis.move).toBeNull();
+    expect((await request(app).get(`/api/factures/${moveId}`).set(bear(admin.token))).status).toBe(404);
+  });
+});

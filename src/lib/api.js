@@ -639,6 +639,100 @@ export async function deletePaymentTerm(id) {
   return request(`/payment-terms/${id}`, { method: 'DELETE' });
 }
 
+// Taxes réutilisables (account.tax-like) — étape 1 Comptabilité.
+export async function getTaxes() {
+  return request('/taxes');
+}
+export async function createTax(payload) {
+  return request('/taxes', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateTax(id, payload) {
+  return request(`/taxes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteTax(id) {
+  return request(`/taxes/${id}`, { method: 'DELETE' });
+}
+
+// Journaux + plan de comptes (account.journal / account.account-like) — étape 2 Comptabilité.
+export async function getJournals() {
+  return request('/journals');
+}
+export async function createJournal(payload) {
+  return request('/journals', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateJournal(id, payload) {
+  return request(`/journals/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteJournal(id) {
+  return request(`/journals/${id}`, { method: 'DELETE' });
+}
+export async function getAccounts() {
+  return request('/accounts');
+}
+export async function createAccount(payload) {
+  return request('/accounts', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateAccount(id, payload) {
+  return request(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteAccount(id) {
+  return request(`/accounts/${id}`, { method: 'DELETE' });
+}
+
+// Factures (account.move-like) — étape 3 Comptabilité.
+export async function getFactures(params = '') {
+  return request(`/factures${params}`);
+}
+export async function getFacture(id) {
+  return request(`/factures/${id}`);
+}
+export async function createFacture(payload) {
+  return request('/factures', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateFacture(id, payload) {
+  return request(`/factures/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteFacture(id) {
+  return request(`/factures/${id}`, { method: 'DELETE' });
+}
+export async function postFacture(id) {
+  return request(`/factures/${id}/post`, { method: 'POST', body: '{}' });
+}
+export async function factureRetourBrouillon(id) {
+  return request(`/factures/${id}/button-draft`, { method: 'POST', body: '{}' });
+}
+export async function annulerFacture(id) {
+  return request(`/factures/${id}/cancel`, { method: 'POST', body: '{}' });
+}
+export async function enregistrerPaiementFacture(id, payload) {
+  return request(`/factures/${id}/register-payment`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function verifyFactureHash(journalId) {
+  return request(`/factures/verify-hash?journalId=${journalId}`);
+}
+export async function reverseFacture(id, payload) {
+  return request(`/factures/${id}/reverse`, { method: 'POST', body: JSON.stringify(payload) });
+}
+// Étape 6 : balance âgée, relances, paiements autonomes.
+export async function getAgedReceivable(date) {
+  return request(`/factures/aged-receivable${date ? `?date=${date}` : ''}`);
+}
+export async function getOverdueFactures() {
+  return request('/factures/overdue');
+}
+export async function markFactureReminded(id) {
+  return request(`/factures/${id}/mark-reminded`, { method: 'POST', body: '{}' });
+}
+export async function getPaiements(params = '') {
+  return request(`/paiements${params}`);
+}
+export async function createPaiement(payload) {
+  return request('/paiements', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function allocatePaiement(id, payload) {
+  return request(`/paiements/${id}/allocate`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
 // Modifie une fiche client existante (coordonnées mises à jour)
 export async function updatePoulaillerMouvement(id, payload) {
   return request(`/poulailler/mouvements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });

@@ -10,6 +10,8 @@ import { streamDevisPdf } from '../utils/devisPdf.js';
 import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 import { genererEcheancesDepuisTerme } from './paymentTerms.js';
+import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
+import { posterMove, enregistrerPaiementMove, journalParType } from '../utils/accountMove.js';
 
 // Date de validité par défaut d'un devis : aujourd'hui + 30 jours (comme default_validity_date
 // d'un ERP de référence). Format 'YYYY-MM-DD'.
@@ -79,13 +81,40 @@ function normalizeLigne(l) {
     quantite: isSection ? 0 : (Number(l.quantite) || 0),
     prixUnitaire: isSection ? 0 : (Number(l.prixUnitaire) || 0),
     remisePourcentage: isSection ? 0 : Math.min(100, Math.max(0, Number(l.remisePourcentage) || 0)),
-    tauxTaxe: isSection ? 0 : Math.min(100, Math.max(0, Number(l.tauxTaxe) || 0)),
+    // Étape 1 Comptabilité : plus de taux unique par ligne — une ligne porte des liens vers
+    // des taxes réutilisables account_tax (Many2many, comme sale.order.line.tax_id). Les ids
+    // sont validés contre l'entreprise appelante avant écriture (voir filtrerTaxIds).
+    taxIds: isSection ? [] : [...new Set(
+      (Array.isArray(l.taxIds) ? l.taxIds : []).map(Number).filter((n) => Number.isInteger(n) && n > 0)
+    )],
     unite: isSection ? null : (l.unite || null),
     recolteId: isSection ? null : l.recolteId,
     stockId: isSection ? null : l.stockId,
     stockModule: isSection ? null : l.stockModule,
   };
 }
+
+// Charge les taxes actives de l'entreprise dans une Map<id, config>. `q` est soit le pool,
+// soit un client de transaction en cours.
+async function chargerTaxMap(entrepriseId, q = pool) {
+  const { rows } = await q.query(
+    `SELECT id, amount_type AS "amountType", amount::float8 AS amount,
+            price_include AS "priceInclude", include_base_amount AS "includeBaseAmount", sequence
+     FROM account_tax WHERE entreprise_id = $1 AND active = TRUE`,
+    [entrepriseId]
+  );
+  return new Map(rows.map((t) => [t.id, t]));
+}
+
+// Ne garde d'une liste d'ids que ceux réellement présents dans la taxMap (donc appartenant
+// à l'entreprise et actifs) — défense contre un payload qui référencerait la taxe d'une
+// autre entreprise ou un id inexistant.
+function filtrerTaxIds(taxIds, taxMap) {
+  return (taxIds || []).filter((id) => taxMap.has(id));
+}
+
+// Calcul des taxes d'une ligne : voir utils/taxeCompute.js (source unique, partagée avec
+// devisPdf.js).
 // Montant HT de la ligne (après remise ligne, avant taxe) — c'est ce qu'un ERP de référence appelle
 // "Amount"/"Montant" sur une ligne de commande.
 function ligneTotal(l) {
@@ -101,13 +130,44 @@ function ligneTotal(l) {
 // (ordre comptable standard : remise avant taxe). Stocké dans devis.total (pas recalculé
 // uniquement côté frontend) pour que financeSync/stockSync, qui lisent tous deux devis.total
 // comme source de vérité, restent cohérents avec ce qui s'affiche.
-function calculerTotal(lignesNormalisees, remiseGlobale) {
+function calculerTotal(lignesNormalisees, remiseGlobale, taxMap = new Map()) {
   const facteurRemiseGlobale = 1 - (Number(remiseGlobale) || 0) / 100;
   return lignesNormalisees.reduce((s, l) => {
     const ht = ligneTotal(l) * facteurRemiseGlobale;
-    const taxe = ht * (Number(l.tauxTaxe) || 0) / 100;
-    return s + ht + taxe;
+    const taxes = filtrerTaxIds(l.taxIds, taxMap).map((id) => taxMap.get(id));
+    // base = ht pour une taxe classique ; base < ht pour une taxe price_include (le prix
+    // saisi étant TTC). Total ligne = base + taxe dans les deux cas.
+    const { base, taxeTotale } = taxes.length
+      ? appliquerTaxesLigne(ht, Number(l.quantite) || 0, taxes)
+      : { base: ht, taxeTotale: 0 };
+    return s + base + taxeTotale;
   }, 0);
+}
+
+// Insère les lignes normalisées d'un devis + leurs liens vers account_tax. Factorisé entre
+// POST / et PUT /:id (mêmes règles, y compris la validation d'appartenance des recolte_id /
+// stock_id / tax_id à l'entreprise appelante).
+async function insererLignes(client, devisId, lignesNormalisees, entrepriseId, taxMap) {
+  const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, entrepriseId);
+  const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, entrepriseId);
+  for (let i = 0; i < lignesNormalisees.length; i++) {
+    const l = lignesNormalisees[i];
+    const stockOk = stockLigneValide(l);
+    const { rows: [{ id: ligneId }] } = await client.query(
+      `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
+       recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
+       stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
+    );
+    for (const taxId of filtrerTaxIds(l.taxIds, taxMap)) {
+      await client.query(
+        `INSERT INTO devis_lignes_taxes (devis_ligne_id, tax_id) VALUES ($1, $2)
+         ON CONFLICT (devis_ligne_id, tax_id) DO NOTHING`,
+        [ligneId, taxId]
+      );
+    }
+  }
 }
 
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
@@ -131,17 +191,55 @@ async function getDevisComplet(devisId, entrepriseId) {
   if (devisResult.rows.length === 0) return null;
   const lignesResult = await pool.query(
     `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-            remise_pourcentage::float8 AS "remisePourcentage", taux_taxe::float8 AS "tauxTaxe", unite,
+            remise_pourcentage::float8 AS "remisePourcentage", unite,
             quantite_livree::float8 AS "quantiteLivree", quantite_facturee::float8 AS "quantiteFacturee",
             recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
+  // Liens ligne→taxe (Many2many) rattachés à chaque ligne + référentiel des taxes de
+  // l'entreprise (pour l'affichage/recalcul côté client et le récapitulatif PDF).
+  const ligneIds = lignesResult.rows.map((l) => l.id);
+  const liensResult = ligneIds.length
+    ? await pool.query(
+        `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId"
+         FROM devis_lignes_taxes WHERE devis_ligne_id = ANY($1::int[])`,
+        [ligneIds]
+      )
+    : { rows: [] };
+  const taxIdsParLigne = new Map();
+  for (const { ligneId, taxId } of liensResult.rows) {
+    if (!taxIdsParLigne.has(ligneId)) taxIdsParLigne.set(ligneId, []);
+    taxIdsParLigne.get(ligneId).push(taxId);
+  }
+  const lignes = lignesResult.rows.map((l) => ({ ...l, taxIds: taxIdsParLigne.get(l.id) || [] }));
+  const taxesResult = await pool.query(
+    `SELECT id, name, amount_type AS "amountType", amount::float8 AS amount,
+            price_include AS "priceInclude", include_base_amount AS "includeBaseAmount",
+            sequence, invoice_label AS "invoiceLabel"
+     FROM account_tax WHERE entreprise_id = $1 AND active = TRUE
+     ORDER BY sequence ASC, id ASC`,
+    [entrepriseId]
+  );
   const echeancesResult = await pool.query(
     `SELECT id, montant::float8 AS montant, to_char(date_echeance, 'YYYY-MM-DD') AS "dateEcheance", statut, date_paiement AS "datePaiement" FROM echeances_paiement WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
-  return { ...devisResult.rows[0], lignes: lignesResult.rows, echeances: echeancesResult.rows };
+  // Étape 3b : facture comptable liée (account_move), si le devis a été facturé.
+  const moveResult = await pool.query(
+    `SELECT m.id, m.name, m.state, m.payment_state AS "paymentState",
+            m.amount_residual::float8 AS "amountResidual", m.amount_total::float8 AS "amountTotal"
+     FROM devis d JOIN account_move m ON m.id = d.move_id
+     WHERE d.id = $1 AND d.entreprise_id = $2`,
+    [devisId, entrepriseId]
+  );
+  return {
+    ...devisResult.rows[0],
+    lignes,
+    taxes: taxesResult.rows,
+    echeances: echeancesResult.rows,
+    move: moveResult.rows[0] || null,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -239,7 +337,8 @@ router.post('/', authRequired, async (req, res) => {
 
     const numero = await genererNumero(req.user.entrepriseId);
     const lignesNormalisees = lignes.map(normalizeLigne);
-    const total = calculerTotal(lignesNormalisees, remiseGlobale);
+    const taxMap = await chargerTaxMap(req.user.entrepriseId, client);
+    const total = calculerTotal(lignesNormalisees, remiseGlobale, taxMap);
 
     const devisResult = await client.query(
       `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise, validity_date)
@@ -249,20 +348,7 @@ router.post('/', authRequired, async (req, res) => {
        validityDate || validiteParDefaut()]
     );
     const devisId = devisResult.rows[0].id;
-    const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
-    const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, req.user.entrepriseId);
-
-    for (let i = 0; i < lignesNormalisees.length; i++) {
-      const l = lignesNormalisees[i];
-      const stockOk = stockLigneValide(l);
-      await client.query(
-        `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, taux_taxe, unite, ordre, recolte_id, stock_id, stock_module, type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.tauxTaxe, l.unite, i,
-         recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-         stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
-      );
-    }
+    await insererLignes(client, devisId, lignesNormalisees, req.user.entrepriseId, taxMap);
 
     await client.query('COMMIT');
 
@@ -296,20 +382,35 @@ router.put('/:id', authRequired, async (req, res) => {
 
     // Un appel qui ne touche que la remise globale/conditions (sans renvoyer de lignes,
     // ex: le panneau "Totaux" de la popup de détail) ne doit pas faire retomber le total à
-    // 0 — on recharge alors les lignes déjà en base (avec leur propre taux_taxe) pour le
+    // 0 — on recharge alors les lignes déjà en base (avec leurs liens de taxes) pour le
     // recalcul.
-    const lignesSource = Array.isArray(lignes)
-      ? lignes
-      : (await client.query(
-          `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
-                  remise_pourcentage::float8 AS "remisePourcentage", taux_taxe::float8 AS "tauxTaxe", unite,
-                  recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
-           FROM devis_lignes WHERE devis_id = $1`,
-          [req.params.id]
-        )).rows;
+    const taxMap = await chargerTaxMap(req.user.entrepriseId, client);
+    let lignesSource;
+    if (Array.isArray(lignes)) {
+      lignesSource = lignes;
+    } else {
+      const { rows: lignesEnBase } = await client.query(
+        `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+                remise_pourcentage::float8 AS "remisePourcentage", unite,
+                recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
+         FROM devis_lignes WHERE devis_id = $1`,
+        [req.params.id]
+      );
+      const { rows: liens } = await client.query(
+        `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId" FROM devis_lignes_taxes
+         WHERE devis_ligne_id = ANY($1::int[])`,
+        [lignesEnBase.map((l) => l.id)]
+      );
+      const parLigne = new Map();
+      for (const { ligneId, taxId } of liens) {
+        if (!parLigne.has(ligneId)) parLigne.set(ligneId, []);
+        parLigne.get(ligneId).push(taxId);
+      }
+      lignesSource = lignesEnBase.map((l) => ({ ...l, taxIds: parLigne.get(l.id) || [] }));
+    }
     const lignesNormalisees = lignesSource.map(normalizeLigne);
     const remiseGlobaleFinale = remiseGlobale != null ? Number(remiseGlobale) || 0 : check.rows[0].remiseGlobale;
-    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale);
+    const total = calculerTotal(lignesNormalisees, remiseGlobaleFinale, taxMap);
 
     await client.query(
       `UPDATE devis SET client_id = COALESCE($1, client_id), total = $2, notes = COALESCE($3, notes),
@@ -323,20 +424,9 @@ router.put('/:id', authRequired, async (req, res) => {
       { total: check.rows[0].total }, { total }, ['total']);
 
     if (Array.isArray(lignes)) {
+      // Les liens devis_lignes_taxes cascadent sur la suppression des lignes.
       await client.query('DELETE FROM devis_lignes WHERE devis_id = $1', [req.params.id]);
-      const recolteIdsValides = await validerRecolteIds(client, lignesNormalisees, req.user.entrepriseId);
-      const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, req.user.entrepriseId);
-      for (let i = 0; i < lignesNormalisees.length; i++) {
-        const l = lignesNormalisees[i];
-        const stockOk = stockLigneValide(l);
-        await client.query(
-          `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, taux_taxe, unite, ordre, recolte_id, stock_id, stock_module, type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [req.params.id, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.tauxTaxe, l.unite, i,
-           recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-           stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
-        );
-      }
+      await insererLignes(client, req.params.id, lignesNormalisees, req.user.entrepriseId, taxMap);
     }
 
     await client.query('COMMIT');
@@ -638,6 +728,81 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       });
     }
 
+    // ─── Étape 3b : produit une vraie facture comptable (account.move) ───
+    // Le devis reste l'objet commercial ; la facture posée est la pièce comptable de
+    // référence (numéro de journal, écriture équilibrée, lettrage). Les échéances déjà
+    // créées ci-dessus sont rattachées AUX DEUX (devis_id + move_id).
+    const journalVente = await journalParType(client, req.user.entrepriseId, 'sale');
+    if (!journalVente) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Aucun journal de vente configuré — complétez la configuration comptable.' });
+    }
+    const lignesDevis = await client.query(
+      `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+              remise_pourcentage::float8 AS "remisePourcentage", ordre
+       FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC, id ASC`,
+      [req.params.id]
+    );
+    const ligneIds = lignesDevis.rows.map((l) => l.id);
+    const liensTaxes = ligneIds.length
+      ? await client.query(
+          `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId" FROM devis_lignes_taxes
+           WHERE devis_ligne_id = ANY($1::int[])`,
+          [ligneIds]
+        )
+      : { rows: [] };
+    const taxParLigne = new Map();
+    for (const { ligneId, taxId } of liensTaxes.rows) {
+      if (!taxParLigne.has(ligneId)) taxParLigne.set(ligneId, []);
+      taxParLigne.get(ligneId).push(taxId);
+    }
+    const dueDate = echeancesFinales && echeancesFinales.length
+      ? echeancesFinales[echeancesFinales.length - 1].dateEcheance
+      : new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+
+    const mv = await client.query(
+      `INSERT INTO account_move
+        (entreprise_id, journal_id, move_type, state, partner_id, invoice_date, invoice_date_due,
+         invoice_origin, payment_term_id, user_id)
+       VALUES ($1, $2, 'out_invoice', 'draft', (SELECT client_id FROM devis WHERE id = $3),
+               CURRENT_DATE, $4, $5, $6, $7) RETURNING id`,
+      [req.user.entrepriseId, journalVente.id, req.params.id, dueDate, numero, paymentTermIdFinal, req.user.sub]
+    );
+    const moveId = mv.rows[0].id;
+    let seqLigne = 0;
+    for (const l of lignesDevis.rows) {
+      seqLigne += 10;
+      const isSection = l.type === 'section';
+      const ins = await client.query(
+        `INSERT INTO account_move_line
+          (move_id, entreprise_id, display_type, sequence, name, quantity, price_unit, discount)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [moveId, req.user.entrepriseId, isSection ? 'line_section' : 'product', seqLigne, l.produit,
+         isSection ? 0 : l.quantite, isSection ? 0 : l.prixUnitaire, isSection ? 0 : l.remisePourcentage]
+      );
+      for (const taxId of (taxParLigne.get(l.id) || [])) {
+        await client.query(
+          `INSERT INTO account_move_line_taxes (move_line_id, tax_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [ins.rows[0].id, taxId]
+        );
+      }
+    }
+    // Rattache les échéances (créées plus haut, devis_id) aussi au move avant le post
+    // pour que posterMove ne les régénère pas depuis le terme.
+    await client.query('UPDATE echeances_paiement SET move_id = $1 WHERE devis_id = $2', [moveId, req.params.id]);
+    await posterMove(client, moveId, req.user.entrepriseId);
+    // Paiement complet : on solde la facture comptablement (lettrage), sans redoubler le
+    // miroir Finances déjà écrit par syncDevisPaiement ci-dessus.
+    if (modaliteFinale === 'complet') {
+      const pj = await journalParType(client, req.user.entrepriseId, modePaiement === 'Espèces' ? 'cash' : 'bank');
+      await enregistrerPaiementMove(client, {
+        moveId, entrepriseId: req.user.entrepriseId, userId: req.user.sub,
+        amount: Number(total), paymentDate: new Date().toISOString().slice(0, 10),
+        journalId: pj ? pj.id : undefined, skipFinanceMirror: true,
+      });
+    }
+    await client.query('UPDATE devis SET move_id = $1 WHERE id = $2', [moveId, req.params.id]);
+
     await client.query('COMMIT');
 
     await logAuditEvent({
@@ -670,12 +835,24 @@ const STATUTS_APRES_SIGNATURE = ['Signé', 'Facturé', 'Non payé', 'Payé parti
 router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const check = await client.query('SELECT statut, numero FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await client.query(
+      `SELECT d.statut, d.numero, d.move_id AS "moveId", m.inalterable_hash AS "moveHash",
+              EXISTS (SELECT 1 FROM account_move rm WHERE rm.reversed_entry_id = d.move_id) AS "aDesAvoirs"
+       FROM devis d LEFT JOIN account_move m ON m.id = d.move_id
+       WHERE d.id = $1 AND d.entreprise_id = $2`,
+      [req.params.id, req.user.entrepriseId]
+    );
     if (check.rows.length === 0) {
-      client.release();
-      return res.status(404).json({ error: 'Devis introuvable.' });
+      return res.status(404).json({ error: 'Devis introuvable.' }); // client libéré par le finally
     }
     const statutAvant = check.rows[0].statut;
+    const moveId = check.rows[0].moveId;
+    if (check.rows[0].moveHash) {
+      return res.status(400).json({ error: 'La facture liée est sécurisée (inaltérable) — créez un avoir plutôt que de remettre le devis en brouillon.' });
+    }
+    if (check.rows[0].aDesAvoirs) {
+      return res.status(400).json({ error: 'La facture liée a des avoirs — remise en brouillon impossible.' });
+    }
 
     await client.query('BEGIN');
 
@@ -683,9 +860,37 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
     await client.query(`DELETE FROM finances WHERE source_module = 'Devis' AND source_mouvement_id IN (SELECT id FROM echeances_paiement WHERE devis_id = $1)`, [req.params.id]);
     // Supprime les échéances elles-mêmes
     await client.query(`DELETE FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
+
+    // Étape 3b : défait aussi la facture comptable liée (undo pré-production). On retire les
+    // écritures de paiement lettrées contre elle, puis la facture elle-même (ses lignes +
+    // liens de taxes + partiels de lettrage cascadent). Le numéro de journal consommé n'est
+    // pas restitué (un trou de séquence est acceptable ici).
+    if (moveId) {
+      const payMoves = await client.query(
+        `SELECT DISTINCT pml.move_id AS id
+         FROM account_partial_reconcile apr
+         JOIN account_move_line iml ON iml.id IN (apr.debit_move_line_id, apr.credit_move_line_id) AND iml.move_id = $1
+         JOIN account_move_line pml ON pml.id IN (apr.debit_move_line_id, apr.credit_move_line_id) AND pml.move_id <> $1`,
+        [moveId]
+      );
+      const payMoveIds = payMoves.rows.map((r) => r.id);
+      if (payMoveIds.length) {
+        await client.query('DELETE FROM finances WHERE source_module = $1 AND source_mouvement_id IN (SELECT id FROM account_payment WHERE move_id = ANY($2::int[]))', ['Facture', payMoveIds]);
+        await client.query('DELETE FROM account_payment WHERE move_id = ANY($1::int[])', [payMoveIds]);
+        await client.query('DELETE FROM account_move WHERE id = ANY($1::int[])', [payMoveIds]);
+      }
+      await client.query('DELETE FROM account_move WHERE id = $1 AND entreprise_id = $2', [moveId, req.user.entrepriseId]);
+      await client.query(
+        `DELETE FROM account_full_reconcile fr WHERE fr.entreprise_id = $1
+           AND NOT EXISTS (SELECT 1 FROM account_partial_reconcile apr WHERE apr.full_reconcile_id = fr.id)`,
+        [req.user.entrepriseId]
+      );
+    }
+
     // Réinitialise le devis en brouillon
     await client.query(
       `UPDATE devis SET statut = 'Brouillon', mode_paiement = NULL, modalite_paiement = NULL, payment_term_id = NULL,
+       move_id = NULL,
        signature_data = NULL, signataire_nom = NULL, date_signature = NULL, token_public = NULL
        WHERE id = $1`,
       [req.params.id]
@@ -721,16 +926,18 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
 });
 
 router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin'), async (req, res) => {
+  const client = await pool.connect();
   try {
-    const devisResult = await pool.query(
-      `SELECT d.mode_paiement AS "modePaiement", d.numero, d.statut, c.nom AS "clientNom", c.prenom AS "clientPrenom"
+    const devisResult = await client.query(
+      `SELECT d.mode_paiement AS "modePaiement", d.numero, d.statut, d.move_id AS "moveId",
+              c.nom AS "clientNom", c.prenom AS "clientPrenom"
        FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
     );
     if (devisResult.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
 
-    const echeanceResult = await pool.query(
+    const echeanceResult = await client.query(
       `SELECT id, montant::float8 AS montant, statut FROM echeances_paiement WHERE id = $1 AND devis_id = $2`,
       [req.params.echeanceId, req.params.id]
     );
@@ -739,10 +946,11 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
       return res.status(400).json({ error: 'Cette échéance est déjà marquée comme payée.' });
     }
 
-    await pool.query(`UPDATE echeances_paiement SET statut = 'Payé', date_paiement = now() WHERE id = $1`, [req.params.echeanceId]);
-
-    const { modePaiement, numero, clientNom, clientPrenom } = devisResult.rows[0];
+    const { modePaiement, numero, clientNom, clientPrenom, moveId } = devisResult.rows[0];
     const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
+
+    await client.query('BEGIN');
+    await client.query(`UPDATE echeances_paiement SET statut = 'Payé', date_paiement = now() WHERE id = $1`, [req.params.echeanceId]);
 
     await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
       montant: echeanceResult.rows[0].montant,
@@ -753,13 +961,27 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
       echeanceId: req.params.echeanceId,
     });
 
+    // Étape 3b : si une facture comptable est liée, on y enregistre le paiement (lettrage,
+    // payment_state) — le miroir Finances a déjà été écrit ci-dessus (skipFinanceMirror).
+    // Si ça échoue, toute la transaction est annulée : pas de paiement enregistré sans
+    // son écriture comptable.
+    if (moveId) {
+      await enregistrerPaiementMove(client, {
+        moveId, entrepriseId: req.user.entrepriseId, userId: req.user.sub,
+        amount: echeanceResult.rows[0].montant,
+        skipFinanceMirror: true, skipEcheanceAllocation: true,
+      });
+    }
+
     // Recalcule le statut global du devis selon l'état de toutes ses échéances
-    const toutesEcheances = await pool.query(`SELECT statut FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
+    const toutesEcheances = await client.query(`SELECT statut FROM echeances_paiement WHERE devis_id = $1`, [req.params.id]);
     const toutesPayees = toutesEcheances.rows.every(e => e.statut === 'Payé');
     const auMoinsUnePayee = toutesEcheances.rows.some(e => e.statut === 'Payé');
     const nouveauStatut = toutesPayees ? 'Facturé' : auMoinsUnePayee ? 'Payé partiellement' : 'Non payé';
 
-    await pool.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
+    await client.query(`UPDATE devis SET statut = $1 WHERE id = $2`, [nouveauStatut, req.params.id]);
+    await client.query('COMMIT');
+
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: devisResult.rows[0].statut }, { statut: nouveauStatut }, ['statut']);
     await logAuditEvent({
@@ -773,8 +995,11 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
     return res.json({ devis });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[POST /devis/:id/echeances/:echeanceId/payer]', err);
     return res.status(500).json({ error: 'Erreur lors du paiement.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -796,12 +1021,32 @@ router.get('/public/:token/pdf', async (req, res) => {
 
     const devis = devisResult.rows[0];
     const lignesResult = await pool.query(
-      `SELECT produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
+      `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
               remise_pourcentage::float8 AS "remisePourcentage", recolte_id AS "recolteId"
        FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
       [devis.id]
     );
-    devis.lignes = lignesResult.rows;
+    const ligneIds = lignesResult.rows.map((l) => l.id);
+    const liensResult = ligneIds.length
+      ? await pool.query(
+          `SELECT devis_ligne_id AS "ligneId", tax_id AS "taxId" FROM devis_lignes_taxes
+           WHERE devis_ligne_id = ANY($1::int[])`,
+          [ligneIds]
+        )
+      : { rows: [] };
+    const taxIdsParLigne = new Map();
+    for (const { ligneId, taxId } of liensResult.rows) {
+      if (!taxIdsParLigne.has(ligneId)) taxIdsParLigne.set(ligneId, []);
+      taxIdsParLigne.get(ligneId).push(taxId);
+    }
+    devis.lignes = lignesResult.rows.map((l) => ({ ...l, taxIds: taxIdsParLigne.get(l.id) || [] }));
+    const { rows: taxesRef } = await pool.query(
+      `SELECT id, name, amount_type AS "amountType", amount::float8 AS amount,
+              price_include AS "priceInclude", include_base_amount AS "includeBaseAmount", sequence
+       FROM account_tax WHERE entreprise_id = (SELECT entreprise_id FROM devis WHERE id = $1) AND active = TRUE`,
+      [devis.id]
+    );
+    devis.taxes = taxesRef;
 
     streamDevisPdf(res, devis);
   } catch (err) {

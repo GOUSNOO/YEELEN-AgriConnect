@@ -19,6 +19,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 
 // Ce script tourne en dehors du serveur Express (invoqué directement via `node
 // src/db/migrate.js`), donc db.js (qui charge son propre .env via un chemin relatif
@@ -263,10 +264,13 @@ ALTER TABLE devis ADD COLUMN IF NOT EXISTS payment_term_id INTEGER;
 -- Unité de mesure par ligne (ex: "kg", "sacs", "Heures") — préremplie depuis le produit du
 -- catalogue au même titre que le prix, mais reste un simple champ texte libre modifiable.
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS unite TEXT;
--- Taux de taxe (%) par ligne, comme dans un ERP de référence — remplace la tentative devis.taux_taxe
--- (unique par devis) du même jour. Voir calculerTotal() dans routes/devis.js pour l'ordre
--- d'application (remise globale d'abord, puis taxe sur le montant remisé, ligne par ligne).
-ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS taux_taxe NUMERIC(5, 2) NOT NULL DEFAULT 0;
+-- Étape 1 Comptabilité (2026-08-30) : devis_lignes.taux_taxe (un simple % par ligne) est
+-- RETIRÉE au profit de vraies taxes réutilisables (account_tax, plus bas) reliées par la
+-- table de jointure devis_lignes_taxes — cf. sale.order.line.tax_id (Many2many) d'un ERP de
+-- référence. L ancien ADD COLUMN IF NOT EXISTS taux_taxe a été supprimé d ici (le laisser
+-- l aurait recréée à chaque relance après le DROP — même piège que remise/client_prix/
+-- cultures_stocks aux étapes précédentes). La conversion + le DROP se font dans
+-- migrateTaxeDevisLignesVersAccountTax() plus bas.
 
 -- Étape 4 (2026-08-18) : alignement structurel ERP — remise en pourcentage, lignes de
 -- section/note, suivi manuel livré/facturé. Voir migrateRemiseToPourcentage() plus bas pour
@@ -335,6 +339,235 @@ DO $$ BEGIN
       FOREIGN KEY (payment_term_id) REFERENCES payment_terms(id) ON DELETE SET NULL;
   END IF;
 END $$;
+
+-- ═══════════════ Étape 1 Comptabilité — taxes réutilisables (account.tax) ═══════════════
+-- Calqué sur account.tax d'un ERP de référence. Étape 1 calcule amount_type 'percent' et
+-- 'fixed' (par unité) ; 'group'/'division' sont autorisés par le CHECK mais pas encore
+-- implémentés ni proposés à l'UI (les repartition lines arrivent avec account.move, étape 3).
+CREATE TABLE IF NOT EXISTS account_tax (
+  id                   SERIAL PRIMARY KEY,
+  entreprise_id        INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name                 TEXT NOT NULL,
+  type_tax_use         TEXT NOT NULL DEFAULT 'sale' CHECK (type_tax_use IN ('sale', 'purchase', 'none')),
+  amount_type          TEXT NOT NULL DEFAULT 'percent' CHECK (amount_type IN ('percent', 'fixed', 'group', 'division')),
+  amount               NUMERIC(16, 4) NOT NULL DEFAULT 0,
+  price_include        BOOLEAN NOT NULL DEFAULT FALSE,
+  include_base_amount  BOOLEAN NOT NULL DEFAULT FALSE,
+  active               BOOLEAN NOT NULL DEFAULT TRUE,
+  sequence             INTEGER NOT NULL DEFAULT 1,
+  description          TEXT,
+  invoice_label        TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_account_tax_entreprise_id ON account_tax(entreprise_id);
+
+-- sale.order.line.tax_id est un Many2many → table de jointure. Les lignes de devis sont
+-- supprimées/réinsérées à chaque PUT (voir routes/devis.js), donc ces liens cascadent et
+-- sont reconstruits à chaque enregistrement.
+CREATE TABLE IF NOT EXISTS devis_lignes_taxes (
+  id              SERIAL PRIMARY KEY,
+  devis_ligne_id  INTEGER NOT NULL REFERENCES devis_lignes(id) ON DELETE CASCADE,
+  tax_id          INTEGER NOT NULL REFERENCES account_tax(id) ON DELETE CASCADE,
+  UNIQUE (devis_ligne_id, tax_id)
+);
+CREATE INDEX IF NOT EXISTS idx_devis_lignes_taxes_ligne ON devis_lignes_taxes(devis_ligne_id);
+
+-- ═══════════════ Étape 2 Comptabilité — journaux + plan de comptes + séquences ═══════════════
+-- Objets de configuration calqués sur account.journal / account.account d'un ERP de référence.
+-- Aucune écriture comptable ne s'y rattache encore (account.move arrive à l'étape 3) : ce sont
+-- les référentiels + le numérotateur que l'étape 3 consommera. Le plan de comptes seedé suit
+-- le chart générique (codes 1xxxxx/2xxxxx/4xxxxx/5xxxxx), pas un PCG national — portée mondiale.
+CREATE TABLE IF NOT EXISTS account_account (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  code           VARCHAR(64) NOT NULL,
+  name           TEXT NOT NULL,
+  account_type   TEXT NOT NULL CHECK (account_type IN (
+                   'asset_receivable', 'asset_cash', 'asset_current', 'asset_non_current',
+                   'asset_prepayments', 'asset_fixed', 'liability_payable', 'liability_credit_card',
+                   'liability_current', 'liability_non_current', 'equity', 'equity_unaffected',
+                   'income', 'income_other', 'expense', 'expense_other', 'expense_depreciation',
+                   'expense_direct_cost', 'off_balance')),
+  reconcile      BOOLEAN NOT NULL DEFAULT FALSE,
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_account_account_entreprise_id ON account_account(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS account_journal (
+  id                  SERIAL PRIMARY KEY,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name                TEXT NOT NULL,
+  code                VARCHAR(5) NOT NULL,
+  type                TEXT NOT NULL CHECK (type IN ('sale', 'purchase', 'cash', 'bank', 'general')),
+  sequence            INTEGER NOT NULL DEFAULT 10,
+  active              BOOLEAN NOT NULL DEFAULT TRUE,
+  refund_sequence     BOOLEAN NOT NULL DEFAULT FALSE,
+  default_account_id  INTEGER REFERENCES account_account(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entreprise_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_account_journal_entreprise_id ON account_journal(entreprise_id);
+
+-- Compteur par (journal, préfixe). Le préfixe porte l'année → remise à zéro annuelle
+-- automatique (un nouveau préfixe = un nouveau compteur), comme le sequence.mixin d'un ERP
+-- de référence. Alimenté par utils/journalSequence.js (verrou de ligne pour l'incrément).
+CREATE TABLE IF NOT EXISTS account_journal_sequence (
+  id           SERIAL PRIMARY KEY,
+  journal_id   INTEGER NOT NULL REFERENCES account_journal(id) ON DELETE CASCADE,
+  prefix       TEXT NOT NULL,
+  last_number  INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (journal_id, prefix)
+);
+
+-- ═══════════════ Étape 3 Comptabilité — account.move + account.move.line (double-partie) ═══════════════
+-- La facture devient une pièce comptable à part entière, distincte du devis : un en-tête
+-- account_move (draft → posted → cancel) + des lignes account_move_line dont l'ensemble est
+-- équilibré (Σdébit = Σcrédit) au moment du post. Calqué sur account.move / account.move.line
+-- d'un ERP de référence. POST /api/devis/:id/facturer n'est PAS encore rebranché dessus (étape 3b).
+CREATE TABLE IF NOT EXISTS account_move (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  journal_id         INTEGER NOT NULL REFERENCES account_journal(id) ON DELETE RESTRICT,
+  move_type          TEXT NOT NULL DEFAULT 'entry' CHECK (move_type IN (
+                       'entry', 'out_invoice', 'out_refund', 'in_invoice', 'in_refund')),
+  state              TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'posted', 'cancel')),
+  name               TEXT,
+  ref                TEXT,
+  -- FK vers contacts ajoutée plus bas (contacts est créée après ce bloc dans le script).
+  partner_id         INTEGER,
+  invoice_date       DATE,
+  invoice_date_due   DATE,
+  date               DATE NOT NULL DEFAULT CURRENT_DATE,
+  invoice_origin     TEXT,
+  payment_term_id    INTEGER REFERENCES payment_terms(id) ON DELETE SET NULL,
+  amount_untaxed     NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  amount_tax         NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  amount_total       NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  amount_residual    NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  payment_state      TEXT NOT NULL DEFAULT 'not_paid' CHECK (payment_state IN (
+                       'not_paid', 'in_payment', 'paid', 'partial', 'reversed')),
+  reversed_entry_id  INTEGER REFERENCES account_move(id) ON DELETE SET NULL,
+  user_id            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_account_move_entreprise_id ON account_move(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_journal_id ON account_move(journal_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_partner_id ON account_move(partner_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_type_state ON account_move(entreprise_id, move_type, state);
+-- Un numéro (name) est unique par journal une fois attribué (au post). Index partiel : les
+-- brouillons ont name = NULL et ne sont donc pas contraints.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_account_move_name_journal
+  ON account_move(journal_id, name) WHERE name IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS account_move_line (
+  id                  SERIAL PRIMARY KEY,
+  move_id             INTEGER NOT NULL REFERENCES account_move(id) ON DELETE CASCADE,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  account_id          INTEGER REFERENCES account_account(id) ON DELETE RESTRICT,
+  partner_id          INTEGER, -- FK vers contacts ajoutée plus bas
+  name                TEXT,
+  display_type        TEXT NOT NULL DEFAULT 'product' CHECK (display_type IN (
+                        'product', 'line_section', 'line_note', 'tax', 'payment_term', 'rounding')),
+  sequence            INTEGER NOT NULL DEFAULT 10,
+  quantity            NUMERIC(16, 4) NOT NULL DEFAULT 0,
+  price_unit          NUMERIC(16, 4) NOT NULL DEFAULT 0,
+  discount            NUMERIC(5, 2) NOT NULL DEFAULT 0,
+  price_subtotal      NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  price_total         NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  debit               NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  credit              NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  balance             NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  tax_line_id         INTEGER REFERENCES account_tax(id) ON DELETE SET NULL,
+  amount_residual     NUMERIC(16, 2) NOT NULL DEFAULT 0,
+  reconciled          BOOLEAN NOT NULL DEFAULT FALSE,
+  full_reconcile_id   INTEGER,
+  matching_number     TEXT,
+  date_maturity       DATE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_account_move_line_move_id ON account_move_line(move_id);
+CREATE INDEX IF NOT EXISTS idx_account_move_line_account ON account_move_line(entreprise_id, account_id, reconciled);
+
+-- tax_ids d'une ligne produit (Many2many) — patron devis_lignes_taxes.
+CREATE TABLE IF NOT EXISTS account_move_line_taxes (
+  id             SERIAL PRIMARY KEY,
+  move_line_id   INTEGER NOT NULL REFERENCES account_move_line(id) ON DELETE CASCADE,
+  tax_id         INTEGER NOT NULL REFERENCES account_tax(id) ON DELETE CASCADE,
+  UNIQUE (move_line_id, tax_id)
+);
+CREATE INDEX IF NOT EXISTS idx_account_move_line_taxes_line ON account_move_line_taxes(move_line_id);
+
+-- Lettrage : une écriture de lettrage total (account.full.reconcile) regroupe des
+-- rapprochements partiels (account.partial.reconcile) entre une ligne au débit et une au
+-- crédit, jusqu'à solder les deux.
+CREATE TABLE IF NOT EXISTS account_full_reconcile (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS account_partial_reconcile (
+  id                    SERIAL PRIMARY KEY,
+  entreprise_id         INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  debit_move_line_id    INTEGER NOT NULL REFERENCES account_move_line(id) ON DELETE CASCADE,
+  credit_move_line_id   INTEGER NOT NULL REFERENCES account_move_line(id) ON DELETE CASCADE,
+  amount                NUMERIC(16, 2) NOT NULL,
+  full_reconcile_id     INTEGER REFERENCES account_full_reconcile(id) ON DELETE SET NULL,
+  max_date              DATE,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_apr_debit ON account_partial_reconcile(debit_move_line_id);
+CREATE INDEX IF NOT EXISTS idx_apr_credit ON account_partial_reconcile(credit_move_line_id);
+
+-- account.payment délègue à une account_move (son écriture : banque + créance/dette).
+CREATE TABLE IF NOT EXISTS account_payment (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  move_id        INTEGER REFERENCES account_move(id) ON DELETE SET NULL,
+  journal_id     INTEGER NOT NULL REFERENCES account_journal(id) ON DELETE RESTRICT,
+  payment_type   TEXT NOT NULL CHECK (payment_type IN ('inbound', 'outbound')),
+  partner_type   TEXT NOT NULL DEFAULT 'customer' CHECK (partner_type IN ('customer', 'supplier')),
+  partner_id     INTEGER, -- FK vers contacts ajoutée plus bas
+
+  amount         NUMERIC(16, 2) NOT NULL,
+  payment_date   DATE NOT NULL DEFAULT CURRENT_DATE,
+  ref            TEXT,
+  state          TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'posted', 'cancel')),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_account_payment_entreprise_id ON account_payment(entreprise_id);
+
+-- Une échéance peut appartenir à une facture (account_move) en plus / à la place d'un
+-- devis — devis_id devient donc nullable. Depuis l'étape 3b, POST /devis/:id/facturer crée
+-- une vraie facture account_move et rattache les échéances aux DEUX (devis_id + move_id).
+ALTER TABLE echeances_paiement ADD COLUMN IF NOT EXISTS move_id INTEGER REFERENCES account_move(id) ON DELETE CASCADE;
+ALTER TABLE echeances_paiement ALTER COLUMN devis_id DROP NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_echeances_paiement_move_id ON echeances_paiement(move_id);
+
+-- Étape 3b : un devis facturé pointe vers la facture comptable (account_move) qu'il a
+-- produite. NULL pour les devis encore en brouillon/signé et pour les devis facturés avant
+-- l'étape 3b (ceux-là gardent l'ancien flux d'échéances côté devis).
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS move_id INTEGER REFERENCES account_move(id) ON DELETE SET NULL;
+
+-- Étape 4 : inaltérabilité des factures postées (opt-in via account_journal.
+-- restrict_mode_hash_table). inalterable_hash = sha256 chaîné par journal ;
+-- secure_sequence_number = compteur sans trou (distinct du numéro d affichage name qui,
+-- lui, peut sauter). secure_sequence_last vit sur le journal, incrémenté sous verrou au post.
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS inalterable_hash TEXT;
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS secure_sequence_number INTEGER;
+ALTER TABLE account_journal ADD COLUMN IF NOT EXISTS restrict_mode_hash_table BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE account_journal ADD COLUMN IF NOT EXISTS secure_sequence_last INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_account_move_secure_seq ON account_move(journal_id, secure_sequence_number);
+
+-- Étape 6 : base de relances. Combien de fois une facture a été relancée + date de la
+-- dernière relance (l'envoi d'email est différé — SMTP non configuré ; ces champs sont
+-- juste le suivi). La balance âgée et la liste des retards se calculent à la volée.
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS relance_niveau INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS derniere_relance DATE;
 
 CREATE TABLE IF NOT EXISTS finances (
   id                   SERIAL PRIMARY KEY,
@@ -1075,6 +1308,26 @@ CREATE TABLE IF NOT EXISTS contacts_tags_rel (
   PRIMARY KEY (contact_id, tag_id)
 );
 
+-- Étape 3 Comptabilité : FK partner_id → contacts pour account_move / account_move_line /
+-- account_payment. Ajoutées ici (et non inline) parce que ces trois tables sont créées plus
+-- haut dans le script, avant que contacts n'existe (même contrainte que devis.client_id,
+-- posée par ALTER plus bas).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'account_move_partner_id_fkey') THEN
+    ALTER TABLE account_move ADD CONSTRAINT account_move_partner_id_fkey
+      FOREIGN KEY (partner_id) REFERENCES contacts(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'account_move_line_partner_id_fkey') THEN
+    ALTER TABLE account_move_line ADD CONSTRAINT account_move_line_partner_id_fkey
+      FOREIGN KEY (partner_id) REFERENCES contacts(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'account_payment_partner_id_fkey') THEN
+    ALTER TABLE account_payment ADD CONSTRAINT account_payment_partner_id_fkey
+      FOREIGN KEY (partner_id) REFERENCES contacts(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
 -- ═══════════════ Journal des modifications (chatter) + activités planifiées ═══════════════
 -- Round 2 de l'inspiration ERP (après recherche globale/boutons intelligents/routage/nav
 -- adaptative/Kanban devis) : deux mécanismes génériques attachables à n'importe quelle
@@ -1758,6 +2011,89 @@ async function migrateTaxeDevisVersLignes() {
   }
 }
 
+// Étape 1 Comptabilité : bascule du % par ligne (devis_lignes.taux_taxe) vers de vraies
+// taxes réutilisables (account_tax) reliées en Many2many par devis_lignes_taxes — cf.
+// sale.order.line.tax_id d'un ERP de référence. Pour chaque (entreprise, taux) distinct avec
+// taux > 0 : une taxe account_tax « TVA {taux} % » (amount_type 'percent'), puis un lien par
+// ligne concernée. Puis DROP COLUMN taux_taxe. Idempotent sur l'existence de la colonne
+// (même garde que migrateRemiseToPourcentage / migrateTaxeDevisVersLignes). En production
+// 0 ligne réelle a un taux_taxe non nul (confirmé) → no-op de fait, mais la conversion est
+// écrite pour être exacte si une base en contient.
+async function migrateTaxeDevisLignesVersAccountTax() {
+  const { rows: [{ exists: colonneExiste }] } = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'devis_lignes' AND column_name = 'taux_taxe'
+    ) AS exists
+  `);
+  if (!colonneExiste) {
+    console.log('ℹ️  account_tax : colonne devis_lignes.taux_taxe déjà absente — bascule déjà effectuée, étape ignorée.');
+    return;
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [{ count: nbLignesAffectees }] } = await client.query(
+      `SELECT COUNT(*) FROM devis_lignes WHERE taux_taxe IS NOT NULL AND taux_taxe <> 0`
+    );
+
+    // Un couple (entreprise, taux) distinct = une taxe account_tax. entreprise_id vient du
+    // devis parent (devis_lignes n'a pas de colonne entreprise_id propre).
+    const { rows: couples } = await client.query(`
+      SELECT DISTINCT d.entreprise_id AS "entrepriseId", dl.taux_taxe AS "taux"
+      FROM devis_lignes dl
+      JOIN devis d ON d.id = dl.devis_id
+      WHERE dl.taux_taxe IS NOT NULL AND dl.taux_taxe <> 0
+    `);
+
+    for (const { entrepriseId, taux } of couples) {
+      // Nom lisible aligné sur le taux ; le % est formaté sans décimale superflue.
+      const tauxNum = Number(taux);
+      const nom = `TVA ${Number.isInteger(tauxNum) ? tauxNum : tauxNum.toString()} %`;
+      const { rows: [{ id: taxId }] } = await client.query(`
+        INSERT INTO account_tax (entreprise_id, name, type_tax_use, amount_type, amount, sequence)
+        VALUES ($1, $2, 'sale', 'percent', $3, 1)
+        ON CONFLICT (entreprise_id, name) DO UPDATE SET amount_type = EXCLUDED.amount_type
+        RETURNING id
+      `, [entrepriseId, nom, tauxNum]);
+
+      await client.query(`
+        INSERT INTO devis_lignes_taxes (devis_ligne_id, tax_id)
+        SELECT dl.id, $1
+        FROM devis_lignes dl
+        JOIN devis d ON d.id = dl.devis_id
+        WHERE d.entreprise_id = $2 AND dl.taux_taxe = $3
+        ON CONFLICT (devis_ligne_id, tax_id) DO NOTHING
+      `, [taxId, entrepriseId, tauxNum]);
+    }
+
+    // Vérification avant COMMIT : chaque ligne convertie doit avoir exactement une taxe liée
+    // dont amount == l'ancien taux_taxe. Une taxe unique 'percent' est strictement équivalente
+    // à l'ancien facteur (1 + taux/100), donc les totaux stockés (recalculés seulement au PUT)
+    // restent corrects — pas de réécriture de devis.total nécessaire.
+    const { rows: [{ count: nonMigrees }] } = await client.query(`
+      SELECT COUNT(*) FROM devis_lignes dl
+      WHERE dl.taux_taxe IS NOT NULL AND dl.taux_taxe <> 0
+        AND NOT EXISTS (
+          SELECT 1 FROM devis_lignes_taxes dlt
+          JOIN account_tax at ON at.id = dlt.tax_id
+          WHERE dlt.devis_ligne_id = dl.id AND at.amount = dl.taux_taxe
+        )
+    `);
+    if (Number(nonMigrees) > 0) {
+      throw new Error(`Vérification account_tax échouée : ${nonMigrees} ligne(s) avec taux_taxe non reliées à une taxe équivalente.`);
+    }
+
+    await client.query('ALTER TABLE devis_lignes DROP COLUMN taux_taxe');
+    await client.query('COMMIT');
+    console.log(`✅ account_tax : ${nbLignesAffectees} ligne(s) reliées à ${couples.length} taxe(s). Colonne devis_lignes.taux_taxe supprimée.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
+}
+
 // ═══════════════ RH complète — amorçage des données dérivées ═══════════════
 // Ces trois fonctions ne retirent aucune colonne (contrairement à migrateRemiseToPourcentage
 // etc.) : elles se contentent de peupler les nouvelles structures à partir de l'existant.
@@ -1807,6 +2143,42 @@ async function seedPaymentTermsForExistingEntreprises() {
   }
   if (entreprises.length > 0) {
     console.log(`✅ Conditions de paiement par défaut créées pour ${entreprises.length} entreprise(s).`);
+  }
+}
+
+// Étape 2 Comptabilité : crée le plan de comptes + les journaux par défaut pour toute
+// entreprise qui n'a aucun journal. Idempotent (garde sur l'absence de account_journal +
+// ON CONFLICT DO NOTHING sur les deux tables). Mêmes listes que routes/auth.js (seed à
+// l'inscription) via utils/comptaDefauts.js.
+async function seedComptaConfigForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM account_journal j WHERE j.entreprise_id = e.id)`
+  );
+  for (const { id } of entreprises) {
+    const compteIdParCode = {};
+    for (const c of COMPTES_DEFAUT) {
+      const { rows } = await client.query(
+        `INSERT INTO account_account (entreprise_id, code, name, account_type, reconcile)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (entreprise_id, code) DO UPDATE SET code = EXCLUDED.code
+         RETURNING id`,
+        [id, c.code, c.name, c.account_type, c.reconcile]
+      );
+      compteIdParCode[c.code] = rows[0].id;
+    }
+    for (const j of JOURNAUX_DEFAUT) {
+      await client.query(
+        `INSERT INTO account_journal (entreprise_id, name, code, type, sequence, refund_sequence, default_account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (entreprise_id, code) DO NOTHING`,
+        [id, j.name, j.code, j.type, j.sequence, j.refund_sequence,
+         j.defaultAccountCode ? compteIdParCode[j.defaultAccountCode] : null]
+      );
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Plan de comptes + journaux par défaut créés pour ${entreprises.length} entreprise(s).`);
   }
 }
 
@@ -1891,6 +2263,8 @@ async function migrate() {
     await migrateClientPrixToListesPrix();
     await migrateRemiseToPourcentage();
     await migrateTaxeDevisVersLignes();
+    await migrateTaxeDevisLignesVersAccountTax();
+    await seedComptaConfigForExistingEntreprises();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();
     await migratePostesFromSalaries();
