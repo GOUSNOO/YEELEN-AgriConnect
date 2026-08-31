@@ -22,6 +22,7 @@ import {
   getParcellesHistorique, createParcelleHistorique,
   getCulturesMouvements,
   getProduits, createProduit, updateProduit, deleteProduit, getProduitMouvements,
+  getProduitLots, createProduitLot, updateProduitLot, deleteProduitLot, getLotsPerimes,
   getProduitCategories, createProduitCategorie, deleteProduitCategorie,
   getPoulaillerMouvements,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
@@ -2670,6 +2671,14 @@ const fillIntrant = (s) => ({
   zntMetres: s.zntMetres != null ? String(s.zntMetres) : '', bioAutorise: !!s.bioAutorise,
 });
 
+// Un lot périmé ou proche de la péremption (≤ 30 j) — sert au surlignage et à l'alerte.
+const LOT_PEREMPTION_SEUIL_JOURS = 30;
+function lotPerimeSoon(datePeremption) {
+  if (!datePeremption) return false;
+  const j = Math.ceil((new Date(datePeremption + 'T00:00:00') - new Date()) / 86400000);
+  return j <= LOT_PEREMPTION_SEUIL_JOURS;
+}
+
 function IntrantChamps({ v, patch, t }) {
   const type = v.typeIntrant;
   return (
@@ -2774,6 +2783,84 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   const [historiqueMouvements, setHistoriqueMouvements] = useState([]);
   const [historiqueLoading, setHistoriqueLoading] = useState(false);
 
+  // Suivi de lot + péremption (étape B) — registre parallèle, un produit à la fois déplié.
+  const emptyLotForm = { numeroLot: '', datePeremption: '', quantiteInitiale: '', coutUnitaire: '' };
+  const [lotsFor, setLotsFor] = useState(null);
+  const [lots, setLots] = useState([]);
+  const [lotForm, setLotForm] = useState(emptyLotForm);
+  const [lotBusy, setLotBusy] = useState(false);
+  const [lotsPerimes, setLotsPerimes] = useState([]);
+
+  const rechargerLotsPerimes = () => getLotsPerimes(LOT_PEREMPTION_SEUIL_JOURS).then(d => setLotsPerimes(d.lots || [])).catch(() => {});
+
+  const toggleLots = async (produitId) => {
+    if (lotsFor === produitId) { setLotsFor(null); setLots([]); return; }
+    setLotsFor(produitId);
+    setLots([]);
+    setLotForm(emptyLotForm);
+    try {
+      const { lots: fetched } = await getProduitLots(produitId);
+      setLots(fetched || []);
+    } catch (err) {
+      console.error('[StocksTab lots]', err);
+      notifyError(err, t('stocks.lotLoadError'));
+    }
+  };
+
+  const addLot = async (e) => {
+    e.preventDefault();
+    if (!lotForm.numeroLot.trim()) return;
+    setLotBusy(true);
+    try {
+      const { lot } = await createProduitLot(lotsFor, {
+        numeroLot: lotForm.numeroLot.trim(),
+        datePeremption: lotForm.datePeremption || null,
+        quantiteInitiale: lotForm.quantiteInitiale === '' ? 0 : Number(lotForm.quantiteInitiale),
+        coutUnitaire: lotForm.coutUnitaire === '' ? null : Number(lotForm.coutUnitaire),
+      });
+      if (lot) {
+        setLots(l => [...l, lot].sort((a, b) => (a.datePeremption || '9999') < (b.datePeremption || '9999') ? -1 : 1));
+        setLotForm(emptyLotForm);
+        rechargerLotsPerimes();
+        notifySuccess(t('stocks.lotAdded'));
+      }
+    } catch (err) {
+      console.error('[StocksTab addLot]', err);
+      notifyError(err, t('stocks.lotAddError'));
+    } finally {
+      setLotBusy(false);
+    }
+  };
+
+  const removeLot = async (lotId) => {
+    try {
+      await deleteProduitLot(lotId);
+      setLots(l => l.filter(x => x.id !== lotId));
+      rechargerLotsPerimes();
+      notifySuccess(t('stocks.lotDeleted'));
+    } catch (err) {
+      console.error('[StocksTab removeLot]', err);
+      notifyError(err, t('stocks.lotDeleteError'));
+    }
+  };
+
+  const saveLotQte = async (lot, nouvelleQte) => {
+    try {
+      const { lot: updated } = await updateProduitLot(lot.id, {
+        numeroLot: lot.numeroLot, datePeremption: lot.datePeremption || null,
+        quantiteRestante: Number(nouvelleQte) || 0,
+        coutUnitaire: lot.coutUnitaire, notes: lot.notes,
+      });
+      if (updated) {
+        setLots(l => l.map(x => x.id === lot.id ? updated : x));
+        rechargerLotsPerimes();
+      }
+    } catch (err) {
+      console.error('[StocksTab saveLotQte]', err);
+      notifyError(err, t('stocks.lotUpdateError'));
+    }
+  };
+
   const openHistorique = async (stock) => {
     setHistoriqueArticle(stock);
     setHistoriqueLoading(true);
@@ -2829,6 +2916,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         } else {
           setStocks(fetched);
         }
+        rechargerLotsPerimes();
       } catch (err) {
         console.error('[StocksTab load]', err);
       } finally {
@@ -2956,6 +3044,17 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t('stocks.stockEvolution')}</div>
         <MiniChart data={stockEvolution} color={COLORS.blue} />
       </Card>
+      {lotsPerimes.length > 0 && (
+        <Card style={{ background: COLORS.ochreSoft, border: `1px solid ${COLORS.ochre}`, fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 4 }}>
+            <AlertTriangle size={15} /> {t('stocks.lotsPerimesTitle', { n: lotsPerimes.length, jours: LOT_PEREMPTION_SEUIL_JOURS })}
+          </div>
+          <div style={{ color: COLORS.inkSoft }}>
+            {lotsPerimes.slice(0, 6).map(l => `${l.produitNom} · ${t('stocks.lotShort', { numero: l.numeroLot })} · ${l.datePeremption}`).join('  —  ')}
+            {lotsPerimes.length > 6 ? ` …+${lotsPerimes.length - 6}` : ''}
+          </div>
+        </Card>
+      )}
       <Card style={{ padding: 0 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 12px 0' }}>
           {['', ...TYPES_INTRANT].map(x => (
@@ -2983,7 +3082,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               return rows.length === 0 ? (
               <tr><td colSpan={7} style={{ color: COLORS.inkSoft }}>{t('stocks.emptyTable')}</td></tr>
             ) : rows.map(s => (
-              <tr key={s.id}>
+              <React.Fragment key={s.id}>
+              <tr>
                 <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: 6, color: COLORS.green, fontSize: 11 }}>bio</span> : null}</td>
                 <td><Badge tone="ochre">{s.categorie}</Badge></td>
                 <td style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>
@@ -2999,6 +3099,9 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? fmtMoney(s.prixDefaut) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={() => toggleLots(s.id)} title={t('stocks.lotsTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: lotsFor === s.id ? COLORS.ochre : COLORS.inkSoft, display: 'flex' }}>
+                      <Package size={15} />
+                    </button>
                     <button onClick={() => openHistorique(s)} title={t('stocks.historiqueTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                       <History size={15} />
                     </button>
@@ -3011,6 +3114,56 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                   </div>
                 </td>
               </tr>
+              {lotsFor === s.id && (
+                <tr>
+                  <td colSpan={7} style={{ background: '#FBFAF4', padding: '10px 14px' }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{t('stocks.lotsTitle')}</div>
+                    {lots.length === 0 ? (
+                      <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t('stocks.lotsEmpty')}</div>
+                    ) : (
+                      <table className="data-table" style={{ marginBottom: 8 }}>
+                        <thead><tr style={{ color: COLORS.inkSoft }}>
+                          <th>{t('stocks.lotNumero')}</th>
+                          <th>{t('stocks.lotDateEntree')}</th>
+                          <th>{t('stocks.lotPeremption')}</th>
+                          <th>{t('stocks.lotRestant')}</th>
+                          <th>{t('stocks.coutRevient', { devise })}</th>
+                          <th></th>
+                        </tr></thead>
+                        <tbody>
+                          {lots.map(l => (
+                            <tr key={l.id} style={lotPerimeSoon(l.datePeremption) ? { background: COLORS.redSoft } : undefined}>
+                              <td style={{ fontWeight: 500 }}>{l.numeroLot}</td>
+                              <td style={{ color: COLORS.inkSoft }}>{l.dateEntree}</td>
+                              <td style={{ color: lotPerimeSoon(l.datePeremption) ? COLORS.red : COLORS.inkSoft, fontWeight: lotPerimeSoon(l.datePeremption) ? 600 : 400 }}>{l.datePeremption || '—'}</td>
+                              <td>
+                                <input type="number" defaultValue={l.quantiteRestante}
+                                  onBlur={e => { if (Number(e.target.value) !== l.quantiteRestante) saveLotQte(l, e.target.value); }}
+                                  style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: '2px 6px', fontSize: 12.5 }} />
+                                <span style={{ color: COLORS.inkSoft, fontSize: 11 }}> / {l.quantiteInitiale}</span>
+                              </td>
+                              <td style={{ color: COLORS.inkSoft }}>{l.coutUnitaire != null ? fmtMoney(l.coutUnitaire) : '—'}</td>
+                              <td style={{ textAlign: 'right' }}>
+                                <button onClick={() => removeLot(l.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><Trash2 size={14} /></button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    <form onSubmit={addLot} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end' }}>
+                      <Field label={t('stocks.lotNumero')} value={lotForm.numeroLot} onChange={e => setLotForm({ ...lotForm, numeroLot: e.target.value })} />
+                      <Field label={t('stocks.lotPeremption')} type="date" value={lotForm.datePeremption} onChange={e => setLotForm({ ...lotForm, datePeremption: e.target.value })} />
+                      <Field label={t('stocks.lotQuantiteInitiale')} type="number" value={lotForm.quantiteInitiale} onChange={e => setLotForm({ ...lotForm, quantiteInitiale: e.target.value })} />
+                      <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={lotForm.coutUnitaire} onChange={e => setLotForm({ ...lotForm, coutUnitaire: e.target.value })} />
+                      <Button type="submit" disabled={lotBusy} style={{ whiteSpace: 'nowrap' }}>
+                        {lotBusy ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t('stocks.lotAdd')}
+                      </Button>
+                    </form>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ));
             })()}
           </tbody>

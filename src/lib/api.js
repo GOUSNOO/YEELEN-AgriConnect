@@ -201,6 +201,23 @@ export async function getProduitMouvements(id) {
   return request(`/produits/${id}/mouvements`);
 }
 
+// Suivi de lot + péremption (étape B) — registre parallèle, ne touche pas produits.quantite
+export async function getProduitLots(id) {
+  return request(`/produits/${id}/lots`);
+}
+export async function createProduitLot(id, payload) {
+  return safeRequest(`/produits/${id}/lots`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateProduitLot(lotId, payload) {
+  return safeRequest(`/produits/lots/${lotId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteProduitLot(lotId) {
+  return safeRequest(`/produits/lots/${lotId}`, { method: 'DELETE' });
+}
+export async function getLotsPerimes(jours = 30) {
+  return request(`/produits/lots-perimes?jours=${jours}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Catégories de produits (par entreprise, par module)
 // ─────────────────────────────────────────────────────────────────────

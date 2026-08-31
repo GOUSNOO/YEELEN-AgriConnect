@@ -1252,6 +1252,31 @@ UPDATE produits p SET type_intrant = CASE pc.nom
   WHERE pc.id = p.categorie_id AND p.type_intrant IS NULL
     AND pc.nom IN ('Semences', 'Engrais', 'Produits phytosanitaires', 'Aliment');
 
+-- Étape B « élargissement stock » : suivi de lot + péremption. Registre parallèle,
+-- INDÉPENDANT de produits.quantite (qui reste la source de vérité du stock global) — un lot
+-- trace un batch entrant (n° de lot, date de péremption, coût unitaire, provenance achat).
+-- La consommation FIFO/lot-à-lot est volontairement hors périmètre ici (voir la note
+-- "Traçabilité" de CLAUDE.md sur le choix de ne pas construire un vrai suivi de lots complet).
+-- achat_id n'a pas de FK stricte, comme stock_id ailleurs (traçabilité indicative).
+CREATE TABLE IF NOT EXISTS stock_lots (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  produit_id        INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  numero_lot        TEXT NOT NULL,
+  date_entree       DATE NOT NULL DEFAULT CURRENT_DATE,
+  date_peremption   DATE,
+  quantite_initiale NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  quantite_restante NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  cout_unitaire     NUMERIC(12, 2),
+  achat_id          INTEGER,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stock_lots_entreprise_id ON stock_lots(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_stock_lots_produit_id ON stock_lots(produit_id);
+CREATE INDEX IF NOT EXISTS idx_stock_lots_peremption ON stock_lots(entreprise_id, date_peremption);
+
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,

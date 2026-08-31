@@ -225,4 +225,133 @@ router.get('/:id/mouvements', authRequired, async (req, res) => {
   }
 });
 
+// ─── Suivi de lot + péremption (étape B « élargissement stock ») ───────────────
+// Registre parallèle : les lots tracent les batchs entrants (n° de lot, péremption,
+// coût, provenance) sans toucher produits.quantite. Aucune consommation FIFO ici.
+const LOT_COLUMNS = `
+  l.id, l.produit_id AS "produitId", l.numero_lot AS "numeroLot",
+  to_char(l.date_entree, 'YYYY-MM-DD') AS "dateEntree",
+  to_char(l.date_peremption, 'YYYY-MM-DD') AS "datePeremption",
+  l.quantite_initiale::float8 AS "quantiteInitiale",
+  l.quantite_restante::float8 AS "quantiteRestante",
+  l.cout_unitaire::float8 AS "coutUnitaire",
+  l.achat_id AS "achatId", l.notes, l.created_at AS "createdAt"
+`;
+
+function champsLot(body) {
+  const num = (v) => (v === '' || v == null ? null : Number(v));
+  const txt = (v) => (v === '' || v == null ? null : String(v).trim() || null);
+  const numeroLot = txt(body.numeroLot);
+  if (!numeroLot) return { error: 'Le numéro de lot est requis.' };
+  const qInit = num(body.quantiteInitiale);
+  const qRest = body.quantiteRestante === '' || body.quantiteRestante == null ? qInit : num(body.quantiteRestante);
+  return {
+    valeurs: {
+      numeroLot,
+      dateEntree: txt(body.dateEntree),
+      datePeremption: txt(body.datePeremption),
+      quantiteInitiale: qInit ?? 0,
+      quantiteRestante: qRest ?? 0,
+      coutUnitaire: num(body.coutUnitaire),
+      achatId: body.achatId === '' || body.achatId == null ? null : Math.trunc(Number(body.achatId)),
+      notes: txt(body.notes),
+    },
+  };
+}
+
+// Lots dont la péremption est proche (ou dépassée) et qu'il reste du stock — pour
+// l'alerte du module Stocks. Déclarée avant /:id/lots (aucun conflit de route, mais
+// même méthode/préfixe).
+router.get('/lots-perimes', authRequired, async (req, res) => {
+  const jours = Number.isFinite(Number(req.query.jours)) ? Math.max(0, Math.trunc(Number(req.query.jours))) : 30;
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${LOT_COLUMNS}, p.nom AS "produitNom", p.module
+       FROM stock_lots l JOIN produits p ON p.id = l.produit_id
+       WHERE l.entreprise_id = $1 AND l.quantite_restante > 0
+         AND l.date_peremption IS NOT NULL
+         AND l.date_peremption <= (CURRENT_DATE + make_interval(days => $2::int))
+       ORDER BY l.date_peremption ASC, l.id ASC`,
+      [req.user.entrepriseId, jours]
+    );
+    return res.json({ lots: rows });
+  } catch (err) {
+    console.error('[GET /produits/lots-perimes]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des lots.' });
+  }
+});
+
+router.get('/:id/lots', authRequired, async (req, res) => {
+  try {
+    const owned = await pool.query('SELECT 1 FROM produits WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (owned.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable.' });
+    const { rows } = await pool.query(
+      `SELECT ${LOT_COLUMNS} FROM stock_lots l
+       WHERE l.produit_id = $1 AND l.entreprise_id = $2
+       ORDER BY l.date_peremption ASC NULLS LAST, l.id ASC`,
+      [req.params.id, req.user.entrepriseId]
+    );
+    return res.json({ lots: rows });
+  } catch (err) {
+    console.error('[GET /produits/:id/lots]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des lots.' });
+  }
+});
+
+router.post('/:id/lots', authRequired, async (req, res) => {
+  const c = champsLot(req.body);
+  if (c.error) return res.status(400).json({ error: c.error });
+  try {
+    const owned = await pool.query('SELECT 1 FROM produits WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (owned.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable.' });
+    const v = c.valeurs;
+    const ins = await pool.query(
+      `INSERT INTO stock_lots (entreprise_id, produit_id, user_id, numero_lot, date_entree, date_peremption,
+         quantite_initiale, quantite_restante, cout_unitaire, achat_id, notes)
+       VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE), $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [req.user.entrepriseId, req.params.id, req.user.sub, v.numeroLot, v.dateEntree, v.datePeremption,
+       v.quantiteInitiale, v.quantiteRestante, v.coutUnitaire, v.achatId, v.notes]
+    );
+    const { rows } = await pool.query(`SELECT ${LOT_COLUMNS} FROM stock_lots l WHERE l.id = $1`, [ins.rows[0].id]);
+    return res.status(201).json({ lot: rows[0] });
+  } catch (err) {
+    console.error('[POST /produits/:id/lots]', err);
+    return res.status(500).json({ error: 'Erreur lors de la création du lot.' });
+  }
+});
+
+router.put('/lots/:lotId', authRequired, async (req, res) => {
+  const c = champsLot(req.body);
+  if (c.error) return res.status(400).json({ error: c.error });
+  try {
+    const v = c.valeurs;
+    const result = await pool.query(
+      `UPDATE stock_lots SET numero_lot = $1, date_peremption = $2, quantite_restante = $3,
+         cout_unitaire = $4, notes = $5
+       WHERE id = $6 AND entreprise_id = $7 RETURNING id`,
+      [v.numeroLot, v.datePeremption, v.quantiteRestante, v.coutUnitaire, v.notes, req.params.lotId, req.user.entrepriseId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Lot introuvable.' });
+    const { rows } = await pool.query(`SELECT ${LOT_COLUMNS} FROM stock_lots l WHERE l.id = $1`, [req.params.lotId]);
+    return res.json({ lot: rows[0] });
+  } catch (err) {
+    console.error('[PUT /produits/lots/:lotId]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour du lot.' });
+  }
+});
+
+router.delete('/lots/:lotId', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM stock_lots WHERE id = $1 AND entreprise_id = $2 RETURNING id',
+      [req.params.lotId, req.user.entrepriseId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Lot introuvable.' });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /produits/lots/:lotId]', err);
+    return res.status(500).json({ error: 'Erreur lors de la suppression du lot.' });
+  }
+});
+
 export default router;
