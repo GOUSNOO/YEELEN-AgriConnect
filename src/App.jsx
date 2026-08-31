@@ -761,18 +761,21 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
   const cancelEditDevis = () => {
     setEditingId(null);
-    setEditForm({ clientId: '', notes: '', lignes: [{ ...emptyLigne }] });
+    setEditForm({ clientId: '', statut: '', notes: '', lignes: [{ ...emptyLigne }] });
     setEditClientSearch('');
   };
 
   const startEditDevis = async (d) => {
-    if (d.statut !== 'Brouillon') return;
+    // Aligné sur Odoo : un devis signé mais pas encore facturé reste éditable (ajout
+    // d'articles). Le backend réajuste le stock réservé ; dès "Facturé", verrouillé.
+    if (!['Brouillon', 'Devis', 'Signé'].includes(d.statut)) return;
     try {
       const data = await getDevisDetail(d.id);
       const devisComplet = data.devis;
       setEditingId(devisComplet.id);
       setEditForm({
         clientId: String(devisComplet.clientId),
+        statut: devisComplet.statut,
         notes: devisComplet.notes || '',
         lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', taxIds: Array.isArray(l.taxIds) ? l.taxIds : [], unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
       });
@@ -1272,7 +1275,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <td style={{ fontWeight: 600 }}>{fmtMoney(d.total)}</td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                      {['Brouillon', 'Devis'].includes(d.statut) && (
+                      {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
                         <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
                       )}
                       {d.statut === 'Brouillon' && (
@@ -1292,7 +1295,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {detailId && detailData && (() => {
         const margeInfo = computeMarge(detailData, catalogItems);
         const closeDetailPopup = () => { setDetailId(null); setDetailData(null); setJournal([]); setMessages([]); };
-        const modifiable = detailData.statut === 'Brouillon';
+        const modifiable = ['Brouillon', 'Devis', 'Signé'].includes(detailData.statut);
         const nbLignesProduit = detailData.lignes.filter(l => l.type !== 'section').length;
         const nbEcheances = (detailData.echeances || []).length;
         const montantHT = detailData.lignes.reduce((s, l) => {
@@ -1790,6 +1793,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t("devis.editTitle")}</div>
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
+            {editForm.statut === 'Signé' && (
+              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: 10, padding: '8px 12px', fontSize: 12.5, marginBottom: 12 }}>
+                {t("devis.editSigneNotice")}
+              </div>
+            )}
             <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <Field

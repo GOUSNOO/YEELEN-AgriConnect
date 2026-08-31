@@ -459,6 +459,7 @@
     "errRequired": "Un client et toutes les lignes de produits (complètes) sont requis.",
     "created": "Devis créé en brouillon.",
     "updated": "Devis mis à jour.",
+    "editSigneNotice": "Ce devis est déjà signé. La modification des lignes réajuste automatiquement le stock réservé. Une fois le devis facturé, les lignes ne pourront plus être modifiées.",
     "updateMetaError": "Impossible de mettre à jour le devis.",
     "sendMessageError": "Impossible d'envoyer le message.",
     "confirmAnnuler": "Annuler ce devis ? Cette action ne peut pas être annulée (il faudra en recréer un nouveau).",
