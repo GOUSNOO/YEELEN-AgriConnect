@@ -1314,3 +1314,404 @@ Répétition migration : `pg_dump` de `agri_app` → restauration jetable → `m
 Vérifs : `vite build` OK, front `npm test` 88/88, `test:integration` 94/94, back `npm test`
 vert, smoke HTTP réel (devis validityDate +30 j / expired ; facturer terme 30 j + acompte
 25 % → échéances 2500 aujourd'hui + 7500 à J+30). Conteneurs backend + frontend reconstruits.
+
+### ERP Comptabilité — Étape 1 : `account.tax` (taxes réutilisables) (2026-08-30)
+
+Remplace le `%` brut par ligne (`devis_lignes.taux_taxe`) par de vraies taxes réutilisables
+calquées sur `account.tax` d'un ERP de référence.
+
+- **`migrate.js`** : `devis_lignes.taux_taxe` retirée ;
+  `migrateTaxeDevisLignesVersAccountTax()` convertit chaque `(entreprise, taux>0)` en
+  `account_tax` percent + liens, puis `DROP COLUMN` (0 ligne réelle en prod → no-op). Grep
+  complet fait contre une résurrection par `ADD COLUMN IF NOT EXISTS`.
+- **`account_tax`** (noms de champs Odoo : `type_tax_use`, `amount_type`, `amount`,
+  `price_include`, `include_base_amount`, `active`, `sequence`, `invoice_label`,
+  `UNIQUE(entreprise_id, name)`) + **`devis_lignes_taxes`** (jointure Many2many, comme
+  `sale.order.line.tax_id`).
+- Calcul : `percent`, `fixed` (à l'unité), `price_include` (extraction),
+  `include_base_amount` (cascade) ; `group`/`division` = 0 (repoussé à l'étape 3). Calcul
+  unique partagé dans **`utils/taxeCompute.js:appliquerTaxesLigne`**, utilisé par
+  `routes/devis.js` (`calculerTotal`) **et** `utils/devisPdf.js` (récap HT / par taxe / TTC
+  + colonne « Taxes »).
+- Routes `/api/taxes` : GET ouvert, `POST/PUT/DELETE` gated `admin`/`directeur`.
+  `devis.js` `POST`/`PUT` acceptent `lignes[].taxIds` (id étranger ignoré en silence via
+  `filtrerTaxIds`). `getDevisComplet` agrège `taxIds` par ligne + renvoie le référentiel
+  `taxes`.
+- Front : input `%` par ligne → `TaxSelect` (menu de cases à cocher) ; `TaxesPanel`
+  (référentiel repliable) ; recalcul client `taxesLigneCalc`. i18n `taxes.*` fr/en.
+
+Migration répétée ×2 sur copie restaurée d'`agri_app` (idempotente, totaux devis
+inchangés). `taxes.test.js` → tests d'intégration verts ; front 88/88.
+
+### ERP Comptabilité — Étape 2 : journaux + plan de comptes + séquences (2026-08-30)
+
+Objets de configuration uniquement : **aucun `account.move`, aucune écriture au grand
+livre, aucun changement du calcul devis/factures ni de `finances`**. Socle pour l'étape 3.
+
+- **`account_account`** : `code`, `name`, `account_type` (19 valeurs, CHECK), `reconcile`,
+  `active`, `UNIQUE(entreprise_id, code)`.
+- **`account_journal`** : `name`, `code` (≤5), `type` (sale/purchase/cash/bank/general),
+  `sequence`, `refund_sequence`, `default_account_id` (FK `ON DELETE SET NULL`),
+  `UNIQUE(entreprise_id, code)`.
+- **`account_journal_sequence`** : compteur `(journal_id, prefix, last_number)`.
+- Seed (**`utils/comptaDefauts.js`**, importé par `auth.js` à l'inscription +
+  `migrate.js:seedComptaConfigForExistingEntreprises` rétroactivement) : plan générique
+  (codes `121000`/`211000`/`101401`/`101402`/`400000`/`500000`/`251000`/`131000` — **pas un
+  PCG national, portée mondiale**) + journaux `INV`/`BILL`/`BNK`/`CSH`/`MISC` reliés à leur
+  compte par défaut.
+- **`utils/journalSequence.js:prochainNumeroJournal`** → `CODE/AAAA/NNNN` (`RCODE/…` pour
+  un avoir si `refund_sequence`). Année dans le préfixe ⇒ remise à zéro annuelle. Increment
+  sous verrou de ligne dans la transaction de l'appelant. Aucun appelant à ce stade —
+  l'étape 3 le branchera.
+- Routes `/api/journals` + `/api/accounts` : GET ouvert, `POST/PUT/DELETE` gated
+  `admin`/`directeur`. `journals.js` valide que `defaultAccountId` appartient à
+  l'entreprise → 400 sinon.
+- Front : `ComptaConfigPanel` (repliable, dans `DevisModule`) — journaux + comptes,
+  ajout/suppression. i18n `comptaConfig.*` fr/en.
+
+Migration ×2 sur copie restaurée (idempotente ; 9×8 comptes + 9×5 journaux seedés ; totaux
+inchangés). `journals.test.js` + `accounts.test.js` → 120 tests d'intégration / 21 fichiers.
+
+### ERP Comptabilité — Étape 3 : `account.move` + `account.move.line` (double-partie) (2026-08-30)
+
+Décision prise avec l'utilisateur : **double-partie complète** (écriture équilibrée + moteur
+de lettrage). `account.move` **autonome cette étape** — `POST /devis/:id/facturer` INCHANGÉ
+(rebranché à l'étape 3b).
+
+- Tables (noms de champs calqués Odoo) : **`account_move`** (`move_type`, `state`
+  draft/posted/cancel, `name` NULL→`INV/2026/0001` au post, montants HT/taxe/TTC/résiduel,
+  `payment_state`, `reversed_entry_id` pour l'étape 5 ; index unique partiel
+  `(journal_id, name)` WHERE name IS NOT NULL) ; **`account_move_line`** (`display_type`
+  product/tax/payment_term/…, `debit`/`credit`/`balance`/`account_id`,
+  `amount_residual`/`reconciled`/`full_reconcile_id`/`matching_number`, `date_maturity`) ;
+  **`account_move_line_taxes`** (M2M), **`account_full_reconcile`**,
+  **`account_partial_reconcile`**, **`account_payment`** (délègue à sa propre move).
+- `echeances_paiement` : `+move_id`, `devis_id` passe nullable. **FK `partner_id` →
+  `contacts` posées par un `DO $$` après la création de `contacts`** (les tables `account_*`
+  précèdent `contacts` dans le template SQL unique — même contrainte que `devis.client_id` ;
+  base fraîche 500 tant que non corrigé, repéré par le `globalSetup` d'intégration).
+- Post : créance D=total / produit C=HT par ligne / lignes de taxe C=taxe, assertion
+  Σd=Σc, `name` via `prochainNumeroJournal`, `out_refund` signes inversés + préfixe `RINV`.
+- `register-payment` : `account_payment` + son écriture (trésorerie D ↔ créance C) +
+  `account_partial_reconcile` contre la ligne créance ; au solde total →
+  `account_full_reconcile` + `matching_number` ; maj `amount_residual`/`payment_state`,
+  échéances couvertes marquées, miroir `finances` via `syncFacturePaiement`
+  (`source_module='Facture'`).
+- Routes `/api/factures` : GET liste + `:id`, `POST`/`PUT` (brouillon seul),
+  `:id/post` / `:id/button-draft` / `:id/cancel` / `:id/register-payment`
+  (`admin`/`directeur`), `DELETE` (brouillon/annulé seul).
+- Front : **`src/components/FacturesModule.jsx`** (liste + brouillon avec `TaxSelect` +
+  modal détail lignes compta / échéances / paiements + actions), onglet nav « Factures »
+  (permission `finances`). `taxesLigneCalc` extrait vers **`src/lib/taxes.js`** (partagé avec
+  `DevisModule`). i18n `factures.*` fr/en.
+
+Migration ×2 sur copie restaurée (idempotente). Smoke live : brouillon → post
+`INV/2026/0001` (D=C=11800) → paiement → paid, résiduel 0, matching `A00001`, entrée
+`finances` Banque 11800. `factures.test.js` (10) → 130 tests d'intégration / 22 fichiers.
+
+### ERP Comptabilité — Étape 3b : `POST /devis/:id/facturer` produit une facture (2026-08-30)
+
+`facturer` **crée et poste** désormais un `account_move` (`out_invoice`) reflet du devis.
+`devis.move_id` (nouvelle colonne nullable) pointe vers la facture ;
+`account_move.invoice_origin` = numéro du devis ; échéances rattachées aux deux
+(`devis_id` + `move_id`). Le devis garde son `statut`/flux d'échéances comme **miroir
+commercial**.
+
+- Refacto : **`server/src/utils/accountMove.js`** extrait de `routes/factures.js` —
+  `posterMove(client, moveId, entrepriseId)` (écriture équilibrée + numéro) et
+  `enregistrerPaiementMove(client, {…, skipFinanceMirror, skipEcheanceAllocation})`
+  (paiement + lettrage) ; `factures.js` `/post` et `/register-payment` deviennent des
+  enveloppes minces (comportement inchangé).
+- `facturer` complet → `enregistrerPaiementMove(skipFinanceMirror)` : le move se solde
+  (paid + lettrage), `syncDevisPaiement` reste la **seule** entrée `finances`
+  (`source_module='Devis'`).
+- `POST /devis/:id/echeances/:eid/payer` devient transactionnel et, si `devis.move_id`,
+  appelle `enregistrerPaiementMove(skipFinanceMirror, skipEcheanceAllocation)` pour que
+  `payment_state`/`amount_residual`/lettrage du move suivent (l'échéance précise est déjà
+  marquée par la route devis, sinon débordement sur la suivante).
+- `POST /devis/:id/remettre-brouillon` défait aussi la facture : supprime écritures de
+  paiement lettrées + `account_payment` + entrées `finances` `'Facture'`, supprime le move
+  (cascades), purge `full_reconcile` orphelins, remet `move_id` NULL. Numéro de journal non
+  restitué (trou accepté pour cet undo pré-prod).
+- `getDevisComplet` renvoie `move: {id,name,state,paymentState,amountResidual,amountTotal}
+  | null`. Front : bouton intelligent « Facture INV/… · <état paiement> » dans le modal
+  devis → onglet Factures (`devis.voirFacture` i18n).
+
+Migration ×2 sur copie restaurée. Smoke live : devis signé → facturer complet →
+`INV/2026/0001` posté/paid, écriture D=C=1000, `invoice_origin=DEV-2026-0001` →
+`remettre-brouillon` → move supprimé (404). `devis.test.js` +3 → 133 tests / 22 fichiers.
+
+### ERP Comptabilité — Étape 4 : inaltérabilité des factures postées (2026-08-30)
+
+**Opt-in par journal** (`account_journal.restrict_mode_hash_table`, désactivé par défaut →
+le flux pré-prod `remettre-brouillon` reste utilisable tant qu'une entreprise ne l'active
+pas).
+
+- Schéma : `account_journal.restrict_mode_hash_table BOOL` + `.secure_sequence_last INT`
+  (compteur sans trou, verrou de ligne au post) ; `account_move.inalterable_hash TEXT` +
+  `.secure_sequence_number INT`.
+- **`utils/accountMove.js`** : `chaineIntegriteMove`
+  (`name|date|journal_id|amount_total|partner_id` puis chaque ligne
+  `account_id|debit|credit|balance` triée par id) ; `hacherMoveSiRequis` (si journal
+  sécurisé : `secure_sequence_number = last+1` FOR UPDATE + `inalterable_hash =
+  sha256(prevHash + chaine)` chaîné à l'écriture sécurisée précédente du journal ; appelé
+  par `posterMove` et après l'écriture de paiement) ; `verifierChaineJournal` (re-parcourt,
+  recalcule chaque hash, vérifie l'absence de trou → `{ok,count}` |
+  `{ok:false,brokenAt,reason:'hash'|'gap'}`).
+- Garde-fous : `button-draft` / `DELETE` facture / `devis remettre-brouillon` → 400 si le
+  move est haché (message : « créez un avoir », étape 5). `GET /api/factures/verify-hash
+  ?journalId=` (`admin`/`directeur`, déclarée avant `/:id`). `journals` `PUT`/`POST`
+  acceptent `restrictModeHashTable` **seulement pour l'ACTIVER** (`=== true`) ; un `false`
+  partiel est ignoré. Corrigé au passage : 2 `double-client.release()` sur les retours
+  anticipés de `remettre-brouillon`.
+- Front : `ComptaConfigPanel` bouton verrou par journal (confirmation, irréversible) ;
+  `FacturesModule` modal détail — puce « Sécurisée » + bouton « Vérifier l'intégrité ».
+  i18n.
+
+Migration ×2 sur copie restaurée. Smoke live : journal `INV` sécurisé, 2 factures →
+`secure_sequence_number` 1 puis 2, hashs distincts et chaînés, `button-draft` → 400,
+`verify-hash` → `{ok:true,count:2}`. `factureHash.test.js` (5) → 138 tests / 23 fichiers.
+
+### ERP Comptabilité — Étape 5 : avoirs (`out_refund` + reverse) (2026-08-30)
+
+Aucun changement de schéma (`reversed_entry_id` / `out_refund` / séquence `RINV` existent
+depuis l'étape 3).
+
+- Refacto : **`lettrerLignesPartenaire(client, entrepriseId, {ligneFactureId, ligneContreId,
+  amount, date})`** extrait d'`enregistrerPaiementMove` — le
+  `account_partial_reconcile` + `account_full_reconcile` + `matching_number` au solde,
+  **sign-aware sur les DEUX lignes**. Partagé par le paiement et le reverse.
+- **`reverseMove(client, {moveId, entrepriseId, userId, reason, date, refundMethod})`** :
+  l'origine doit être une facture postée (`out_invoice`/`in_invoice`) ; crée un
+  `account_move` `out_refund`/`in_refund` (`reversed_entry_id` = origine, `ref` = « Annulation
+  de : <name> — <reason> », `invoice_origin`), copie lignes produit/section + liens de taxes.
+  `refundMethod:'refund'` (défaut) → avoir en **brouillon** ; `refundMethod:'cancel'` →
+  `posterMove` (écriture inversée + numéro `RINV/…` + hash si journal sécurisé) puis
+  lettrage contre la créance d'origine → origine `payment_state='reversed'` +
+  `amount_residual=0`.
+- Route `POST /api/factures/:id/reverse` (`admin`/`directeur`). Garde-fous :
+  `enregistrerPaiementMove` → 400 si origine `reversed` ; `POST /devis/:id/remettre-brouillon`
+  → 400 si la facture liée a des avoirs. `getFactureComplete` renvoie `reversedEntryName` +
+  `reversalMoveNames`.
+- Front : `FacturesModule` modal détail — bouton « Créer un avoir » sur une `out_invoice`
+  postée → formulaire inline (motif + méthode), ouvre l'avoir créé ; en-tête « Avoir de :
+  … » / « Annulée par : … ». i18n.
+
+`factureAvoir.test.js` (7) → 144 tests d'intégration / 24 fichiers.
+
+### ERP Comptabilité — Étape 6 : balance âgée, relances, paiements autonomes (2026-08-30) — ROADMAP COMPLÈTE
+
+- Schéma : `account_move.relance_niveau INT DEFAULT 0` + `.derniere_relance DATE` (suivi
+  des relances — **pas d'envoi email, SMTP différé**).
+- **`utils/accountMove.js`** : `creerPaiementAutonome(client, {…, partnerId, amount,
+  paymentDate, journalId, ref, sens})` — `account_payment` + son écriture postée
+  (trésorerie D / créance C) **sans lettrage** → crédit non alloué sur le compte client
+  (haché si le journal de trésorerie est sécurisé) ; `allouerPaiement(client, {paymentId,
+  moveId, amount, entrepriseId})` — lettre une tranche via `lettrerLignesPartenaire`, bornée
+  à `min(demandé, non-alloué, résiduel facture)`, maj `payment_state` ; partenaire différent
+  → 400.
+- Routes : `GET /api/factures/aged-receivable?date=` (par partenaire, reste dû des
+  `out_invoice`/`out_refund` postés ventilé *non échu / 1-30 / 31-60 / 61-90 / 90+* vs
+  `invoice_date_due`, `reversed` exclues, `out_refund` négatif, + totaux) ;
+  `GET /api/factures/overdue` (`out_invoice` postées `not_paid`/`partial` échues, avec
+  `daysOverdue`/`relanceNiveau`/`derniereRelance`) ; `POST /api/factures/:id/mark-reminded`
+  (`admin`/`directeur`) ; nouveau **`routes/paiements.js`** (`/api/paiements`) : `GET
+  ?partnerId=&unallocated=1`, `POST`, `POST :id/allocate` (`admin`/`directeur`).
+  `aged-receivable` / `overdue` déclarées avant `/:id`.
+- Coupe assumée : `payment_state='in_payment'` non utilisé (pas d'import de relevé bancaire
+  dans YEELEN).
+- Front : **`src/components/ComptaReportsPanel.jsx`** (sections repliables : balance âgée
+  partenaire × tranche ; retards + « Marquer relancé » ; paiement autonome + non-alloués +
+  « Affecter » inline), rendu au-dessus de `FacturesModule`. i18n `comptaReports.*`.
+
+Migration ×2 sur copie restaurée. Smoke live : facture échue −40 j → tranche 31-60 = 1000 ;
+overdue niveau 0 → mark-reminded → niveau 1 + date ; paiement autonome `BNK/2026/0001` non
+alloué = 600 → allocate contre la facture → lettré 600, résiduel 400, partial.
+`agedReceivable.test.js` (5) + `paiements.test.js` (7) → **154 tests d'intégration / 26
+fichiers**.
+
+### ERP Comptabilité — passe d'alignement UI sur Odoo (frontend seul) (2026-08-30)
+
+Sur demande utilisateur (« respecter la même interface qu'Odoo : forme, taille des colonnes
+et des lignes, leur emplacement »). **Aucun changement backend / schéma / test.**
+
+- `FacturesModule` : liste aux colonnes dans l'ordre du tree `account.move`
+  (`Numéro | Client | Date de facture | Échéance | Total HT | Total TTC | État paiement |
+  État`), échéance annotée façon widget `remaining_days`. Modal détail refait sur le
+  squelette de la fiche `account.move` : `MoveStatusBar` en chevrons, barre d'actions dans
+  l'ordre Odoo, en-tête deux colonnes en `.field-group`, onglets notebook « Lignes de
+  facture » / « Écritures comptables », bloc totaux bas-droite façon `oe_subtotal_footer`.
+- `ComptaReportsPanel` / `ComptaConfigPanel` / `TaxesPanel` / `PaymentTermsPanel` : listes
+  `<div>` → `.data-table` avec les colonnes des rapports Odoo. `TaxSelect` → puces
+  arrondies avec `×` façon `many2many_tags`. Tableaux de lignes du devis : colonne « Taxes »
+  déplacée après « Remise » (ordre de la ligne Sale Order). i18n fr/en complétée.
+
+`vite build` + 88 tests verts. Conteneur frontend reconstruit.
+
+### ERP Comptabilité — fiche facture aux vraies valeurs SCSS d'Odoo (frontend seul) (2026-08-30)
+
+Sur demande utilisateur (« pars des vraies valeurs SCSS d'Odoo pour la fiche facture »). Les
+dimensions sont **extraites du SCSS source du clone `erp-source`**
+(`addons/web/static/src/…`), pas estimées, et documentées valeur par valeur dans
+`src/App.css` (bloc `.oe-invoice`).
+
+- Repris tel quel : base 14px / lh 1.5, `gray-300` `#dee2e6`, `gray-100` `#f8f9fa`, texte
+  `#212529`, `brand-primary` `#71639e` ; statusbar caret `1em`, chevron inactif `#dee2e6` /
+  texte `#212529`, **actif = `mix(#71639e,#f8f9fa,20%)` = `#dddbe8` + bord latéral
+  `#71639e`, texte reste `#212529`** (la version précédente mettait un fond vert plein +
+  texte blanc, faux) ; `o_inner_group` grid `fit-content(150px) minmax(0,1fr)` gap
+  `8px 16px` ; `oe_subtotal_footer` grid `1fr auto` `margin-left auto` `border-top 1px`,
+  total `border-top 1px` weight 700 `font-size 1.3em` ; cellules liste `8px / 4.8px`
+  (16px aux bords) `border-collapse collapse` ; notebook `nav-tabs` onglet actif bord bas
+  blanc.
+- Modal `FacturesModule` réécrit en `.oe-group` / `.oe-list` / `.oe-subtotal` /
+  `.oe-notebook` / `.oe-statusbar`. Portée limitée à `.oe-invoice` pour ne pas toucher le
+  `.data-table` app-wide.
+
+`vite build` + 88 tests verts ; conteneur reconstruit.
+
+### Devis — édition des lignes autorisée après signature (modèle Odoo) (2026-08-31)
+
+Un devis **Signé mais pas encore Facturé** reste éditable (ajout/retrait d'articles), comme
+une commande confirmée dans Odoo. Le stock réservé à la signature est réajusté après coup
+(reverse ancien jeu + apply nouveau). Dès « Facturé », les lignes restent verrouillées
+(écriture comptable postée).
+
+- `PUT /devis/:id` : garde étendue à `{Brouillon, Devis, Signé}` ; réconciliation stock
+  pour un devis Signé dont les lignes changent.
+- Front : bouton « Modifier les lignes » + icône liste actifs sur Signé ; bandeau
+  d'avertissement dans l'éditeur ; i18n fr/en.
+- 3 tests d'intégration (ajout d'article → total recalculé + statut inchangé ;
+  réajustement du stock catalogué ; `PUT` refusé si Facturé).
+
+Vérifié au navigateur : bouton présent sur Signé / absent sur Facturé, édition OK, devis
+reste Signé, total 6000 → 7500, 2 lignes persistées.
+
+### Comptabilité — correctifs de la passe E2E : liste factures + totaux de l'avoir brouillon (2026-08-31)
+
+Deux correctifs issus d'une passe E2E navigateur :
+
+1. **`GET /api/factures`** ne renvoie plus les `account_move` de type `entry` (contreparties
+   de paiement `account_payment`) quand aucun `?moveType=` n'est passé — elles apparaissaient
+   dans la liste « Factures » avec un chip d'état de paiement trompeur. Le filtre explicite
+   `?moveType=` reste opérant.
+2. **`reverseMove`** (méthode `refund` / brouillon d'avoir) calcule désormais
+   `price_subtotal`/`price_total` par ligne et `amount_untaxed`/`tax`/`total`/`residual` sur
+   le move dès la création, au lieu de laisser `0,00` affiché partout jusqu'au post
+   (`posterMove` les recalcule de toute façon). Comportement aligné sur Odoo.
+
+`+1` test (liste exclut `entry`) ; `factureAvoir.test.js` « refund » vérifie maintenant les
+totaux du brouillon. 158 tests d'intégration verts.
+
+### Comptabilité — affectation d'un avoir posté + date d'échéance du paiement complet (2026-09-01)
+
+Deux correctifs issus de la passe E2E (obs. #3 et #4) :
+
+- **#3** — Un avoir posté via la méthode `refund` (avec un résiduel) restait bloqué en
+  négatif sur la balance âgée sans moyen UI de l'imputer. Ajouté :
+  `utils/accountMove.js:allouerAvoir()` (lettre la ligne `payment_term` de l'avoir contre
+  celle d'une facture ouverte du même partenaire — mêmes garde-fous qu'`allouerPaiement`) ;
+  `GET /api/factures/credit-notes-unallocated` (avant `/:id`) + `POST
+  /api/factures/:id/allocate-credit` (`admin`/`directeur`) ; section « Avoirs à affecter »
+  dans `ComptaReportsPanel`, même picker inline « Affecter » que les paiements autonomes.
+- **#4** — `POST /devis/:id/facturer`, chemin « complet » : `invoice_date_due` du move était
+  figé à J+30 alors que l'échéance créée est du jour (statut « Payé »). Aligné sur
+  aujourd'hui.
+
+`+4` tests d'intégration + `devis.test.js` (`invoice_date_due` = aujourd'hui pour le
+paiement complet). 162 tests d'intégration + 88 front verts. Vérifié au navigateur.
+
+### Stock — Étape A : typologie des intrants + fiche enrichie par type (2026-09-01)
+
+Élargissement de la gestion de stock (semences/engrais/phyto). Modèle de champs adapté de
+**LiteFarm** (`product` / `soil_amendment_product` : enum de type, NPK + unité, dose, liste
+substances bio) + champs propres au **registre des traitements phytosanitaires FR** (n° AMM,
+DAR = délai avant récolte, ZNT) qu'aucun projet OSS ne modélise.
+
+- **`migrate.js`** : `produits.type_intrant` (CHECK 6 valeurs) + champs à plat semence
+  (`variete`, `taux_germination`), engrais (`npk_n/p/k`, `npk_unit`, `dose_ha`,
+  `dose_ha_unite`), phyto (`matiere_active`, `numero_amm`, `dar_jours`, `znt_metres`),
+  `bio_autorise`. 3 CHECK sur NPK (unité valide ; cohérence tout-ou-rien ; somme ≤ 100 si
+  percent). Backfill `type_intrant` depuis le nom de catégorie (idempotent).
+- **`routes/produits.js`** : `champsIntrant()` normalise + valide ; `POST`/`PUT`/`GET`
+  étendus, `GET ?typeIntrant=` pour filtrer ; `PRODUIT_COLUMNS` renvoie les 14 champs.
+- **`App.jsx` `StocksTab`** : composant `IntrantChamps` partagé add/edit (select type + bloc
+  de champs conditionnel), rangée de filtres par type au-dessus du tableau, colonne « Type
+  d'intrant » + « DAR n j » + pastille bio. i18n fr/en.
+- `produits.test.js` : 9 tests (création par type, validations 400, ratio autorisé > 100,
+  `PUT` + filtre `GET`, isolation multi-tenant).
+
+171 tests d'intégration / 27 fichiers + 88 front verts. Vérifié au navigateur.
+
+### Stock — Étape B : suivi de lot + péremption (2026-09-01)
+
+- **`migrate.js`** : table **`stock_lots`** (`produit_id`, `numero_lot`, `date_entree`,
+  `date_peremption`, `quantite_initiale/restante`, `cout_unitaire`, `achat_id?`, `notes`) +
+  3 index. **Registre parallèle** : ne touche pas `produits.quantite` (qui reste la source
+  de vérité du stock global).
+- **`routes/produits.js`** : `GET /:id/lots`, `POST /:id/lots` (`numeroLot` requis),
+  `PUT /lots/:lotId`, `DELETE /lots/:lotId` (404 sur 0 ligne), `GET /lots-perimes?jours=30`
+  (lots avec péremption ≤ J+jours et reste > 0). `LOT_COLUMNS` `to_char` sur les dates.
+- **`App.jsx` `StocksTab`** : bouton Package par ligne → sous-ligne dépliable (liste lots +
+  mini-formulaire d'ajout), édition inline de la quantité restante (`onBlur`), surlignage
+  rouge d'un lot périmant (≤ 30 j), bannière d'alerte au-dessus du tableau. i18n fr/en.
+- `produits.test.js` `+6` tests (création lot, 400/404, ne modifie pas `produits.quantite`,
+  `PUT` restante + `DELETE` 404, `lots-perimes` filtre, isolation multi-tenant).
+
+177 tests d'intégration / 27 fichiers + 88 front verts. Vérifié au navigateur.
+
+### Stock — Étape C : registre des traitements phytosanitaires (2026-09-01)
+
+Journal **réglementaire** (obligation FR/UE) des applications d'engrais et de produits
+phytosanitaires au champ.
+
+- **`migrate.js`** : table **`applications_intrants`** (`parcelle_id`, `produit_id`,
+  `lot_id?`, `date_application`, `dose` + `unite`, `surface_traitee_ha`,
+  `quantite_utilisee`, `operateur`, `cible`, `dar_calcule`, `znt_respectee`, `notes`). FK
+  `ON DELETE SET NULL` + **noms dénormalisés** : l'entrée survit à la suppression d'une
+  parcelle/produit (pièce réglementaire).
+- **`stockSync.js`** : `consommerProduit` / `restituerProduit` (décrément/restaure un seul
+  produit catalogue).
+- **`routes/applicationsIntrants.js`** (nouveau, `/api/applications-intrants`) : `GET`
+  liste, `POST` (valide appartenance parcelle/produit/lot → `null` sinon ; `dar_calcule` =
+  date + `produit.dar_jours` figé à la saisie, calcul en UTC ; décrémente le stock si
+  `quantite_utilisee`), `PUT` métadonnées (recalcule le DAR, ne touche pas le stock),
+  `DELETE` (restitue le stock, 404 sur 0 ligne).
+- **`src/components/RegistreIntrantsView.jsx`** (nouveau) + onglet « Registre » dans
+  `CulturesModule` : formulaire (parcelle, produit filtré aux types engrais/phyto, dose,
+  surface, quantité prélevée, opérateur, cible, ZNT, notes) + tableau + bannière « récolte
+  déconseillée avant le <DAR> » par parcelle. i18n fr/en.
+- `applicationsIntrants.test.js` (5 tests) : DAR calculé + stock décrémenté, parcelle/produit
+  d'une autre entreprise → `null`, `DELETE` restitue le stock + 404, `PUT` recalcule le DAR
+  sans toucher le stock, isolation.
+
+**182 tests d'intégration / 28 fichiers** + 88 front + build verts. Vérifié au navigateur.
+
+### Passe de récupération : stack Docker périmée + vérif navigateur Stock A/B/C (2026-09-01)
+
+Après plusieurs `git pull` successifs (récupération des étapes Comptabilité 1-6 et Stock
+A/B/C faites dans d'autres sessions), constat : **les conteneurs Docker tournaient encore
+sur des images du 2026-08-22** et la base n'avait jamais reçu les nouvelles migrations —
+toutes les routes compta/intrants répondaient 404, aucune des nouvelles tables n'existait.
+
+- Correctif : `docker-compose up -d --build` (reconstruction backend + frontend depuis le
+  code courant) puis `docker exec … node src/db/migrate.js` — toutes les tables compta +
+  intrants créées, plan de comptes / journaux / conditions de paiement seedés pour
+  l'entreprise existante.
+- Conflit de merge résolu dans `CLAUDE.md` (section « Backend structure », description
+  `server.js`/`app.js`) : gardé la description à jour de la factory `app.js` + fusionné les
+  nouvelles routes (`taxes`, `journals`, `accounts`, `factures`, `paiements`).
+- **Passe de vérification navigateur des 3 étapes Stock** (entreprise jetable créée par
+  l'utilisateur, exercée, puis supprimée — nettoyage multi-tables) :
+  - **A** — création d'un engrais (NPK 15/15/15 %, dose 200) + d'un phytosanitaire (matière
+    active, n° AMM, DAR 14 j, ZNT 5 m) ; champs conditionnels par type, filtres, colonne
+    dédiée — tout persisté correctement.
+  - **B** — lot `LOT-2026-09-A` (péremption 15/09) : bannière « périmant dans les 30 jours »,
+    ligne surlignée rouge, édition inline du restant 20→12 persistée, `produits.quantite`
+    inchangé (registre parallèle confirmé).
+  - **C** — 2 applications (Parcelle A/engrais, Parcelle B/phyto) : `dar_calcule` = date +
+    14 j pour le phyto / `null` pour l'engrais, bannière « récolte déconseillée avant le
+    15 sept. 2026 », stock décrémenté (−6 → 34, −3 → 7), noms dénormalisés stockés.
+  - Les 3 fonctionnalités marchent bout en bout (UI + API + base). Entreprise de test
+    `Test Stock ABC` (`entreprise_id=3`) + user `test-abc@yeelen.test` entièrement supprimés
+    ensuite (17 `DELETE` en une transaction, tables non-cascade incluses).
