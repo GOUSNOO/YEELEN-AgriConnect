@@ -1201,6 +1201,112 @@ CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id)
 -- que de compter sur le CREATE TABLE ci-dessus, qui ne s'applique qu'à une base neuve.
 ALTER TABLE produits ADD COLUMN IF NOT EXISTS cout NUMERIC(12, 2);
 
+-- ═══════════════ Étape A « élargissement stock » (2026-09-01) : typologie des intrants + fiches enrichies ═══════════════
+-- Modèle de champs adapté de LiteFarm (tables product / soil_amendment_product : enum de
+-- type produit, NPK n/p/k + unité, dose, liste des substances autorisées) + champs propres
+-- au registre des traitements phytosanitaires français (n° AMM, DAR = délai avant récolte,
+-- ZNT), qu'aucun projet open-source ne modélise. Tout en colonnes plates sur produits — un
+-- article de stock EST déjà l'intrant, pas de table séparée (même choix que la fusion 2026-08-18).
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS type_intrant TEXT;
+ALTER TABLE produits DROP CONSTRAINT IF EXISTS produits_type_intrant_check;
+ALTER TABLE produits ADD CONSTRAINT produits_type_intrant_check
+  CHECK (type_intrant IS NULL OR type_intrant IN ('semence', 'engrais', 'phytosanitaire', 'aliment', 'materiel', 'autre'));
+-- semence
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS variete TEXT;
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS taux_germination NUMERIC(5, 2);
+-- engrais (NPK, modèle LiteFarm)
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS npk_n NUMERIC(6, 3);
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS npk_p NUMERIC(6, 3);
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS npk_k NUMERIC(6, 3);
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS npk_unit TEXT;
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS dose_ha NUMERIC(10, 2);
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS dose_ha_unite TEXT;
+ALTER TABLE produits DROP CONSTRAINT IF EXISTS produits_npk_unit_check;
+ALTER TABLE produits ADD CONSTRAINT produits_npk_unit_check
+  CHECK (npk_unit IS NULL OR npk_unit IN ('percent', 'ratio'));
+ALTER TABLE produits DROP CONSTRAINT IF EXISTS produits_npk_coherence_check;
+ALTER TABLE produits ADD CONSTRAINT produits_npk_coherence_check
+  CHECK (
+    (COALESCE(npk_n, npk_p, npk_k) IS NULL AND npk_unit IS NULL)
+    OR (COALESCE(npk_n, npk_p, npk_k) IS NOT NULL AND npk_unit IS NOT NULL)
+  );
+ALTER TABLE produits DROP CONSTRAINT IF EXISTS produits_npk_percent_check;
+ALTER TABLE produits ADD CONSTRAINT produits_npk_percent_check
+  CHECK (npk_unit <> 'percent' OR (COALESCE(npk_n, 0) + COALESCE(npk_p, 0) + COALESCE(npk_k, 0)) <= 100);
+-- phytosanitaire (registre des traitements — obligations FR/UE)
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS matiere_active TEXT;
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS numero_amm TEXT;
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS dar_jours INTEGER;
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS znt_metres NUMERIC(6, 1);
+-- tout intrant : utilisable en agriculture biologique (liste des substances autorisées)
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS bio_autorise BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Backfill du type depuis le nom de la catégorie — idempotent (ne touche que les NULL).
+UPDATE produits p SET type_intrant = CASE pc.nom
+    WHEN 'Semences' THEN 'semence'
+    WHEN 'Engrais' THEN 'engrais'
+    WHEN 'Produits phytosanitaires' THEN 'phytosanitaire'
+    WHEN 'Aliment' THEN 'aliment'
+    ELSE NULL END
+  FROM produit_categories pc
+  WHERE pc.id = p.categorie_id AND p.type_intrant IS NULL
+    AND pc.nom IN ('Semences', 'Engrais', 'Produits phytosanitaires', 'Aliment');
+
+-- Étape B « élargissement stock » : suivi de lot + péremption. Registre parallèle,
+-- INDÉPENDANT de produits.quantite (qui reste la source de vérité du stock global) — un lot
+-- trace un batch entrant (n° de lot, date de péremption, coût unitaire, provenance achat).
+-- La consommation FIFO/lot-à-lot est volontairement hors périmètre ici (voir la note
+-- "Traçabilité" de CLAUDE.md sur le choix de ne pas construire un vrai suivi de lots complet).
+-- achat_id n'a pas de FK stricte, comme stock_id ailleurs (traçabilité indicative).
+CREATE TABLE IF NOT EXISTS stock_lots (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  produit_id        INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  numero_lot        TEXT NOT NULL,
+  date_entree       DATE NOT NULL DEFAULT CURRENT_DATE,
+  date_peremption   DATE,
+  quantite_initiale NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  quantite_restante NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  cout_unitaire     NUMERIC(12, 2),
+  achat_id          INTEGER,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stock_lots_entreprise_id ON stock_lots(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_stock_lots_produit_id ON stock_lots(produit_id);
+CREATE INDEX IF NOT EXISTS idx_stock_lots_peremption ON stock_lots(entreprise_id, date_peremption);
+
+-- Étape C « élargissement stock » : registre des traitements phytosanitaires / apports
+-- d'intrants (obligation FR/UE). Journal append-only : quelle parcelle a reçu quel produit,
+-- à quelle dose, quand, par qui, avec le DAR calculé (date_application + produit.dar_jours
+-- figé à la saisie) et le respect de la ZNT. Champ cible ≈ pest_control_task.pest_target de
+-- LiteFarm. FK ON DELETE SET NULL : l'entrée du registre survit à la suppression d'une
+-- parcelle / d'un produit (une pièce réglementaire doit persister).
+CREATE TABLE IF NOT EXISTS applications_intrants (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  parcelle_id        INTEGER REFERENCES parcelles(id) ON DELETE SET NULL,
+  produit_id         INTEGER REFERENCES produits(id) ON DELETE SET NULL,
+  lot_id             INTEGER REFERENCES stock_lots(id) ON DELETE SET NULL,
+  produit_nom        TEXT,
+  parcelle_nom       TEXT,
+  date_application   DATE NOT NULL DEFAULT CURRENT_DATE,
+  dose               NUMERIC(12, 3),
+  dose_unite         TEXT,
+  surface_traitee_ha NUMERIC(10, 2),
+  quantite_utilisee  NUMERIC(12, 2),
+  operateur          TEXT,
+  cible              TEXT,
+  dar_calcule        DATE,
+  znt_respectee      BOOLEAN,
+  notes              TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_applications_intrants_entreprise_id ON applications_intrants(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_applications_intrants_parcelle_id ON applications_intrants(parcelle_id);
+
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,

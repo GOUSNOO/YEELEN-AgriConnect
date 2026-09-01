@@ -94,3 +94,90 @@ describe('Paiements clients autonomes (étape 6 : account.payment sans facture)'
     expect((await request(app).post(`/api/paiements/${pay.paymentId}/allocate`).set(bearer(b.token)).send({ moveId: f.id })).status).toBe(404);
   });
 });
+
+describe('Affectation d\'un avoir posté sur une facture ouverte (allocate-credit)', () => {
+  let admin;
+  let clientId;
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const facturePostee = async (prix) => {
+    const d = (await request(app).post('/api/factures').set(bearer(admin.token))
+      .send({ moveType: 'out_invoice', partnerId: clientId, lignes: [{ name: 'X', quantity: 1, priceUnit: prix }] })).body.facture;
+    return (await request(app).post(`/api/factures/${d.id}/post`).set(bearer(admin.token)).send({})).body.facture;
+  };
+  // avoir posté autonome (résiduel = son total) : facture jetable → reverse "refund" → post
+  const avoirPoste = async (montant) => {
+    const src = await facturePostee(montant);
+    const cn = (await request(app).post(`/api/factures/${src.id}/reverse`).set(bearer(admin.token))
+      .send({ refundMethod: 'refund' })).body.facture;
+    return (await request(app).post(`/api/factures/${cn.id}/post`).set(bearer(admin.token)).send({})).body.facture;
+  };
+
+  test('l\'avoir posté apparaît dans credit-notes-unallocated puis disparaît une fois imputé', async () => {
+    const facture = await facturePostee(1000);
+    const cn = await avoirPoste(800);
+
+    let liste = (await request(app).get('/api/factures/credit-notes-unallocated').set(bearer(admin.token))).body.creditNotes;
+    const ligne = liste.find((x) => x.id === cn.id);
+    expect(ligne).toBeTruthy();
+    expect(ligne.unallocated).toBeCloseTo(800, 2);
+
+    const alloc = await request(app).post(`/api/factures/${cn.id}/allocate-credit`).set(bearer(admin.token))
+      .send({ invoiceId: facture.id });
+    expect(alloc.status).toBe(200);
+    expect(alloc.body.allocation.montantLettre).toBeCloseTo(800, 2);
+    expect(alloc.body.allocation.factureResidu).toBeCloseTo(200, 2);
+    expect(alloc.body.allocation.factureState).toBe('partial');
+    expect(alloc.body.allocation.avoirResidu).toBeCloseTo(0, 2);
+
+    const fRelu = (await request(app).get(`/api/factures/${facture.id}`).set(bearer(admin.token))).body.facture;
+    expect(fRelu.amountResidual).toBeCloseTo(200, 2);
+    expect(fRelu.paymentState).toBe('partial');
+
+    liste = (await request(app).get('/api/factures/credit-notes-unallocated').set(bearer(admin.token))).body.creditNotes;
+    expect(liste.find((x) => x.id === cn.id)).toBeFalsy();
+  });
+
+  test('avoir soldant la facture → matching_number + payment_state paid des deux côtés', async () => {
+    const facture = await facturePostee(500);
+    const cn = await avoirPoste(500);
+    const alloc = await request(app).post(`/api/factures/${cn.id}/allocate-credit`).set(bearer(admin.token))
+      .send({ invoiceId: facture.id });
+    expect(alloc.body.allocation.factureState).toBe('paid');
+    expect(alloc.body.allocation.avoirState).toBe('paid');
+    const fRelu = (await request(app).get(`/api/factures/${facture.id}`).set(bearer(admin.token))).body.facture;
+    expect(fRelu.paymentState).toBe('paid');
+    expect(fRelu.lignes.find((l) => l.displayType === 'payment_term').matchingNumber).toMatch(/^A\d{5}$/);
+  });
+
+  test('avoir en brouillon / partenaire différent → 400', async () => {
+    // avoir encore en brouillon (non posté)
+    const src = await facturePostee(300);
+    const draft = (await request(app).post(`/api/factures/${src.id}/reverse`).set(bearer(admin.token))
+      .send({ refundMethod: 'refund' })).body.facture;
+    const facture = await facturePostee(300);
+    expect((await request(app).post(`/api/factures/${draft.id}/allocate-credit`).set(bearer(admin.token))
+      .send({ invoiceId: facture.id })).status).toBe(400);
+
+    // partenaire différent
+    const cn = await avoirPoste(200);
+    const autre = await createClient(admin.token, 'Autre');
+    const fAutre = (await request(app).post('/api/factures').set(bearer(admin.token))
+      .send({ moveType: 'out_invoice', partnerId: autre, lignes: [{ name: 'Z', quantity: 1, priceUnit: 200 }] })).body.facture;
+    await request(app).post(`/api/factures/${fAutre.id}/post`).set(bearer(admin.token)).send({});
+    expect((await request(app).post(`/api/factures/${cn.id}/allocate-credit`).set(bearer(admin.token))
+      .send({ invoiceId: fAutre.id })).status).toBe(400);
+  });
+
+  test('écriture réservée admin/directeur (ouvrier → 403)', async () => {
+    const ouvrier = await createEmployeeLogin(admin.token, 'ouvrier');
+    const cn = await avoirPoste(100);
+    const facture = await facturePostee(100);
+    expect((await request(app).post(`/api/factures/${cn.id}/allocate-credit`).set(bearer(ouvrier.token))
+      .send({ invoiceId: facture.id })).status).toBe(403);
+  });
+});

@@ -1,4 +1,4 @@
-import { app, pool, request, registerEntreprise, createClient, createEmployeeLogin } from './helpers.js';
+import { app, pool, request, registerEntreprise, createClient, createEmployeeLogin, createProduit } from './helpers.js';
 
 afterAll(async () => { await pool.end(); });
 
@@ -359,6 +359,10 @@ describe('Devis — Étape 3b : facturer produit une facture comptable (account.
     const cc = f.lignes.reduce((s, l) => s + l.credit, 0);
     expect(dd).toBeCloseTo(cc, 2);
     expect(f.invoiceOrigin).toBe(d.numero);
+    // paiement complet → échéance du jour ⇒ invoice_date_due = aujourd'hui (pas un J+30 fictif)
+    const auj = new Date().toISOString().slice(0, 10);
+    expect(f.invoiceDateDue).toBe(auj);
+    expect(f.invoiceDate).toBe(auj);
   });
 
   test('facturer échelonné (terme 30 jours + acompte) → move non soldé, 2 échéances partagées', async () => {
@@ -391,5 +395,78 @@ describe('Devis — Étape 3b : facturer produit une facture comptable (account.
     expect(remise.body.devis.statut).toBe('Brouillon');
     expect(remise.body.devis.move).toBeNull();
     expect((await request(app).get(`/api/factures/${moveId}`).set(bear(admin.token))).status).toBe(404);
+  });
+});
+
+// Option A / modèle Odoo : un devis signé mais pas encore facturé reste éditable
+// (ajout d'articles), avec réajustement du stock réservé. Dès "Facturé", verrouillé.
+describe('Devis — modification des lignes après signature', () => {
+  let admin;
+  let clientId;
+  const bear = (t) => ({ Authorization: `Bearer ${t}` });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+  });
+
+  const stockDe = async (produitId) => {
+    const { rows } = await pool.query('SELECT quantite::float8 AS q FROM produits WHERE id = $1', [produitId]);
+    return rows[0].q;
+  };
+  const signer = async (id) =>
+    request(app).post(`/api/devis/${id}/valider-manuel`).set(bear(admin.token)).send({ confirmePar: 'M. Test' });
+
+  test('ajout d\'un article sur un devis signé → 200, total recalculé, statut inchangé', async () => {
+    const create = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 10, prixUnitaire: 1000, type: 'produit' }] });
+    const devisId = create.body.devis.id;
+    expect(create.body.devis.total).toBe(10000);
+    await signer(devisId);
+
+    const put = await request(app).put(`/api/devis/${devisId}`).set(bear(admin.token)).send({
+      clientId,
+      lignes: [
+        { produit: 'Maïs', quantite: 10, prixUnitaire: 1000, type: 'produit' },
+        { produit: 'Engrais NPK', quantite: 5, prixUnitaire: 200, type: 'produit' },
+      ],
+    });
+    expect(put.status).toBe(200);
+    expect(put.body.devis.statut).toBe('Signé');
+    expect(put.body.devis.lignes.filter((l) => l.type !== 'section')).toHaveLength(2);
+    expect(put.body.devis.total).toBe(11000);
+  });
+
+  test('le stock réservé est réajusté quand on change la quantité d\'une ligne cataloguée', async () => {
+    const produit = await createProduit(admin.token, { module: 'Cultures', nom: `Semence ${Date.now()}` });
+    await pool.query('UPDATE produits SET quantite = 100 WHERE id = $1', [produit.id]);
+
+    const create = await request(app).post('/api/devis').set(bear(admin.token)).send({
+      clientId,
+      lignes: [{ produit: produit.nom, quantite: 10, prixUnitaire: 50, type: 'produit', stockId: produit.id, stockModule: 'Cultures' }],
+    });
+    const devisId = create.body.devis.id;
+    await signer(devisId);
+    expect(await stockDe(produit.id)).toBe(90); // réservé à la signature
+
+    const put = await request(app).put(`/api/devis/${devisId}`).set(bear(admin.token)).send({
+      clientId,
+      lignes: [{ produit: produit.nom, quantite: 4, prixUnitaire: 50, type: 'produit', stockId: produit.id, stockModule: 'Cultures' }],
+    });
+    expect(put.status).toBe(200);
+    expect(await stockDe(produit.id)).toBe(96); // ancien +10 restitué, nouveau -4 appliqué
+  });
+
+  test('modification des lignes refusée une fois le devis facturé (400)', async () => {
+    const create = await request(app).post('/api/devis').set(bear(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 2, prixUnitaire: 100, type: 'produit' }] });
+    const devisId = create.body.devis.id;
+    await signer(devisId);
+    await request(app).post(`/api/devis/${devisId}/facturer`).set(bear(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+
+    const put = await request(app).put(`/api/devis/${devisId}`).set(bear(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 3, prixUnitaire: 100, type: 'produit' }] });
+    expect(put.status).toBe(400);
   });
 });

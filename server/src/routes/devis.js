@@ -364,8 +364,17 @@ router.post('/', authRequired, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-//  MODIFICATION (uniquement si Brouillon)
+//  MODIFICATION (Brouillon/Devis, ou Signé tant que pas facturé)
 // ═══════════════════════════════════════════════════════════
+
+// Aligné sur Odoo : une commande confirmée mais pas encore facturée reste éditable
+// (on peut y ajouter des articles). Un devis "Signé" a déjà décrémenté le stock (voir
+// applyVenteLignesToStock dans /valider-manuel), mais n'a pas encore d'account_move —
+// celui-ci n'est créé qu'au POST /:id/facturer. On autorise donc la modification des
+// lignes tant que statut ∈ {Brouillon, Devis, Signé}, en réajustant le stock réservé
+// après coup pour un devis déjà signé. Dès "Facturé"/payé, l'écriture comptable postée
+// interdit toute mutation des lignes (passer par un avoir).
+const STATUTS_MODIFIABLES = ['Brouillon', 'Devis', 'Signé'];
 
 router.put('/:id', authRequired, async (req, res) => {
   const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise, validityDate } = req.body;
@@ -374,8 +383,20 @@ router.put('/:id', authRequired, async (req, res) => {
   try {
     const check = await client.query('SELECT statut, total::float8 AS total, remise_globale::float8 AS "remiseGlobale" FROM devis WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Devis introuvable.' });
-    if (!['Brouillon', 'Devis'].includes(check.rows[0].statut)) {
+    const statutActuel = check.rows[0].statut;
+    if (!STATUTS_MODIFIABLES.includes(statutActuel)) {
       return res.status(400).json({ error: 'Ce devis ne peut plus être modifié à ce stade.' });
+    }
+
+    // Devis déjà signé + remplacement effectif des lignes : on mémorise l'ancien jeu de
+    // lignes pour restituer le stock réservé avant de réserver le nouveau (après COMMIT).
+    let anciennesLignesStock = null;
+    if (statutActuel === 'Signé' && Array.isArray(lignes)) {
+      const { rows } = await client.query(
+        'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
+        [req.params.id]
+      );
+      anciennesLignesStock = rows;
     }
 
     await client.query('BEGIN');
@@ -432,6 +453,21 @@ router.put('/:id', authRequired, async (req, res) => {
     await client.query('COMMIT');
 
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+
+    // Réconciliation du stock réservé pour un devis déjà signé dont les lignes viennent
+    // d'être remplacées : on inverse l'ancien jeu puis on applique le nouveau. Même
+    // pattern non transactionnel que /valider-manuel et /remettre-brouillon (stockSync
+    // écrit sur le pool en autocommit) — l'écart de lignes identiques se solde à zéro,
+    // au prix de deux lignes dans stock_mouvements.
+    if (anciennesLignesStock) {
+      await reverseVenteLignesToStock(req.user.entrepriseId, anciennesLignesStock, {
+        userId: req.user.sub, documentType: 'devis', documentId: Number(req.params.id), raison: 'devis_modification_lignes',
+      });
+      await applyVenteLignesToStock(req.user.entrepriseId, devis.lignes, {
+        userId: req.user.sub, documentType: 'devis', documentId: Number(req.params.id), raison: 'devis_modification_lignes',
+      });
+    }
+
     return res.json({ devis });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -756,9 +792,13 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       if (!taxParLigne.has(ligneId)) taxParLigne.set(ligneId, []);
       taxParLigne.get(ligneId).push(taxId);
     }
+    // Échelonné / terme : la dernière échéance porte la date d'exigibilité.
+    // Paiement complet (pas d'échéancier) : la facture est réglée le jour même —
+    // invoice_date_due = aujourd'hui, aligné sur l'échéance unique créée plus haut
+    // (CURRENT_DATE, statut « Payé »), au lieu d'un J+30 fictif.
     const dueDate = echeancesFinales && echeancesFinales.length
       ? echeancesFinales[echeancesFinales.length - 1].dateEcheance
-      : new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+      : new Date().toISOString().slice(0, 10);
 
     const mv = await client.query(
       `INSERT INTO account_move

@@ -98,6 +98,22 @@ describe('Factures (account.move) — cycle de vie + double-partie + lettrage', 
     expect(p2.body.facture.paiements).toHaveLength(2);
   });
 
+  test('GET / : la liste exclut les écritures `entry` (contrepartie de paiement) par défaut', async () => {
+    const { body: { facture } } = await creerBrouillon([{ name: 'Millet', quantity: 1, priceUnit: 800 }]);
+    await request(app).post(`/api/factures/${facture.id}/post`).set(bearer(admin.token)).send({});
+    await request(app).post(`/api/factures/${facture.id}/register-payment`).set(bearer(admin.token))
+      .send({ amount: 800, paymentDate: '2026-03-01' }); // crée un account_move move_type='entry'
+
+    const liste = (await request(app).get('/api/factures').set(bearer(admin.token))).body.factures;
+    expect(liste.length).toBeGreaterThan(0);
+    expect(liste.every((m) => m.moveType !== 'entry')).toBe(true);
+    expect(liste.some((m) => m.id === facture.id)).toBe(true);
+
+    // le filtre explicite ?moveType= reste opérant
+    const refunds = (await request(app).get('/api/factures?moveType=out_refund').set(bearer(admin.token))).body.factures;
+    expect(refunds.every((m) => m.moveType === 'out_refund')).toBe(true);
+  });
+
   test('register-payment refusé si montant > reste dû, ou facture non postée', async () => {
     const { body: { facture } } = await creerBrouillon([{ name: 'X', quantity: 1, priceUnit: 500 }]);
     expect((await request(app).post(`/api/factures/${facture.id}/register-payment`).set(bearer(admin.token)).send({ amount: 100 })).status).toBe(400);

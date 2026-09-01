@@ -201,6 +201,37 @@ export async function getProduitMouvements(id) {
   return request(`/produits/${id}/mouvements`);
 }
 
+// Suivi de lot + péremption (étape B) — registre parallèle, ne touche pas produits.quantite
+export async function getProduitLots(id) {
+  return request(`/produits/${id}/lots`);
+}
+export async function createProduitLot(id, payload) {
+  return safeRequest(`/produits/${id}/lots`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateProduitLot(lotId, payload) {
+  return safeRequest(`/produits/lots/${lotId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteProduitLot(lotId) {
+  return safeRequest(`/produits/lots/${lotId}`, { method: 'DELETE' });
+}
+export async function getLotsPerimes(jours = 30) {
+  return request(`/produits/lots-perimes?jours=${jours}`);
+}
+
+// Registre des traitements phytosanitaires / apports d'intrants (étape C)
+export async function getApplicationsIntrants() {
+  return request('/applications-intrants');
+}
+export async function createApplicationIntrant(payload) {
+  return safeRequest('/applications-intrants', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateApplicationIntrant(id, payload) {
+  return safeRequest(`/applications-intrants/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteApplicationIntrant(id) {
+  return safeRequest(`/applications-intrants/${id}`, { method: 'DELETE' });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Catégories de produits (par entreprise, par module)
 // ─────────────────────────────────────────────────────────────────────
@@ -731,6 +762,12 @@ export async function createPaiement(payload) {
 }
 export async function allocatePaiement(id, payload) {
   return request(`/paiements/${id}/allocate`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function getUnallocatedCreditNotes() {
+  return request('/factures/credit-notes-unallocated');
+}
+export async function allocateCreditNote(creditNoteId, payload) {
+  return request(`/factures/${creditNoteId}/allocate-credit`, { method: 'POST', body: JSON.stringify(payload) });
 }
 
 // Modifie une fiche client existante (coordonnées mises à jour)
