@@ -283,6 +283,7 @@
     "manageCategories": "Gérer les catégories",
     "hideCategories": "Masquer les catégories",
     "newCategorie": "Nouvelle catégorie",
+    "categorieParentNone": "Aucune catégorie parente",
     "stockEvolution": "Évolution du stock",
     "emptyTable": "Aucun article en stock pour l'instant.",
     "stockLow": "Stock bas ({{seuil}})",

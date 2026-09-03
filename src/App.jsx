@@ -2743,16 +2743,27 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   const defaultCategorieId = categories[0]?.id ?? '';
   const [catManagerOpen, setCatManagerOpen] = useState(false);
   const [newCatNom, setNewCatNom] = useState('');
+  const [newCatParentId, setNewCatParentId] = useState('');
   const [catSubmitting, setCatSubmitting] = useState(false);
+
+  // Recharge depuis le serveur plutôt qu'un ajout/retrait optimiste local : le serveur
+  // trie déjà par completeName (chaîne hiérarchique), reproduire ce tri côté client pour
+  // une insertion optimiste serait un second endroit à garder synchronisé avec la logique
+  // du CTE récursif de la route.
+  const rechargerCategories = async () => {
+    const { categories: fetchedCats } = await getProduitCategories(moduleType);
+    setCategories(fetchedCats || []);
+  };
 
   const addCategorie = async (e) => {
     e.preventDefault();
     if (!newCatNom.trim()) return;
     setCatSubmitting(true);
     try {
-      const { categorie } = await createProduitCategorie({ module: moduleType, nom: newCatNom.trim(), ordre: categories.length });
-      if (categorie) setCategories(c => [...c, categorie]);
+      await createProduitCategorie({ module: moduleType, nom: newCatNom.trim(), ordre: categories.length, parentId: newCatParentId || null });
+      await rechargerCategories();
       setNewCatNom('');
+      setNewCatParentId('');
     } catch (err) {
       console.error('[StocksTab addCategorie]', err);
       notifyError(err, t('stocks.categorieAddError'));
@@ -2764,7 +2775,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
     if (!window.confirm(t('stocks.confirmDeleteCategorie', { nom }))) return;
     try {
       await deleteProduitCategorie(id);
-      setCategories(c => c.filter(cat => cat.id !== id));
+      await rechargerCategories();
     } catch (err) {
       console.error('[StocksTab removeCategorie]', err);
       notifyError(err, t('stocks.categorieDeleteError'));
@@ -3009,7 +3020,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
           <Select label={t('stocks.categorie')} value={form.categorieId} onChange={e => setForm({ ...form, categorieId: Number(e.target.value) })}>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
           </Select>
           <Field label={t('stocks.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
           <Field label={t('stocks.unite')} placeholder={t('stocks.unitePlaceholder')} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
@@ -3026,7 +3037,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {categories.map(c => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                <span>{c.nom}</span>
+                <span>{c.completeName || c.nom}</span>
                 <button type="button" onClick={() => removeCategorie(c.id, c.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                   <Trash2 size={14} />
                 </button>
@@ -3034,6 +3045,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             ))}
             <form onSubmit={addCategorie} style={{ display: 'flex', gap: 8 }}>
               <Field placeholder={t('stocks.newCategorie')} value={newCatNom} onChange={e => setNewCatNom(e.target.value)} />
+              <select className="flat-input" value={newCatParentId} onChange={e => setNewCatParentId(e.target.value)} style={{ maxWidth: 180 }}>
+                <option value="">{t('stocks.categorieParentNone')}</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
+              </select>
               <Button type="submit" disabled={catSubmitting} style={{ whiteSpace: 'nowrap' }}>
                 {catSubmitting ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t('common.add')}
               </Button>
@@ -3182,7 +3197,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
                 <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
                 <Select label={t('stocks.categorie')} value={editForm.categorieId} onChange={e => setEditForm({ ...editForm, categorieId: Number(e.target.value) })}>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
                 </Select>
                 <Field label={t('stocks.quantite')} type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
                 <Field label={t('stocks.unite')} placeholder={t('stocks.unitePlaceholder')} value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />

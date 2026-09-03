@@ -1172,6 +1172,14 @@ CREATE TABLE IF NOT EXISTS produit_categories (
   UNIQUE (entreprise_id, module, nom)
 );
 CREATE INDEX IF NOT EXISTS idx_produit_categories_entreprise_id ON produit_categories(entreprise_id);
+-- Hiérarchie de catégories (étape 0 de l'alignement Odoo produit/stock, 2026-09-03) —
+-- équivalent de product.category.parent_id. ON DELETE CASCADE (pas SET NULL comme
+-- contacts.parent_id juste au-dessus) : supprimer une catégorie parente doit supprimer
+-- ses enfants, cohérent avec le comportement réel de product.category. Le cloisonnement
+-- par module est conservé (validé côté route, pas en CHECK — Postgres ne peut pas comparer
+-- deux lignes dans un CHECK) : un parent doit être du même module que son enfant.
+ALTER TABLE produit_categories ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES produit_categories(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_produit_categories_parent_id ON produit_categories(parent_id);
 
 CREATE TABLE IF NOT EXISTS produits (
   id             SERIAL PRIMARY KEY,

@@ -283,6 +283,7 @@
     "manageCategories": "Manage categories",
     "hideCategories": "Hide categories",
     "newCategorie": "New category",
+    "categorieParentNone": "No parent category",
     "stockEvolution": "Stock trend",
     "emptyTable": "No items in stock yet.",
     "stockLow": "Low stock ({{seuil}})",
