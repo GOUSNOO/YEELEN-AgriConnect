@@ -236,6 +236,7 @@
     "quantite": "Quantity",
     "unite": "Unit",
     "unitePlaceholder": "kg, bags…",
+    "uniteAucune": "No unit",
     "seuilAlerte": "Alert threshold",
     "seuil": "Threshold",
     "prixDefautField": "Default price ({{devise}})",

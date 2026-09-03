@@ -18,6 +18,7 @@ const PRODUIT_COLUMNS = `
   p.id, p.module, p.nom,
   p.categorie_id AS "categorieId", pc.nom AS categorie,
   p.quantite::float8 AS quantite, p.unite,
+  p.unite_id AS "uniteId", um.nom AS "uniteNom", um.symbole AS "uniteSymbole",
   p.seuil::float8 AS seuil, p.prix_defaut::float8 AS "prixDefaut",
   p.cout::float8 AS cout,
   p.type_intrant AS "typeIntrant",
@@ -80,6 +81,22 @@ function champsIntrant(body) {
   };
 }
 
+// Résout un uniteId proposé (étape 1 alignement Odoo produit/stock) : doit exister et
+// appartenir à l'entreprise appelante, sinon renvoyé null en silence plutôt qu'en 400 (même
+// posture que resolveParentId/resolveListePrixId ailleurs dans le projet). Quand un uniteId
+// valide est fourni, .unite (TEXT) est resynchronisé depuis le symbole/nom de l'unité —
+// colonne pont dénormalisée pour les lecteurs existants, voir le commentaire dans
+// server/src/db/migrate.js. Sans uniteId, .unite reste le texte libre soumis tel quel.
+async function resolveUnite(entrepriseId, uniteId, uniteTexteLibre) {
+  if (uniteId == null || uniteId === '') return { uniteId: null, unite: uniteTexteLibre };
+  const { rows } = await pool.query(
+    'SELECT id, nom, symbole FROM unites_mesure WHERE id = $1 AND entreprise_id = $2',
+    [uniteId, entrepriseId]
+  );
+  if (!rows[0]) return { uniteId: null, unite: uniteTexteLibre };
+  return { uniteId: rows[0].id, unite: rows[0].symbole || rows[0].nom };
+}
+
 router.get('/', authRequired, async (req, res) => {
   const { module, typeIntrant } = req.query;
   const cond = ['p.entreprise_id = $1'];
@@ -88,7 +105,7 @@ router.get('/', authRequired, async (req, res) => {
   if (typeIntrant) { params.push(typeIntrant); cond.push(`p.type_intrant = $${params.length}`); }
   try {
     const result = await pool.query(
-      `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id
+      `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id LEFT JOIN unites_mesure um ON um.id = p.unite_id
        WHERE ${cond.join(' AND ')} ORDER BY p.id ASC`,
       params
     );
@@ -100,7 +117,7 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.post('/', authRequired, async (req, res) => {
-  const { module, nom, categorieId, quantite = 0, unite = '', seuil = 0, prixDefaut, cout } = req.body;
+  const { module, nom, categorieId, quantite = 0, unite = '', uniteId, seuil = 0, prixDefaut, cout } = req.body;
   if (!module || !['Cultures', 'Poulailler'].includes(module) || !nom || !categorieId) {
     return res.status(400).json({ error: 'module (Cultures/Poulailler), nom et categorieId sont requis.' });
   }
@@ -114,19 +131,20 @@ router.post('/', authRequired, async (req, res) => {
     if (categorie.rows.length === 0) {
       return res.status(400).json({ error: 'categorieId invalide pour ce module.' });
     }
+    const uniteResolue = await resolveUnite(req.user.entrepriseId, uniteId, unite);
     const insert = await pool.query(
-      `INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, seuil, prix_defaut, cout,
+      `INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, unite_id, seuil, prix_defaut, cout,
          type_intrant, variete, taux_germination, npk_n, npk_p, npk_k, npk_unit, dose_ha, dose_ha_unite,
          matiere_active, numero_amm, dar_jours, znt_metres, bio_autorise)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING id`,
-      [req.user.entrepriseId, req.user.sub, module, nom, categorieId, Number(quantite) || 0, unite, Number(seuil) || 0,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+         $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING id`,
+      [req.user.entrepriseId, req.user.sub, module, nom, categorieId, Number(quantite) || 0, uniteResolue.unite, uniteResolue.uniteId, Number(seuil) || 0,
        prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut),
        cout === '' || cout == null ? null : Number(cout),
        ...intrant.valeurs]
     );
     const result = await pool.query(
-      `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id WHERE p.id = $1`,
+      `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id LEFT JOIN unites_mesure um ON um.id = p.unite_id WHERE p.id = $1`,
       [insert.rows[0].id]
     );
     return res.status(201).json({ stock: result.rows[0] });
@@ -137,10 +155,11 @@ router.post('/', authRequired, async (req, res) => {
 });
 
 router.put('/:id', authRequired, async (req, res) => {
-  const { nom, categorieId, quantite, unite, seuil, prixDefaut, cout } = req.body;
+  const { nom, categorieId, quantite, unite, uniteId, seuil, prixDefaut, cout } = req.body;
   const intrant = champsIntrant(req.body);
   if (intrant.error) return res.status(400).json({ error: intrant.error });
   try {
+    const uniteResolue = await resolveUnite(req.user.entrepriseId, uniteId, unite ?? null);
     if (categorieId != null) {
       const owned = await pool.query(
         'SELECT p.module FROM produits p WHERE p.id = $1 AND p.entreprise_id = $2',
@@ -165,17 +184,18 @@ router.put('/:id', authRequired, async (req, res) => {
          categorie_id = COALESCE($2, categorie_id),
          quantite = COALESCE($3, quantite),
          unite = COALESCE($4, unite),
-         seuil = COALESCE($5, seuil),
-         prix_defaut = $6,
-         cout = $7,
-         type_intrant = $8, variete = $9, taux_germination = $10,
-         npk_n = $11, npk_p = $12, npk_k = $13, npk_unit = $14,
-         dose_ha = $15, dose_ha_unite = $16,
-         matiere_active = $17, numero_amm = $18, dar_jours = $19, znt_metres = $20,
-         bio_autorise = $21
-       WHERE id = $22 AND entreprise_id = $23
+         unite_id = COALESCE($5, unite_id),
+         seuil = COALESCE($6, seuil),
+         prix_defaut = $7,
+         cout = $8,
+         type_intrant = $9, variete = $10, taux_germination = $11,
+         npk_n = $12, npk_p = $13, npk_k = $14, npk_unit = $15,
+         dose_ha = $16, dose_ha_unite = $17,
+         matiere_active = $18, numero_amm = $19, dar_jours = $20, znt_metres = $21,
+         bio_autorise = $22
+       WHERE id = $23 AND entreprise_id = $24
        RETURNING id`,
-      [nom, categorieId, quantite, unite, seuil,
+      [nom, categorieId, quantite, uniteResolue.unite, uniteResolue.uniteId, seuil,
        prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut),
        cout === '' || cout == null ? null : Number(cout),
        ...intrant.valeurs,
@@ -185,7 +205,7 @@ router.put('/:id', authRequired, async (req, res) => {
       return res.status(404).json({ error: 'Produit introuvable.' });
     }
     const updated = await pool.query(
-      `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id WHERE p.id = $1`,
+      `SELECT ${PRODUIT_COLUMNS} FROM produits p JOIN produit_categories pc ON pc.id = p.categorie_id LEFT JOIN unites_mesure um ON um.id = p.unite_id WHERE p.id = $1`,
       [req.params.id]
     );
     return res.json({ stock: updated.rows[0] });

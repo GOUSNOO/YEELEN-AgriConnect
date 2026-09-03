@@ -24,6 +24,7 @@ import {
   getProduits, createProduit, updateProduit, deleteProduit, getProduitMouvements,
   getProduitLots, createProduitLot, updateProduitLot, deleteProduitLot, getLotsPerimes,
   getProduitCategories, createProduitCategorie, deleteProduitCategorie,
+  getUnitesMesure,
   getPoulaillerMouvements,
   getPoulaillerLivraisons, createPoulaillerLivraison, updatePoulaillerLivraison, deletePoulaillerLivraison,
   getPoulaillerSuivi, createPoulaillerSuivi,
@@ -489,8 +490,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
-  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', taxIds: [], unite: '', recolteId: '', stockId: null, stockModule: null };
-  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', taxIds: [], unite: '', recolteId: '', stockId: null, stockModule: null };
+  const emptyLigne = { produit: '', type: 'produit', quantite: '', prixUnitaire: '', remisePourcentage: '', taxIds: [], unite: '', recolteId: '', stockId: null, stockModule: null, uomId: null };
+  const emptySectionLigne = { produit: '', type: 'section', quantite: '', prixUnitaire: '', remisePourcentage: '', taxIds: [], unite: '', recolteId: '', stockId: null, stockModule: null, uomId: null };
   const [form, setForm] = useState({ clientId: '', notes: '', validityDate: '', lignes: [{ ...emptyLigne }] });
   const [paymentTerms, setPaymentTerms] = useState([]);
   const [taxes, setTaxes] = useState([]);
@@ -737,6 +738,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
           stockModule: l.stockModule || null,
+          uomId: l.uomId || null,
         })),
       };
       await createDevis(payload);
@@ -779,7 +781,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         clientId: String(devisComplet.clientId),
         statut: devisComplet.statut,
         notes: devisComplet.notes || '',
-        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', taxIds: Array.isArray(l.taxIds) ? l.taxIds : [], unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null })),
+        lignes: devisComplet.lignes.map(l => ({ produit: l.produit, type: l.type === 'section' ? 'section' : 'produit', quantite: l.quantite, prixUnitaire: l.prixUnitaire, remisePourcentage: l.remisePourcentage || '', taxIds: Array.isArray(l.taxIds) ? l.taxIds : [], unite: l.unite || '', recolteId: l.recolteId || '', stockId: l.stockId || null, stockModule: l.stockModule || null, uomId: l.uomId || null })),
       });
       const c = findClientById(devisComplet.clientId);
       setEditClientSearch(c ? clientLabel(c) : (devisComplet.clientPrenom ? `${devisComplet.clientPrenom} ${devisComplet.clientNom}` : (devisComplet.clientNom || '')));
@@ -811,6 +813,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           recolteId: l.recolteId ? Number(l.recolteId) : null,
           stockId: l.stockId || null,
           stockModule: l.stockModule || null,
+          uomId: l.uomId || null,
         })),
       };
       await updateDevis(editingId, payload);
@@ -1152,6 +1155,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                             const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                             updateLigne(i, 'stockId', match ? match.id : null);
                             updateLigne(i, 'stockModule', match ? match.module : null);
+                            updateLigne(i, 'uomId', match ? match.uniteId || null : null);
                             const prix = prixPourMatch(match, clientPrixMap);
                             if (prix != null && !ligne.prixUnitaire) {
                               updateLigne(i, 'prixUnitaire', String(prix));
@@ -1862,6 +1866,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                                 const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                                 updateEditLigne(i, 'stockId', match ? match.id : null);
                                 updateEditLigne(i, 'stockModule', match ? match.module : null);
+                                updateEditLigne(i, 'uomId', match ? match.uniteId || null : null);
                                 const prix = prixPourMatch(match, editClientPrixMap);
                                 if (prix != null && !ligne.prixUnitaire) {
                                   updateEditLigne(i, 'prixUnitaire', String(prix));
@@ -2097,13 +2102,13 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const [docs, setDocs] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [useRemote, setUseRemote] = useState(true);
-  const [form, setForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
+  const [form, setForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null, uomId: null }] });
   const [error, setError] = useState('');
   const [detailDoc, setDetailDoc] = useState(null);
   const key = `${storageKey}-${farmId}`;
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
+  const [editForm, setEditForm] = useState({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null, uomId: null }] });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   // Catalogue produit : les articles de stock du module servent de suggestions (avec
@@ -2166,7 +2171,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
   const addLigne = () => setForm(f => ({
     ...f,
-    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '', stockId: null }],
+    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '', stockId: null, uomId: null }],
   }));
 
   const removeLigne = (index) => setForm(f => ({
@@ -2184,7 +2189,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const totalForm = form.lignes.reduce((sum, ligne) => sum + (Number(ligne.quantite) || 0) * (Number(ligne.prixUnitaire) || 0), 0);
 
   const resetForm = () => {
-    setForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
+    setForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null, uomId: null }] });
     setError('');
   };
 
@@ -2209,6 +2214,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         quantite: Number(l.quantite),
         prixUnitaire: Number(l.prixUnitaire),
         stockId: l.stockId || null,
+        uomId: l.uomId || null,
       })),
     };
 
@@ -2240,7 +2246,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   // Ligne d'achat — version formulaire de modification (fenêtre séparée)
   const addEditLigne = () => setEditForm(f => ({
     ...f,
-    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '', stockId: null }],
+    lignes: [...f.lignes, { produit: '', quantite: '', prixUnitaire: '', stockId: null, uomId: null }],
   }));
   const removeEditLigne = (index) => setEditForm(f => ({
     ...f,
@@ -2259,7 +2265,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null }] });
+    setEditForm({ fournisseurId: '', fournisseurNom: '', notes: '', lignes: [{ produit: '', quantite: '', prixUnitaire: '', stockId: null, uomId: null }] });
   };
 
   const startEdit = async (doc) => {
@@ -2280,7 +2286,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       fournisseurId: source.fournisseurId ? String(source.fournisseurId) : '__autre__',
       fournisseurNom: source.fournisseurId ? '' : source.fournisseurNom,
       notes: source.notes || '',
-      lignes: source.lignes.map(l => ({ produit: l.produit, quantite: String(l.quantite), prixUnitaire: String(l.prixUnitaire), stockId: l.stockId || null })),
+      lignes: source.lignes.map(l => ({ produit: l.produit, quantite: String(l.quantite), prixUnitaire: String(l.prixUnitaire), stockId: l.stockId || null, uomId: l.uomId || null })),
     });
   };
 
@@ -2305,6 +2311,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         quantite: Number(l.quantite),
         prixUnitaire: Number(l.prixUnitaire),
         stockId: l.stockId || null,
+        uomId: l.uomId || null,
       })),
     };
 
@@ -2443,6 +2450,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                   updateLigne(index, 'produit', value);
                   const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                   updateLigne(index, 'stockId', match ? match.id : null);
+                  updateLigne(index, 'uomId', match ? match.uniteId || null : null);
                   if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
                     updateLigne(index, 'prixUnitaire', String(match.prixDefaut));
                   }
@@ -2594,6 +2602,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                       updateEditLigne(index, 'produit', value);
                       const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                       updateEditLigne(index, 'stockId', match ? match.id : null);
+                      updateEditLigne(index, 'uomId', match ? match.uniteId || null : null);
                       if (match && match.prixDefaut != null && !ligne.prixUnitaire) {
                         updateEditLigne(index, 'prixUnitaire', String(match.prixDefaut));
                       }
@@ -2785,10 +2794,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [filtreType, setFiltreType] = useState('');
-  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
+  const [unites, setUnites] = useState([]);
+  const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', uniteId: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
+  const [editForm, setEditForm] = useState({ nom: '', categorieId: '', quantite: '', uniteId: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [historiqueArticle, setHistoriqueArticle] = useState(null);
@@ -2911,6 +2921,9 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         setCategories(fetchedCats || []);
         setForm(f => ({ ...f, categorieId: f.categorieId || fetchedCats?.[0]?.id || '' }));
 
+        const { unites: fetchedUnites } = await getUnitesMesure();
+        setUnites(fetchedUnites || []);
+
         const { stocks: fetched } = await api.get();
         if (fetched.length === 0 && moduleType === 'Poulailler') {
           const seeded = [];
@@ -2942,7 +2955,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
     if (!form.nom || form.quantite === '') return;
     try {
       const { stock } = await api.create({
-        nom: form.nom, categorieId: form.categorieId, quantite: Number(form.quantite), unite: form.unite, seuil: Number(form.seuil || 0),
+        nom: form.nom, categorieId: form.categorieId, quantite: Number(form.quantite), uniteId: form.uniteId || null, seuil: Number(form.seuil || 0),
         prixDefaut: form.prixDefaut === '' ? null : Number(form.prixDefaut),
         cout: form.cout === '' ? null : Number(form.cout),
         ...pickIntrant(form),
@@ -2955,7 +2968,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       console.error('[StocksTab add]', err);
       notifyError(err, t('stocks.articleAddError'));
     }
-    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
+    setForm({ nom: '', categorieId: defaultCategorieId, quantite: '', uniteId: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   };
   const remove = async (id, nom) => {
     if (!window.confirm(t('stocks.confirmDeleteArticle', { nom }))) return;
@@ -2971,11 +2984,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), unite: s.unite || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '', cout: s.cout != null ? String(s.cout) : '', ...fillIntrant(s) });
+    setEditForm({ nom: s.nom, categorieId: s.categorieId, quantite: String(s.quantite), uniteId: s.uniteId || '', seuil: String(s.seuil), prixDefaut: s.prixDefaut != null ? String(s.prixDefaut) : '', cout: s.cout != null ? String(s.cout) : '', ...fillIntrant(s) });
   };
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', unite: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
+    setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', uniteId: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   };
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -2983,7 +2996,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
     setEditSubmitting(true);
     try {
       const { stock } = await api.update(editingId, {
-        nom: editForm.nom, categorieId: editForm.categorieId, quantite: Number(editForm.quantite), unite: editForm.unite, seuil: Number(editForm.seuil || 0),
+        nom: editForm.nom, categorieId: editForm.categorieId, quantite: Number(editForm.quantite), uniteId: editForm.uniteId || null, seuil: Number(editForm.seuil || 0),
         prixDefaut: editForm.prixDefaut === '' ? null : Number(editForm.prixDefaut),
         cout: editForm.cout === '' ? null : Number(editForm.cout),
         ...pickIntrant(editForm),
@@ -3023,7 +3036,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
           </Select>
           <Field label={t('stocks.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
-          <Field label={t('stocks.unite')} placeholder={t('stocks.unitePlaceholder')} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })} />
+          <Select label={t('stocks.unite')} value={form.uniteId} onChange={e => setForm({ ...form, uniteId: e.target.value ? Number(e.target.value) : '' })}>
+            <option value="">{t('stocks.uniteAucune')}</option>
+            {unites.map(u => <option key={u.id} value={u.id}>{u.categorieNom} — {u.nom}{u.symbole ? ` (${u.symbole})` : ''}</option>)}
+          </Select>
           <Field label={t('stocks.seuilAlerte')} type="number" placeholder="0" value={form.seuil} onChange={e => setForm({ ...form, seuil: e.target.value })} />
           <Field label={t('stocks.prixDefautField', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={form.prixDefaut} onChange={e => setForm({ ...form, prixDefaut: e.target.value })} />
           <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={form.cout} onChange={e => setForm({ ...form, cout: e.target.value })} />
@@ -3200,7 +3216,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                   {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
                 </Select>
                 <Field label={t('stocks.quantite')} type="number" placeholder="0" value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} required />
-                <Field label={t('stocks.unite')} placeholder={t('stocks.unitePlaceholder')} value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })} />
+                <Select label={t('stocks.unite')} value={editForm.uniteId} onChange={e => setEditForm({ ...editForm, uniteId: e.target.value ? Number(e.target.value) : '' })}>
+                  <option value="">{t('stocks.uniteAucune')}</option>
+                  {unites.map(u => <option key={u.id} value={u.id}>{u.categorieNom} — {u.nom}{u.symbole ? ` (${u.symbole})` : ''}</option>)}
+                </Select>
                 <Field label={t('stocks.seuilAlerte')} type="number" placeholder="0" value={editForm.seuil} onChange={e => setEditForm({ ...editForm, seuil: e.target.value })} />
                 <Field label={t('stocks.prixDefautField', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.prixDefaut} onChange={e => setEditForm({ ...editForm, prixDefaut: e.target.value })} />
                 <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.cout} onChange={e => setEditForm({ ...editForm, cout: e.target.value })} />

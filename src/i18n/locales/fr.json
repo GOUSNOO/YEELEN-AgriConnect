@@ -236,6 +236,7 @@
     "quantite": "Quantité",
     "unite": "Unité",
     "unitePlaceholder": "kg, sacs…",
+    "uniteAucune": "Aucune unité",
     "seuilAlerte": "Seuil d'alerte",
     "seuil": "Seuil",
     "prixDefautField": "Prix par défaut ({{devise}})",

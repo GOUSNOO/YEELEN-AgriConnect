@@ -17,7 +17,8 @@ const DOCUMENT_COLUMNS = `
 `;
 
 const LIGNE_COLUMNS = `
-  id, produit, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire", ordre, stock_id AS "stockId"
+  al.id, al.produit, al.quantite::float8 AS quantite, al.prix_unitaire::float8 AS "prixUnitaire", al.ordre,
+  al.stock_id AS "stockId", al.uom_id AS "uomId", um.symbole AS "uomSymbole"
 `;
 
 // Ne garde qu'un stockId qui appartient réellement à l'entreprise appelante ET au bon
@@ -26,14 +27,28 @@ const LIGNE_COLUMNS = `
 // valide mais du mauvais module doit être rejeté, ce qui ne pouvait pas arriver avant
 // puisqu'un id n'existait alors que dans une seule des deux tables) — stocke null sinon
 // plutôt que de rejeter, pour ne jamais bloquer un achat sur un id de stock invalide.
+// Retourne une Map stockId -> uniteId (plutôt qu'un simple Set) : sert aussi de repli pour
+// l'unité par défaut d'une ligne quand aucun uomId n'est fourni (étape 1 UoM).
 async function validerStockIds(client, module, lignes, entrepriseId) {
   const ids = [...new Set(lignes.map(l => l.stockId).filter(Boolean))];
-  if (!['Cultures', 'Poulailler'].includes(module) || ids.length === 0) return new Set();
+  if (!['Cultures', 'Poulailler'].includes(module) || ids.length === 0) return new Map();
   const result = await client.query(
-    'SELECT id FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
+    'SELECT id, unite_id AS "uniteId" FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
     [ids, entrepriseId, module]
   );
-  return new Set(result.rows.map(r => r.id));
+  return new Map(result.rows.map(r => [r.id, r.uniteId]));
+}
+
+// Résout l'uom_id effectif d'une ligne : l'unité fournie si elle appartient bien à
+// l'entreprise appelante, sinon l'unité de base du produit catalogué en repli (défaut
+// implicite d'Odoo : une ligne sans uom explicite hérite de l'uom du produit), sinon null
+// (produit en texte libre non catalogué, ou produit sans unité de base définie).
+async function resolveUomId(client, entrepriseId, uomId, produitUniteId) {
+  if (uomId) {
+    const check = await client.query('SELECT id FROM unites_mesure WHERE id = $1 AND entreprise_id = $2', [uomId, entrepriseId]);
+    if (check.rows.length > 0) return uomId;
+  }
+  return produitUniteId ?? null;
 }
 
 async function getDocumentComplete(documentId, entrepriseId) {
@@ -44,7 +59,8 @@ async function getDocumentComplete(documentId, entrepriseId) {
   if (documentResult.rows.length === 0) return null;
 
   const lignesResult = await pool.query(
-    `SELECT ${LIGNE_COLUMNS} FROM achats_lignes WHERE document_id = $1 ORDER BY ordre ASC`,
+    `SELECT ${LIGNE_COLUMNS} FROM achats_lignes al LEFT JOIN unites_mesure um ON um.id = al.uom_id
+     WHERE al.document_id = $1 ORDER BY al.ordre ASC`,
     [documentId]
   );
 
@@ -156,10 +172,12 @@ router.post('/', authRequired, async (req, res) => {
     const stockIdsValides = await validerStockIds(client, module, lignes, req.user.entrepriseId);
     for (let i = 0; i < lignes.length; i += 1) {
       const ligne = lignes[i];
+      const stockId = stockIdsValides.has(ligne.stockId) ? ligne.stockId : null;
+      const uomId = await resolveUomId(client, req.user.entrepriseId, ligne.uomId, stockId ? stockIdsValides.get(stockId) : null);
       await client.query(
-        `INSERT INTO achats_lignes (document_id, produit, quantite, prix_unitaire, ordre, stock_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [documentId, ligne.produit, Number(ligne.quantite) || 0, Number(ligne.prixUnitaire) || 0, i, stockIdsValides.has(ligne.stockId) ? ligne.stockId : null]
+        `INSERT INTO achats_lignes (document_id, produit, quantite, prix_unitaire, ordre, stock_id, uom_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [documentId, ligne.produit, Number(ligne.quantite) || 0, Number(ligne.prixUnitaire) || 0, i, stockId, uomId]
       );
     }
 
@@ -220,10 +238,12 @@ router.put('/:id', authRequired, async (req, res) => {
     const stockIdsValides = await validerStockIds(client, module, lignes, req.user.entrepriseId);
     for (let i = 0; i < lignes.length; i += 1) {
       const ligne = lignes[i];
+      const stockId = stockIdsValides.has(ligne.stockId) ? ligne.stockId : null;
+      const uomId = await resolveUomId(client, req.user.entrepriseId, ligne.uomId, stockId ? stockIdsValides.get(stockId) : null);
       await client.query(
-        `INSERT INTO achats_lignes (document_id, produit, quantite, prix_unitaire, ordre, stock_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [req.params.id, ligne.produit, Number(ligne.quantite) || 0, Number(ligne.prixUnitaire) || 0, i, stockIdsValides.has(ligne.stockId) ? ligne.stockId : null]
+        `INSERT INTO achats_lignes (document_id, produit, quantite, prix_unitaire, ordre, stock_id, uom_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [req.params.id, ligne.produit, Number(ligne.quantite) || 0, Number(ligne.prixUnitaire) || 0, i, stockId, uomId]
       );
     }
 
@@ -299,7 +319,7 @@ router.post('/:id/recevoir', authRequired, async (req, res) => {
 
     await pool.query(`UPDATE achats_documents SET statut = 'Reçu', date_reception = NOW() WHERE id = $1`, [req.params.id]);
 
-    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId" FROM achats_lignes WHERE document_id = $1', [req.params.id]);
+    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", uom_id AS "uomId" FROM achats_lignes WHERE document_id = $1', [req.params.id]);
     await syncAchatDocumentFinance(req.user.entrepriseId, req.user.sub, {
       module, total, fournisseurNom, documentId: Number(req.params.id),
     });
@@ -326,7 +346,7 @@ router.post('/:id/annuler-reception', authRequired, async (req, res) => {
     }
     const { module } = check.rows[0];
 
-    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId" FROM achats_lignes WHERE document_id = $1', [req.params.id]);
+    const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", uom_id AS "uomId" FROM achats_lignes WHERE document_id = $1', [req.params.id]);
     await removeFinanceEntry(req.user.entrepriseId, module, req.params.id);
     await reverseAchatLignesFromStock(req.user.entrepriseId, module, lignesResult.rows, {
       userId: req.user.sub, documentType: 'achat', documentId: Number(req.params.id), raison: 'achat_annulation_reception',

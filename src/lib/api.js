@@ -684,6 +684,30 @@ export async function deleteTax(id) {
   return request(`/taxes/${id}`, { method: 'DELETE' });
 }
 
+// Unités de mesure + leurs catégories (uom.category / uom.uom-like) — étape 1 alignement
+// produit/stock Odoo.
+export async function getUnitesMesureCategories() {
+  return request('/unites-mesure-categories');
+}
+export async function createUniteMesureCategorie(payload) {
+  return request('/unites-mesure-categories', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function deleteUniteMesureCategorie(id) {
+  return request(`/unites-mesure-categories/${id}`, { method: 'DELETE' });
+}
+export async function getUnitesMesure(categorieId) {
+  return request(categorieId ? `/unites-mesure?categorieId=${categorieId}` : '/unites-mesure');
+}
+export async function createUniteMesure(payload) {
+  return request('/unites-mesure', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateUniteMesure(id, payload) {
+  return request(`/unites-mesure/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteUniteMesure(id) {
+  return request(`/unites-mesure/${id}`, { method: 'DELETE' });
+}
+
 // Journaux + plan de comptes (account.journal / account.account-like) — étape 2 Comptabilité.
 export async function getJournals() {
   return request('/journals');

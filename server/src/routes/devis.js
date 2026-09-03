@@ -52,21 +52,37 @@ async function validerRecolteIds(dbClient, lignes, entrepriseId) {
 // son propre stockModule, donc la validation d'appartenance se fait module par module
 // (nécessaire depuis la fusion produits du 2026-08-18 : un id valide mais du mauvais
 // module doit être rejeté — voir la même note dans routes/achats.js:validerStockIds).
+// Retourne, par ligne, l'appartenance du stock_id ET l'unite_id de base du produit trouvé
+// (Map plutôt qu'un simple Set) — sert aussi de repli pour l'unité par défaut d'une ligne
+// quand aucun uomId n'est fourni explicitement (étape 1 UoM, même logique qu'achats.js).
 async function validerStockLigneIds(dbClient, lignes, entrepriseId) {
-  const parModule = { Cultures: new Set(), Poulailler: new Set() };
+  const parModule = { Cultures: new Map(), Poulailler: new Map() };
   for (const module of Object.keys(parModule)) {
     const ids = [...new Set(lignes.filter(l => l.stockModule === module && l.stockId).map(l => l.stockId))];
     if (ids.length === 0) continue;
     const result = await dbClient.query(
-      'SELECT id FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
+      'SELECT id, unite_id AS "uniteId" FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
       [ids, entrepriseId, module]
     );
-    parModule[module] = new Set(result.rows.map(r => r.id));
+    parModule[module] = new Map(result.rows.map(r => [r.id, r.uniteId]));
   }
   return (ligne) => {
     const valides = parModule[ligne.stockModule];
-    return Boolean(valides) && Boolean(ligne.stockId) && valides.has(ligne.stockId);
+    const ok = Boolean(valides) && Boolean(ligne.stockId) && valides.has(ligne.stockId);
+    return { ok, uniteId: ok ? valides.get(ligne.stockId) : null };
   };
+}
+
+// Résout l'uom_id effectif d'une ligne : l'unité fournie si elle appartient bien à
+// l'entreprise appelante, sinon l'unité de base du produit catalogué en repli, sinon null
+// (produit en texte libre non catalogué, ou produit sans unité de base définie) — même
+// logique que resolveUomId dans routes/achats.js.
+async function resolveUomId(dbClient, entrepriseId, uomId, produitUniteId) {
+  if (uomId) {
+    const check = await dbClient.query('SELECT id FROM unites_mesure WHERE id = $1 AND entreprise_id = $2', [uomId, entrepriseId]);
+    if (check.rows.length > 0) return uomId;
+  }
+  return produitUniteId ?? null;
 }
 
 // Étape 4 (2026-08-18) : une ligne de section/note (type='section') ne porte aucune quantité/
@@ -91,6 +107,7 @@ function normalizeLigne(l) {
     recolteId: isSection ? null : l.recolteId,
     stockId: isSection ? null : l.stockId,
     stockModule: isSection ? null : l.stockModule,
+    uomId: isSection ? null : l.uomId,
   };
 }
 
@@ -152,13 +169,14 @@ async function insererLignes(client, devisId, lignesNormalisees, entrepriseId, t
   const stockLigneValide = await validerStockLigneIds(client, lignesNormalisees, entrepriseId);
   for (let i = 0; i < lignesNormalisees.length; i++) {
     const l = lignesNormalisees[i];
-    const stockOk = stockLigneValide(l);
+    const stockInfo = stockLigneValide(l);
+    const uomId = await resolveUomId(client, entrepriseId, l.uomId, stockInfo.uniteId);
     const { rows: [{ id: ligneId }] } = await client.query(
-      `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      `INSERT INTO devis_lignes (devis_id, produit, quantite, prix_unitaire, remise_pourcentage, unite, ordre, recolte_id, stock_id, stock_module, type, uom_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
       [devisId, l.produit, l.quantite, l.prixUnitaire, l.remisePourcentage, l.unite, i,
        recolteIdsValides.has(l.recolteId) ? l.recolteId : null,
-       stockOk ? l.stockId : null, stockOk ? l.stockModule : null, l.type]
+       stockInfo.ok ? l.stockId : null, stockInfo.ok ? l.stockModule : null, l.type, uomId]
     );
     for (const taxId of filtrerTaxIds(l.taxIds, taxMap)) {
       await client.query(
@@ -193,7 +211,7 @@ async function getDevisComplet(devisId, entrepriseId) {
     `SELECT id, produit, type, quantite::float8 AS quantite, prix_unitaire::float8 AS "prixUnitaire",
             remise_pourcentage::float8 AS "remisePourcentage", unite,
             quantite_livree::float8 AS "quantiteLivree", quantite_facturee::float8 AS "quantiteFacturee",
-            recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule"
+            recolte_id AS "recolteId", stock_id AS "stockId", stock_module AS "stockModule", uom_id AS "uomId"
      FROM devis_lignes WHERE devis_id = $1 ORDER BY ordre ASC`,
     [devisId]
   );
@@ -393,7 +411,7 @@ router.put('/:id', authRequired, async (req, res) => {
     let anciennesLignesStock = null;
     if (statutActuel === 'Signé' && Array.isArray(lignes)) {
       const { rows } = await client.query(
-        'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
+        'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule", uom_id AS "uomId" FROM devis_lignes WHERE devis_id = $1',
         [req.params.id]
       );
       anciennesLignesStock = rows;
@@ -640,7 +658,7 @@ router.post('/public/:token/signer', async (req, res) => {
     await logFieldChanges(check.rows[0].entrepriseId, 'devis', check.rows[0].id, null,
       { statut: check.rows[0].statut }, { statut: 'Signé' }, ['statut']);
     const lignesResult = await pool.query(
-      'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
+      'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule", uom_id AS "uomId" FROM devis_lignes WHERE devis_id = $1',
       [check.rows[0].id]
     );
     await applyVenteLignesToStock(check.rows[0].entrepriseId, lignesResult.rows, {
@@ -946,7 +964,7 @@ router.post('/:id/remettre-brouillon', authRequired, requireRole('admin'), async
 
     if (STATUTS_APRES_SIGNATURE.includes(statutAvant)) {
       const lignesResult = await pool.query(
-        'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule" FROM devis_lignes WHERE devis_id = $1',
+        'SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", stock_module AS "stockModule", uom_id AS "uomId" FROM devis_lignes WHERE devis_id = $1',
         [req.params.id]
       );
       await reverseVenteLignesToStock(req.user.entrepriseId, lignesResult.rows, {

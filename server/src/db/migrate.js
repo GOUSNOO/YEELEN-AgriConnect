@@ -20,6 +20,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
+import { UNITES_MESURE_DEFAUT } from '../utils/unitesMesureDefaut.js';
 
 // Ce script tourne en dehors du serveur Express (invoqué directement via `node
 // src/db/migrate.js`), donc db.js (qui charge son propre .env via un chemin relatif
@@ -1209,6 +1210,47 @@ CREATE INDEX IF NOT EXISTS idx_produits_entreprise_id ON produits(entreprise_id)
 -- que de compter sur le CREATE TABLE ci-dessus, qui ne s'applique qu'à une base neuve.
 ALTER TABLE produits ADD COLUMN IF NOT EXISTS cout NUMERIC(12, 2);
 
+-- ═══════════════ Étape 1 alignement Odoo produit/stock (2026-09-03) : référentiel d'unités de mesure ═══════════════
+-- Équivalent uom.category / uom.uom, mais scopé par entreprise (comme tout le reste de ce
+-- projet — pas de référentiel global partagé entre entreprises, contrairement à Odoo).
+-- « facteur » : combien d'unités de référence de sa catégorie pour 1 unité de cette ligne
+-- (ex. catégorie Poids, référence kg : g → facteur 0.001, tonne → facteur 1000). Convention
+-- volontairement plus simple que le facteur/facteur_inv à double sens d'Odoo (bigger/smaller) —
+-- un seul nombre, une seule direction, moins d'ambiguïté pour le même résultat de conversion.
+CREATE TABLE IF NOT EXISTS unites_mesure_categories (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom            TEXT NOT NULL,
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_unites_mesure_categories_entreprise_id ON unites_mesure_categories(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS unites_mesure (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  categorie_id   INTEGER NOT NULL REFERENCES unites_mesure_categories(id) ON DELETE CASCADE,
+  nom            TEXT NOT NULL,
+  symbole        TEXT,
+  facteur        NUMERIC(14, 6) NOT NULL DEFAULT 1,
+  est_reference  BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE (entreprise_id, categorie_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_unites_mesure_entreprise_id ON unites_mesure(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_unites_mesure_categorie_id ON unites_mesure(categorie_id);
+
+-- produits.unite (TEXT libre) reste en place comme cache d'affichage dénormalisé — synchronisé
+-- depuis unites_mesure.symbole/nom à chaque fois que unite_id est renseigné côté route, plutôt
+-- que retiré d'un coup (même logique de « colonne pont » que produits.quantite prévue à
+-- l'étape 3 du plan : ça évite de réécrire d'un coup tous les lecteurs existants de .unite).
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS unite_id INTEGER REFERENCES unites_mesure(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_produits_unite_id ON produits(unite_id);
+
+-- uom_id par ligne (achat/devis) : optionnel, sert uniquement à la conversion dans stockSync.js
+-- quand l'unité de la ligne diffère de celle du produit — pas un champ visible/éditable dans le
+-- formulaire de ligne, auto-rempli comme stockId l'est déjà à la sélection d'un article.
+ALTER TABLE achats_lignes ADD COLUMN IF NOT EXISTS uom_id INTEGER REFERENCES unites_mesure(id) ON DELETE SET NULL;
+ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS uom_id INTEGER REFERENCES unites_mesure(id) ON DELETE SET NULL;
+
 -- ═══════════════ Étape A « élargissement stock » (2026-09-01) : typologie des intrants + fiches enrichies ═══════════════
 -- Modèle de champs adapté de LiteFarm (tables product / soil_amendment_product : enum de
 -- type produit, NPK n/p/k + unité, dose, liste des substances autorisées) + champs propres
@@ -2296,6 +2338,87 @@ async function seedComptaConfigForExistingEntreprises() {
   }
 }
 
+// Étape 1 alignement Odoo produit/stock : crée les catégories d'unités de mesure + unités
+// par défaut pour toute entreprise qui n'en a aucune. Même liste que routes/auth.js (seed
+// à l'inscription) via utils/unitesMesureDefaut.js.
+async function seedUnitesMesureForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM unites_mesure_categories c WHERE c.entreprise_id = e.id)`
+  );
+  for (const { id } of entreprises) {
+    for (const cat of UNITES_MESURE_DEFAUT) {
+      const { rows } = await client.query(
+        `INSERT INTO unites_mesure_categories (entreprise_id, nom) VALUES ($1, $2)
+         ON CONFLICT (entreprise_id, nom) DO NOTHING RETURNING id`,
+        [id, cat.categorie]
+      );
+      if (!rows[0]) continue;
+      for (const u of cat.unites) {
+        await client.query(
+          `INSERT INTO unites_mesure (entreprise_id, categorie_id, nom, symbole, facteur, est_reference)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, rows[0].id, u.nom, u.symbole, u.facteur, u.estReference]
+        );
+      }
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Unités de mesure par défaut créées pour ${entreprises.length} entreprise(s).`);
+  }
+}
+
+// Étape 1 alignement Odoo produit/stock : relie chaque produits.unite (texte libre) encore
+// non résolu à une unites_mesure de son entreprise — par correspondance insensible à la
+// casse sur le nom ou le symbole, sinon création d'une unité de secours dans une catégorie
+// « Autre » (créée si besoin) avec un facteur de 1 (aucune conversion connue possible pour
+// une unité inventée à la volée par un utilisateur). Ne touche que les produits dont
+// unite_id est encore NULL — relançable sans effet une fois tout résolu.
+async function backfillProduitsUniteId() {
+  const { rows: aResoudre } = await client.query(
+    `SELECT id, entreprise_id, unite FROM produits
+     WHERE unite_id IS NULL AND unite IS NOT NULL AND unite <> ''`
+  );
+  if (aResoudre.length === 0) {
+    console.log('ℹ️  produits.unite_id : rien à relier (aucune unité texte non résolue).');
+    return;
+  }
+  const autreCategorieIdParEntreprise = {};
+  let resolus = 0;
+  for (const p of aResoudre) {
+    const { rows: match } = await client.query(
+      `SELECT id FROM unites_mesure
+       WHERE entreprise_id = $1 AND (LOWER(nom) = LOWER($2) OR LOWER(symbole) = LOWER($2))
+       LIMIT 1`,
+      [p.entreprise_id, p.unite.trim()]
+    );
+    let uniteId = match[0]?.id;
+    if (!uniteId) {
+      let autreCategorieId = autreCategorieIdParEntreprise[p.entreprise_id];
+      if (!autreCategorieId) {
+        const { rows } = await client.query(
+          `INSERT INTO unites_mesure_categories (entreprise_id, nom) VALUES ($1, 'Autre')
+           ON CONFLICT (entreprise_id, nom) DO UPDATE SET nom = EXCLUDED.nom RETURNING id`,
+          [p.entreprise_id]
+        );
+        autreCategorieId = rows[0].id;
+        autreCategorieIdParEntreprise[p.entreprise_id] = autreCategorieId;
+      }
+      const { rows: created } = await client.query(
+        `INSERT INTO unites_mesure (entreprise_id, categorie_id, nom, symbole, facteur, est_reference)
+         VALUES ($1, $2, $3, $3, 1, FALSE)
+         ON CONFLICT (entreprise_id, categorie_id, nom) DO UPDATE SET nom = EXCLUDED.nom
+         RETURNING id`,
+        [p.entreprise_id, autreCategorieId, p.unite.trim()]
+      );
+      uniteId = created[0].id;
+    }
+    await client.query('UPDATE produits SET unite_id = $1 WHERE id = $2', [uniteId, p.id]);
+    resolus++;
+  }
+  console.log(`✅ produits.unite_id relié pour ${resolus} produit(s).`);
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -2381,6 +2504,8 @@ async function migrate() {
     await seedComptaConfigForExistingEntreprises();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();
+    await seedUnitesMesureForExistingEntreprises();
+    await backfillProduitsUniteId();
     await migratePostesFromSalaries();
     await migrateContratsFromSalaries();
   } catch (err) {

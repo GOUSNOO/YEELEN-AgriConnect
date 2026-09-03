@@ -15,6 +15,7 @@ import { logAuditEvent, getAuditLog, countRecentAuditEvents } from '../utils/aud
 import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfaCode.js';
 import { sendMfaCodeEmail } from '../services/mailer.js';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
+import { UNITES_MESURE_DEFAUT } from '../utils/unitesMesureDefaut.js';
 
 const router = express.Router();
 
@@ -174,6 +175,25 @@ router.post('/register', async (req, res) => {
         [entreprise.id, j.name, j.code, j.type, j.sequence, j.refund_sequence,
          j.defaultAccountCode ? compteIdParCode[j.defaultAccountCode] : null]
       );
+    }
+
+    // Étape 1 alignement Odoo produit/stock : catégories d'unités de mesure + unités par
+    // défaut (mêmes listes que migrate.js:seedUnitesMesureForExistingEntreprises, via
+    // utils/unitesMesureDefaut.js).
+    for (const cat of UNITES_MESURE_DEFAUT) {
+      const catRes = await client.query(
+        `INSERT INTO unites_mesure_categories (entreprise_id, nom) VALUES ($1, $2)
+         ON CONFLICT (entreprise_id, nom) DO NOTHING RETURNING id`,
+        [entreprise.id, cat.categorie]
+      );
+      if (!catRes.rows[0]) continue;
+      for (const u of cat.unites) {
+        await client.query(
+          `INSERT INTO unites_mesure (entreprise_id, categorie_id, nom, symbole, facteur, est_reference)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [entreprise.id, catRes.rows[0].id, u.nom, u.symbole, u.facteur, u.estReference]
+        );
+      }
     }
 
     await client.query('COMMIT');

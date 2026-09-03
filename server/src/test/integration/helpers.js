@@ -83,7 +83,7 @@ export async function createParcelle(token, nom = `Parcelle ${Date.now()}-${Math
 
 // Crée un produit (stock) rattaché à une catégorie seedée à la création de l'entreprise.
 // Renvoie { id, categorieId, nom }.
-export async function createProduit(token, { module = 'Cultures', nom, prixDefaut } = {}) {
+export async function createProduit(token, { module = 'Cultures', nom, prixDefaut, uniteId } = {}) {
   const cats = await request(app)
     .get(`/api/produit-categories?module=${module}`)
     .set('Authorization', `Bearer ${token}`);
@@ -93,7 +93,7 @@ export async function createProduit(token, { module = 'Cultures', nom, prixDefau
   const res = await request(app)
     .post('/api/produits')
     .set('Authorization', `Bearer ${token}`)
-    .send({ module, nom: produitNom, categorieId, prixDefaut });
+    .send({ module, nom: produitNom, categorieId, prixDefaut, uniteId });
   if (res.status !== 201) {
     throw new Error(`création produit a échoué (${res.status}): ${JSON.stringify(res.body)}`);
   }
