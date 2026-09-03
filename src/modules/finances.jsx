@@ -271,7 +271,7 @@ export function FinancesModule({ role }) {
           </div>
         </div>
       </Card>
-      <Card style={{ padding: 0 }}>
+      <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>

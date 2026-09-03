@@ -5,7 +5,7 @@ import {
   getEquipements, createEquipement, updateEquipement, deleteEquipement,
   getEquipementMaintenance, createEquipementMaintenance, deleteEquipementMaintenance,
 } from '../lib/api.js';
-import { Badge, Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { Badge, Button, Card, DataTable, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
 
 const CATEGORIES = ['Tracteur/Machine', 'Véhicule', 'Outil manuel', 'Irrigation', 'Autre'];
@@ -194,7 +194,7 @@ export function EquipementsModule({ canManage = false }) {
       )}
 
       <Card style={{ padding: 0 }}>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: '#5B6357' }}>
               <th>{t('equipements.colEquipement')}</th>
@@ -233,7 +233,7 @@ export function EquipementsModule({ canManage = false }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
 
       {editingId && (

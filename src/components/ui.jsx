@@ -66,6 +66,21 @@ export function Card({ children, style, ...rest }) {
   );
 }
 
+// Enveloppe systématiquement .data-table dans un conteneur overflow-x: auto —
+// sans ça, un tableau plus large que son Card fait grandir toute la page au lieu
+// de défiler dans son propre cadre (constaté sur plusieurs modules, pas un cas isolé).
+// Passer ici plutôt que de rajouter le wrapper à chaque site d'appel garantit que
+// tout futur tableau utilisant ce composant est protégé automatiquement.
+export function DataTable({ children, style, wrapperStyle, ...rest }) {
+  return (
+    <div style={{ overflowX: 'auto', ...wrapperStyle }}>
+      <table className="data-table" style={style} {...rest}>
+        {children}
+      </table>
+    </div>
+  );
+}
+
 export function Button({ children, onClick, variant = 'default', small, style, type = 'button', disabled, ...rest }) {
   const base = {
     fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: small ? 13 : 14,

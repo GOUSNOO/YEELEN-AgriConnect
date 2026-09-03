@@ -43,7 +43,7 @@ import {
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte, updateRecolte, deleteRecolte,
   getOnboardingStatus, updateOnboardingStatus, updateEntreprise,
 } from './lib/api';
-import { Badge, Button, Card, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
+import { Badge, Button, Card, DataTable, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
 import { RegistreIntrantsView } from './components/RegistreIntrantsView';
 import { FeedbackModule } from './components/FeedbackModule';
@@ -1255,7 +1255,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             {filtreStatut ? t('devis.emptyAFacturer') : t('devis.emptyList')}
           </div>
         ) : (
-          <table className="data-table">
+          <DataTable>
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                 <th>{t("devis.colNumero")}</th>
@@ -1288,7 +1288,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         )}
       </Card>
       )}
@@ -1510,7 +1510,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </div>
               ) : (
               <>
-              <table className="data-table" style={{ marginBottom: 12 }}>
+              <DataTable style={{ marginBottom: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                     <th style={{ width: '25%' }}>{t("devis.colProduit")}</th><th style={{ width: '10%' }}>{t("devis.colQte")}</th><th style={{ width: '10%' }}>{t("devis.colLivre")}</th><th style={{ width: '10%' }}>{t("devis.colFacture")}</th><th style={{ width: '6%' }}>{t("devis.colUnite")}</th><th style={{ width: '10%' }}>{t("devis.colPU")}</th><th style={{ width: '5%' }}>{t("devis.colRemise")}</th><th style={{ width: '14%' }}>{t("devis.colTaxe")}</th><th style={{ width: '10%', textAlign: 'right' }}>{t("common.total")}</th>
@@ -1562,7 +1562,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     );
                   })}
                 </tbody>
-              </table>
+              </DataTable>
               {detailData.statut !== 'Brouillon' && (
                 <div style={{ textAlign: 'right', marginBottom: 10 }}>
                   <Button small variant="outline" onClick={handleSaveQuantites} disabled={quantitesSaving}>
@@ -1987,7 +1987,7 @@ function VentesAnalyseTab() {
           <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
             {t('ventes.analyseResume', { count: mouvements.length, total: fmtMoney(total) })}
           </div>
-          <table className="data-table">
+          <DataTable>
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                 <th>{t('common.date')}</th><th>{t('ventes.colProduit')}</th><th>{t('ventes.colClient')}</th><th>{t('devis.colQte')}</th><th style={{ textAlign: 'right' }}>{t('common.amount')}</th>
@@ -2004,7 +2004,7 @@ function VentesAnalyseTab() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         </>
       )}
     </Card>
@@ -2475,7 +2475,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         </div>
       </Card>
       <Card style={{ padding: 0 }}>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('common.date')}</th>
@@ -2521,7 +2521,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               );
             })}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
       {detailDoc && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
@@ -2539,7 +2539,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             </div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t('achats.detailLignes')}</div>
-              <table className="data-table">
+              <DataTable>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                     <th>{t('achats.produit')}</th>
@@ -2558,7 +2558,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </DataTable>
             </div>
             <Button variant="ghost" onClick={closeDetail}>{t('common.close')}</Button>
           </div>
@@ -3065,7 +3065,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             </button>
           ))}
         </div>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('stocks.article')}</th>
@@ -3122,7 +3122,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                     {lots.length === 0 ? (
                       <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t('stocks.lotsEmpty')}</div>
                     ) : (
-                      <table className="data-table" style={{ marginBottom: 8 }}>
+                      <DataTable style={{ marginBottom: 8 }}>
                         <thead><tr style={{ color: COLORS.inkSoft }}>
                           <th>{t('stocks.lotNumero')}</th>
                           <th>{t('stocks.lotDateEntree')}</th>
@@ -3150,7 +3150,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </DataTable>
                     )}
                     <form onSubmit={addLot} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end' }}>
                       <Field label={t('stocks.lotNumero')} value={lotForm.numeroLot} onChange={e => setLotForm({ ...lotForm, numeroLot: e.target.value })} />
@@ -3168,7 +3168,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             ));
             })()}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
 
       {editingId && (
@@ -3374,7 +3374,7 @@ function LivraisonsTab({ farmId }) {
         </form>
       </Card>
       <Card style={{ padding: 0 }}>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('common.date')}</th><th>{t('poulailler.client')}</th><th>{t('poulailler.produit')}</th><th>{t('poulailler.colQte')}</th><th>{t('common.status')}</th><th></th>
@@ -3403,7 +3403,7 @@ function LivraisonsTab({ farmId }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
     </div>
   );
@@ -3484,7 +3484,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       )}
 
       <Card style={{ padding: 0 }}>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('common.date')}</th><th>{t('compta.type')}</th><th>{t('compta.detail')}</th><th style={{ textAlign: 'right' }}>{t('common.amount')}</th>
@@ -3509,7 +3509,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
 
       {/* Popup listant tout l'historique (modifications + suppressions) du module */}
@@ -3666,7 +3666,7 @@ function PoultryMonitoringTab({ farmId }) {
       </div>
 
       <Card style={{ padding: 0 }}>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('common.date')}</th>
@@ -3687,7 +3687,7 @@ function PoultryMonitoringTab({ farmId }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
     </div>
   );
@@ -4862,7 +4862,7 @@ function HarvestsModule({ farmId }) {
       </div>
 
       <Card style={{ padding: 0 }}>
-        <table className="data-table">
+        <DataTable>
           <thead>
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('common.date')}</th>
@@ -4894,7 +4894,7 @@ function HarvestsModule({ farmId }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </Card>
 
       {editingId && (
