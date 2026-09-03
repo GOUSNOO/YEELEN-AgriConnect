@@ -1109,6 +1109,7 @@
         "points": [
           "Parcelles : humidité et température du sol (capteurs simulés), seuil d'arrosage, mode automatique ou vanne manuelle.",
           "Stocks : semences, engrais, produits phytosanitaires — quantités, seuils d'alerte, catégories personnalisables, et un prix par défaut par article. Ce prix se propose automatiquement dès que vous tapez le nom de l'article dans un achat ou un devis.",
+          "Lots & registre : suivez chaque lot avec sa date de péremption. Pour un produit phytosanitaire, renseignez matière active, n° AMM, ZNT et délai avant récolte (DAR) — le registre des traitements calcule alors automatiquement, pour chaque application, la date à partir de laquelle la récolte redevient possible.",
           "Ventes / Achats : passent par les devis (module Ventes) et par le formulaire d'achat multi-lignes (module Achats — avec un vrai cycle Brouillon → Commandé → Reçu, le stock et les finances ne bougeant qu'à la réception). Chaque achat reçu ou vente signée met automatiquement à jour vos Finances et votre stock.",
           "Comptabilité : total des ventes et achats du module, et l'historique des modifications."
         ]
@@ -1131,7 +1132,11 @@
       },
       "salaries": {
         "title": "Salariés",
-        "text": "Fiches de vos employés : poste, salaire, coordonnées personnelles. Ouvrez la « Fiche RH » d'un employé pour son suivi détaillé : présences jour par jour, demandes de congés (à approuver/refuser), et avances sur salaire. Un employé peut avoir un compte de connexion séparé (avec son propre rôle) — c'est différent de son email personnel."
+        "text": "Fiches de vos employés : poste, salaire, coordonnées personnelles. Ouvrez la « Fiche RH » d'un employé pour son suivi détaillé : présences jour par jour, demandes de congés (à approuver/refuser), et avances sur salaire. Un employé peut avoir un compte de connexion séparé (avec son propre rôle) — c'est différent de son email personnel. Une fois connecté avec ce compte, l'employé retrouve son propre suivi (congés, avances, présences, bulletin estimé) dans « Mon espace RH »."
+      },
+      "factures": {
+        "title": "Facturation & comptabilité",
+        "text": "Une fois un devis facturé, la facture apparaît dans Factures avec son état de paiement (non payée, partiellement payée, payée) et, passé l'échéance, un badge « en retard » — vous pouvez alors « Marquer relancé ». Pour corriger une facture déjà postée sans la supprimer, créez un avoir depuis son détail. Un journal comptable peut être sécurisé (icône 🔒) pour rendre ses écritures inaltérables une fois validées ; « Vérifier l'intégrité » recalcule la chaîne pour confirmer qu'aucune écriture n'a été modifiée après coup."
       },
       "equipements": {
         "title": "Équipements",

@@ -1109,6 +1109,7 @@
         "points": [
           "Plots: soil moisture and temperature (simulated sensors), watering threshold, automatic mode or manual valve.",
           "Stock: seeds, fertilizers, crop-protection products — quantities, alert thresholds, customizable categories, and a default price per item. That price is suggested automatically as soon as you type the item name in a purchase or a quote.",
+          "Batches & log: track each batch with its expiry date. For a crop-protection product, fill in active substance, registration number, buffer zone and pre-harvest interval (PHI) — the treatment log then automatically works out, for every application, the date from which harvesting is allowed again.",
           "Sales / Purchases: go through quotes (Sales module) and the multi-line purchase form (Purchases module — with a real Draft → Ordered → Received cycle, stock and finances only moving on receipt). Every received purchase or signed sale automatically updates your Finances and your stock.",
           "Accounting: total sales and purchases for the module, and the change history."
         ]
@@ -1131,7 +1132,11 @@
       },
       "salaries": {
         "title": "Employees",
-        "text": "Records for your employees: position, salary, personal contact details. Open an employee's “HR record” for detailed tracking: day-by-day attendance, leave requests (to approve/reject), and salary advances. An employee can have a separate login account (with their own role) — that is different from their personal email."
+        "text": "Records for your employees: position, salary, personal contact details. Open an employee's “HR record” for detailed tracking: day-by-day attendance, leave requests (to approve/reject), and salary advances. An employee can have a separate login account (with their own role) — that is different from their personal email. Once signed in with that account, the employee finds their own tracking (leave, advances, attendance, estimated payslip) under “My HR space”."
+      },
+      "factures": {
+        "title": "Invoicing & accounting",
+        "text": "Once a quote is invoiced, the invoice shows up under Invoices with its payment status (unpaid, partially paid, paid) and, past its due date, an “overdue” badge — you can then “Mark as reminded”. To correct an already-posted invoice without deleting it, create a credit note from its detail view. An accounting journal can be secured (🔒 icon) to make its entries immutable once posted; “Verify integrity” recomputes the chain to confirm nothing was altered afterward."
       },
       "equipements": {
         "title": "Equipment",

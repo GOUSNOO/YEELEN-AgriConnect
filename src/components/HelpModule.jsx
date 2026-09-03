@@ -7,7 +7,7 @@ import { Card } from './ui.jsx';
 // sous help.sections.<id>.
 const SECTION_IDS = [
   'accueil', 'calendrier', 'recoltes', 'cultures', 'poulailler', 'clientsFournisseurs',
-  'finances', 'devis', 'salaries', 'equipements', 'observations', 'assistant',
+  'finances', 'devis', 'factures', 'salaries', 'equipements', 'observations', 'assistant',
   'previsionsRapports', 'notifications', 'feedback', 'profil',
 ];
 
