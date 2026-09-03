@@ -1,21 +1,23 @@
-# Runbook de déploiement en production
+# Déploiement en production — YEELEN AgriConnect
 
-Ce document décrit comment faire passer YEELEN AgriConnect de "stack Docker
-locale sur la machine de dev" à "instance accessible publiquement en HTTPS sur
-un Droplet DigitalOcean". C'est la procédure du Jalon 4 (*Mise en production*)
-de la feuille de route — voir `CLAUDE.md` pour le contexte produit complet.
+Cible retenue (décision 2026-08-13) : **un VPS unique** (DigitalOcean Droplet)
+faisant tourner la stack `docker-compose` existante, avec **Caddy** en frontal
+pour le HTTPS automatique (Let's Encrypt). Pas de Kubernetes, pas de service
+managé, pas de CDN. C'est la procédure du Jalon 4 (*Mise en production*) de la
+feuille de route — voir `CLAUDE.md` pour le contexte produit complet.
 
-**État au moment de la rédaction (2026-09-03)** : la configuration de
-déploiement (`docker-compose.prod.yml`, `Caddyfile`) est écrite, committée et
-**vérifiée localement** (voir `docs/journal.md`, entrées du 2026-08-13 et du
-2026-08-16) — Caddy démarre, sert en HTTPS, route `/api/*` vers le backend et
-le reste vers le frontend, et le fallback sur son CA local en l'absence d'un
-vrai domaine confirme que la config est correcte. **Rien n'est hébergé
-publiquement** : ça reste bloqué sur la création d'un compte DigitalOcean/
-Droplet et l'achat d'un nom de domaine par l'utilisateur — décisions et achats
-qu'un agent ne fait pas à la place de quelqu'un. Ce runbook prépare le terrain
-pour que ces deux étapes, une fois faites, suffisent à aller en ligne sans
-improviser.
+**État de la config (2026-09-03)** : `docker-compose.prod.yml` et le
+`Caddyfile` sont écrits, committés et **vérifiés localement** (voir
+`docs/journal.md`, entrées du 2026-08-13/2026-08-16/2026-09-03) — Caddy
+démarre, sert en HTTPS, route `/api/*` vers le backend et le reste vers le
+frontend, et le fallback sur son CA local en l'absence d'un vrai domaine
+confirme que la config est correcte. **Rien n'est hébergé publiquement** :
+bloqué sur la création d'un compte DigitalOcean/Droplet et l'achat d'un nom de
+domaine — décisions et achats qu'un agent ne fait pas à la place de quelqu'un
+(voir [[project_hosting_budget_blocked]] dans la mémoire du projet). Les
+étapes marquées **[toi]** ci-dessous ne peuvent pas être faites à ta place
+(compte, paiement, accès SSH) ; ce runbook prépare le reste pour que, une fois
+ces deux étapes faites, aller en ligne n'ait rien à improviser.
 
 ## Vue d'ensemble de l'architecture de prod
 
@@ -35,82 +37,96 @@ Internet, contrairement à la config de dev locale (`5433`/`4000`/`8090`
 publiés). Caddy obtient et renouvelle automatiquement un certificat Let's
 Encrypt pour le domaine configuré — aucune manipulation `certbot` manuelle.
 
-## Prérequis
+## 1. Prérequis — à faire manuellement **[toi]**
 
-- [ ] Un compte DigitalOcean (ou hébergeur équivalent proposant un VPS Ubuntu) — **à créer par l'utilisateur**, pas par un agent.
-- [ ] Un nom de domaine acheté chez un registrar (Namecheap, OVH, Gandi, etc.) — **idem**.
-- [ ] Une carte bancaire pour le Droplet + le domaine (frais réels, hors du champ de ce qu'un agent peut faire).
-- [ ] Accès SSH à la machine où ce runbook est exécuté (le Droplet, une fois créé).
+| # | Action | Détail |
+|---|--------|--------|
+| 1 | Créer un compte DigitalOcean | ou tout autre fournisseur de VPS Ubuntu |
+| 2 | Créer un Droplet | Ubuntu 24.04 LTS, **2 Go RAM minimum** (4 Go confortable — le build frontend Vite est gourmand et peut se faire tuer par l'OOM killer en-dessous), 2 vCPU, 50 Go disque. Ajouter ta clé SSH à la création. |
+| 3 | Acheter un nom de domaine | ou utiliser un sous-domaine que tu contrôles |
+| 4 | Créer l'enregistrement DNS | Un **A record** (ex. `agriconnect.tondomaine.com`) → IP publique du Droplet. Vérifier avec `dig +short agriconnect.tondomaine.com` avant de continuer — doit renvoyer l'IP du Droplet (la propagation peut prendre quelques minutes à quelques heures). |
 
-Voir [[project_hosting_budget_blocked]] dans la mémoire du projet : ce chantier
-reste délibérément en pause tant que le budget n'est pas débloqué — ce runbook
-sert de référence prête à l'emploi pour quand ça le sera, pas une invitation à
-relancer la conversation sur le sujet.
+Caddy ne pourra pas obtenir de certificat Let's Encrypt tant que le DNS ne
+pointe pas correctement — il retentera automatiquement en boucle si ce n'est
+pas encore propagé, pas besoin de le relancer manuellement.
 
-## 1. Créer le Droplet
+## 2. Préparer le serveur
 
-1. Sur DigitalOcean : **Create → Droplet**.
-2. Image : **Ubuntu 24.04 LTS** (ou la dernière LTS disponible).
-3. Taille : la plus petite offre (1 vCPU / 1-2 Go RAM) suffit pour démarrer — l'app entière (Postgres + Node + nginx + Caddy) est légère à ce stade de trafic. Peut être redimensionné plus tard sans réinstallation.
-4. Région : la plus proche des utilisateurs cibles.
-5. Authentification : clé SSH (pas de mot de passe root).
-6. Une fois créé, noter l'**adresse IP publique** du Droplet.
-
-## 2. Pointer le domaine
-
-Chez le registrar du domaine, créer un enregistrement DNS :
-
-```
-Type: A
-Nom:  @  (ou le sous-domaine choisi, ex. app)
-Valeur: <IP publique du Droplet>
-TTL: 3600 (ou la valeur par défaut)
-```
-
-La propagation DNS peut prendre de quelques minutes à quelques heures.
-Vérifier avant de continuer : `dig +short <domaine>` doit renvoyer l'IP du
-Droplet. Caddy ne pourra pas obtenir de certificat Let's Encrypt tant que le
-DNS ne pointe pas correctement — retentera automatiquement en boucle si ce
-n'est pas encore propagé, pas besoin de le relancer manuellement.
-
-## 3. Préparer le Droplet
-
-Connexion SSH puis, sur le Droplet :
+En SSH sur le Droplet (`ssh root@IP_DU_DROPLET`) :
 
 ```bash
-# Docker + Docker Compose (le plugin, pas l'ancien binaire docker-compose séparé)
-curl -fsSL https://get.docker.com | sh
-apt-get install -y docker-compose-plugin git
+# Docker + plugin compose
+apt-get update && apt-get install -y ca-certificates curl git
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+  > /etc/apt/sources.list.d/docker.list
+apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# Cloner le dépôt
-git clone <url-du-repo> agri-app
-cd agri-app
+# Pare-feu : n'ouvrir que SSH + HTTP + HTTPS
+ufw allow OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable
 ```
 
-À partir d'ici, `docker compose` (avec un espace, plugin v2) est utilisé plutôt
-que `docker-compose` (binaire v1, utilisé jusqu'ici en dev local sur Windows) —
-les deux acceptent la même syntaxe de fichiers, seule la commande change.
+> **Ne pas** ouvrir 5432/5433/4000/8090 sur le pare-feu : en prod,
+> `docker-compose.prod.yml` retire tous les ports publiés sauf ceux de Caddy
+> (80/443) — la base et le backend ne sont de toute façon joignables que
+> depuis le réseau Docker interne, mais autant ne pas compter uniquement
+> là-dessus.
 
-## 4. Configurer les variables d'environnement
+## 3. Récupérer le code et configurer
 
 ```bash
-cp .env.prod.example .env
-cp server/.env.prod.example server/.env
+git clone https://github.com/GOUSNOO/YEELEN-AgriConnect.git
+cd YEELEN-AgriConnect
+
+# Fichiers d'environnement (voir .env.example et server/.env.example)
+cp .env.example .env
+cp server/.env.example server/.env
 ```
 
-Puis éditer les deux fichiers (`nano .env`, `nano server/.env`) :
+Éditer **`.env`** :
 
-- [ ] `DOMAIN` (`.env`) = le domaine pointé à l'étape 2, sans `https://`.
+```ini
+DB_USER=agri
+DB_PASSWORD=<mot de passe fort — openssl rand -base64 24>
+DB_NAME=agri_app
+VITE_API_URL=/api                      # URL relative — Caddy sert front + API sur le même domaine
+DOMAIN=agriconnect.tondomaine.com      # exactement le domaine du A record
+```
+
+Éditer **`server/.env`** :
+
+```ini
+DB_HOST=db
+DB_PORT=5432
+DB_USER=agri
+DB_PASSWORD=<le MÊME mot de passe que dans .env>
+DB_NAME=agri_app
+PORT=4000
+JWT_SECRET=<chaîne aléatoire longue — openssl rand -base64 48>
+EMAIL_USER=<adresse Gmail, ou laisser vide>
+EMAIL_PASS=<mot de passe d'application Gmail, ou laisser vide>
+```
+
+- [ ] `DOMAIN` (`.env`) = le domaine pointé à l'étape 1.4, sans `https://`.
 - [ ] `DB_USER` / `DB_PASSWORD` / `DB_NAME` — **identiques dans les deux fichiers**, mot de passe généré pour l'occasion (pas celui de dev).
-- [ ] `VITE_API_URL` (`.env`) = `https://<DOMAIN>/api`.
-- [ ] `EMAIL_USER` / `EMAIL_PASS` (`.env`) — compte SMTP réel, sinon les emails (2FA email, envoi de devis, notifications) échoueront silencieusement côté nodemailer (comportement déjà vu et documenté en dev — voir `CLAUDE.md`, section MFA).
-- [ ] `JWT_SECRET` (`server/.env`) — généré avec `openssl rand -base64 48`, jamais réutilisé d'un environnement à l'autre.
+- [ ] `VITE_API_URL=/api` — URL relative, fonctionne quel que soit le domaine choisi (Caddy sert front et API sous le même nom de domaine).
+- [ ] `EMAIL_USER` / `EMAIL_PASS` — compte SMTP réel (Gmail + mot de passe d'application, pas le mot de passe du compte), sinon les fonctions email (2FA par email, email de bienvenue employé, envoi de devis) échouent proprement plutôt que de bloquer le reste — le MFA par application (TOTP) fonctionne sans email.
+- [ ] `JWT_SECRET` — généré avec `openssl rand -base64 48`, jamais réutilisé d'un environnement à l'autre. À fixer une bonne fois : le changer après coup invalide toutes les sessions ouvertes (tout le monde doit se reconnecter).
 
-Les deux fichiers `.env`/`server/.env` réels restent gitignorés — ne jamais les
-committer, ne jamais les faire transiter autrement que par SSH/copie directe
-sur le Droplet.
+> ⚠️ `DB_PASSWORD` doit être **identique** dans les deux fichiers, sinon le
+> backend ne peut pas se connecter à Postgres (le conteneur ne démarrera pas).
 
-## 5. Premier démarrage
+Les deux fichiers `.env`/`server/.env` réels restent gitignorés — ne jamais
+les committer, ne jamais les faire transiter autrement que par SSH/copie
+directe sur le Droplet.
+
+## 4. Premier démarrage
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
@@ -127,7 +143,7 @@ docker compose logs -f caddy
 Un message contenant `certificate obtained successfully` confirme que le
 HTTPS public fonctionne.
 
-## 6. Appliquer les migrations
+## 5. Appliquer les migrations
 
 Le backend **ne migre pas automatiquement au démarrage** (`server.js` vérifie
 seulement que Postgres répond, voir `CLAUDE.md`) — sur une base fraîche, les
@@ -141,24 +157,27 @@ docker compose exec backend node src/db/migrate.js
 EXISTS`) — relançable sans risque à chaque déploiement, y compris ceux
 suivants qui ajoutent des colonnes.
 
-## 7. Vérifications post-déploiement
+## 6. Vérifications post-déploiement
 
-- [ ] `curl -I https://<DOMAIN>` répond `200`, en HTTPS (pas de warning certificat).
-- [ ] `curl -I http://<DOMAIN>` répond `308` (redirection automatique vers HTTPS par Caddy).
-- [ ] `curl https://<DOMAIN>/api/auth/login -X POST -H 'content-type: application/json' -d '{}'` répond une erreur JSON de l'API (pas une page d'erreur Caddy/nginx) — confirme que `/api/*` atteint bien le backend Express.
-- [ ] Inscription (`Créer un compte`) d'une entreprise de test depuis un navigateur réel, puis suppression manuelle de ces données de test une fois vérifiée (voir la note de nettoyage multi-tables dans `CLAUDE.md`, section "Local dev environment" — les mêmes contraintes `NO ACTION` s'appliquent en prod).
+- [ ] `curl -sSI https://<DOMAIN>` répond `200`, en HTTPS (pas de warning certificat).
+- [ ] `curl -sSI http://<DOMAIN>` répond `308` (redirection automatique vers HTTPS par Caddy).
+- [ ] `curl -sS https://<DOMAIN>/api/` répond `{"message":"Backend AgriApp opérationnel 🚜"}` (ou équivalent) — confirme que `/api/*` atteint bien le backend Express, pas une page d'erreur Caddy/nginx.
+- [ ] `curl https://<DOMAIN>/api/auth/login -X POST -H 'content-type: application/json' -d '{}'` répond une erreur JSON de validation de l'API.
+- [ ] Dans un navigateur : ouvrir le domaine, **créer le premier compte entreprise** via l'onglet « Inscription », se connecter, vérifier qu'un module (Cultures, Comptabilité…) charge sans erreur. Puis supprimer manuellement ces données de test une fois vérifiées (voir la note de nettoyage multi-tables dans `CLAUDE.md`, section "Local dev environment" — les mêmes contraintes `NO ACTION` s'appliquent en prod).
 - [ ] `docker compose ps` — les 5 services sont `Up`/`healthy`, aucun en `Restarting`.
 
-## 8. Sauvegardes — vérifier qu'elles tournent réellement
+## 7. Sauvegardes — vérifier qu'elles tournent réellement
 
 Le service `backup` tourne dès le premier `up` (dépend de `db: healthy`) et
-fait un `pg_dump` toutes les 6h, avec rotation sur les 14 derniers, plus les
-fichiers sentinelles `.last_success`/`.last_failure`/`.last_restore_test` dans
-`./backups/` sur le Droplet (voir `CLAUDE.md`, section Backups, pour le détail
-du mécanisme et le bug de dump silencieusement vide déjà corrigé).
+fait un `pg_dump` toutes les 6h dans `./backups`, avec rotation sur les 14
+derniers, plus les fichiers sentinelles
+`.last_success`/`.last_failure`/`.last_restore_test` (voir `CLAUDE.md`,
+section Backups, pour le détail du mécanisme et le bug de dump silencieusement
+vide déjà corrigé).
 
 - [ ] Après le premier cycle (6h, ou forcer un cycle manuellement — voir ci-dessous), `backups/.last_success` existe et est récent.
-- [ ] `backups/.last_failure` n'existe pas (ou, s'il existe d'un cycle précédent, a bien été effacé par le cycle suivant).
+- [ ] `backups/.last_failure` n'existe pas (ou a bien été effacé par le cycle suivant s'il existait d'un cycle précédent).
+- [ ] **Copie hors du Droplet mise en place** (DigitalOcean Spaces, `rsync` cron, snapshot de volume…) — un dump qui ne quitte jamais la machine ne protège pas d'une perte du Droplet lui-même. Pas automatisé par le projet à ce stade, à faire manuellement.
 
 Pour forcer un cycle sans attendre 6h (utile juste après le premier déploiement) :
 
@@ -166,7 +185,7 @@ Pour forcer un cycle sans attendre 6h (utile juste après le premier déploiemen
 docker compose exec backup /backup.sh
 ```
 
-## 9. Test de restauration (drill)
+## 8. Test de restauration (drill)
 
 Une sauvegarde qui n'a jamais été restaurée n'est qu'une hypothèse. À faire
 une fois juste après la mise en ligne, puis périodiquement (le service
@@ -190,10 +209,10 @@ docker compose exec db sh -c '
 - [ ] La restauration se termine sans erreur (`pg_restore` peut afficher des warnings sur l'ordre des contraintes, normal — l'échec réel serait un code de sortie non nul).
 - [ ] Le nombre de tables restaurées correspond à ce qui est attendu (comparer avec `docker compose exec db psql -U $POSTGRES_USER -d agri_app -c "\dt" | wc -l` sur la vraie base).
 
-## 10. Déployer une mise à jour (routine, après le premier déploiement)
+## 9. Déployer une mise à jour (routine, après le premier déploiement)
 
 ```bash
-cd agri-app
+cd YEELEN-AgriConnect
 git pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec backend node src/db/migrate.js   # si le déploiement inclut une migration de schéma
@@ -204,7 +223,7 @@ les assets hashés (`immutable`) — un déploiement ne laisse donc pas les
 utilisateurs déjà ouverts coincés sur un vieux bundle JS indéfiniment (bug
 identifié et corrigé, voir `CLAUDE.md`).
 
-## 11. Rollback
+## 10. Rollback
 
 Il n'y a pas de registre d'images ni de tags de versions à ce stade — le
 rollback se fait au niveau du code source :
@@ -222,7 +241,14 @@ déploiement à annuler a ajouté des colonnes/tables, revenir en arrière côt�
 code ne les supprime pas côté base — dans la grande majorité des cas c'est
 inoffensif (colonnes en plus non utilisées par l'ancien code), mais si le
 rollback doit annuler un changement de schéma cassant, restaurer plutôt depuis
-la sauvegarde la plus récente d'avant le déploiement fautif (voir §9).
+la sauvegarde la plus récente d'avant le déploiement fautif (voir §8).
+
+## Limites connues de cette cible
+
+- **Instance unique, pas de haute dispo** : une panne du Droplet = service indisponible jusqu'au redémarrage / à la restauration. Acceptable pour un MVP gratuit à faible trafic ; à revoir si l'usage décolle.
+- **Base sur le même hôte** que l'app (volume Docker `pgdata`). La restauration repose entièrement sur les dumps du conteneur `backup` + leur copie offsite (voir §7).
+- **Pas de CI/CD de déploiement** : la mise à jour est la séquence `git pull` + `up -d --build` du §9, faite à la main en SSH. La CI GitHub Actions ne fait que tester, elle ne déploie pas.
+- **Ressources build** : `npm run build` (Vite) sur un Droplet à 1 Go de RAM peut se faire tuer par l'OOM killer — d'où le minimum de 2 Go recommandé au §1. Alternative si besoin : builder l'image ailleurs et la pousser sur un registre plutôt que de builder sur le Droplet lui-même.
 
 ## Checklist go-live complète
 
@@ -230,15 +256,15 @@ la sauvegarde la plus récente d'avant le déploiement fautif (voir §9).
 
 - [ ] Compte DigitalOcean créé, carte bancaire ajoutée.
 - [ ] Domaine acheté.
-- [ ] Droplet créé (§1), IP notée.
-- [ ] DNS pointé et propagé, vérifié avec `dig` (§2).
-- [ ] Docker + git installés sur le Droplet, dépôt cloné (§3).
-- [ ] `.env` et `server/.env` remplis avec de vraies valeurs de prod, secrets générés pour l'occasion — pas réutilisés du dev (§4).
-- [ ] Premier `docker compose up -d --build` réussi, certificat Let's Encrypt obtenu (§5).
-- [ ] Migrations appliquées (§6).
-- [ ] Toutes les vérifications post-déploiement passées (§7).
-- [ ] Un cycle de sauvegarde forcé confirmé (§8).
-- [ ] Drill de restauration réussi (§9).
+- [ ] Droplet créé (§1), IP notée, 2 Go RAM minimum.
+- [ ] DNS pointé et propagé, vérifié avec `dig` (§1).
+- [ ] Docker + git installés sur le Droplet, pare-feu configuré, dépôt cloné (§2-3).
+- [ ] `.env` et `server/.env` remplis avec de vraies valeurs de prod, secrets générés pour l'occasion — pas réutilisés du dev (§3).
+- [ ] Premier `docker compose up -d --build` réussi, certificat Let's Encrypt obtenu (§4).
+- [ ] Migrations appliquées (§5).
+- [ ] Toutes les vérifications post-déploiement passées (§6).
+- [ ] Un cycle de sauvegarde forcé confirmé, copie offsite mise en place (§7).
+- [ ] Drill de restauration réussi (§8).
 - [ ] MFA obligatoire par entreprise — décision produit encore différée (voir `CLAUDE.md`, "MFA enforcement (by-policy)") : reconfirmer avec l'utilisateur si ça doit être tranché avant l'ouverture aux premiers agriculteurs, ou après.
-- [ ] Forum de feedback testé en conditions réelles (soumission → triage platform-admin) — chantier 4 de la feuille de route Sept 2026, à faire avant ou en parallèle de l'ouverture publique.
+- [ ] Forum de feedback testé en conditions réelles (soumission → triage platform-admin) — fait le 2026-09-03, voir `docs/journal.md`.
 - [ ] Annoncer/ouvrir l'accès aux premiers utilisateurs.
