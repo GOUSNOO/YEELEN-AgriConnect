@@ -31,6 +31,17 @@ async function request(path, options = {}) {
     throw new Error(data.error || 'Session expirée. Veuillez vous reconnecter.');
   }
 
+  if (response.status === 402) {
+    // Abonnement Phase 1 (subscriptionGuard) : accès limité/bloqué, mais l'utilisateur reste
+    // connecté — contrairement au 401, pas de clearToken(). Le shell applicatif écoute cet
+    // événement pour afficher le bandeau/paywall adapté (voir App.jsx).
+    window.dispatchEvent(new CustomEvent('agri-subscription-blocked', { detail: data }));
+    const message = data.reason === 'suspended'
+      ? 'Compte suspendu. Contactez le support.'
+      : 'Période d\'essai ou d\'abonnement expirée.';
+    throw new Error(data.error || message);
+  }
+
   if (!response.ok) {
     throw new Error(data.error || `Erreur ${response.status}`);
   }
@@ -61,15 +72,56 @@ export async function login(email, password, mfaCode) {
 }
 
 export async function register(email, password, extra) {
-  const { nomEntreprise, typeCompte, siret, devise, locale } = extra || {};
+  const { nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken } = extra || {};
   return request('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret, devise, locale }),
+    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken }),
   });
 }
 
 export async function getMe() {
   return request('/auth/me');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Abonnement (Phase 1, 2026-09-04) — voir docs/spec-abonnement-phase1.md
+// ─────────────────────────────────────────────────────────────────────
+export async function getBillingStatus() {
+  return request('/billing/status');
+}
+
+export async function listBillingEntreprises({ status, q, page, pageSize } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (q) params.set('q', q);
+  if (page) params.set('page', page);
+  if (pageSize) params.set('pageSize', pageSize);
+  const qs = params.toString();
+  return request(qs ? `/billing/entreprises?${qs}` : '/billing/entreprises');
+}
+
+export async function getBillingEntrepriseDetail(id) {
+  return request(`/billing/entreprises/${id}`);
+}
+
+export async function activerAbonnement(id, payload) {
+  return request(`/billing/entreprises/${id}/activer`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function prolongerAbonnement(id, payload) {
+  return request(`/billing/entreprises/${id}/prolonger`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function suspendreAbonnement(id, payload) {
+  return request(`/billing/entreprises/${id}/suspendre`, { method: 'POST', body: JSON.stringify(payload || {}) });
+}
+
+export async function reactiverAbonnement(id) {
+  return request(`/billing/entreprises/${id}/reactiver`, { method: 'POST' });
+}
+
+export async function exempterAbonnement(id, exempt) {
+  return request(`/billing/entreprises/${id}/exempter`, { method: 'POST', body: JSON.stringify({ exempt }) });
 }
 
 // ─────────────────────────────────────────────────────────────────────

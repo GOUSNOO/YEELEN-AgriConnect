@@ -4,6 +4,7 @@
     "save": "Save",
     "cancel": "Cancel",
     "loading": "Loading…",
+    "previous": "Previous",
     "next": "Next",
     "finish": "Finish",
     "add": "Add",
@@ -1141,6 +1142,67 @@
       "Traité": "Handled"
     }
   },
+  "billing": {
+    "trialBanner": "Trial period: {{count}} day(s) left.",
+    "readonlyBanner": "Subscription expired — read-only, {{count}} day(s) before full lockout.",
+    "status": {
+      "trial": "Trial",
+      "active": "Active",
+      "expired": "Expired",
+      "suspended": "Suspended",
+      "exempt": "Exempt"
+    },
+    "blocked": {
+      "expiredTitle": "Access blocked",
+      "expiredDesc": "Your trial period or subscription has ended. Contact us to reactivate your access.",
+      "suspendedTitle": "Account suspended",
+      "suspendedDesc": "Your account has been suspended. Contact support for more information."
+    },
+    "admin": {
+      "title": "Subscription administration",
+      "search": "Search",
+      "searchPlaceholder": "Company name…",
+      "statusFilter": "Status",
+      "loadError": "Could not load companies.",
+      "actionError": "Action failed.",
+      "empty": "No companies.",
+      "colName": "Company",
+      "colStatus": "Status",
+      "colUntil": "Until",
+      "colUsers": "Users",
+      "colLastPayment": "Last payment",
+      "colDate": "Date",
+      "manage": "Manage",
+      "pageOf": "Page {{page}} / {{total}}",
+      "trialUntil": "Trial until",
+      "activeUntil": "Active until",
+      "graceUntil": "Grace period until",
+      "suspend": "Suspend",
+      "suspendConfirm": "Suspend this company's access?",
+      "suspended": "Company suspended.",
+      "reactivate": "Reactivate",
+      "reactivated": "Access reactivated.",
+      "exempt": "Exempt",
+      "exempted": "Company exempted.",
+      "removeExemption": "Remove exemption",
+      "exemptionRemoved": "Exemption removed.",
+      "activateTitle": "Activate a subscription",
+      "activate": "Activate",
+      "activated": "Subscription activated.",
+      "amount": "Amount",
+      "currency": "Currency",
+      "method": "Method",
+      "reference": "Reference",
+      "periodMonths": "Duration (months)",
+      "extendTitle": "Extend",
+      "extend": "Extend",
+      "extended": "Period extended.",
+      "days": "Days",
+      "reason": "Reason",
+      "paymentsHistory": "Payment history",
+      "noPayments": "No payments recorded."
+    }
+  },
   "help": {
     "title": "Help",
     "intro": "A quick reminder of what each module does. A question that isn't answered here? Leave it in Feedback.",
@@ -1553,6 +1615,7 @@
     "equipements": "Equipment",
     "feedback": "Feedback",
     "aide": "Help",
+    "billing": "Subscriptions",
     "profil": "Profile"
   },
   "navGroup": {

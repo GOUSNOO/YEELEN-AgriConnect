@@ -34,6 +34,7 @@ services:
       context: .
       args:
         VITE_API_URL: ${VITE_API_URL}
+        VITE_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY}
     restart: unless-stopped
     ports:
       - "8090:80"

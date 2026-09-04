@@ -44,7 +44,11 @@ import {
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte, updateRecolte, deleteRecolte,
   getOnboardingStatus, updateOnboardingStatus, updateEntreprise,
+  getBillingStatus,
 } from './lib/api';
+import { getRecaptchaToken } from './lib/recaptcha.js';
+import BillingAdminPanel from './components/BillingAdminPanel';
+import AbonnementBloque from './components/AbonnementBloque';
 import { Badge, Button, Card, DataTable, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
 import { RegistreIntrantsView } from './components/RegistreIntrantsView';
@@ -4154,7 +4158,12 @@ function LoginScreen({ onAuth }) {
     setBusy(true);
     try {
       const extra = mode === 'register'
-        ? { nomEntreprise, typeCompte, siret: typeCompte === 'entreprise' ? siret : undefined, devise, locale }
+        ? {
+            nomEntreprise, typeCompte, siret: typeCompte === 'entreprise' ? siret : undefined, devise, locale,
+            // reCAPTCHA v3 : undefined si VITE_RECAPTCHA_SITE_KEY n'est pas configuré (repli
+            // gracieux côté serveur aussi, voir lib/recaptcha.js) — n'empêche jamais l'inscription.
+            recaptchaToken: await getRecaptchaToken('register'),
+          }
         : null;
       const result = await onAuth(mode, email, password, extra);
       if (result?.mfaRequired) {
@@ -7187,6 +7196,10 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('admin');
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  // Abonnement Phase 1 (2026-09-04) : { status, mode, daysLeft, ... } | null tant que non
+  // chargé. `mode` pilote l'affichage (trial/readonly/locked/active) — voir GET /billing/status.
+  const [billing, setBilling] = useState(null);
+  const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
   const [activated, setActivated] = useState({ cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
   const tab = screen === 'dashboard' ? (urlTab || 'accueil') : null;
   const [initLoaded, setInitLoaded] = useState(false);
@@ -7274,18 +7287,37 @@ export default function App() {
       setUser(null);
     };
 
+    // Abonnement Phase 1 : n'importe quel appel API bloqué par subscriptionGuard (402) émet
+    // cet événement (voir lib/api.js) — on rafraîchit l'état complet (daysLeft inclus) plutôt
+    // que de se contenter du { reason, mode } du detail, qui ne porte pas tout.
+    const handleSubscriptionBlocked = () => {
+      getBillingStatus().then(setBilling).catch(() => {});
+    };
+
     updateStatus();
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
     window.addEventListener('agri-sync-status-changed', updateStatus);
     window.addEventListener('agri-auth-expired', handleAuthExpired);
+    window.addEventListener('agri-subscription-blocked', handleSubscriptionBlocked);
     return () => {
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
       window.removeEventListener('agri-sync-status-changed', updateStatus);
       window.removeEventListener('agri-auth-expired', handleAuthExpired);
+      window.removeEventListener('agri-subscription-blocked', handleSubscriptionBlocked);
     };
   }, []);
+
+  // Rafraîchit l'état d'abonnement après connexion/inscription et au montage (token existant) —
+  // n'importe quel rôle peut le lire, la route est whitelistée par subscriptionGuard.
+  const refreshBillingStatus = async () => {
+    try {
+      setBilling(await getBillingStatus());
+    } catch (err) {
+      console.error('[refreshBillingStatus]', err);
+    }
+  };
 
   // Seuls admin/directeur voient l'assistant "Configurer votre entreprise" ; pour les autres
   // rôles on ne l'affiche jamais et on ne fait même pas l'appel réseau. L'état vient du serveur
@@ -7335,6 +7367,7 @@ export default function App() {
   setRole(uiRole);
   setIsPlatformAdmin(authResult.user.isPlatformAdmin === true);
   applyEntrepriseLocale(authResult.entreprise);
+  refreshBillingStatus();
   await checkOnboardingNeeded(uiRole);
   goToScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
   return authResult;
@@ -7411,6 +7444,9 @@ export default function App() {
     roleConfig.permissions.includes('equipements') && { id: 'equipements', label: t('nav.equipements'), icon: Wrench, category: 'operations' },
     { id: 'feedback', label: t('nav.feedback'), icon: MessageSquare, category: null },
     { id: 'aide', label: t('nav.aide'), icon: HelpCircle, category: null },
+    // Outil interne : contrairement à Feedback (tab toujours visible, contenu conditionnel),
+    // le tab lui-même n'a aucune raison d'apparaître pour un utilisateur normal.
+    isPlatformAdmin && { id: 'billing', label: t('nav.billing'), icon: Landmark, category: null },
     { id: 'profil', label: t('nav.profil'), icon: Settings, category: null },
   ].filter(Boolean);
 
@@ -7444,6 +7480,7 @@ export default function App() {
         setRole(uiRole);
         setIsPlatformAdmin(user.isPlatformAdmin === true);
         applyEntrepriseLocale(entreprise);
+        refreshBillingStatus();
         await checkOnboardingNeeded(uiRole);
         const hasModulesAccess = selectedConfig.permissions.includes('modules');
         const currentScreen = pathnameToScreen(location.pathname);
@@ -7529,7 +7566,25 @@ export default function App() {
                   : t('shell.noSync')}
             </span>
           </div>
+          {billing?.mode === 'trial' && !trialBannerDismissed && (
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: 8, background: COLORS.greenSoft, color: COLORS.green, fontSize: 12.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <span>{t('billing.trialBanner', { count: billing.daysLeft })}</span>
+              <button onClick={() => setTrialBannerDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 700, fontSize: 13 }}>×</button>
+            </div>
+          )}
+          {billing?.mode === 'readonly' && (
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: 8, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <AlertTriangle size={14} /> {t('billing.readonlyBanner', { count: billing.daysLeft })}
+            </div>
+          )}
         </div>
+      )}
+
+      {screen !== 'login' && billing?.mode === 'locked' && (
+        <AbonnementBloque
+          billing={billing}
+          onLogout={() => { clearToken(); navigate('/login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); setBilling(null); }}
+        />
       )}
 
       {screen === 'login' && <LoginScreen onAuth={handleAuth} />}
@@ -7638,6 +7693,7 @@ export default function App() {
             {tab === 'observations' && <ObservationListView />}
             {tab === 'equipements' && <EquipementsModule canManage={['admin', 'directeur', 'gestionnaire'].includes(role)} />}
             {tab === 'feedback' && <FeedbackModule isPlatformAdmin={isPlatformAdmin} />}
+            {tab === 'billing' && isPlatformAdmin && <BillingAdminPanel />}
             {tab === 'aide' && <HelpModule />}
             {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
           </div>

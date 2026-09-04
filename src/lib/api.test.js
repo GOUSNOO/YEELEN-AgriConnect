@@ -61,6 +61,25 @@ describe('request (via getMe)', () => {
     fetch.mockResolvedValue(okResponse({ error: 'Champ requis manquant.' }, 400));
     await expect(getMe()).rejects.toThrow('Champ requis manquant.');
   });
+
+  test('402 (abonnement) → émet agri-subscription-blocked avec le detail, jette, NE vide PAS le token', async () => {
+    setToken('still-valid');
+    fetch.mockResolvedValue(okResponse({ reason: 'expired', mode: 'locked' }, 402));
+    const listener = jest.fn();
+    window.addEventListener('agri-subscription-blocked', listener);
+
+    await expect(getMe()).rejects.toThrow(/expiré/i);
+    expect(getToken()).toBe('still-valid');
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail).toEqual({ reason: 'expired', mode: 'locked' });
+    window.removeEventListener('agri-subscription-blocked', listener);
+  });
+
+  test('402 suspended → message dédié', async () => {
+    setToken('still-valid');
+    fetch.mockResolvedValue(okResponse({ reason: 'suspended', mode: 'locked' }, 402));
+    await expect(getMe()).rejects.toThrow(/suspendu/i);
+  });
 });
 
 describe('safeRequest (via createContactTag)', () => {

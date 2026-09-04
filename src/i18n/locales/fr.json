@@ -4,6 +4,7 @@
     "save": "Enregistrer",
     "cancel": "Annuler",
     "loading": "Chargement…",
+    "previous": "Précédent",
     "next": "Suivant",
     "finish": "Terminer",
     "add": "Ajouter",
@@ -1141,6 +1142,67 @@
       "Traité": "Traité"
     }
   },
+  "billing": {
+    "trialBanner": "Période d'essai : {{count}} jour(s) restant(s).",
+    "readonlyBanner": "Abonnement expiré — lecture seule, {{count}} jour(s) avant blocage complet.",
+    "status": {
+      "trial": "Essai",
+      "active": "Actif",
+      "expired": "Expiré",
+      "suspended": "Suspendu",
+      "exempt": "Exempté"
+    },
+    "blocked": {
+      "expiredTitle": "Accès bloqué",
+      "expiredDesc": "Votre période d'essai ou d'abonnement est terminée. Contactez-nous pour réactiver votre accès.",
+      "suspendedTitle": "Compte suspendu",
+      "suspendedDesc": "Votre compte a été suspendu. Contactez le support pour plus d'informations."
+    },
+    "admin": {
+      "title": "Administration des abonnements",
+      "search": "Rechercher",
+      "searchPlaceholder": "Nom de l'entreprise…",
+      "statusFilter": "Statut",
+      "loadError": "Impossible de charger les entreprises.",
+      "actionError": "Échec de l'action.",
+      "empty": "Aucune entreprise.",
+      "colName": "Entreprise",
+      "colStatus": "Statut",
+      "colUntil": "Jusqu'au",
+      "colUsers": "Utilisateurs",
+      "colLastPayment": "Dernier paiement",
+      "colDate": "Date",
+      "manage": "Gérer",
+      "pageOf": "Page {{page}} / {{total}}",
+      "trialUntil": "Essai jusqu'au",
+      "activeUntil": "Actif jusqu'au",
+      "graceUntil": "Délai de grâce jusqu'au",
+      "suspend": "Suspendre",
+      "suspendConfirm": "Suspendre l'accès de cette entreprise ?",
+      "suspended": "Entreprise suspendue.",
+      "reactivate": "Réactiver",
+      "reactivated": "Accès réactivé.",
+      "exempt": "Exempter",
+      "exempted": "Entreprise exemptée.",
+      "removeExemption": "Retirer l'exemption",
+      "exemptionRemoved": "Exemption retirée.",
+      "activateTitle": "Activer un abonnement",
+      "activate": "Activer",
+      "activated": "Abonnement activé.",
+      "amount": "Montant",
+      "currency": "Devise",
+      "method": "Moyen",
+      "reference": "Référence",
+      "periodMonths": "Durée (mois)",
+      "extendTitle": "Prolonger",
+      "extend": "Prolonger",
+      "extended": "Période prolongée.",
+      "days": "Jours",
+      "reason": "Raison",
+      "paymentsHistory": "Historique des paiements",
+      "noPayments": "Aucun paiement enregistré."
+    }
+  },
   "help": {
     "title": "Aide",
     "intro": "Un rappel rapide de ce que fait chaque module. Une question qui n'a pas de réponse ici ? Laissez-la dans Feedback.",
@@ -1553,6 +1615,7 @@
     "equipements": "Équipements",
     "feedback": "Feedback",
     "aide": "Aide",
+    "billing": "Abonnements",
     "profil": "Profil"
   },
   "navGroup": {
