@@ -1715,3 +1715,62 @@ toutes les routes compta/intrants répondaient 404, aucune des nouvelles tables 
   - Les 3 fonctionnalités marchent bout en bout (UI + API + base). Entreprise de test
     `Test Stock ABC` (`entreprise_id=3`) + user `test-abc@yeelen.test` entièrement supprimés
     ensuite (17 `DELETE` en une transaction, tables non-cascade incluses).
+
+### Abonnement Phase 1 : essai 45 jours + activation manuelle + anti-abus (2026-09-04/05)
+
+Chantier explicitement demandé par l'utilisateur, indépendamment du blocage budgétaire sur
+l'hébergement (qui reste différé, voir `project_hosting_budget_blocked`) — le code peut être
+livré maintenant, l'activation réelle attendra la veille de mise en production. Spec de
+référence : `docs/spec-abonnement-phase1.md` (écrite par une autre session le 2026-09-01,
+jamais implémentée avant ce chantier). Exécuté en 5 lots, un commit chacun.
+
+- **Lot 1** (`bc058a9`... schéma+config+hook inscription) — `entreprises.subscription_status
+  /trial_ends_at/activated_at/activated_until/grace_until` + CHECK + index, table
+  `abonnement_paiements` (placée après `users` : un `CREATE TABLE` ne peut pas référencer une
+  table pas encore créée, contrairement à `ALTER TABLE ADD CONSTRAINT`). Backfill grand-père
+  (entreprises existantes → `active` + 1 an) puis exemption des entreprises du platform-admin,
+  dans cet ordre. `config/abonnement.js` (`TRIAL_DAYS=45`, `GRACE_DAYS=30`). `register`
+  journalise `trial_started` et vérifie une limite de 3 inscriptions/24h par IP
+  (`countRecentAuditEventsByIp`, même patron que le rate-limit MFA existant).
+- **Lot 2** (`66ba1d4` — garde-fou d'accès) — `middleware/subscriptionGuard.js` :
+  `evaluerAcces(ent, verb, now)` fonction pure (testée seule, tous les branchements) +
+  middleware avec cache 60s/entreprise + `invaliderCacheAbonnement`. Branché globalement dans
+  `app.js` juste après `express.json()`, whitelist `/auth`, `/billing/status`, `/health`,
+  `/feedback`. `GET /api/billing/status` (nouveau `routes/billing.js`).
+- **Lot 3** (`830e493` — administration + reCAPTCHA) — 6 routes `requirePlatformAdmin` sur
+  `/api/billing/entreprises*` (liste paginée, détail, activer/prolonger/suspendre/
+  réactiver/exempter), chacune journalisée (`audit_log`) et invalidant le cache du guard.
+  `utils/recaptcha.js` : reCAPTCHA v3 avec repli gracieux total si `RECAPTCHA_SECRET_KEY`
+  absent — inspiré du module Odoo `google_recaptcha` (seul mécanisme anti-abus réellement
+  open-source côté Odoo, confirmé par recherche dans le clone source local ; le blocage IP/
+  domaines jetables y vit dans leur infra SaaS propriétaire).
+- **Lot 4** (`bd11bb5` — frontend) — `lib/api.js` gère le 402 (`CustomEvent
+  agri-subscription-blocked`, sans déconnexion, message dédié `suspended`/`expired`) ;
+  `lib/recaptcha.js` (même repli gracieux côté frontend). `App.jsx` : bandeau essai
+  dismissible + bandeau readonly, overlay plein écran `AbonnementBloque` (choix délibéré :
+  `position:fixed` par-dessus tout plutôt que de toucher les nombreux blocs
+  `{screen === '...' &&}` de ce fichier de 7700+ lignes), nouveau tab `billing` filtré
+  `isPlatformAdmin` (contrairement au tab `feedback`, toujours visible) → nouveau
+  `BillingAdminPanel.jsx` (liste paginée/filtrée + modale détail avec formulaires
+  activer/prolonger + historique paiements). Build-arg Docker `VITE_RECAPTCHA_SITE_KEY`.
+- **Lot 5** (`3ace3be` — tests d'isolation manquants + vérification finale) — complété les 2
+  cas du spec §7 pas encore couverts explicitement : 403 sur chacune des 7 routes admin (pas
+  seulement 2) pour un rôle `admin` normal, et confirmation qu'un platform-admin voit/gère des
+  entreprises **autres que la sienne** (cross-tenant, le seul endroit de l'app où c'est
+  voulu). Spec mis à jour avec une section « Ajouts par rapport à ce spec ».
+
+**268 tests d'intégration / 34 fichiers** (26 → 34, dont le nouveau `abonnement.test.js`, 28
+tests) + 96 front (88 → 96) + build Vite verts. Migration idempotente confirmée (aucun
+changement de schéma depuis le lot 1, rejouée 3× au total sur des sauvegardes restaurées).
+Vérifié en réel deux fois (Docker reconstruit + Chrome) : bandeau essai à l'inscription,
+absence de script reCAPTCHA sans clé configurée, cycle complet
+essai→actif→suspendu→réactivé→exempté via l'API réelle, et — deuxième passage — la liste
+`BillingAdminPanel`, sa modale de détail, et l'overlay `AbonnementBloque` (mode `locked`)
+après expiration forcée + redémarrage backend pour vider le cache du guard. Entreprises/
+utilisateurs jetables nettoyés après chaque passage.
+
+Non vérifié dans cette session (aucun bouton `window.confirm` cliqué via l'automatisation
+navigateur, par prudence — cette action bloquerait la session si un dialogue natif se
+déclenchait) : le flux réel de clic sur « Suspendre »/« Exempter » dans `BillingAdminPanel`
+depuis le navigateur — couvert uniquement par Jest (mock de `window.confirm`) et par l'API
+directe. À vérifier au clic si un bug y est un jour signalé.

@@ -11,6 +11,31 @@
 
 ---
 
+## Ajouts par rapport à ce spec — implémentation 2026-09-04/05
+
+Implémenté en 5 lots (voir `docs/journal.md` et le fichier de plan de la session), avec deux
+ajouts délibérés au-delà de ce document :
+
+- **`TRIAL_DAYS = 45`** (tranché, pas 60) et **`GRACE_DAYS = 30`** — conformes à la
+  proposition §0.
+- **Limite d'inscriptions par IP** (anti-abus, hors spec) : max 3 inscriptions abouties
+  (`trial_started`) par IP / 24h → `429`, réutilisant le patron `audit_log` déjà en place pour
+  le rate-limit MFA (`countRecentAuditEventsByIp` dans `utils/auditLog.js`).
+- **reCAPTCHA v3 sur l'inscription** (anti-abus, hors spec), inspiré du module Odoo
+  `google_recaptcha` (recherche confirmée dans le clone source local — seul mécanisme
+  anti-abus réellement open-source côté Odoo ; le blocage IP/domaines jetables y vit dans leur
+  infra SaaS propriétaire, hors dépôt). `server/src/utils/recaptcha.js` +
+  `src/lib/recaptcha.js` : repli gracieux total (jamais de blocage) tant que
+  `RECAPTCHA_SECRET_KEY`/`VITE_RECAPTCHA_SITE_KEY` ne sont pas configurés — utilisable en dev
+  sans compte Google. Seuil `score >= 0.5`, `action: 'register'`.
+- Le reste (schéma, `subscriptionGuard`/`evaluerAcces`, routes `/api/billing`, hook
+  `register`, frontend) suit ce spec section par section, avec un écart mineur documenté dans
+  le code : `evaluerAcces` renvoie toujours `{ allow, mode }` (mode calculé dans la même passe)
+  plutôt que le repli littéral du pseudocode §3.1, pour que `GET /billing/status` réutilise le
+  même calcul sans le dupliquer.
+
+---
+
 ## 0. Décisions à valider avant de coder
 
 | # | Question | Proposition |
