@@ -1715,3 +1715,107 @@ toutes les routes compta/intrants répondaient 404, aucune des nouvelles tables 
   - Les 3 fonctionnalités marchent bout en bout (UI + API + base). Entreprise de test
     `Test Stock ABC` (`entreprise_id=3`) + user `test-abc@yeelen.test` entièrement supprimés
     ensuite (17 `DELETE` en une transaction, tables non-cascade incluses).
+
+### Catalogue produit — alignement Odoo, étape 0 : hiérarchie des catégories (2026-09-03)
+
+Début d'un plan en 5 étapes (validé en mode plan) qui recale le modèle produit/stock « à
+plat » sur la structure d'Odoo (`product.template` / `product.product` / `uom` /
+`stock.quant` / `product.pricelist`). **Principe** : à chaque étape, une « colonne pont »
+garde les anciens lecteurs fonctionnels — rien ne casse.
+
+- `produit_categories.parent_id` (auto-référence, `ON DELETE CASCADE` comme
+  `product.category`). Cloisonnement par module conservé et **validé côté route** (parent et
+  enfant doivent partager le même module). Garde anti-cycle.
+- `complete_name` (chemin complet « Engrais / Azotés / Urée ») **calculé par CTE récursive à
+  la lecture**, pas stocké.
+- Front : sélecteur de catégorie parente dans `StocksTab` ; les listes déroulantes affichent
+  le chemin complet au lieu du seul nom.
+
+Migration rejouée sur une copie de sauvegarde restaurée avant application réelle (idempotence
+confirmée par un 2ᵉ passage). +12 tests d'intégration (cycle, cloisonnement module, cascade,
+isolation) → **194/194**. Vérifié au navigateur sur entreprise jetable, données nettoyées.
+
+### Catalogue produit — Odoo étape 1 : unités de mesure + conversion de facteur (2026-09-03)
+
+- Nouvelles tables **`unites_mesure_categories`** / **`unites_mesure`** (`facteur` = ratio
+  vers l'unité de référence de sa catégorie), seedées à l'inscription **et**
+  rétroactivement pour les entreprises existantes.
+- `produits.unite_id` (FK ; `unite` TEXT gardée comme **pont** synchronisé),
+  `achats_lignes.uom_id` / `devis_lignes.uom_id` optionnels.
+- **`stockSync.js`** convertit la quantité d'une ligne vers l'unité de base du produit quand
+  les deux unités partagent la même catégorie ; sinon applique le delta brut.
+- Front : `StocksTab` → select référentiel au lieu du texte libre. Devis/Achat propagent
+  l'`uomId` du produit catalogue **sans** sélecteur par ligne (périmètre minimal).
+
+CRUD complet + 13 tests d'intégration → **207/207**. Migration rejouée sur copie de
+sauvegarde puis appliquée ; vérifié au navigateur (entreprise jetable), nettoyé.
+
+### Catalogue produit — Odoo étape 2 : gabarits / variantes / attributs (2026-09-03)
+
+- Nouvelles tables **`produit_templates`**, **`attributs_produit`** (`_valeurs`),
+  `gabarit_attributs_lignes`, `variante_attributs_valeurs`.
+- **`produits.template_id`** (FK cascade) : un produit n'existe **jamais** sans gabarit — le
+  formulaire « ajout rapide » existant crée désormais en silence un gabarit implicite à
+  variante unique.
+- Génération de variantes par **produit cartésien** (mode `always`), **strictement
+  additive** : une variante existante n'est jamais recréée ni supprimée.
+- Front : nouveau panneau `StocksTab` (`ProduitTemplatesPanel.jsx`) pour gérer
+  attributs / gabarits / variantes.
+
+CRUD complet + 17 tests d'intégration → **224/224**. Migration rejouée sur copie de
+sauvegarde puis appliquée ; vérifié au navigateur (gabarit 2 attributs → 2 variantes
+confirmées comme articles réels), nettoyé.
+
+### Catalogue produit — Odoo étape 3 : stock multi-emplacements avec réservation (2026-09-03)
+
+- Nouvelles tables **`emplacements_stock`** (interne / client / fournisseur / perte —
+  4 seedés par entreprise), **`stock_quants`** (un seul quant réel par produit,
+  l'emplacement interne), **`stock_moves`** (journal structuré : brouillon / confirmé /
+  fait / annulé).
+- `stock_mouvements` (l'ancien) **conservé tel quel en parallèle**.
+- **`stockSync.js` réécrit en interne mais garde ses 6 signatures exportées à l'identique** —
+  aucun appelant à changer, **aucun changement frontend**.
+- **`produits.quantite`** (colonne pont) devient le vrai disponible = `quantité −
+  quantité_réservée`, à valeur visible **strictement identique** qu'avant (un devis signé
+  décrémentait déjà `quantite` immédiatement ; désormais soutenu par une vraie réservation
+  structurée).
+- Backfill rétroactif : quant initial par produit + réservations en cours reconstituées
+  depuis les devis déjà signés/facturés.
+
++8 tests d'intégration → **232/232**. Migration rejouée sur copie de sauvegarde (vérifie
+qu'un run rattrape plusieurs étapes de retard) puis appliquée. Vérifié contre le backend
+Docker réel via script autonome + inspection directe des tables.
+
+### Catalogue produit — Odoo étape 4 : moteur de règles de tarification (2026-09-04) — PLAN COMPLET
+
+- **`listes_prix_lignes` devient un vrai moteur de règles** : `applied_on`
+  global / catégorie / gabarit / variante, `compute_price` fixe / pourcentage,
+  `quantite_min`, fenêtre de dates. L'ancien `UNIQUE (liste, article)` est **retiré** →
+  plusieurs règles par paliers de quantité possibles.
+- Nouveau **`pricelistResolver.js`** : résolution par **spécificité décroissante puis palier
+  décroissant** — même logique que `_get_product_price` d'Odoo.
+- Nouvelle route **`GET /listes-prix/prix-effectif`** : le prix dans `DevisModule` est
+  maintenant calculé **côté serveur** à la sélection de l'article (remplace le calcul 100 %
+  client `prixPourMatch`).
+- Front : `ListesPrixManager` étendu — sélecteur cible/mode + options avancées.
+
+4 tests existants adaptés au nouveau contrat + 6 nouveaux → **238/238**. Migration rejouée
+sur copie de sauvegarde puis appliquée. Vérifié au navigateur (règle variante 150 bat règle
+globale −15 % sur un article à 200, préfill correct en conditions réelles), nettoyé.
+
+**Les 5 étapes de l'alignement Odoo produit/stock sont livrées** : catégories hiérarchiques,
+unités de mesure + conversion, gabarits/variantes/attributs, stock multi-emplacements avec
+réservation, règles de tarification. Compat assurée par les colonnes pont (`unite`,
+`quantite`) — à ne pas retirer tant que tous les lecteurs ne sont pas passés au nouveau
+modèle.
+
+### Passe de récupération : stack Docker périmée (catalogue Odoo) (2026-09-04)
+
+Même schéma que le 2026-09-01 : après `git pull` des étapes catalogue Odoo 0-4 (faites dans
+une autre session), les conteneurs tournaient encore sur des images du 2026-09-01 —
+`/api/unites-mesure`, `/api/produit-templates`, `/api/attributs-produit` en 404, tables
+absentes. Correctif : `docker-compose up -d --build` + `docker exec … node src/db/migrate.js`
+→ `unites_mesure`, `unites_mesure_categories`, `produit_templates`, `stock_quants`,
+emplacements de stock par défaut créés/seedés pour l'entreprise existante ; routes repassées
+en 401 (auth requise, normal), frontend 200, aucune erreur backend. `docs/deploiement.md`
+avait aussi été bien étoffé par une autre session (gardé). Local aligné sur `4bb462e`.
