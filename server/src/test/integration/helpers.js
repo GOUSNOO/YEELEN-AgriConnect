@@ -4,6 +4,7 @@
 import request from 'supertest';
 import app from '../../app.js';
 import { pool } from '../../db.js';
+import { invaliderCacheAbonnement } from '../../middleware/subscriptionGuard.js';
 
 export { app, pool, request };
 
@@ -113,4 +114,25 @@ export async function createProduit(token, { module = 'Cultures', nom, prixDefau
     throw new Error(`création produit a échoué (${res.status}): ${JSON.stringify(res.body)}`);
   }
   return { id: res.body.stock.id, categorieId, nom: produitNom };
+}
+
+// Abonnement Phase 1 (2026-09-04) : "avance le temps" d'une entreprise de test en écrivant
+// directement les colonnes d'abonnement — pas d'appel HTTP, il n'existe (et n'existera) aucune
+// route pour falsifier des dates arbitraires en dehors des tests. `null` efface explicitement
+// une colonne (utile pour simuler un essai jamais démarré ou une entreprise déjà activée).
+export async function setEntrepriseSubscription(entrepriseId, { status, trialEndsAt, activatedUntil, graceUntil } = {}) {
+  const champs = [];
+  const valeurs = [];
+  let i = 1;
+  if (status !== undefined) { champs.push(`subscription_status = $${i++}`); valeurs.push(status); }
+  if (trialEndsAt !== undefined) { champs.push(`trial_ends_at = $${i++}`); valeurs.push(trialEndsAt); }
+  if (activatedUntil !== undefined) { champs.push(`activated_until = $${i++}`); valeurs.push(activatedUntil); }
+  if (graceUntil !== undefined) { champs.push(`grace_until = $${i++}`); valeurs.push(graceUntil); }
+  if (champs.length === 0) return;
+  valeurs.push(entrepriseId);
+  await pool.query(`UPDATE entreprises SET ${champs.join(', ')} WHERE id = $${i}`, valeurs);
+  // Le guard cache 60s par entreprise (voir subscriptionGuard.js) — sans cette invalidation,
+  // une requête faite juste avant cet appel (ex: registerEntreprise() lui-même) laisserait le
+  // guard lire l'ancien état pendant jusqu'à une minute, masquant l'effet de ce changement.
+  invaliderCacheAbonnement(entrepriseId);
 }

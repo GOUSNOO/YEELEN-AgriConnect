@@ -1,6 +1,8 @@
 // Abonnement Phase 1 (2026-09-04) — Lot 1 : schéma + hook d'inscription (essai 45 j) +
-// limite d'inscriptions par IP. Voir docs/spec-abonnement-phase1.md.
-import { app, pool, request, registerEntreprise, uniqueEmail } from './helpers.js';
+// limite d'inscriptions par IP. Lot 2 : garde-fou d'accès (subscriptionGuard/evaluerAcces).
+// Voir docs/spec-abonnement-phase1.md.
+import { app, pool, request, registerEntreprise, uniqueEmail, createProduit, setEntrepriseSubscription } from './helpers.js';
+import { evaluerAcces } from '../../middleware/subscriptionGuard.js';
 
 afterAll(async () => { await pool.end(); });
 
@@ -50,5 +52,118 @@ describe('Limite d\'inscriptions par IP (anti-abus)', () => {
     // ipA est maintenant à la limite, mais ipB doit passer sans problème.
     const res = await registerEntreprise({ ip: ipB, email: uniqueEmail('ipB') });
     expect(res.entrepriseId).toBeTruthy();
+  });
+});
+
+describe('evaluerAcces (fonction pure — tous les branchements)', () => {
+  const now = new Date('2026-09-04T00:00:00Z');
+
+  test('exempt : toujours autorisé, mode active', () => {
+    expect(evaluerAcces({ subscription_status: 'exempt' }, 'POST', now)).toEqual({ allow: true, mode: 'active' });
+  });
+
+  test('suspended : toujours bloqué (402), même avec des dates par ailleurs valides', () => {
+    const r = evaluerAcces({ subscription_status: 'suspended', activated_until: '2027-01-01' }, 'GET', now);
+    expect(r).toMatchObject({ allow: false, mode: 'locked', status: 402, body: { reason: 'suspended' } });
+  });
+
+  test('essai en cours : autorisé, mode trial', () => {
+    expect(evaluerAcces({ subscription_status: 'trial', trial_ends_at: '2026-10-01' }, 'POST', now))
+      .toEqual({ allow: true, mode: 'trial' });
+  });
+
+  test('période payée en cours : autorisée, mode active (prime sur un trial_ends_at par ailleurs présent)', () => {
+    const ent = { subscription_status: 'trial', activated_until: '2027-01-01', trial_ends_at: '2026-01-01' };
+    expect(evaluerAcces(ent, 'POST', now)).toEqual({ allow: true, mode: 'active' });
+  });
+
+  test('expiré, dans la grâce (grace_until explicite) : GET autorisé, POST 402 readonly', () => {
+    const ent = { subscription_status: 'trial', trial_ends_at: '2026-09-01', grace_until: '2026-09-10' };
+    expect(evaluerAcces(ent, 'GET', now)).toEqual({ allow: true, mode: 'readonly' });
+    expect(evaluerAcces(ent, 'POST', now)).toMatchObject({ allow: false, mode: 'readonly', status: 402, body: { reason: 'expired', mode: 'readonly' } });
+  });
+
+  test('expiré, grâce dépassée : bloqué même en lecture (GET)', () => {
+    const ent = { subscription_status: 'trial', trial_ends_at: '2026-07-01', grace_until: '2026-07-31' };
+    expect(evaluerAcces(ent, 'GET', now)).toMatchObject({ allow: false, mode: 'locked', status: 402, body: { reason: 'expired', mode: 'locked' } });
+  });
+
+  test('sans grace_until explicite : calcule fin + GRACE_DAYS (30j par défaut)', () => {
+    // trial_ends_at = 2026-08-10, +30j = 2026-09-09 -> encore dans la grâce le 2026-09-04
+    expect(evaluerAcces({ subscription_status: 'trial', trial_ends_at: '2026-08-10' }, 'GET', now).mode).toBe('readonly');
+    // trial_ends_at = 2026-07-01, +30j = 2026-07-31 -> grâce dépassée le 2026-09-04
+    expect(evaluerAcces({ subscription_status: 'trial', trial_ends_at: '2026-07-01' }, 'GET', now).mode).toBe('locked');
+  });
+});
+
+describe('subscriptionGuard — bout-en-bout via de vraies routes API', () => {
+  test('essai en cours : lecture ET écriture autorisées', async () => {
+    const admin = await registerEntreprise();
+    const getRes = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${admin.token}`);
+    expect(getRes.status).toBe(200);
+    const produit = await createProduit(admin.token, { module: 'Cultures' });
+    expect(produit.id).toBeTruthy();
+  });
+
+  test('expiré + dans la grâce : lecture 200, écriture 402 readonly', async () => {
+    const admin = await registerEntreprise();
+    const cats = await request(app).get('/api/produit-categories?module=Cultures').set('Authorization', `Bearer ${admin.token}`);
+    const categorieId = cats.body.categories[0].id;
+    await setEntrepriseSubscription(admin.entrepriseId, { trialEndsAt: new Date(Date.now() - 5 * 86400000).toISOString() });
+
+    const getRes = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${admin.token}`);
+    expect(getRes.status).toBe(200);
+
+    const postRes = await request(app).post('/api/produits').set('Authorization', `Bearer ${admin.token}`)
+      .send({ module: 'Cultures', nom: 'Bloqué', categorieId });
+    expect(postRes.status).toBe(402);
+    expect(postRes.body).toMatchObject({ reason: 'expired', mode: 'readonly' });
+  });
+
+  test('au-delà de la grâce : tout bloqué (402 locked), sauf les routes whitelistées', async () => {
+    const admin = await registerEntreprise();
+    await setEntrepriseSubscription(admin.entrepriseId, { trialEndsAt: new Date(Date.now() - 40 * 86400000).toISOString() });
+
+    const getRes = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${admin.token}`);
+    expect(getRes.status).toBe(402);
+    expect(getRes.body).toMatchObject({ reason: 'expired', mode: 'locked' });
+
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${admin.token}`);
+    expect(me.status).toBe(200);
+
+    const status = await request(app).get('/api/billing/status').set('Authorization', `Bearer ${admin.token}`);
+    expect(status.status).toBe(200);
+    expect(status.body.mode).toBe('locked');
+    expect(status.body.daysLeft).toBe(0);
+  });
+
+  test('suspended bloque tout, quelles que soient les dates', async () => {
+    const admin = await registerEntreprise();
+    await setEntrepriseSubscription(admin.entrepriseId, { status: 'suspended' });
+    const getRes = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${admin.token}`);
+    expect(getRes.status).toBe(402);
+    expect(getRes.body).toMatchObject({ reason: 'suspended', mode: 'locked' });
+  });
+
+  test('exempt autorise tout, même expiré depuis très longtemps', async () => {
+    const admin = await registerEntreprise();
+    await setEntrepriseSubscription(admin.entrepriseId, {
+      status: 'exempt',
+      trialEndsAt: new Date(Date.now() - 400 * 86400000).toISOString(),
+    });
+    const getRes = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${admin.token}`);
+    expect(getRes.status).toBe(200);
+  });
+});
+
+describe('GET /api/billing/status', () => {
+  test('essai en cours : mode trial, daysLeft ≈ 45', async () => {
+    const admin = await registerEntreprise();
+    const res = await request(app).get('/api/billing/status').set('Authorization', `Bearer ${admin.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.mode).toBe('trial');
+    expect(res.body.status).toBe('trial');
+    expect(res.body.daysLeft).toBeGreaterThanOrEqual(44);
+    expect(res.body.daysLeft).toBeLessThanOrEqual(45);
   });
 });

@@ -46,6 +46,9 @@ import activitesRoutes from "./routes/activites.js";
 import messagesRoutes from "./routes/messages.js";
 import contactTagsRoutes from "./routes/contactTags.js";
 import rhRoutes from "./routes/rh.js";
+import billingRoutes from "./routes/billing.js";
+import { verifierTokenSiPresent } from "./middleware/auth.js";
+import { subscriptionGuard } from "./middleware/subscriptionGuard.js";
 
 dotenv.config();
 
@@ -57,6 +60,14 @@ const app = express();
 app.use(cors());
 // Limite relevée à 2mb : la photo de contact est envoyée en base64 dans le corps JSON.
 app.use(express.json({ limit: "2mb" }));
+
+// Abonnement Phase 1 (2026-09-04, Lot 2) : verifierTokenSiPresent pose req.user quand un
+// token valide est présent SANS jamais rejeter (authRequired, posé route par route plus loin,
+// s'occupe du 401 réel) ; subscriptionGuard lit alors req.user.entrepriseId pour bloquer (402)
+// une entreprise dont l'essai/l'abonnement a expiré — voir docs/spec-abonnement-phase1.md §3.3
+// pour la justification de ce montage global plutôt qu'un ajout à chaque route existante.
+app.use(verifierTokenSiPresent);
+app.use(subscriptionGuard);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);
@@ -94,6 +105,7 @@ app.use("/api/recherche", rechercheRoutes);
 app.use("/api/activites", activitesRoutes);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/rh", rhRoutes);
+app.use("/api/billing", billingRoutes);
 
 // Route de bienvenue à la racine — vérification manuelle rapide ("le backend répond-il ?").
 app.get("/", (req, res) => {

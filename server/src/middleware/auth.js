@@ -26,3 +26,22 @@ export function authRequired(req, res, next) {
     return res.status(401).json({ error: 'Token invalide.' });
   }
 }
+
+// Variante d'authRequired qui ne rejette JAMAIS — pose req.user quand un token valide est
+// présent, laisse passer sinon (authRequired, posé route par route, s'occupera du 401 sur les
+// routes qui l'exigent réellement). Abonnement Phase 1 (2026-09-04) : posé en middleware
+// global dans app.js, juste avant subscriptionGuard, pour que ce dernier connaisse
+// req.user.entrepriseId sans dupliquer authRequired sur les ~25 fichiers de routes existants.
+export function verifierTokenSiPresent(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token) {
+    try {
+      req.user = jwt.verify(token, env.JWT_SECRET);
+    } catch {
+      // Token invalide/expiré : ne rejette pas ici, authRequired s'en chargera plus loin
+      // sur les routes qui l'exigent — ce middleware ne fait que poser req.user si possible.
+    }
+  }
+  next();
+}
