@@ -708,6 +708,44 @@ export async function deleteUniteMesure(id) {
   return request(`/unites-mesure/${id}`, { method: 'DELETE' });
 }
 
+// Attributs de produit + leurs valeurs (product.attribute / product.attribute.value-like) —
+// étape 2 alignement produit/stock Odoo.
+export async function getAttributsProduit() {
+  return request('/attributs-produit');
+}
+export async function createAttributProduit(payload) {
+  return request('/attributs-produit', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function createAttributProduitValeur(attributId, payload) {
+  return request(`/attributs-produit/${attributId}/valeurs`, { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function deleteAttributProduitValeur(valeurId) {
+  return request(`/attributs-produit/valeurs/${valeurId}`, { method: 'DELETE' });
+}
+export async function deleteAttributProduit(id) {
+  return request(`/attributs-produit/${id}`, { method: 'DELETE' });
+}
+
+// Gabarits de produit (product.template-like) — étape 2 alignement produit/stock Odoo.
+export async function getProduitTemplates(module) {
+  return request(module ? `/produit-templates?module=${module}` : '/produit-templates');
+}
+export async function getProduitTemplate(id) {
+  return request(`/produit-templates/${id}`);
+}
+export async function createProduitTemplate(payload) {
+  return request('/produit-templates', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateProduitTemplate(id, payload) {
+  return request(`/produit-templates/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function regenererVariantesTemplate(id) {
+  return request(`/produit-templates/${id}/regenerer-variantes`, { method: 'POST' });
+}
+export async function deleteProduitTemplate(id) {
+  return request(`/produit-templates/${id}`, { method: 'DELETE' });
+}
+
 // Journaux + plan de comptes (account.journal / account.account-like) — étape 2 Comptabilité.
 export async function getJournals() {
   return request('/journals');

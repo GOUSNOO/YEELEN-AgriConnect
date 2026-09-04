@@ -1251,6 +1251,77 @@ CREATE INDEX IF NOT EXISTS idx_produits_unite_id ON produits(unite_id);
 ALTER TABLE achats_lignes ADD COLUMN IF NOT EXISTS uom_id INTEGER REFERENCES unites_mesure(id) ON DELETE SET NULL;
 ALTER TABLE devis_lignes ADD COLUMN IF NOT EXISTS uom_id INTEGER REFERENCES unites_mesure(id) ON DELETE SET NULL;
 
+-- ═══════════════ Étape 2 alignement Odoo produit/stock (2026-09-04) : gabarit/variante + attributs ═══════════════
+-- Équivalent product.template / product.product / product.attribute / product.attribute.value.
+-- produits devient la variante (product.product) : gagne template_id, un gabarit (product.
+-- template) portant le nom/catégorie/description communs. Un article créé via le formulaire
+-- "Ajout rapide" de StocksTab (inchangé) se voit créer un gabarit à variante unique en silence
+-- côté route (voir routes/produits.js) — comme dans un ERP de référence, un product.product
+-- n'existe jamais sans product.template, même quand personne ne gère de variantes.
+CREATE TABLE IF NOT EXISTS produit_templates (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  module         TEXT NOT NULL CHECK (module IN ('Cultures', 'Poulailler')),
+  nom            TEXT NOT NULL,
+  categorie_id   INTEGER REFERENCES produit_categories(id) ON DELETE SET NULL,
+  description    TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_produit_templates_entreprise_id ON produit_templates(entreprise_id);
+
+ALTER TABLE produits ADD COLUMN IF NOT EXISTS template_id INTEGER REFERENCES produit_templates(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_produits_template_id ON produits(template_id);
+
+-- Attributs réutilisables (product.attribute), scopés par entreprise seulement — contrairement
+-- à produit_categories/unites_mesure_categories, pas de cloisonnement par module : un attribut
+-- comme « Calibre » peut aussi bien s'appliquer à un article Cultures qu'à un article Poulailler.
+CREATE TABLE IF NOT EXISTS attributs_produit (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom            TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_attributs_produit_entreprise_id ON attributs_produit(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS attributs_produit_valeurs (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  attribut_id    INTEGER NOT NULL REFERENCES attributs_produit(id) ON DELETE CASCADE,
+  valeur         TEXT NOT NULL,
+  ordre          INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (attribut_id, valeur)
+);
+CREATE INDEX IF NOT EXISTS idx_attributs_produit_valeurs_entreprise_id ON attributs_produit_valeurs(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_attributs_produit_valeurs_attribut_id ON attributs_produit_valeurs(attribut_id);
+
+-- Quelles valeurs d'attribut un gabarit propose pour générer ses variantes (product.template.
+-- attribute.line simplifié : pas de product.template.attribute.value séparé, attribut_id
+-- dénormalisé pour éviter un join supplémentaire à la lecture — dérivable de valeur_id via
+-- attributs_produit_valeurs.attribut_id sinon).
+CREATE TABLE IF NOT EXISTS gabarit_attributs_lignes (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  template_id    INTEGER NOT NULL REFERENCES produit_templates(id) ON DELETE CASCADE,
+  attribut_id    INTEGER NOT NULL REFERENCES attributs_produit(id) ON DELETE CASCADE,
+  valeur_id      INTEGER NOT NULL REFERENCES attributs_produit_valeurs(id) ON DELETE CASCADE,
+  UNIQUE (template_id, valeur_id)
+);
+CREATE INDEX IF NOT EXISTS idx_gabarit_attributs_lignes_entreprise_id ON gabarit_attributs_lignes(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_gabarit_attributs_lignes_template_id ON gabarit_attributs_lignes(template_id);
+
+-- Quelle combinaison de valeurs identifie chaque variante (product.product ↔ ses attribute
+-- values, simplifié en pointant directement les valeurs plutôt qu'un ptav intermédiaire).
+CREATE TABLE IF NOT EXISTS variante_attributs_valeurs (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  produit_id     INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  valeur_id      INTEGER NOT NULL REFERENCES attributs_produit_valeurs(id) ON DELETE CASCADE,
+  UNIQUE (produit_id, valeur_id)
+);
+CREATE INDEX IF NOT EXISTS idx_variante_attributs_valeurs_entreprise_id ON variante_attributs_valeurs(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_variante_attributs_valeurs_produit_id ON variante_attributs_valeurs(produit_id);
+
 -- ═══════════════ Étape A « élargissement stock » (2026-09-01) : typologie des intrants + fiches enrichies ═══════════════
 -- Modèle de champs adapté de LiteFarm (tables product / soil_amendment_product : enum de
 -- type produit, NPK n/p/k + unité, dose, liste des substances autorisées) + champs propres
@@ -2419,6 +2490,29 @@ async function backfillProduitsUniteId() {
   console.log(`✅ produits.unite_id relié pour ${resolus} produit(s).`);
 }
 
+// Étape 2 alignement Odoo produit/stock : crée un gabarit à variante unique pour chaque
+// produit existant sans template_id (nom/catégorie/module copiés depuis la variante) — un
+// product.product n'existe jamais sans product.template. Ne touche que les produits dont
+// template_id est encore NULL, relançable sans effet une fois tout résolu.
+async function backfillProduitsTemplates() {
+  const { rows: aResoudre } = await client.query(
+    `SELECT id, entreprise_id, module, nom, categorie_id FROM produits WHERE template_id IS NULL`
+  );
+  if (aResoudre.length === 0) {
+    console.log('ℹ️  produit_templates : rien à créer (tous les produits ont déjà un gabarit).');
+    return;
+  }
+  for (const p of aResoudre) {
+    const { rows: [tpl] } = await client.query(
+      `INSERT INTO produit_templates (entreprise_id, module, nom, categorie_id)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [p.entreprise_id, p.module, p.nom, p.categorie_id]
+    );
+    await client.query('UPDATE produits SET template_id = $1 WHERE id = $2', [tpl.id, p.id]);
+  }
+  console.log(`✅ produit_templates rétroactifs créés pour ${aResoudre.length} produit(s) existants.`);
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -2506,6 +2600,7 @@ async function migrate() {
     await seedPaymentTermsForExistingEntreprises();
     await seedUnitesMesureForExistingEntreprises();
     await backfillProduitsUniteId();
+    await backfillProduitsTemplates();
     await migratePostesFromSalaries();
     await migrateContratsFromSalaries();
   } catch (err) {

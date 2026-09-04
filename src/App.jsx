@@ -58,6 +58,7 @@ import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
 import FacturesModule from './components/FacturesModule';
+import ProduitTemplatesPanel from './components/ProduitTemplatesPanel';
 import { taxesLigneCalc as taxesLigneCalcPure } from './lib/taxes.js';
 import MonEspaceRh from './components/MonEspaceRh';
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
@@ -3072,6 +3073,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           </div>
         )}
       </Card>
+      <ProduitTemplatesPanel module={moduleType} categories={categories} />
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t('stocks.stockEvolution')}</div>
         <MiniChart data={stockEvolution} color={COLORS.blue} />

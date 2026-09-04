@@ -17,6 +17,10 @@ const router = express.Router();
 const PRODUIT_COLUMNS = `
   p.id, p.module, p.nom,
   p.categorie_id AS "categorieId", pc.nom AS categorie,
+  p.template_id AS "templateId",
+  (SELECT string_agg(apv.valeur, ', ' ORDER BY apv.id)
+   FROM variante_attributs_valeurs vav JOIN attributs_produit_valeurs apv ON apv.id = vav.valeur_id
+   WHERE vav.produit_id = p.id) AS "attributsVariante",
   p.quantite::float8 AS quantite, p.unite,
   p.unite_id AS "uniteId", um.nom AS "uniteNom", um.symbole AS "uniteSymbole",
   p.seuil::float8 AS seuil, p.prix_defaut::float8 AS "prixDefaut",
@@ -97,6 +101,27 @@ async function resolveUnite(entrepriseId, uniteId, uniteTexteLibre) {
   return { uniteId: rows[0].id, unite: rows[0].symbole || rows[0].nom };
 }
 
+// Résout le gabarit (produit_templates) d'un produit à créer — étape 2 alignement Odoo
+// produit/stock : un templateId fourni et valide (même entreprise/module) en priorité, sinon
+// création silencieuse d'un gabarit à variante unique portant le même nom/catégorie. Un
+// product.product n'existe jamais sans product.template, même quand l'utilisateur passe par le
+// formulaire "Ajout rapide" de StocksTab sans jamais gérer de variantes (voir aussi
+// migrate.js:backfillProduitsTemplates, même principe appliqué rétroactivement).
+async function resolveTemplateId(entrepriseId, module, nom, categorieId, templateId) {
+  if (templateId) {
+    const owned = await pool.query(
+      'SELECT id FROM produit_templates WHERE id = $1 AND entreprise_id = $2 AND module = $3',
+      [templateId, entrepriseId, module]
+    );
+    if (owned.rows[0]) return owned.rows[0].id;
+  }
+  const { rows } = await pool.query(
+    'INSERT INTO produit_templates (entreprise_id, module, nom, categorie_id) VALUES ($1, $2, $3, $4) RETURNING id',
+    [entrepriseId, module, nom, categorieId]
+  );
+  return rows[0].id;
+}
+
 router.get('/', authRequired, async (req, res) => {
   const { module, typeIntrant } = req.query;
   const cond = ['p.entreprise_id = $1'];
@@ -117,7 +142,7 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.post('/', authRequired, async (req, res) => {
-  const { module, nom, categorieId, quantite = 0, unite = '', uniteId, seuil = 0, prixDefaut, cout } = req.body;
+  const { module, nom, categorieId, quantite = 0, unite = '', uniteId, seuil = 0, prixDefaut, cout, templateId } = req.body;
   if (!module || !['Cultures', 'Poulailler'].includes(module) || !nom || !categorieId) {
     return res.status(400).json({ error: 'module (Cultures/Poulailler), nom et categorieId sont requis.' });
   }
@@ -132,13 +157,14 @@ router.post('/', authRequired, async (req, res) => {
       return res.status(400).json({ error: 'categorieId invalide pour ce module.' });
     }
     const uniteResolue = await resolveUnite(req.user.entrepriseId, uniteId, unite);
+    const templateIdResolu = await resolveTemplateId(req.user.entrepriseId, module, nom, categorieId, templateId);
     const insert = await pool.query(
-      `INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, quantite, unite, unite_id, seuil, prix_defaut, cout,
+      `INSERT INTO produits (entreprise_id, user_id, module, nom, categorie_id, template_id, quantite, unite, unite_id, seuil, prix_defaut, cout,
          type_intrant, variete, taux_germination, npk_n, npk_p, npk_k, npk_unit, dose_ha, dose_ha_unite,
          matiere_active, numero_amm, dar_jours, znt_metres, bio_autorise)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-         $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING id`,
-      [req.user.entrepriseId, req.user.sub, module, nom, categorieId, Number(quantite) || 0, uniteResolue.unite, uniteResolue.uniteId, Number(seuil) || 0,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+         $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) RETURNING id`,
+      [req.user.entrepriseId, req.user.sub, module, nom, categorieId, templateIdResolu, Number(quantite) || 0, uniteResolue.unite, uniteResolue.uniteId, Number(seuil) || 0,
        prixDefaut === '' || prixDefaut == null ? null : Number(prixDefaut),
        cout === '' || cout == null ? null : Number(cout),
        ...intrant.valeurs]
