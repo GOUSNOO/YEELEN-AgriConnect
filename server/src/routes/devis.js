@@ -524,15 +524,24 @@ router.post('/:id/envoyer', authRequired, async (req, res) => {
     if (!devis.clientEmail) return res.status(400).json({ error: "Le client n'a pas d'adresse email renseignée." });
 
     const token = crypto.randomBytes(24).toString('hex');
+    const entrepriseResult = await pool.query('SELECT nom FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
+    const entrepriseNom = entrepriseResult.rows[0]?.nom || 'Votre exploitant';
+    const lienConsultation = `${process.env.FRONTEND_URL || 'http://localhost:8090'}/devis/${token}`;
+
+    // L'email est envoyé AVANT toute écriture en base (même patron que mfa.js pour le code
+    // par email) : si l'envoi échoue, le devis ne doit pas se retrouver coincé en 'Envoyé'
+    // avec un token public généré pour un lien que le client n'a jamais reçu — bug réel
+    // documenté dans CLAUDE.md, corrigé ici.
+    try {
+      await sendDevisEmail(devis.clientEmail, `${devis.clientPrenom || ''} ${devis.clientNom}`.trim(), entrepriseNom, devis.numero, lienConsultation);
+    } catch (mailErr) {
+      console.error('[POST /devis/:id/envoyer] envoi email', mailErr);
+      return res.status(502).json({ error: "L'email n'a pas pu être envoyé. Le devis reste en brouillon, réessayez." });
+    }
+
     await pool.query(`UPDATE devis SET statut = 'Envoyé', token_public = $1 WHERE id = $2`, [token, req.params.id]);
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: devis.statut }, { statut: 'Envoyé' }, ['statut']);
-
-    const entrepriseResult = await pool.query('SELECT nom FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
-    const entrepriseNom = entrepriseResult.rows[0]?.nom || 'Votre exploitant';
-
-    const lienConsultation = `${process.env.FRONTEND_URL || 'http://localhost:8090'}/devis/${token}`;
-    await sendDevisEmail(devis.clientEmail, `${devis.clientPrenom || ''} ${devis.clientNom}`.trim(), entrepriseNom, devis.numero, lienConsultation);
 
     return res.json({ success: true, lienConsultation });
   } catch (err) {

@@ -470,3 +470,40 @@ describe('Devis — modification des lignes après signature', () => {
     expect(put.status).toBe(400);
   });
 });
+
+// Régression (voir CLAUDE.md « reported, not fixed » puis corrigé) : un échec d'envoi email
+// ne doit plus laisser le devis coincé en 'Envoyé' avec un token public généré pour rien.
+// L'environnement de test n'a pas d'EMAIL_USER/EMAIL_PASS (voir test/integration/env.js), donc
+// nodemailer échoue systématiquement ici — exactement le scénario du bug original.
+describe('Devis — POST /:id/envoyer, échec d\'envoi email n\'altère pas l\'état', () => {
+  test('email indisponible → 502, devis reste en Brouillon, aucun token_public posé', async () => {
+    const admin = await registerEntreprise();
+    const contact = await request(app).post('/api/contacts').set({ Authorization: `Bearer ${admin.token}` })
+      .send({ nom: 'Client Email SARL', estClient: true, email: 'client-envoi@test.local' });
+    expect(contact.status).toBe(201);
+    const clientId = contact.body.contact.id;
+
+    const create = await request(app).post('/api/devis').set({ Authorization: `Bearer ${admin.token}` })
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 2, prixUnitaire: 100, type: 'produit' }] });
+    expect(create.status).toBe(201);
+    const devisId = create.body.devis.id;
+
+    const envoyer = await request(app).post(`/api/devis/${devisId}/envoyer`).set({ Authorization: `Bearer ${admin.token}` });
+    expect(envoyer.status).toBe(502);
+
+    const { rows } = await pool.query('SELECT statut, token_public FROM devis WHERE id = $1', [devisId]);
+    expect(rows[0].statut).toBe('Brouillon');
+    expect(rows[0].token_public).toBeNull();
+  });
+
+  test('client sans email → 400, aucune tentative d\'envoi', async () => {
+    const admin = await registerEntreprise();
+    const clientId = await createClient(admin.token);
+    const create = await request(app).post('/api/devis').set({ Authorization: `Bearer ${admin.token}` })
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+    const devisId = create.body.devis.id;
+
+    const envoyer = await request(app).post(`/api/devis/${devisId}/envoyer`).set({ Authorization: `Bearer ${admin.token}` });
+    expect(envoyer.status).toBe(400);
+  });
+});
