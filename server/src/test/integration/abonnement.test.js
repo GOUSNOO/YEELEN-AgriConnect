@@ -188,6 +188,52 @@ describe('Administration /api/billing/entreprises* (platform-admin uniquement)',
     expect(activer.status).toBe(403);
   });
 
+  // Spec §7, cas 8/9 : un non-platform-admin n'atteint AUCUNE route /billing/entreprises*, sur
+  // sa propre entreprise (pas seulement 403 sur la liste/l'activation, testé ci-dessus) — les
+  // 7 routes une à une, pour ne pas laisser un futur ajout de route hors du gate par oubli.
+  test('un admin normal reçoit 403 sur chacune des 7 routes /billing/entreprises*, y compris sur sa propre entreprise', async () => {
+    const admin = await registerEntreprise();
+    const bearer = { Authorization: `Bearer ${admin.token}` };
+    const id = admin.entrepriseId;
+    const appels = [
+      () => request(app).get('/api/billing/entreprises').set(bearer),
+      () => request(app).get(`/api/billing/entreprises/${id}`).set(bearer),
+      () => request(app).post(`/api/billing/entreprises/${id}/activer`).set(bearer).send({ periodeMois: 1 }),
+      () => request(app).post(`/api/billing/entreprises/${id}/prolonger`).set(bearer).send({ jours: 1 }),
+      () => request(app).post(`/api/billing/entreprises/${id}/suspendre`).set(bearer).send({}),
+      () => request(app).post(`/api/billing/entreprises/${id}/reactiver`).set(bearer),
+      () => request(app).post(`/api/billing/entreprises/${id}/exempter`).set(bearer).send({ exempt: true }),
+    ];
+    for (const appel of appels) {
+      const res = await appel();
+      expect(res.status).toBe(403);
+    }
+  });
+
+  // Spec §7, cas 9 : à l'inverse de chaque route tenant-scopée du reste de l'app
+  // (WHERE entreprise_id = req.user.entrepriseId), /billing/entreprises* est délibérément
+  // CROSS-TENANT pour un platform-admin — c'est tout son intérêt (superviser toutes les
+  // entreprises, pas seulement la sienne).
+  test('un platform-admin voit et gère des entreprises AUTRES que la sienne (cross-tenant, comportement voulu)', async () => {
+    const admin = await registerEntreprise();
+    const platformToken = await promotePlatformAdmin(admin);
+    const autre1 = await registerEntreprise();
+    const autre2 = await registerEntreprise();
+
+    const list = await request(app).get('/api/billing/entreprises?pageSize=200').set('Authorization', `Bearer ${platformToken}`);
+    expect(list.status).toBe(200);
+    const ids = list.body.entreprises.map((e) => e.id);
+    expect(ids).toEqual(expect.arrayContaining([autre1.entrepriseId, autre2.entrepriseId]));
+    // La propre entreprise du platform-admin n'est pas non plus exclue de la liste.
+    expect(ids).toContain(admin.entrepriseId);
+
+    const suspendre = await request(app).post(`/api/billing/entreprises/${autre1.entrepriseId}/suspendre`)
+      .set('Authorization', `Bearer ${platformToken}`).send({});
+    expect(suspendre.status).toBe(200);
+    const bloque = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${autre1.token}`);
+    expect(bloque.status).toBe(402);
+  });
+
   test('GET /entreprises (paginé) et GET /entreprises/:id : un platform-admin voit la liste', async () => {
     const admin = await registerEntreprise();
     const platformToken = await promotePlatformAdmin(admin);
