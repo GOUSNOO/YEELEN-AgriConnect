@@ -656,6 +656,16 @@ export async function getContactPrixEffectifs(contactId) {
   return request(`/contacts/${contactId}/prix-effectifs`);
 }
 
+// Résolution serveur d'un prix effectif (étape 4 alignement produit/stock Odoo — remplace le
+// calcul purement client qu'était prixPourMatch dans DevisModule).
+export async function getPrixEffectif({ stockId, contactId, quantite, date }) {
+  const params = new URLSearchParams({ stockId });
+  if (contactId) params.set('contactId', contactId);
+  if (quantite != null) params.set('quantite', quantite);
+  if (date) params.set('date', date);
+  return request(`/listes-prix/prix-effectif?${params.toString()}`);
+}
+
 // Conditions de paiement réutilisables (account.payment.term-like) — étape 0 Comptabilité.
 export async function getPaymentTerms() {
   return request('/payment-terms');

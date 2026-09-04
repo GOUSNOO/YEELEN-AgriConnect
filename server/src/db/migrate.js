@@ -1516,6 +1516,47 @@ CREATE TABLE IF NOT EXISTS listes_prix_lignes (
 );
 CREATE INDEX IF NOT EXISTS idx_listes_prix_lignes_liste_prix_id ON listes_prix_lignes(liste_prix_id);
 
+-- ═══════════════ Étape 4 alignement Odoo produit/stock (2026-09-04) : moteur de règles de tarification ═══════════════
+-- listes_prix_lignes devient un vrai moteur de règles (product.pricelist.item-like) au lieu
+-- d'un prix fixe par (liste, variante). stock_id redevient optionnel : une règle 'categorie'/
+-- 'gabarit'/'global' ne cible pas une variante précise — la contrainte de cohérence plus bas
+-- impose qu'exactement la bonne colonne cible soit renseignée selon applied_on. L'ancienne
+-- contrainte UNIQUE(liste_prix_id, stock_id) est retirée : plusieurs règles peuvent désormais
+-- cibler la même variante avec des paliers de quantité différents (ex. -10% dès 10, -20% dès
+-- 50). Toute ligne déjà existante reste implicitement applied_on='variante'/compute_price=
+-- 'fixe'/quantite_min=0/sans fenêtre de date via les DEFAULT ci-dessous — comportement
+-- rigoureusement identique à avant cette étape, aucune migration de données nécessaire.
+ALTER TABLE listes_prix_lignes DROP CONSTRAINT IF EXISTS listes_prix_lignes_liste_prix_id_stock_id_key;
+ALTER TABLE listes_prix_lignes ALTER COLUMN stock_id DROP NOT NULL;
+ALTER TABLE listes_prix_lignes ALTER COLUMN prix DROP NOT NULL;
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS applied_on TEXT NOT NULL DEFAULT 'variante';
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS template_id INTEGER REFERENCES produit_templates(id) ON DELETE CASCADE;
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS categorie_id INTEGER REFERENCES produit_categories(id) ON DELETE CASCADE;
+-- compute_price='formule' calcule identiquement à 'pourcentage' dans cette version (formule
+-- simplifiée : base + ajustement %, voir utils/pricelistResolver.js) — conservé comme valeur
+-- distincte uniquement pour coller au nom du champ Odoo, pas de logique de marge/arrondi.
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS compute_price TEXT NOT NULL DEFAULT 'fixe';
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS pourcentage NUMERIC(7, 3);
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS quantite_min NUMERIC(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS date_debut DATE;
+ALTER TABLE listes_prix_lignes ADD COLUMN IF NOT EXISTS date_fin DATE;
+ALTER TABLE listes_prix_lignes DROP CONSTRAINT IF EXISTS listes_prix_lignes_applied_on_check;
+ALTER TABLE listes_prix_lignes ADD CONSTRAINT listes_prix_lignes_applied_on_check
+  CHECK (applied_on IN ('global', 'categorie', 'gabarit', 'variante'));
+ALTER TABLE listes_prix_lignes DROP CONSTRAINT IF EXISTS listes_prix_lignes_compute_price_check;
+ALTER TABLE listes_prix_lignes ADD CONSTRAINT listes_prix_lignes_compute_price_check
+  CHECK (compute_price IN ('fixe', 'pourcentage', 'formule'));
+ALTER TABLE listes_prix_lignes DROP CONSTRAINT IF EXISTS listes_prix_lignes_cible_coherente_check;
+ALTER TABLE listes_prix_lignes ADD CONSTRAINT listes_prix_lignes_cible_coherente_check
+  CHECK (
+    (applied_on = 'global' AND stock_id IS NULL AND template_id IS NULL AND categorie_id IS NULL) OR
+    (applied_on = 'categorie' AND categorie_id IS NOT NULL AND stock_id IS NULL AND template_id IS NULL) OR
+    (applied_on = 'gabarit' AND template_id IS NOT NULL AND stock_id IS NULL AND categorie_id IS NULL) OR
+    (applied_on = 'variante' AND stock_id IS NOT NULL AND template_id IS NULL AND categorie_id IS NULL)
+  );
+CREATE INDEX IF NOT EXISTS idx_listes_prix_lignes_template_id ON listes_prix_lignes(template_id);
+CREATE INDEX IF NOT EXISTS idx_listes_prix_lignes_categorie_id ON listes_prix_lignes(categorie_id);
+
 -- ═══════════════ Contacts unifiés (fusion clients / fournisseurs) ═══════════════
 -- Deuxième étape de l'alignement structurel ERP (après produits) : remplace deux tables
 -- séparées par une seule, inspirée d'un modèle de contact standard — contrairement à produits.module (un

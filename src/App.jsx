@@ -34,7 +34,8 @@ import {
   getPoulaillerHistorique, getCulturesHistorique,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
-  getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getContactPrixEffectifs,
+  getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getPrixEffectif,
+  getProduitTemplates,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   getPaymentTerms, createPaymentTerm, deletePaymentTerm,
   getTaxes,
@@ -604,38 +605,6 @@ function DevisModule({ clientsListe, filtreStatut }) {
     })();
   }, []);
 
-  // Prix effectifs (liste de prix assignée) du client sélectionné — formulaire d'ajout
-  // et fenêtre de modification peuvent porter sur deux clients différents en même temps,
-  // donc deux cartes séparées. Clé stockId seul (les ids produits sont non-ambigus depuis
-  // la fusion produits, plus besoin du composite "module:id" qu'utilisait l'ancien
-  // client_prix, conçue avant cette fusion).
-  const [clientPrixMap, setClientPrixMap] = useState({});
-  const [editClientPrixMap, setEditClientPrixMap] = useState({});
-
-  const loadClientPrixMap = async (clientId, setter) => {
-    if (!clientId) { setter({}); return; }
-    try {
-      const { prix } = await getContactPrixEffectifs(clientId);
-      const map = {};
-      (prix || []).forEach(p => { map[p.stockId] = p.prix; });
-      setter(map);
-    } catch (err) {
-      console.error('[DevisModule prix client]', err);
-      setter({});
-    }
-  };
-
-  useEffect(() => { loadClientPrixMap(form.clientId, setClientPrixMap); }, [form.clientId]);
-  useEffect(() => { loadClientPrixMap(editForm.clientId, setEditClientPrixMap); }, [editForm.clientId]);
-
-  // Prix à préremplir pour un article catalogué : le prix de la liste assignée au client
-  // s'il existe, sinon le prix par défaut de l'article — jamais l'inverse.
-  const prixPourMatch = (match, prixMap) => {
-    if (!match) return null;
-    const negocie = prixMap[match.id];
-    return negocie != null ? negocie : match.prixDefaut;
-  };
-
   // Ajoute une ligne de produit vide au formulaire
   // Réordonnancement par glisser-déposer — la colonne `ordre` de devis_lignes existe déjà
   // (attribuée depuis l'index du tableau au moment de la soumission), donc réordonner ici
@@ -1150,19 +1119,24 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     ) : (
                       <>
                         <td>
-                          <input placeholder={t("devis.produitPlaceholder")} list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                          <input placeholder={t("devis.produitPlaceholder")} list={catalogDatalistId} value={ligne.produit} onChange={async e => {
                             const value = e.target.value;
                             updateLigne(i, 'produit', value);
                             const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                             updateLigne(i, 'stockId', match ? match.id : null);
                             updateLigne(i, 'stockModule', match ? match.module : null);
                             updateLigne(i, 'uomId', match ? match.uniteId || null : null);
-                            const prix = prixPourMatch(match, clientPrixMap);
-                            if (prix != null && !ligne.prixUnitaire) {
-                              updateLigne(i, 'prixUnitaire', String(prix));
-                            }
                             if (match && match.unite && !ligne.unite) {
                               updateLigne(i, 'unite', match.unite);
+                            }
+                            if (match && !ligne.prixUnitaire) {
+                              try {
+                                const { prix } = await getPrixEffectif({ stockId: match.id, contactId: form.clientId || undefined, quantite: ligne.quantite || undefined });
+                                if (prix != null) updateLigne(i, 'prixUnitaire', String(prix));
+                              } catch (err) {
+                                console.error('[DevisModule prix effectif]', err);
+                                if (match.prixDefaut != null) updateLigne(i, 'prixUnitaire', String(match.prixDefaut));
+                              }
                             }
                           }} style={ligneCellInputStyle} />
                         </td>
@@ -1861,19 +1835,24 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         ) : (
                           <>
                             <td>
-                              <input placeholder={t("devis.produitPlaceholder")} list={catalogDatalistId} value={ligne.produit} onChange={e => {
+                              <input placeholder={t("devis.produitPlaceholder")} list={catalogDatalistId} value={ligne.produit} onChange={async e => {
                                 const value = e.target.value;
                                 updateEditLigne(i, 'produit', value);
                                 const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
                                 updateEditLigne(i, 'stockId', match ? match.id : null);
                                 updateEditLigne(i, 'stockModule', match ? match.module : null);
                                 updateEditLigne(i, 'uomId', match ? match.uniteId || null : null);
-                                const prix = prixPourMatch(match, editClientPrixMap);
-                                if (prix != null && !ligne.prixUnitaire) {
-                                  updateEditLigne(i, 'prixUnitaire', String(prix));
-                                }
                                 if (match && match.unite && !ligne.unite) {
                                   updateEditLigne(i, 'unite', match.unite);
+                                }
+                                if (match && !ligne.prixUnitaire) {
+                                  try {
+                                    const { prix } = await getPrixEffectif({ stockId: match.id, contactId: editForm.clientId || undefined, quantite: ligne.quantite || undefined });
+                                    if (prix != null) updateEditLigne(i, 'prixUnitaire', String(prix));
+                                  } catch (err) {
+                                    console.error('[DevisModule prix effectif]', err);
+                                    if (match.prixDefaut != null) updateEditLigne(i, 'prixUnitaire', String(match.prixDefaut));
+                                  }
                                 }
                               }} style={ligneCellInputStyle} />
                             </td>
@@ -6011,7 +5990,14 @@ function ListesPrixManager() {
   const [expandedId, setExpandedId] = useState(null);
   const [lignesParListe, setLignesParListe] = useState({});
   const [catalogItems, setCatalogItems] = useState([]);
-  const [ligneForm, setLigneForm] = useState({ produit: '', stockId: null, prix: '' });
+  const [templates, setTemplates] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const emptyLigneForm = {
+    appliedOn: 'variante', produit: '', stockId: null, templateId: '', categorieId: '',
+    computePrice: 'fixe', prix: '', pourcentage: '', quantiteMin: '', dateDebut: '', dateFin: '',
+  };
+  const [ligneForm, setLigneForm] = useState(emptyLigneForm);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const datalistId = 'listes-prix-catalog';
 
   const loadListes = useCallback(async () => {
@@ -6035,6 +6021,24 @@ function ListesPrixManager() {
         setCatalogItems(stocks || []);
       } catch (err) {
         console.error('[ListesPrixManager catalog]', err);
+      }
+    })();
+    (async () => {
+      try {
+        const [{ templates: tCultures }, { templates: tPoulailler }] = await Promise.all([
+          getProduitTemplates('Cultures'), getProduitTemplates('Poulailler'),
+        ]);
+        setTemplates([...(tCultures || []), ...(tPoulailler || [])]);
+      } catch (err) {
+        console.error('[ListesPrixManager templates]', err);
+      }
+    })();
+    (async () => {
+      try {
+        const { categories: cats } = await getProduitCategories();
+        setCategories(cats || []);
+      } catch (err) {
+        console.error('[ListesPrixManager categories]', err);
       }
     })();
   }, []);
@@ -6082,16 +6086,30 @@ function ListesPrixManager() {
 
   const addLigne = async (e, listeId) => {
     e.preventDefault();
-    if (!ligneForm.stockId || ligneForm.prix === '') {
-      notifyError(null, t('contacts.listes.ligneError'));
-      return;
-    }
+    const { appliedOn, stockId, templateId, categorieId, computePrice, prix, pourcentage, quantiteMin, dateDebut, dateFin } = ligneForm;
+    if (appliedOn === 'variante' && !stockId) { notifyError(null, t('contacts.listes.ligneError')); return; }
+    if (appliedOn === 'gabarit' && !templateId) { notifyError(null, t('contacts.listes.ligneError')); return; }
+    if (appliedOn === 'categorie' && !categorieId) { notifyError(null, t('contacts.listes.ligneError')); return; }
+    if (computePrice === 'fixe' && prix === '') { notifyError(null, t('contacts.listes.ligneError')); return; }
+    if (computePrice !== 'fixe' && pourcentage === '') { notifyError(null, t('contacts.listes.ligneError')); return; }
     try {
-      await createListePrixLigne(listeId, { stockId: ligneForm.stockId, prix: Number(ligneForm.prix) });
+      await createListePrixLigne(listeId, {
+        appliedOn,
+        stockId: appliedOn === 'variante' ? stockId : undefined,
+        templateId: appliedOn === 'gabarit' ? Number(templateId) : undefined,
+        categorieId: appliedOn === 'categorie' ? Number(categorieId) : undefined,
+        computePrice,
+        prix: computePrice === 'fixe' ? Number(prix) : undefined,
+        pourcentage: computePrice !== 'fixe' ? Number(pourcentage) : undefined,
+        quantiteMin: quantiteMin === '' ? 0 : Number(quantiteMin),
+        dateDebut: dateDebut || undefined,
+        dateFin: dateFin || undefined,
+      });
       const { lignes } = await getListePrixLignes(listeId);
       setLignesParListe(m => ({ ...m, [listeId]: lignes || [] }));
       setListes(l => l.map(x => x.id === listeId ? { ...x, nombreLignes: lignes.length } : x));
-      setLigneForm({ produit: '', stockId: null, prix: '' });
+      setLigneForm(emptyLigneForm);
+      setAdvancedOpen(false);
     } catch (err) {
       notifyError(err, t('contacts.listes.ligneSaveError'));
     }
@@ -6107,6 +6125,15 @@ function ListesPrixManager() {
       notifyError(err, t('contacts.listes.ligneDeleteError'));
     }
   };
+
+  // Libellé de cible affiché pour une règle déjà créée, selon son niveau de spécificité.
+  const cibleDeLigne = (l) => {
+    if (l.appliedOn === 'variante') return l.stockNom;
+    if (l.appliedOn === 'gabarit') return l.templateNom;
+    if (l.appliedOn === 'categorie') return l.categorieNom;
+    return t('contacts.listes.appliedOnGlobal');
+  };
+  const modeDeLigne = (l) => l.computePrice === 'fixe' ? fmtMoney(l.prix) : `${l.pourcentage > 0 ? '+' : ''}${l.pourcentage}%`;
 
   return (
     <Card>
@@ -6141,22 +6168,65 @@ function ListesPrixManager() {
               </div>
               {expandedId === liste.id && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                    <Field label={t("contacts.listes.article")} placeholder={t("contacts.listes.articlePlaceholder")} list={datalistId} value={ligneForm.produit} onChange={e => {
-                      const value = e.target.value;
-                      const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
-                      setLigneForm({ ...ligneForm, produit: value, stockId: match ? match.id : null });
-                    }} />
-                    <Field label={t("contacts.listes.prix", { devise })} type="number" placeholder="0" value={ligneForm.prix} onChange={e => setLigneForm({ ...ligneForm, prix: e.target.value })} />
-                    <Button type="submit" small><Plus size={14} /> {t("common.add")}</Button>
+                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, background: COLORS.paper, borderRadius: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, alignItems: 'end' }}>
+                      <Select label={t("contacts.listes.appliedOn")} value={ligneForm.appliedOn} onChange={e => setLigneForm({ ...emptyLigneForm, appliedOn: e.target.value })}>
+                        <option value="variante">{t('contacts.listes.appliedOnVariante')}</option>
+                        <option value="gabarit">{t('contacts.listes.appliedOnGabarit')}</option>
+                        <option value="categorie">{t('contacts.listes.appliedOnCategorie')}</option>
+                        <option value="global">{t('contacts.listes.appliedOnGlobal')}</option>
+                      </Select>
+                      {ligneForm.appliedOn === 'variante' && (
+                        <Field label={t("contacts.listes.cible")} placeholder={t("contacts.listes.articlePlaceholder")} list={datalistId} value={ligneForm.produit} onChange={e => {
+                          const value = e.target.value;
+                          const match = catalogItems.find(item => item.nom.toLowerCase() === value.toLowerCase());
+                          setLigneForm({ ...ligneForm, produit: value, stockId: match ? match.id : null });
+                        }} />
+                      )}
+                      {ligneForm.appliedOn === 'gabarit' && (
+                        <Select label={t("contacts.listes.cible")} value={ligneForm.templateId} onChange={e => setLigneForm({ ...ligneForm, templateId: e.target.value })}>
+                          <option value="">{t('contacts.listes.cibleChoose')}</option>
+                          {templates.map(tpl => <option key={tpl.id} value={tpl.id}>{tpl.nom}</option>)}
+                        </Select>
+                      )}
+                      {ligneForm.appliedOn === 'categorie' && (
+                        <Select label={t("contacts.listes.cible")} value={ligneForm.categorieId} onChange={e => setLigneForm({ ...ligneForm, categorieId: e.target.value })}>
+                          <option value="">{t('contacts.listes.cibleChoose')}</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
+                        </Select>
+                      )}
+                      <Select label={t("contacts.listes.computePrice")} value={ligneForm.computePrice} onChange={e => setLigneForm({ ...ligneForm, computePrice: e.target.value })}>
+                        <option value="fixe">{t('contacts.listes.computePriceFixe')}</option>
+                        <option value="pourcentage">{t('contacts.listes.computePricePourcentage')}</option>
+                      </Select>
+                      {ligneForm.computePrice === 'fixe' ? (
+                        <Field label={t("contacts.listes.prix", { devise })} type="number" placeholder="0" value={ligneForm.prix} onChange={e => setLigneForm({ ...ligneForm, prix: e.target.value })} />
+                      ) : (
+                        <Field label={t("contacts.listes.pourcentage")} type="number" placeholder={t("contacts.listes.pourcentagePlaceholder")} value={ligneForm.pourcentage} onChange={e => setLigneForm({ ...ligneForm, pourcentage: e.target.value })} />
+                      )}
+                      <Button type="submit" small><Plus size={14} /> {t("common.add")}</Button>
+                    </div>
+                    <button type="button" onClick={() => setAdvancedOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12, padding: 0, textAlign: 'left', width: 'fit-content' }}>
+                      {t('contacts.listes.advanced')}
+                    </button>
+                    {advancedOpen && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                        <Field label={t("contacts.listes.quantiteMin")} type="number" placeholder="0" value={ligneForm.quantiteMin} onChange={e => setLigneForm({ ...ligneForm, quantiteMin: e.target.value })} />
+                        <Field label={t("contacts.listes.dateDebut")} type="date" value={ligneForm.dateDebut} onChange={e => setLigneForm({ ...ligneForm, dateDebut: e.target.value })} />
+                        <Field label={t("contacts.listes.dateFin")} type="date" value={ligneForm.dateFin} onChange={e => setLigneForm({ ...ligneForm, dateFin: e.target.value })} />
+                      </div>
+                    )}
                   </form>
                   {(lignesParListe[liste.id] || []).length === 0 ? (
                     <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t("contacts.listes.emptyLignes")}</div>
                   ) : (lignesParListe[liste.id] || []).map(l => (
                     <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13 }}>
-                      <span>{l.stockNom}</span>
+                      <span>
+                        {l.quantiteMin > 0
+                          ? t('contacts.listes.ligneResume', { cible: cibleDeLigne(l), mode: modeDeLigne(l), qte: l.quantiteMin })
+                          : `${cibleDeLigne(l)} · ${modeDeLigne(l)}`}
+                      </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontWeight: 700 }}>{fmtMoney(l.prix)}</span>
                         <button onClick={() => removeLigne(l.id, liste.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                       </div>
                     </div>
