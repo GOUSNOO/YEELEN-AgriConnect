@@ -21,6 +21,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 import { UNITES_MESURE_DEFAUT } from '../utils/unitesMesureDefaut.js';
+import { EMPLACEMENTS_STOCK_DEFAUT } from '../utils/emplacementsStockDefaut.js';
 
 // Ce script tourne en dehors du serveur Express (invoqué directement via `node
 // src/db/migrate.js`), donc db.js (qui charge son propre .env via un chemin relatif
@@ -1322,6 +1323,68 @@ CREATE TABLE IF NOT EXISTS variante_attributs_valeurs (
 CREATE INDEX IF NOT EXISTS idx_variante_attributs_valeurs_entreprise_id ON variante_attributs_valeurs(entreprise_id);
 CREATE INDEX IF NOT EXISTS idx_variante_attributs_valeurs_produit_id ON variante_attributs_valeurs(produit_id);
 
+-- ═══════════════ Étape 3 alignement Odoo produit/stock (2026-09-04) : moteur multi-emplacements ═══════════════
+-- Équivalent stock.location / stock.quant / stock.move. Un seul emplacement interne réel par
+-- entreprise (pas de multi-entrepôt dans cette version) + trois emplacements virtuels
+-- (Clients/Fournisseurs/Pertes) servant uniquement de source/destination dans stock_moves —
+-- AUCUN quant n'est jamais suivi à leur niveau, voir utils/stockSync.js. Hiérarchique (parent_id,
+-- ON DELETE CASCADE) comme produit_categories/unites_mesure_categories, bien qu'aucune UI
+-- n'exploite encore de sous-emplacement — cohérence de modèle, pas gadget.
+CREATE TABLE IF NOT EXISTS emplacements_stock (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  nom            TEXT NOT NULL,
+  type           TEXT NOT NULL CHECK (type IN ('interne', 'client', 'fournisseur', 'perte')),
+  parent_id      INTEGER REFERENCES emplacements_stock(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (entreprise_id, nom)
+);
+CREATE INDEX IF NOT EXISTS idx_emplacements_stock_entreprise_id ON emplacements_stock(entreprise_id);
+
+-- « Combien il y a où » — un seul quant par (produit, emplacement) : pas de dimension lot_id
+-- ici (contrairement à stock.quant réel), stockSync.js ne consomme jamais un lot précis — le
+-- suivi de lot (stock_lots, étape B élargissement stock) reste un registre parallèle
+-- indépendant. quantite_reservee : part de quantite déjà engagée par un devis signé mais pas
+-- encore remis en brouillon (voir stockSync.js) — quantite - quantite_reservee = disponible,
+-- c'est cette valeur que produits.quantite (colonne pont dénormalisée) reflète désormais.
+CREATE TABLE IF NOT EXISTS stock_quants (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  produit_id         INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  emplacement_id     INTEGER NOT NULL REFERENCES emplacements_stock(id) ON DELETE CASCADE,
+  quantite           NUMERIC(14, 3) NOT NULL DEFAULT 0,
+  quantite_reservee  NUMERIC(14, 3) NOT NULL DEFAULT 0,
+  UNIQUE (produit_id, emplacement_id)
+);
+CREATE INDEX IF NOT EXISTS idx_stock_quants_entreprise_id ON stock_quants(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_stock_quants_produit_id ON stock_quants(produit_id);
+
+-- Journal structuré des mouvements (remplace conceptuellement stock_mouvements comme source de
+-- vérité sous-jacente, mais NE LE remplace PAS dans le code : stock_mouvements reste le ledger
+-- d'audit simple existant, alimenté en parallèle, voir stockSync.js). state reflète le cycle de
+-- vie réel d'un mouvement — 'confirme' = réservation active (devis signé), 'fait' = mouvement
+-- physique définitif (achat reçu, consommation d'intrant), 'annule' = réservation libérée ou
+-- réception annulée. Référence polymorphe (document_type/document_id) vers le document
+-- d'origine, comme stock_mouvements.
+CREATE TABLE IF NOT EXISTS stock_moves (
+  id                     SERIAL PRIMARY KEY,
+  entreprise_id          INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id                INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  produit_id             INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  quantite               NUMERIC(14, 3) NOT NULL,
+  emplacement_source_id  INTEGER NOT NULL REFERENCES emplacements_stock(id),
+  emplacement_dest_id    INTEGER NOT NULL REFERENCES emplacements_stock(id),
+  state                  TEXT NOT NULL DEFAULT 'brouillon' CHECK (state IN ('brouillon', 'confirme', 'fait', 'annule')),
+  document_type          TEXT,
+  document_id            INTEGER,
+  raison                 TEXT,
+  date_fait              TIMESTAMPTZ,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stock_moves_entreprise_id ON stock_moves(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_stock_moves_produit_id ON stock_moves(produit_id);
+CREATE INDEX IF NOT EXISTS idx_stock_moves_document ON stock_moves(document_type, document_id);
+
 -- ═══════════════ Étape A « élargissement stock » (2026-09-01) : typologie des intrants + fiches enrichies ═══════════════
 -- Modèle de champs adapté de LiteFarm (tables product / soil_amendment_product : enum de
 -- type produit, NPK n/p/k + unité, dose, liste des substances autorisées) + champs propres
@@ -2513,6 +2576,82 @@ async function backfillProduitsTemplates() {
   console.log(`✅ produit_templates rétroactifs créés pour ${aResoudre.length} produit(s) existants.`);
 }
 
+// Étape 3 alignement Odoo produit/stock : crée les 4 emplacements de stock par défaut pour
+// toute entreprise qui n'en a aucun. Même liste que routes/auth.js (seed à l'inscription) via
+// utils/emplacementsStockDefaut.js.
+async function seedEmplacementsStockForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM emplacements_stock es WHERE es.entreprise_id = e.id)`
+  );
+  for (const { id } of entreprises) {
+    for (const e of EMPLACEMENTS_STOCK_DEFAUT) {
+      await client.query(
+        `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
+         ON CONFLICT (entreprise_id, nom) DO NOTHING`,
+        [id, e.nom, e.type]
+      );
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Emplacements de stock par défaut créés pour ${entreprises.length} entreprise(s).`);
+  }
+}
+
+// Étape 3 alignement Odoo produit/stock : initialise un stock_quants à l'emplacement interne
+// pour chaque produit qui n'en a pas encore (quantite = produits.quantite actuel, reservee = 0),
+// puis reconstitue les réservations en cours depuis les devis déjà signés/facturés (tout statut
+// hors Brouillon/Devis/Envoyé/Annulé — ce sont les seuls à ne jamais avoir appelé
+// applyVenteLignesToStock). Ne convertit pas un éventuel uom_id de ligne différent de l'unité
+// de base du produit (cas marginal, jamais rencontré en pratique) : la quantité de ligne brute
+// est utilisée telle quelle — écart possible mais sans risque, une libération ultérieure
+// clippe toujours à 0 (GREATEST) plutôt que de passer en négatif. Relançable sans effet
+// indésirable : la création de quant est un NOT EXISTS, la reconstitution de réservation
+// recalcule à chaque fois la valeur absolue exacte depuis les devis en cours.
+async function backfillStockQuants() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id AS "entrepriseId", es.id AS "emplacementInterneId" FROM entreprises e
+     JOIN emplacements_stock es ON es.entreprise_id = e.id AND es.type = 'interne'`
+  );
+  let produitsInitialises = 0;
+  for (const { entrepriseId, emplacementInterneId } of entreprises) {
+    const { rows: produits } = await client.query(
+      `SELECT p.id, p.quantite::float8 AS quantite FROM produits p
+       WHERE p.entreprise_id = $1
+         AND NOT EXISTS (SELECT 1 FROM stock_quants q WHERE q.produit_id = p.id AND q.emplacement_id = $2)`,
+      [entrepriseId, emplacementInterneId]
+    );
+    for (const p of produits) {
+      await client.query(
+        `INSERT INTO stock_quants (entreprise_id, produit_id, emplacement_id, quantite, quantite_reservee)
+         VALUES ($1, $2, $3, $4, 0)`,
+        [entrepriseId, p.id, emplacementInterneId, p.quantite]
+      );
+      produitsInitialises++;
+    }
+
+    const { rows: reserves } = await client.query(
+      `SELECT dl.stock_id AS "produitId", SUM(dl.quantite)::float8 AS total
+       FROM devis_lignes dl JOIN devis d ON d.id = dl.devis_id
+       WHERE d.entreprise_id = $1 AND dl.stock_id IS NOT NULL
+         AND d.statut NOT IN ('Brouillon', 'Devis', 'Envoyé', 'Annulé')
+       GROUP BY dl.stock_id`,
+      [entrepriseId]
+    );
+    for (const r of reserves) {
+      await client.query(
+        `UPDATE stock_quants SET quantite_reservee = $1 WHERE produit_id = $2 AND emplacement_id = $3`,
+        [r.total, r.produitId, emplacementInterneId]
+      );
+    }
+  }
+  if (produitsInitialises > 0) {
+    console.log(`✅ stock_quants initiaux créés pour ${produitsInitialises} produit(s), réservations reconstituées depuis les devis en cours.`);
+  } else {
+    console.log('ℹ️  stock_quants : rien à initialiser (déjà fait).');
+  }
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -2601,6 +2740,8 @@ async function migrate() {
     await seedUnitesMesureForExistingEntreprises();
     await backfillProduitsUniteId();
     await backfillProduitsTemplates();
+    await seedEmplacementsStockForExistingEntreprises();
+    await backfillStockQuants();
     await migratePostesFromSalaries();
     await migrateContratsFromSalaries();
   } catch (err) {

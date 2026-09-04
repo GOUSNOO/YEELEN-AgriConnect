@@ -16,6 +16,7 @@ import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfa
 import { sendMfaCodeEmail } from '../services/mailer.js';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 import { UNITES_MESURE_DEFAUT } from '../utils/unitesMesureDefaut.js';
+import { EMPLACEMENTS_STOCK_DEFAUT } from '../utils/emplacementsStockDefaut.js';
 
 const router = express.Router();
 
@@ -194,6 +195,17 @@ router.post('/register', async (req, res) => {
           [entreprise.id, catRes.rows[0].id, u.nom, u.symbole, u.facteur, u.estReference]
         );
       }
+    }
+
+    // Emplacements de stock par défaut (étape 3 alignement Odoo produit/stock — mêmes
+    // emplacements que migrate.js:seedEmplacementsStockForExistingEntreprises, via
+    // utils/emplacementsStockDefaut.js).
+    for (const e of EMPLACEMENTS_STOCK_DEFAUT) {
+      await client.query(
+        `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
+         ON CONFLICT (entreprise_id, nom) DO NOTHING`,
+        [entreprise.id, e.nom, e.type]
+      );
     }
 
     await client.query('COMMIT');

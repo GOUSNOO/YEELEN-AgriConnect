@@ -2,6 +2,21 @@
 // au stock réel (table produits, fusion Cultures+Poulailler depuis le 2026-08-18) :
 // incrémente à l'achat, décrémente à la vente signée, journalise chaque ajustement dans
 // stock_mouvements.
+//
+// Étape 3 alignement Odoo produit/stock (2026-09-04) : chaque ajustement crée aussi une ligne
+// stock_moves (state confirme/fait/annule) et met à jour le stock_quants de l'emplacement
+// interne de l'entreprise (quantite pour un mouvement physique, quantite_reservee pour une
+// réservation de vente) — voir migrate.js pour le schéma. produits.quantite (colonne pont)
+// continue de représenter le DISPONIBLE (quantite - quantite_reservee côté quant interne), donc
+// son comportement visible pour les lecteurs existants (StocksTab, alertes, etc.) est identique
+// à avant cette étape : un devis signé décrémentait déjà produits.quantite immédiatement, ce
+// n'est désormais plus un UPDATE brut mais une vraie réservation structurée en dessous.
+// Décision de scope délibérée : la réservation créée à la signature d'un devis n'est jamais
+// promue en mouvement "fait" à la facturation (pas de nouvel appel côté routes/devis.js) — le
+// commentaire existant dans facturer() indique déjà que la signature est le seul événement de
+// stock que l'app modélise ; ajouter cette transition n'aurait aucun effet visible (le
+// disponible ne bouge pas) pour un risque réel sur une route déjà complexe (comptabilité,
+// hash de sécurisation). Elle reste une piste pour une étape future si un vrai besoin émerge.
 import { pool } from '../db.js';
 
 // Résout la ligne de produit concernée par un identifiant (fiable) en priorité, avec un
@@ -69,16 +84,89 @@ async function logMouvement({ entrepriseId, stockModule, stockId, stockNom, delt
   );
 }
 
-// Ajuste le produit correspondant et journalise le mouvement. Aucune correspondance =
-// no-op silencieux : un produit en texte libre non suivi en stock n'est pas une erreur,
-// juste un article non catalogué (pas de mouvement à tracer).
-async function applyToProduit(module, entrepriseId, stockId, nom, delta, ctx, uomId) {
+// Emplacements de stock seedés d'une entreprise (utils/emplacementsStockDefaut.js), résolus à
+// chaque appel (pas de cache global entre requêtes) — { interne, client, fournisseur, perte }.
+async function resoudreEmplacements(entrepriseId) {
+  const { rows } = await pool.query(
+    `SELECT id, type FROM emplacements_stock WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte')`,
+    [entrepriseId]
+  );
+  const parType = {};
+  for (const r of rows) parType[r.type] = r.id;
+  return parType;
+}
+
+// Ajuste un seul quant (produit, emplacement interne) : `champ` vaut 'quantite' (mouvement
+// physique) ou 'quantite_reservee' (réservation de vente) — toujours l'un des deux littéraux
+// contrôlés en interne par CONFIG_MOUVEMENT ci-dessous, jamais une valeur venue de l'appelant,
+// donc son interpolation directe dans la requête est sûre. GREATEST(..., 0) même logique de
+// garde-fou qu'adjustStockRow : jamais de quantité négative.
+async function ajusterQuant(entrepriseId, produitId, emplacementId, champ, delta) {
+  await pool.query(
+    `INSERT INTO stock_quants (entreprise_id, produit_id, emplacement_id, ${champ})
+     VALUES ($1, $2, $3, GREATEST($4, 0))
+     ON CONFLICT (produit_id, emplacement_id) DO UPDATE SET ${champ} = GREATEST(stock_quants.${champ} + $4, 0)`,
+    [entrepriseId, produitId, emplacementId, delta]
+  );
+}
+
+async function creerMove({ entrepriseId, userId, produitId, quantite, sourceId, destId, state, documentType, documentId, raison }) {
+  await pool.query(
+    `INSERT INTO stock_moves (entreprise_id, user_id, produit_id, quantite, emplacement_source_id, emplacement_dest_id, state, document_type, document_id, raison, date_fait)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $7 = 'fait' THEN now() ELSE NULL END)`,
+    [entrepriseId, userId || null, produitId, quantite, sourceId, destId, state, documentType || null, documentId || null, raison || null]
+  );
+}
+
+// Un seul quant réel suivi par produit : celui de l'emplacement interne. Les emplacements
+// client/fournisseur/perte ne servent qu'à qualifier la source/destination du mouvement dans
+// le journal stock_moves (traçabilité), jamais de quant à leur niveau — voir migrate.js.
+//   reception    : achat reçu.                quantite    += n  (fournisseur → interne, fait)
+//   retour_achat : réception d'achat annulée. quantite    += n  (interne → fournisseur, annule)
+//   reservation  : devis signé.               reservee    += n  (interne → client, confirme)
+//   liberation   : devis remis en brouillon.  reservee    -= n  (interne → client, annule)
+//   consommation : intrant appliqué au champ. quantite    -= n  (interne → perte, fait)
+//   restitution  : application annulée.       quantite    += n  (perte → interne, annule)
+// `champ` = quel champ du quant interne bouge ; `champDelta(delta)` = de combien, en fonction du
+// delta signé déjà utilisé par produits.quantite (même convention que l'ancien adjustStockRow).
+const CONFIG_MOUVEMENT = {
+  reception: { champ: 'quantite', source: 'fournisseur', dest: 'interne', state: 'fait', champDelta: (d) => d },
+  retour_achat: { champ: 'quantite', source: 'interne', dest: 'fournisseur', state: 'annule', champDelta: (d) => d },
+  reservation: { champ: 'quantite_reservee', source: 'interne', dest: 'client', state: 'confirme', champDelta: (d) => -d },
+  liberation: { champ: 'quantite_reservee', source: 'interne', dest: 'client', state: 'annule', champDelta: (d) => -d },
+  consommation: { champ: 'quantite', source: 'interne', dest: 'perte', state: 'fait', champDelta: (d) => d },
+  restitution: { champ: 'quantite', source: 'perte', dest: 'interne', state: 'annule', champDelta: (d) => d },
+};
+
+// Ajuste le produit correspondant (disponible, colonne pont) + le quant interne sous-jacent +
+// journalise le mouvement structuré et l'entrée stock_mouvements. Aucune correspondance produit
+// = no-op silencieux : un produit en texte libre non suivi en stock n'est pas une erreur, juste
+// un article non catalogué (pas de mouvement à tracer). Emplacements absents (entreprise pas
+// encore seedée) = même posture : on ajuste quand même produits.quantite (comportement
+// pré-étape-3 préservé), mais on saute la partie quant/move plutôt que d'échouer bruyamment.
+async function mouvementStock(kind, module, entrepriseId, stockId, nom, delta, ctx, uomId) {
   if (!nom || !delta) return;
   try {
     const row = await findStockRow(entrepriseId, module, stockId, nom);
     if (!row) return;
     const deltaConverti = await convertirQuantite(entrepriseId, delta, row.uniteId, uomId);
+    if (!deltaConverti) return;
+
     await adjustStockRow(entrepriseId, row.id, deltaConverti);
+
+    const cfg = CONFIG_MOUVEMENT[kind];
+    const emplacements = await resoudreEmplacements(entrepriseId);
+    const sourceId = emplacements[cfg.source];
+    const destId = emplacements[cfg.dest];
+    const emplacementInterneId = emplacements.interne;
+    if (sourceId && destId && emplacementInterneId) {
+      await ajusterQuant(entrepriseId, row.id, emplacementInterneId, cfg.champ, cfg.champDelta(deltaConverti));
+      await creerMove({
+        entrepriseId, userId: ctx.userId, produitId: row.id, quantite: Math.abs(deltaConverti),
+        sourceId, destId, state: cfg.state, documentType: ctx.documentType, documentId: ctx.documentId, raison: ctx.raison,
+      });
+    }
+
     await logMouvement({ entrepriseId, stockModule: module, stockId: row.id, stockNom: row.nom, delta: deltaConverti, ...ctx });
   } catch (err) {
     console.error('[stockSync:produits]', err);
@@ -89,7 +177,7 @@ async function applyToProduit(module, entrepriseId, stockId, nom, delta, ctx, uo
 export async function applyAchatLignesToStock(entrepriseId, module, lignes, ctx) {
   if (!['Cultures', 'Poulailler'].includes(module)) return;
   for (const ligne of lignes) {
-    await applyToProduit(module, entrepriseId, ligne.stockId, ligne.produit, Number(ligne.quantite) || 0, ctx, ligne.uomId);
+    await mouvementStock('reception', module, entrepriseId, ligne.stockId, ligne.produit, Number(ligne.quantite) || 0, ctx, ligne.uomId);
   }
 }
 
@@ -98,41 +186,38 @@ export async function applyAchatLignesToStock(entrepriseId, module, lignes, ctx)
 export async function reverseAchatLignesFromStock(entrepriseId, module, lignes, ctx) {
   if (!['Cultures', 'Poulailler'].includes(module)) return;
   for (const ligne of lignes) {
-    await applyToProduit(module, entrepriseId, ligne.stockId, ligne.produit, -(Number(ligne.quantite) || 0), ctx, ligne.uomId);
+    await mouvementStock('retour_achat', module, entrepriseId, ligne.stockId, ligne.produit, -(Number(ligne.quantite) || 0), ctx, ligne.uomId);
   }
 }
 
 // Ventes (devis) : une ligne connaît généralement son propre stockModule (le devis lui-même
 // n'est rattaché à aucun module) ; à défaut (lignes plus anciennes), findStockRow cherche
 // l'article par nom dans les deux modules à la fois.
-async function applyVenteLigne(entrepriseId, stockModule, stockId, nom, delta, ctx, uomId) {
-  await applyToProduit(stockModule || null, entrepriseId, stockId, nom, delta, ctx, uomId);
-}
 
-// Décrémente le stock au moment où un devis passe "Signé" (le point de la vente qui
-// devient réellement engagé — voir le cycle de vie documenté dans CLAUDE.md), pas dès
-// la création en Brouillon : un devis non signé n'engage encore aucune marchandise.
+// Décrémente le disponible (réserve le stock) au moment où un devis passe "Signé" (le point de
+// la vente qui devient réellement engagé — voir le cycle de vie documenté dans CLAUDE.md), pas
+// dès la création en Brouillon : un devis non signé n'engage encore aucune marchandise.
 export async function applyVenteLignesToStock(entrepriseId, lignes, ctx) {
   for (const ligne of lignes) {
-    await applyVenteLigne(entrepriseId, ligne.stockModule, ligne.stockId, ligne.produit, -(Number(ligne.quantite) || 0), ctx, ligne.uomId);
+    await mouvementStock('reservation', ligne.stockModule || null, entrepriseId, ligne.stockId, ligne.produit, -(Number(ligne.quantite) || 0), ctx, ligne.uomId);
   }
 }
 
-// Restitue le stock quand un devis déjà signé/facturé est remis en brouillon — symétrique
-// d'applyVenteLignesToStock (même delta, signe inversé).
+// Restitue le disponible (libère la réservation) quand un devis déjà signé/facturé est remis
+// en brouillon — symétrique d'applyVenteLignesToStock (même delta, signe inversé).
 export async function reverseVenteLignesToStock(entrepriseId, lignes, ctx) {
   for (const ligne of lignes) {
-    await applyVenteLigne(entrepriseId, ligne.stockModule, ligne.stockId, ligne.produit, Number(ligne.quantite) || 0, ctx, ligne.uomId);
+    await mouvementStock('liberation', ligne.stockModule || null, entrepriseId, ligne.stockId, ligne.produit, Number(ligne.quantite) || 0, ctx, ligne.uomId);
   }
 }
 
 // Consommation directe d'un seul produit catalogué (apport d'intrant au champ, étape C).
 // delta négatif sur produits.quantite + trace stock_mouvements (raison passée dans ctx).
 export async function consommerProduit(entrepriseId, { stockId, produitNom, stockModule, quantite, uomId }, ctx) {
-  await applyToProduit(stockModule || null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx, uomId);
+  await mouvementStock('consommation', stockModule || null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx, uomId);
 }
 
 // Inverse de consommerProduit — restitue le stock à la suppression d'une application.
 export async function restituerProduit(entrepriseId, { stockId, produitNom, stockModule, quantite, uomId }, ctx) {
-  await applyToProduit(stockModule || null, entrepriseId, stockId, produitNom, Number(quantite) || 0, ctx, uomId);
+  await mouvementStock('restitution', stockModule || null, entrepriseId, stockId, produitNom, Number(quantite) || 0, ctx, uomId);
 }
