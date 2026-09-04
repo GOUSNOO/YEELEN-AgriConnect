@@ -14,10 +14,25 @@ export function uniqueEmail(prefix = 'it') {
 }
 
 // Enregistre une entreprise + son compte admin. Renvoie de quoi agir en son nom.
+//
+// `opts.ip` : IP synthétique envoyée via X-Forwarded-For. Par défaut, une IP UNIQUE dérivée
+// du compteur `seq` — indispensable depuis l'abonnement Phase 1 (2026-09-04, limite de 3
+// inscriptions/24h par IP, voir routes/auth.js) : sans ça, toutes les entreprises jetables
+// créées par la suite de tests partageraient la même IP de boucle locale et se bloqueraient
+// mutuellement au bout de 3 appels. Un test qui veut délibérément vérifier la limite passe
+// la même `opts.ip` à plusieurs appels successifs.
 export async function registerEntreprise(opts = {}) {
   const email = opts.email || uniqueEmail('admin');
   const password = opts.password || 'Passw0rd!';
-  const res = await request(app).post('/api/auth/register').send({
+  seq += 1;
+  // Date.now() (pas seulement seq) : `seq` repart de 0 dans CHAQUE fichier de test (module
+  // isolé par Jest), mais tous les fichiers partagent la même base/le même audit_log durant
+  // toute la suite — une IP dérivée du seul `seq` collision entre fichiers (deux "10.0.0.1"
+  // distincts au sens de audit_log.ip_address = même compteur de limite). L'horloge réelle
+  // n'est, elle, jamais réinitialisée.
+  const n = (Date.now() + seq) % 16777216; // 256^3, espace des 3 derniers octets
+  const ip = opts.ip || `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`;
+  const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', ip).send({
     email,
     password,
     nomEntreprise: opts.nomEntreprise || `IT ${Date.now()}-${seq}`,

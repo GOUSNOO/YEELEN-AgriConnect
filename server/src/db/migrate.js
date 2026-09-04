@@ -64,6 +64,23 @@ CREATE TABLE IF NOT EXISTS entreprises (
   salarie_non_requis    BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+-- ═══════════════ Abonnement Phase 1 (2026-09-04) : essai 45 j + activation manuelle ═══════════════
+-- Voir docs/spec-abonnement-phase1.md pour la spec complète. Enforcement basé sur les dates
+-- (subscriptionGuard.js), pas de cron : subscription_status est un indicateur d'affichage
+-- admin, la vérité ce sont trial_ends_at/activated_until. Colonnes ajoutées en ALTER (pas dans
+-- le CREATE TABLE ci-dessus, qui reproduit le schéma socle déjà en production) pour que le
+-- backfill grand-père plus bas (voir seedAbonnementBackfill) puisse distinguer une ligne
+-- antérieure au modèle (trial_ends_at IS NULL) d'une nouvelle inscription.
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'trial';
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS trial_ends_at   TIMESTAMP;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS activated_at    TIMESTAMP;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS activated_until TIMESTAMP;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS grace_until     TIMESTAMP;
+ALTER TABLE entreprises DROP CONSTRAINT IF EXISTS entreprises_subscription_status_check;
+ALTER TABLE entreprises ADD  CONSTRAINT entreprises_subscription_status_check
+  CHECK (subscription_status IN ('trial','active','expired','suspended','exempt'));
+CREATE INDEX IF NOT EXISTS idx_entreprises_subscription_status ON entreprises(subscription_status);
+
 CREATE TABLE IF NOT EXISTS users (
   id                 SERIAL PRIMARY KEY,
   email              VARCHAR(255) NOT NULL UNIQUE,
@@ -75,6 +92,29 @@ CREATE TABLE IF NOT EXISTS users (
   is_platform_admin  BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));
+
+-- Historique des paiements/activations d'abonnement (saisie manuelle par un platform-admin en
+-- Phase 1 — moyen ∈ 'manuel_virement'|'manuel_especes'|'manuel_mobile_money'|'offert',
+-- 'paddle'/'stripe' réservés à une Phase 2 en ligne, pas encore construite). Les transitions de
+-- statut elles-mêmes sont journalisées dans audit_log (trial_started, subscription_activated,
+-- etc.), pas ici — cette table ne porte que les paiements/activations. Placée après "users"
+-- (pas juste après les colonnes entreprises ci-dessus) : sa FK cree_par_user_id l'exige, un
+-- CREATE TABLE ne peut pas référencer une table pas encore créée (contrairement à une ALTER
+-- TABLE ADD CONSTRAINT, qui peut être différée).
+CREATE TABLE IF NOT EXISTS abonnement_paiements (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  montant           NUMERIC(12,2),
+  devise            TEXT,
+  periode_debut     DATE,
+  periode_fin       DATE,
+  moyen             TEXT,
+  reference         TEXT,
+  note              TEXT,
+  cree_par_user_id  INTEGER REFERENCES users(id),
+  created_at        TIMESTAMP NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_abonnement_paiements_entreprise_id ON abonnement_paiements(entreprise_id);
 
 CREATE TABLE IF NOT EXISTS entreprise_utilisateurs (
   id             SERIAL PRIMARY KEY,
@@ -2693,6 +2733,35 @@ async function backfillStockQuants() {
   }
 }
 
+// Abonnement Phase 1 (2026-09-04) : grand-père toute entreprise déjà en base (trial_ends_at
+// IS NULL = proxy « ligne antérieure au modèle d'abonnement ») en 'active' pendant 1 an, PUIS
+// exempte les entreprises du/des platform-admin (ordre important : l'exemption doit s'appliquer
+// après le grand-père générique, sinon la seconde UPDATE n'aurait rien à corriger — un
+// platform-admin s'inscrit comme n'importe qui, is_platform_admin est basculé à la main après
+// coup). Relançable sans effet une fois fait : le WHERE trial_ends_at IS NULL ne retrouve plus
+// aucune ligne après le premier passage (chaque nouvelle inscription pose trial_ends_at).
+async function seedAbonnementBackfill() {
+  const { rowCount: grandpere } = await client.query(
+    `UPDATE entreprises
+        SET subscription_status = 'active',
+            activated_at        = COALESCE(activated_at, now()),
+            activated_until     = COALESCE(activated_until, now() + interval '1 year')
+      WHERE trial_ends_at IS NULL
+        AND subscription_status = 'trial'`
+  );
+  const { rowCount: exemptees } = await client.query(
+    `UPDATE entreprises SET subscription_status = 'exempt'
+      WHERE id IN (SELECT entreprise_id FROM entreprise_utilisateurs eu
+                   JOIN users u ON u.id = eu.user_id WHERE u.is_platform_admin = true)
+        AND subscription_status <> 'exempt'`
+  );
+  if (grandpere > 0 || exemptees > 0) {
+    console.log(`✅ Abonnement : ${grandpere} entreprise(s) grand-périsée(s) en 'active' (1 an), ${exemptees} exemptée(s) (platform-admin).`);
+  } else {
+    console.log("ℹ️  Abonnement : rien à grand-périser (déjà fait).");
+  }
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -2783,6 +2852,7 @@ async function migrate() {
     await backfillProduitsTemplates();
     await seedEmplacementsStockForExistingEntreprises();
     await backfillStockQuants();
+    await seedAbonnementBackfill();
     await migratePostesFromSalaries();
     await migrateContratsFromSalaries();
   } catch (err) {

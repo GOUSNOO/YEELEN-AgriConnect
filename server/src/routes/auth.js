@@ -11,7 +11,8 @@ import { env } from '../config/env.js';
 import { pool } from '../db.js';
 import { authRequired } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
-import { logAuditEvent, getAuditLog, countRecentAuditEvents } from '../utils/auditLog.js';
+import { logAuditEvent, getAuditLog, countRecentAuditEvents, countRecentAuditEventsByIp, extraireIp } from '../utils/auditLog.js';
+import { TRIAL_DAYS } from '../config/abonnement.js';
 import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfaCode.js';
 import { sendMfaCodeEmail } from '../services/mailer.js';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
@@ -76,6 +77,18 @@ router.post('/register', async (req, res) => {
   // comme 'entreprise' par défaut.
   const compteType = typeCompte === 'particulier' ? 'particulier' : 'entreprise';
 
+  // Abonnement Phase 1, anti-abus (2026-09-04) : freine la création répétée de comptes
+  // d'essai depuis une même adresse (contourner la période d'évaluation en changeant
+  // d'email à chaque fois) — indépendant du reCAPTCHA à venir (défense en profondeur, voir
+  // docs/spec-abonnement-phase1.md). IP absente (proxy mal configuré) = jamais bloquant,
+  // voir countRecentAuditEventsByIp. Vérifié AVANT la transaction : inutile d'ouvrir une
+  // connexion dédiée pour un rejet qui n'écrit rien.
+  const ipInscription = extraireIp(req);
+  const inscriptionsRecentes = await countRecentAuditEventsByIp(ipInscription, ['trial_started'], 24 * 60);
+  if (inscriptionsRecentes >= 3) {
+    return res.status(429).json({ error: 'Trop d\'inscriptions depuis cette adresse. Réessayez plus tard.' });
+  }
+
   const client = await pool.connect();
   try {
     const existing = await client.query(
@@ -104,15 +117,16 @@ router.post('/register', async (req, res) => {
     // Nom d'entreprise par défaut si non fourni — dépend du type de compte pour rester
     // cohérent ("Espace de x@y.com" pour un particulier, "Entreprise de x@y.com" sinon).
     const entrepriseResult = await client.query(
-      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale)
-       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'))
-       RETURNING id, nom, siret, type_compte, devise, locale`,
+      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale, subscription_status, trial_ends_at)
+       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'), 'trial', now() + ($6 || ' days')::interval)
+       RETURNING id, nom, siret, type_compte, devise, locale, subscription_status AS "subscriptionStatus", trial_ends_at AS "trialEndsAt"`,
       [
         nomEntreprise || `${compteType === 'particulier' ? 'Espace' : 'Entreprise'} de ${user.email}`,
         compteType === 'entreprise' ? (siret || null) : null,
         compteType,
         devise || null,
         locale || null,
+        String(TRIAL_DAYS),
       ]
     );
     const entreprise = entrepriseResult.rows[0];
@@ -209,6 +223,11 @@ router.post('/register', async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    await logAuditEvent({
+      entrepriseId: entreprise.id, userId: user.id, email: user.email, action: 'trial_started', req,
+      details: { trialDays: TRIAL_DAYS },
+    });
 
     // isPlatformAdmin toujours false ici : ce flag ne peut être activé que
     // manuellement en base (voir requirePlatformAdmin.js) — une inscription normale

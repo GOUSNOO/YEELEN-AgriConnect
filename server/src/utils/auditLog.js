@@ -6,6 +6,15 @@
 // email inconnu n'a ni l'un ni l'autre.
 import { pool } from '../db.js';
 
+// x-forwarded-for peut contenir plusieurs IP séparées par des virgules (proxys en chaîne) —
+// on ne garde que la première, celle du client d'origine. `req?.ip` sert de repli quand
+// l'en-tête n'est pas présent (connexion directe, sans proxy). Extrait ici (au lieu de rester
+// dupliqué inline) car utilisé par un 3e appelant depuis l'abonnement Phase 1 (limite
+// d'inscriptions par IP, routes/auth.js) en plus de logAuditEvent et utils/mfaCode.js.
+export function extraireIp(req) {
+  return req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || null;
+}
+
 // Enregistre un événement du journal d'audit (connexions, puis actions sensibles
 // à venir) sans jamais faire échouer l'appelant si l'écriture échoue — le journal
 // d'audit est un outil de diagnostic, pas une dépendance critique du chemin
@@ -13,10 +22,7 @@ import { pool } from '../db.js';
 // d'écriture dans `audit_log`).
 export async function logAuditEvent({ entrepriseId = null, userId = null, email = null, action, req, details = null }) {
   try {
-    // x-forwarded-for peut contenir plusieurs IP séparées par des virgules (proxys en
-    // chaîne) — on ne garde que la première, celle du client d'origine. `req?.ip` sert
-    // de repli quand l'en-tête n'est pas présent (connexion directe, sans proxy).
-    const ipAddress = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || null;
+    const ipAddress = extraireIp(req);
     const userAgent = req?.headers?.['user-agent'] || null;
 
     // `details` est stocké en JSONB : on sérialise nous-mêmes en JSON.stringify plutôt
@@ -48,6 +54,27 @@ export async function countRecentAuditEvents(email, actions, sinceMinutes = 60) 
     return result.rows[0]?.n ?? 0;
   } catch (err) {
     console.error('[countRecentAuditEvents]', err);
+    return 0;
+  }
+}
+
+// Même principe que countRecentAuditEvents mais par IP plutôt que par email — sert à limiter
+// le nombre d'inscriptions abouties (`trial_started`) depuis une même adresse (abonnement
+// Phase 1, anti-abus). IP null (jamais capturée) ne compte jamais rien : `WHERE ip_address = $1`
+// avec $1=null ne matche aucune ligne en SQL, donc pas de faux-blocage si l'IP est indisponible.
+export async function countRecentAuditEventsByIp(ipAddress, actions, sinceMinutes = 60) {
+  if (!ipAddress) return 0;
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM audit_log
+       WHERE ip_address = $1
+         AND action = ANY($2)
+         AND created_at > now() - ($3 || ' minutes')::interval`,
+      [ipAddress, actions, String(sinceMinutes)]
+    );
+    return result.rows[0]?.n ?? 0;
+  } catch (err) {
+    console.error('[countRecentAuditEventsByIp]', err);
     return 0;
   }
 }
