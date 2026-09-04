@@ -13,6 +13,7 @@ import { authRequired } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { logAuditEvent, getAuditLog, countRecentAuditEvents, countRecentAuditEventsByIp, extraireIp } from '../utils/auditLog.js';
 import { TRIAL_DAYS } from '../config/abonnement.js';
+import { verifierRecaptcha } from '../utils/recaptcha.js';
 import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfaCode.js';
 import { sendMfaCodeEmail } from '../services/mailer.js';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
@@ -66,10 +67,18 @@ const PAYMENT_TERMS_PAR_DEFAUT = [
 // la toute nouvelle entreprise qu'il vient de créer (pas de rejoindre une entreprise
 // existante depuis cette route).
 router.post('/register', async (req, res) => {
-  const { email, password, nomEntreprise, typeCompte, siret, devise, locale } = req.body;
+  const { email, password, nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis.' });
+  }
+
+  // reCAPTCHA v3 (Lot 3, inspiré du module Odoo google_recaptcha) : repli gracieux total tant
+  // que RECAPTCHA_SECRET_KEY n'est pas configuré (voir utils/recaptcha.js) — ne bloque jamais
+  // en dev/avant que l'utilisateur ait créé ses clés Google.
+  const recaptcha = await verifierRecaptcha(recaptchaToken, 'register');
+  if (!recaptcha.ok) {
+    return res.status(400).json({ error: 'Vérification anti-robot échouée. Réessayez.' });
   }
 
   // Deux types de comptes possibles : 'entreprise' (avec SIRET optionnel) ou

@@ -1,10 +1,20 @@
 // Abonnement Phase 1 (2026-09-04) — Lot 1 : schéma + hook d'inscription (essai 45 j) +
 // limite d'inscriptions par IP. Lot 2 : garde-fou d'accès (subscriptionGuard/evaluerAcces).
+// Lot 3 : administration (/api/billing/entreprises*) + reCAPTCHA v3 sur l'inscription.
 // Voir docs/spec-abonnement-phase1.md.
 import { app, pool, request, registerEntreprise, uniqueEmail, createProduit, setEntrepriseSubscription } from './helpers.js';
 import { evaluerAcces } from '../../middleware/subscriptionGuard.js';
 
 afterAll(async () => { await pool.end(); });
+
+// Passe le compte en platform admin puis renvoie un token frais (isPlatformAdmin est une
+// claim du JWT, il faut se reconnecter — même patron que feedback.test.js).
+async function promotePlatformAdmin(admin) {
+  await pool.query('UPDATE users SET is_platform_admin = true WHERE LOWER(email) = LOWER($1)', [admin.email]);
+  const login = await request(app).post('/api/auth/login').send({ email: admin.email, password: admin.password });
+  expect(login.status).toBe(200);
+  return login.body.token;
+}
 
 describe('Inscription — pose trial_ends_at / subscription_status', () => {
   test('register crée une entreprise en trial, trial_ends_at ≈ now + 45 jours', async () => {
@@ -165,5 +175,171 @@ describe('GET /api/billing/status', () => {
     expect(res.body.status).toBe('trial');
     expect(res.body.daysLeft).toBeGreaterThanOrEqual(44);
     expect(res.body.daysLeft).toBeLessThanOrEqual(45);
+  });
+});
+
+describe('Administration /api/billing/entreprises* (platform-admin uniquement)', () => {
+  test('un admin normal (non platform-admin) reçoit 403 sur toutes les routes', async () => {
+    const admin = await registerEntreprise();
+    const list = await request(app).get('/api/billing/entreprises').set('Authorization', `Bearer ${admin.token}`);
+    expect(list.status).toBe(403);
+    const activer = await request(app).post(`/api/billing/entreprises/${admin.entrepriseId}/activer`)
+      .set('Authorization', `Bearer ${admin.token}`).send({ periodeMois: 1 });
+    expect(activer.status).toBe(403);
+  });
+
+  test('GET /entreprises (paginé) et GET /entreprises/:id : un platform-admin voit la liste', async () => {
+    const admin = await registerEntreprise();
+    const platformToken = await promotePlatformAdmin(admin);
+
+    const cible = await registerEntreprise();
+    const list = await request(app).get('/api/billing/entreprises?pageSize=5')
+      .set('Authorization', `Bearer ${platformToken}`);
+    expect(list.status).toBe(200);
+    expect(list.body.total).toBeGreaterThan(0);
+    expect(Array.isArray(list.body.entreprises)).toBe(true);
+
+    const detail = await request(app).get(`/api/billing/entreprises/${cible.entrepriseId}`)
+      .set('Authorization', `Bearer ${platformToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.entreprise.id).toBe(cible.entrepriseId);
+    expect(detail.body.paiements).toEqual([]);
+  });
+
+  test('POST .../activer : passe en active, étend activated_until, crée une ligne abonnement_paiements', async () => {
+    const admin = await registerEntreprise();
+    const platformToken = await promotePlatformAdmin(admin);
+    const cible = await registerEntreprise();
+
+    const res = await request(app).post(`/api/billing/entreprises/${cible.entrepriseId}/activer`)
+      .set('Authorization', `Bearer ${platformToken}`)
+      .send({ montant: 15000, devise: 'XOF', moyen: 'virement', reference: 'REF-1', periodeMois: 12, note: 'test' });
+    expect(res.status).toBe(200);
+    expect(res.body.subscriptionStatus).toBe('active');
+
+    const { rows } = await pool.query(
+      `SELECT subscription_status AS "subscriptionStatus", activated_until AS "activatedUntil" FROM entreprises WHERE id = $1`,
+      [cible.entrepriseId]
+    );
+    expect(rows[0].subscriptionStatus).toBe('active');
+    const joursRestants = (new Date(rows[0].activatedUntil) - new Date()) / 86400000;
+    expect(joursRestants).toBeGreaterThan(364);
+
+    const paiements = await pool.query('SELECT * FROM abonnement_paiements WHERE entreprise_id = $1', [cible.entrepriseId]);
+    expect(paiements.rows).toHaveLength(1);
+    expect(Number(paiements.rows[0].montant)).toBe(15000);
+    expect(paiements.rows[0].moyen).toBe('virement');
+
+    const audit = await pool.query(
+      `SELECT details FROM audit_log WHERE entreprise_id = $1 AND action = 'subscription_activated'`,
+      [cible.entrepriseId]
+    );
+    expect(audit.rows).toHaveLength(1);
+
+    // Accès réellement restauré après une expiration (pas seulement la colonne en base).
+    await setEntrepriseSubscription(cible.entrepriseId, {});
+    const getRes = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${cible.token}`);
+    expect(getRes.status).toBe(200);
+  });
+
+  test('POST .../prolonger : étend trial_ends_at pendant un essai, sans créer de paiement', async () => {
+    const admin = await registerEntreprise();
+    const platformToken = await promotePlatformAdmin(admin);
+    const cible = await registerEntreprise();
+    const avant = (await pool.query('SELECT trial_ends_at FROM entreprises WHERE id = $1', [cible.entrepriseId])).rows[0].trial_ends_at;
+
+    const res = await request(app).post(`/api/billing/entreprises/${cible.entrepriseId}/prolonger`)
+      .set('Authorization', `Bearer ${platformToken}`).send({ jours: 10, raison: 'geste commercial' });
+    expect(res.status).toBe(200);
+
+    const apres = (await pool.query('SELECT trial_ends_at FROM entreprises WHERE id = $1', [cible.entrepriseId])).rows[0].trial_ends_at;
+    expect((new Date(apres) - new Date(avant)) / 86400000).toBeCloseTo(10, 0);
+
+    const paiements = await pool.query('SELECT * FROM abonnement_paiements WHERE entreprise_id = $1', [cible.entrepriseId]);
+    expect(paiements.rows).toHaveLength(0);
+  });
+
+  test('POST .../suspendre puis .../reactiver : bloque puis restaure un accès cohérent avec les dates', async () => {
+    const admin = await registerEntreprise();
+    const platformToken = await promotePlatformAdmin(admin);
+    const cible = await registerEntreprise();
+
+    const suspendre = await request(app).post(`/api/billing/entreprises/${cible.entrepriseId}/suspendre`)
+      .set('Authorization', `Bearer ${platformToken}`).send({ raison: 'abus constaté' });
+    expect(suspendre.status).toBe(200);
+    const bloque = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${cible.token}`);
+    expect(bloque.status).toBe(402);
+    expect(bloque.body.reason).toBe('suspended');
+
+    const reactiver = await request(app).post(`/api/billing/entreprises/${cible.entrepriseId}/reactiver`)
+      .set('Authorization', `Bearer ${platformToken}`);
+    expect(reactiver.status).toBe(200);
+    expect(reactiver.body.subscriptionStatus).toBe('trial');
+    const restaure = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${cible.token}`);
+    expect(restaure.status).toBe(200);
+  });
+
+  test('POST .../exempter : true rend l\'accès permanent même très expiré, false recalcule depuis les dates', async () => {
+    const admin = await registerEntreprise();
+    const platformToken = await promotePlatformAdmin(admin);
+    const cible = await registerEntreprise();
+    await setEntrepriseSubscription(cible.entrepriseId, { trialEndsAt: new Date(Date.now() - 400 * 86400000).toISOString() });
+
+    const exempter = await request(app).post(`/api/billing/entreprises/${cible.entrepriseId}/exempter`)
+      .set('Authorization', `Bearer ${platformToken}`).send({ exempt: true });
+    expect(exempter.status).toBe(200);
+    expect(exempter.body.subscriptionStatus).toBe('exempt');
+    const ok = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${cible.token}`);
+    expect(ok.status).toBe(200);
+
+    const retirer = await request(app).post(`/api/billing/entreprises/${cible.entrepriseId}/exempter`)
+      .set('Authorization', `Bearer ${platformToken}`).send({ exempt: false });
+    expect(retirer.status).toBe(200);
+    expect(retirer.body.subscriptionStatus).toBe('expired');
+    const bloque = await request(app).get('/api/produits?module=Cultures').set('Authorization', `Bearer ${cible.token}`);
+    expect(bloque.status).toBe(402);
+  });
+});
+
+describe('reCAPTCHA v3 sur l\'inscription (repli gracieux si non configuré)', () => {
+  test('sans RECAPTCHA_SECRET_KEY configuré : passe toujours, avec ou sans token', async () => {
+    delete process.env.RECAPTCHA_SECRET_KEY;
+    const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', '203.0.113.99').send({
+      email: uniqueEmail('norecaptcha'), password: 'Passw0rd!', nomEntreprise: 'Sans reCAPTCHA', typeCompte: 'entreprise',
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test('configuré + score insuffisant renvoyé par Google : 400, aucune entreprise créée', async () => {
+    process.env.RECAPTCHA_SECRET_KEY = 'fake-secret-for-test';
+    const fetchOriginal = global.fetch;
+    global.fetch = async () => ({ json: async () => ({ success: true, action: 'register', score: 0.1 }) });
+    try {
+      const email = uniqueEmail('badrecaptcha');
+      const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', '203.0.113.98').send({
+        email, password: 'Passw0rd!', nomEntreprise: 'Score insuffisant', typeCompte: 'entreprise', recaptchaToken: 'x',
+      });
+      expect(res.status).toBe(400);
+      const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+      expect(rows).toHaveLength(0);
+    } finally {
+      global.fetch = fetchOriginal;
+      delete process.env.RECAPTCHA_SECRET_KEY;
+    }
+  });
+
+  test('configuré + siteverify indisponible (erreur réseau) : repli gracieux, inscription passe', async () => {
+    process.env.RECAPTCHA_SECRET_KEY = 'fake-secret-for-test';
+    const fetchOriginal = global.fetch;
+    global.fetch = async () => { throw new Error('réseau indisponible'); };
+    try {
+      const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', '203.0.113.97').send({
+        email: uniqueEmail('recaptchadown'), password: 'Passw0rd!', nomEntreprise: 'Réseau HS', typeCompte: 'entreprise', recaptchaToken: 'x',
+      });
+      expect(res.status).toBe(201);
+    } finally {
+      global.fetch = fetchOriginal;
+      delete process.env.RECAPTCHA_SECRET_KEY;
+    }
   });
 });
