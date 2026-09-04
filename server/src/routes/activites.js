@@ -7,7 +7,7 @@ import { pool } from '../db.js';
 
 const router = express.Router();
 
-const RESSOURCES_VALIDES = ['devis', 'contact', 'salarie'];
+const RESSOURCES_VALIDES = ['devis', 'contact', 'salarie', 'parcelle'];
 
 // Sans préfixe d'alias : réutilisée telle quelle dans INSERT/UPDATE ... RETURNING (pas de
 // jointure), qui n'ont pas d'alias "a" en portée — même précaution que DOCUMENT_COLUMNS

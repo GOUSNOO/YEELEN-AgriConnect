@@ -216,6 +216,13 @@
     "parcelleDeleteError": "Impossible de supprimer la parcelle.",
     "historiqueSaveError": "L'historique n'a pas pu être enregistré.",
     "confirmDeleteParcelle": "Supprimer la parcelle « {{nom}} » ? Cette action est irréversible.",
+    "planningTitle": "Plan d'intervention",
+    "dateSemis": "Date de semis",
+    "dateSemisError": "La date de semis n'a pas pu être enregistrée.",
+    "genererPlan": "Générer le plan",
+    "confirmGenererPlan": "Générer un plan d'intervention pour « {{nom}} » ? Cela ajoute de nouvelles tâches planifiées (les tâches d'une génération précédente ne sont pas supprimées).",
+    "planGenere": "Plan généré : {{count}} tâche(s) ajoutée(s).",
+    "planGenereError": "Impossible de générer le plan.",
     "vanneAction": {
       "vanne_auto_open": "Vanne ouverte automatiquement",
       "vanne_auto_close": "Vanne fermée automatiquement",

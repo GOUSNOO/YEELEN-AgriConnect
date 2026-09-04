@@ -214,6 +214,11 @@ export async function createParcelleHistorique(payload) {
   return safeRequest('/cultures/historique', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+// `cultureId` dans le corps désigne en réalité un parcelles.id (voir routes/planning.js).
+export async function generatePlanning(parcelleId) {
+  return request('/planning', { method: 'POST', body: JSON.stringify({ cultureId: parcelleId }) });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Cultures — Ventes / Achats
 // ─────────────────────────────────────────────────────────────────────

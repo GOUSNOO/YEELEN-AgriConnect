@@ -19,7 +19,7 @@ import {
   getContacts, createContact, updateContact, deleteContact,
   getContactTags, createContactTag, deleteContactTag,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
-  getParcellesHistorique, createParcelleHistorique,
+  getParcellesHistorique, createParcelleHistorique, generatePlanning,
   getCulturesMouvements,
   getProduits, createProduit, updateProduit, deleteProduit, getProduitMouvements,
   getProduitLots, createProduitLot, updateProduitLot, deleteProduitLot, getLotsPerimes,
@@ -3979,6 +3979,34 @@ function CulturesModule({ farmId, highlightProduitId }) {
     }
   };
 
+  const saveDateSemis = async (id, dateSemis) => {
+    try {
+      const { parcelle } = await updateParcelle(id, { dateSemis });
+      setParcelles(prev => prev.map(p => (p.id === id ? { ...p, dateSemis: parcelle.dateSemis } : p)));
+    } catch (err) {
+      console.error('[saveDateSemis]', err);
+      notifyError(err, t('cultures.dateSemisError'));
+    }
+  };
+
+  const [generatingPlanId, setGeneratingPlanId] = useState(null);
+  const [planningOpenId, setPlanningOpenId] = useState(null);
+
+  const handleGenererPlan = async (id, nom) => {
+    if (!window.confirm(t('cultures.confirmGenererPlan', { nom }))) return;
+    setGeneratingPlanId(id);
+    try {
+      const res = await generatePlanning(id);
+      notifySuccess(t('cultures.planGenere', { count: res.activitesCreees?.length || 0 }));
+      setPlanningOpenId(id);
+    } catch (err) {
+      console.error('[handleGenererPlan]', err);
+      notifyError(err, t('cultures.planGenereError'));
+    } finally {
+      setGeneratingPlanId(null);
+    }
+  };
+
   if (!loaded) {
     return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
       <Loader2 size={18} className="spin" /> {t('cultures.loadingParcelles')}
@@ -4060,6 +4088,35 @@ function CulturesModule({ farmId, highlightProduitId }) {
                 >
                   {p.vanneOuverte ? t('cultures.valveOpen') : t('cultures.valveClosed')}
                 </Button>
+              </div>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
+                <button
+                  onClick={() => setPlanningOpenId(id => (id === p.id ? null : p.id))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                >
+                  <ChevronRight size={14} style={{ transform: planningOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                  {t('cultures.planningTitle')}
+                </button>
+                {planningOpenId === p.id && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Field
+                      label={t('cultures.dateSemis')}
+                      type="date"
+                      defaultValue={p.dateSemis || ''}
+                      onBlur={e => { if (e.target.value !== (p.dateSemis || '')) saveDateSemis(p.id, e.target.value || null); }}
+                    />
+                    <Button
+                      small
+                      variant="outline"
+                      disabled={generatingPlanId === p.id}
+                      onClick={() => handleGenererPlan(p.id, p.nom)}
+                    >
+                      {generatingPlanId === p.id ? <Loader2 size={13} className="spin" /> : <ClipboardList size={13} />}
+                      {t('cultures.genererPlan')}
+                    </Button>
+                    <ActivitesSection ressourceType="parcelle" ressourceId={p.id} />
+                  </div>
+                )}
               </div>
             </Card>
           );

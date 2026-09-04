@@ -216,6 +216,13 @@
     "parcelleDeleteError": "Could not delete the plot.",
     "historiqueSaveError": "The history could not be saved.",
     "confirmDeleteParcelle": "Delete plot “{{nom}}”? This action cannot be undone.",
+    "planningTitle": "Intervention plan",
+    "dateSemis": "Planting date",
+    "dateSemisError": "The planting date could not be saved.",
+    "genererPlan": "Generate plan",
+    "confirmGenererPlan": "Generate an intervention plan for “{{nom}}”? This adds new scheduled tasks (tasks from a previous generation are not removed).",
+    "planGenere": "Plan generated: {{count}} task(s) added.",
+    "planGenereError": "Could not generate the plan.",
     "vanneAction": {
       "vanne_auto_open": "Valve opened automatically",
       "vanne_auto_close": "Valve closed automatically",

@@ -648,6 +648,10 @@ ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS vanne_ouverte BOOLEAN NOT NULL DE
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS seuil         NUMERIC(5, 2) NOT NULL DEFAULT 35;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS pos_x         NUMERIC(5, 2) NOT NULL DEFAULT 50;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS pos_y         NUMERIC(5, 2) NOT NULL DEFAULT 50;
+-- Date de semis (optionnelle) : point de départ réel pour le calendrier d'intervention
+-- généré par POST /api/planning (server/src/services/cultureService.js) — sans elle, le
+-- calendrier se calcule depuis la date du jour (comportement de repli, pas une erreur).
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS date_semis    DATE;
 
 -- Historique des vannes, lié aux parcelles existantes par id entier
 CREATE TABLE IF NOT EXISTS parcelles_historique (
