@@ -660,6 +660,12 @@ ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS ville         TEXT;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS latitude      NUMERIC(9, 6);
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS longitude     NUMERIC(9, 6);
 
+-- Agriculture de précision (voir routes/precisionAgricole.js) — id du polygone créé côté
+-- Agromonitoring pour l'historique NDVI (carré approximatif dérivé de latitude/longitude/
+-- superficie, voir utils/agroPolygon.js). Remis à NULL dès que l'un de ces trois champs
+-- change (PUT /cultures/parcelles/:id), pour forcer une recréation au prochain appel NDVI.
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS agro_polygon_id TEXT;
+
 -- Historique des vannes, lié aux parcelles existantes par id entier
 CREATE TABLE IF NOT EXISTS parcelles_historique (
   id           SERIAL PRIMARY KEY,

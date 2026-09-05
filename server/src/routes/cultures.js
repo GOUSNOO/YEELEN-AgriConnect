@@ -68,8 +68,23 @@ router.post('/parcelles', authRequired, async (req, res) => {
 });
 
 router.put('/parcelles/:id', authRequired, async (req, res) => {
-  const { nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, dateSemis, ville, latitude, longitude } = req.body;
+  const { nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie, dateSemis, ville, latitude, longitude } = req.body;
   try {
+    // Avant écriture : la localisation/superficie actuelle sert à savoir si le polygone
+    // Agromonitoring (agro_polygon_id, voir routes/precisionAgricole.js) doit être invalidé —
+    // il ne représente plus la bonne zone dès que l'un des trois change.
+    const avant = await pool.query(
+      'SELECT latitude::float8 AS latitude, longitude::float8 AS longitude, superficie::float8 AS superficie FROM parcelles WHERE id = $1 AND entreprise_id = $2',
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (avant.rows.length === 0) {
+      return res.status(404).json({ error: 'Parcelle introuvable.' });
+    }
+    const localisationChangee =
+      (latitude !== undefined && Number(latitude) !== avant.rows[0].latitude) ||
+      (longitude !== undefined && Number(longitude) !== avant.rows[0].longitude) ||
+      (superficie !== undefined && Number(superficie) !== avant.rows[0].superficie);
+
     const result = await pool.query(
       `UPDATE parcelles SET
          nom = COALESCE($1, nom),
@@ -81,17 +96,16 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
          seuil = COALESCE($7, seuil),
          pos_x = COALESCE($8, pos_x),
          pos_y = COALESCE($9, pos_y),
-         date_semis = COALESCE($10, date_semis),
-         ville = COALESCE($11, ville),
-         latitude = COALESCE($12, latitude),
-         longitude = COALESCE($13, longitude)
-       WHERE id = $14 AND entreprise_id = $15
+         superficie = COALESCE($10, superficie),
+         date_semis = COALESCE($11, date_semis),
+         ville = COALESCE($12, ville),
+         latitude = COALESCE($13, latitude),
+         longitude = COALESCE($14, longitude),
+         agro_polygon_id = CASE WHEN $15 THEN NULL ELSE agro_polygon_id END
+       WHERE id = $16 AND entreprise_id = $17
        RETURNING ${PARCELLE_COLUMNS}`,
-      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, dateSemis, ville, latitude, longitude, req.params.id, req.user.entrepriseId]
+      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie, dateSemis, ville, latitude, longitude, localisationChangee, req.params.id, req.user.entrepriseId]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Parcelle introuvable.' });
-    }
     return res.json({ parcelle: result.rows[0] });
   } catch (err) {
     console.error('[PUT /parcelles]', err);
