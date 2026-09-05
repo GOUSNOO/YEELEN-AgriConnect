@@ -1878,3 +1878,73 @@ navigateur, par prudence — cette action bloquerait la session si un dialogue n
 déclenchait) : le flux réel de clic sur « Suspendre »/« Exempter » dans `BillingAdminPanel`
 depuis le navigateur — couvert uniquement par Jest (mock de `window.confirm`) et par l'API
 directe. À vérifier au clic si un bug y est un jour signalé.
+
+### Correctif : planning générique remplacé par un vrai calendrier par culture (2026-09-05)
+
+`cultureService.js` renvoyait le même calendrier générique (5 jalons) quelle que soit la
+culture. Remplacé par `CALENDRIERS_PAR_CULTURE` (~10 cultures répandues, correspondance
+insensible casse/accents) + repli générique conservé pour toute culture non reconnue. Les
+dates se calculent désormais depuis `parcelles.date_semis` (nouvelle colonne) si renseignée,
+sinon depuis aujourd'hui comme avant — piège de décalage de fuseau horaire (pg `DATE` → JS
+`Date`) trouvé et corrigé en écrivant tout en UTC (`setUTCDate`, jamais `setDate`). Chaque
+jalon généré est désormais persisté comme une `activites` (`ressourceType:'parcelle'`,
+`RESSOURCES_VALIDES` étendu), réutilisant le modèle déjà en place pour devis/contact/salarie
+au lieu du `savePlanningToDB` commenté. Frontend : section pliable « Plan d'intervention »
+ajoutée sur chaque carte parcelle (`CulturesModule`), avec `<ActivitesSection>` réutilisé tel
+quel. 4 tests, suite verte (270/270). Vérifié en réel (Docker + navigateur, calendriers
+distincts Maïs/culture inconnue, dates correctes depuis une vraie date de semis).
+
+### Module Pisciculture (2026-09-05)
+
+Dernier item « Could have » du MoSCoW jamais commencé, choisi comme prochain chantier.
+Demande explicite de l'utilisateur : s'appuyer sur un projet open source mature plutôt que
+tout reconstruire, en particulier regarder du côté d'Odoo. **Recherche menée avant tout
+code** : cœur Odoo (632 modules, clone source local) → rien. Dépôt communautaire dédié
+`OCA/vertical-agriculture` → coquille vide jamais peuplée (3 commits, toutes branches
+8.0→19.0, README dit littéralement que la table des modules « sera remplacée » — jamais
+fait). Recherche plus large GitHub/GitLab (API publique interrogée directement) → rien de
+mature, seulement des prototypes IoT (capteurs LoRaWAN, STM32) ou un schéma de données FIWARE
+Smart Data Models explicitement « en cours de spécification » (2 contributeurs). Décision
+validée avec l'utilisateur : mirroir du module **Poulailler** déjà construit et éprouvé,
+complété par le vocabulaire qualité de l'eau du schéma FIWARE (`FishContainment`/`Sump` : pH,
+oxygène dissous, température) pour la partie sans équivalent côté Poulailler.
+
+**Découverte structurante avant d'écrire du code** : le stock de Poulailler ne vit plus dans
+une table dédiée depuis l'alignement Odoo du 2026-08-18 — `produits`/`produit_categories`/
+`produit_templates` sont le catalogue unifié, avec `module` contraint par un `CHECK` codé en
+dur à 4 endroits (+ achats_documents) et par des tableaux littéraux `['Cultures',
+'Poulailler']` répétés dans ~8 validations de routes et dans `stockSync.js` (qui **no-op
+silencieusement**, sans erreur, pour un module non reconnu — piège réel identifié avant
+d'écrire le code). La propre ledger « mouvements » de Poulailler (texte libre + sync
+finances) s'est révélée être un vestige : ses 4 fonctions `create/update/delete
+PoulaillerMouvement` côté `api.js` ne sont appelées nulle part dans `App.jsx`, supplantées
+par le flux devis/achats_documents déjà branché sur le vrai stock — délibérément **pas**
+reproduite pour Pisciculture.
+
+- **Lots 1-2 (backend)** : 4 `CHECK` étendus (drop+recreate idempotent), nouvelles tables
+  `pisciculture_livraisons`/`pisciculture_suivi` (`entreprise_id`/`user_id` dès la création,
+  pas de retrofit comme Poulailler avait dû le faire), nouveau `routes/pisciculture.js`
+  (mirroir de la portion livraisons+suivi de `poulailler.js` uniquement), whitelists étendues
+  partout (`produits.js`, `produitCategories.js`, `produitTemplates.js`, `achats.js` ×4,
+  `stockSync.js` ×2, `devis.js`). Catégories par défaut (Aliment/Poissons vivants/Alevins/
+  Autre) seedées à l'inscription + backfill pour les 11 entreprises existantes. 5 tests
+  (livraisons/suivi/isolation + synchro stock réelle vérifiée via un cycle achat complet).
+  Migration rejouée sur copie de sauvegarde puis appliquée réellement. Commit `41a2d02`.
+- **Lots 3-4 (frontend)** : nouveau `PiscicultureModule`, réutilisation telle quelle de
+  `StocksTab`/`VentesWithDevis`/`AchatModule`/`ComptabiliteTab` (`moduleType="Pisciculture"`)
+  — aucun changement à ces composants génériques. 3 onglets dédiés nouveaux (mirroirs
+  Poulailler) : `BassinsEnvironnementTab` (pH/oxygène dissous/température, simulation client
+  pure, aucun backend — comme `EnvironnementTab`), `PiscicultureMonitoringTab` (suivi
+  quotidien : mortalité/croissance/alimentation/traitement), `PiscicultureLivraisonsTab`.
+  Câblage complet du shell (`ModulesScreen`, `roles.js`, `availableTabs`, ternaire de
+  deep-link recherche globale devenu une vraie table de correspondance, `HelpModule`). i18n
+  fr/en complet (~50 clés). Commit `fbc8037`.
+- **Vérification finale** : suite complète verte (275 intégration + 1 unitaire backend, 96
+  frontend), build OK. Vérifié en réel sur entreprise jetable (Docker reconstruit + Chrome) :
+  les 7 onglets (Bassins avec jauges pH/oxygène/température + graphiques, Suivi avec ajout
+  d'entrée croissance fonctionnel, Stocks avec articles de démarrage pré-seedés et catégorie
+  présélectionnée, Ventes avec le flux devis complet, Achats avec le formulaire multi-lignes,
+  Livraisons avec création fonctionnelle, Comptabilité) rendus et exercés avec succès.
+  Entreprise de test nettoyée (cascade `ON DELETE` désormais complète pour `produits`/
+  `produit_categories`/`pisciculture_*` — plus besoin du nettoyage manuel multi-tables
+  documenté pour d'anciennes entreprises de test).
