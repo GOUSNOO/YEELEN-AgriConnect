@@ -3,6 +3,7 @@ import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import { syncFinanceEntry, removeFinanceEntry, updateFinanceEntry } from '../utils/financeSync.js';
 import { logMouvementHistorique, getMouvementHistorique, getAllMouvementHistorique } from '../utils/mouvementHistorique.js';
+import { supprimerPolygone } from '../utils/agroPolygon.js';
 
 const router = express.Router();
 
@@ -74,7 +75,7 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
     // Agromonitoring (agro_polygon_id, voir routes/precisionAgricole.js) doit être invalidé —
     // il ne représente plus la bonne zone dès que l'un des trois change.
     const avant = await pool.query(
-      'SELECT latitude::float8 AS latitude, longitude::float8 AS longitude, superficie::float8 AS superficie FROM parcelles WHERE id = $1 AND entreprise_id = $2',
+      'SELECT latitude::float8 AS latitude, longitude::float8 AS longitude, superficie::float8 AS superficie, agro_polygon_id AS "agroPolygonId" FROM parcelles WHERE id = $1 AND entreprise_id = $2',
       [req.params.id, req.user.entrepriseId]
     );
     if (avant.rows.length === 0) {
@@ -84,6 +85,9 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
       (latitude !== undefined && Number(latitude) !== avant.rows[0].latitude) ||
       (longitude !== undefined && Number(longitude) !== avant.rows[0].longitude) ||
       (superficie !== undefined && Number(superficie) !== avant.rows[0].superficie);
+    if (localisationChangee && avant.rows[0].agroPolygonId) {
+      supprimerPolygone(avant.rows[0].agroPolygonId, process.env.AGRO_API_KEY);
+    }
 
     const result = await pool.query(
       `UPDATE parcelles SET
