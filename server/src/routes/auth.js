@@ -38,6 +38,10 @@ const CATEGORIES_PRODUITS_PAR_DEFAUT = [
   { module: 'Poulailler', nom: 'Œufs', ordre: 1 },
   { module: 'Poulailler', nom: 'Volailles vivantes', ordre: 2 },
   { module: 'Poulailler', nom: 'Autre', ordre: 3 },
+  { module: 'Pisciculture', nom: 'Aliment', ordre: 0 },
+  { module: 'Pisciculture', nom: 'Poissons vivants', ordre: 1 },
+  { module: 'Pisciculture', nom: 'Alevins', ordre: 2 },
+  { module: 'Pisciculture', nom: 'Autre', ordre: 3 },
 ];
 
 // Types de congés par défaut d'une nouvelle entreprise (mêmes valeurs que

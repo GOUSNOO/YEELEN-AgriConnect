@@ -175,7 +175,7 @@ async function mouvementStock(kind, module, entrepriseId, stockId, nom, delta, c
 
 // Achats : incrémente le stock du module du document (entrée en stock).
 export async function applyAchatLignesToStock(entrepriseId, module, lignes, ctx) {
-  if (!['Cultures', 'Poulailler'].includes(module)) return;
+  if (!['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) return;
   for (const ligne of lignes) {
     await mouvementStock('reception', module, entrepriseId, ligne.stockId, ligne.produit, Number(ligne.quantite) || 0, ctx, ligne.uomId);
   }
@@ -184,7 +184,7 @@ export async function applyAchatLignesToStock(entrepriseId, module, lignes, ctx)
 // Inverse d'applyAchatLignesToStock — utilisé à la suppression d'un achat, ou pour
 // annuler l'ancien état avant d'appliquer les nouvelles lignes lors d'une modification.
 export async function reverseAchatLignesFromStock(entrepriseId, module, lignes, ctx) {
-  if (!['Cultures', 'Poulailler'].includes(module)) return;
+  if (!['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) return;
   for (const ligne of lignes) {
     await mouvementStock('retour_achat', module, entrepriseId, ligne.stockId, ligne.produit, -(Number(ligne.quantite) || 0), ctx, ligne.uomId);
   }

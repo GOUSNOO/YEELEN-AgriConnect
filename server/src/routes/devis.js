@@ -56,7 +56,7 @@ async function validerRecolteIds(dbClient, lignes, entrepriseId) {
 // (Map plutôt qu'un simple Set) — sert aussi de repli pour l'unité par défaut d'une ligne
 // quand aucun uomId n'est fourni explicitement (étape 1 UoM, même logique qu'achats.js).
 async function validerStockLigneIds(dbClient, lignes, entrepriseId) {
-  const parModule = { Cultures: new Map(), Poulailler: new Map() };
+  const parModule = { Cultures: new Map(), Poulailler: new Map(), Pisciculture: new Map() };
   for (const module of Object.keys(parModule)) {
     const ids = [...new Set(lignes.filter(l => l.stockModule === module && l.stockId).map(l => l.stockId))];
     if (ids.length === 0) continue;

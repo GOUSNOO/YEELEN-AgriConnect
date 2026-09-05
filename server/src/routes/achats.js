@@ -31,7 +31,7 @@ const LIGNE_COLUMNS = `
 // l'unité par défaut d'une ligne quand aucun uomId n'est fourni (étape 1 UoM).
 async function validerStockIds(client, module, lignes, entrepriseId) {
   const ids = [...new Set(lignes.map(l => l.stockId).filter(Boolean))];
-  if (!['Cultures', 'Poulailler'].includes(module) || ids.length === 0) return new Map();
+  if (!['Cultures', 'Poulailler', 'Pisciculture'].includes(module) || ids.length === 0) return new Map();
   const result = await client.query(
     'SELECT id, unite_id AS "uniteId" FROM produits WHERE id = ANY($1::int[]) AND entreprise_id = $2 AND module = $3',
     [ids, entrepriseId, module]
@@ -145,7 +145,7 @@ router.get('/:id', authRequired, async (req, res) => {
 
 router.post('/', authRequired, async (req, res) => {
   const { module, fournisseurId, fournisseurNom, notes, date, lignes } = req.body;
-  if (!module || !['Cultures', 'Poulailler'].includes(module)) {
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) {
     return res.status(400).json({ error: 'Le module est requis et doit être Cultures ou Poulailler.' });
   }
   if (!fournisseurId && !fournisseurNom) {
@@ -200,7 +200,7 @@ router.post('/', authRequired, async (req, res) => {
 
 router.put('/:id', authRequired, async (req, res) => {
   const { module, fournisseurId, fournisseurNom, notes, date, lignes } = req.body;
-  if (!module || !['Cultures', 'Poulailler'].includes(module)) {
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) {
     return res.status(400).json({ error: 'Le module est requis et doit être Cultures ou Poulailler.' });
   }
   if (!fournisseurId && !fournisseurNom) {

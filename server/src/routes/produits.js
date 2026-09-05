@@ -143,7 +143,7 @@ router.get('/', authRequired, async (req, res) => {
 
 router.post('/', authRequired, async (req, res) => {
   const { module, nom, categorieId, quantite = 0, unite = '', uniteId, seuil = 0, prixDefaut, cout, templateId } = req.body;
-  if (!module || !['Cultures', 'Poulailler'].includes(module) || !nom || !categorieId) {
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module) || !nom || !categorieId) {
     return res.status(400).json({ error: 'module (Cultures/Poulailler), nom et categorieId sont requis.' });
   }
   const intrant = champsIntrant(req.body);

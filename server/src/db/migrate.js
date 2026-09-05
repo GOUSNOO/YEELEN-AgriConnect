@@ -1761,6 +1761,51 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_messages_ressource ON messages(ressource_type, ressource_id);
+
+-- ═══════════════ Module Pisciculture ═══════════════
+-- Mirroir de poulailler_livraisons/poulailler_suivi (routes/poulailler.js) — le stock
+-- (articles/quantités) vit dans le catalogue unifié produits/produit_categories (voir plus
+-- bas, extension du CHECK module), pas ici. entreprise_id/user_id sont inclus dès la création
+-- (contrairement à poulailler_livraisons/suivi historiquement retrofités par ALTER TABLE).
+CREATE TABLE IF NOT EXISTS pisciculture_livraisons (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  date          DATE NOT NULL DEFAULT CURRENT_DATE,
+  client        TEXT NOT NULL,
+  produit       TEXT NOT NULL,
+  quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  statut        TEXT NOT NULL DEFAULT 'En attente',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pisciculture_livraisons_entreprise_id ON pisciculture_livraisons(entreprise_id);
+
+-- Suivi quotidien (mortalité, croissance/pesée, alimentation, traitement)
+CREATE TABLE IF NOT EXISTS pisciculture_suivi (
+  id            SERIAL PRIMARY KEY,
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  date          DATE NOT NULL DEFAULT CURRENT_DATE,
+  type          TEXT NOT NULL,
+  quantite      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  detail        TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pisciculture_suivi_entreprise_id ON pisciculture_suivi(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_pisciculture_suivi_type ON pisciculture_suivi(type);
+
+-- Le catalogue unifié produits/produit_categories/produit_templates + achats_documents
+-- restreignent "module" par un CHECK codé en dur à sa création (voir plus haut) — DROP+ADD
+-- inconditionnel à chaque run (idempotent : élargit la liste sans jamais échouer si elle
+-- contient déjà 'Pisciculture').
+ALTER TABLE achats_documents    DROP CONSTRAINT IF EXISTS achats_documents_module_check;
+ALTER TABLE achats_documents    ADD CONSTRAINT achats_documents_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
+ALTER TABLE produit_categories  DROP CONSTRAINT IF EXISTS produit_categories_module_check;
+ALTER TABLE produit_categories  ADD CONSTRAINT produit_categories_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
+ALTER TABLE produits            DROP CONSTRAINT IF EXISTS produits_module_check;
+ALTER TABLE produits            ADD CONSTRAINT produits_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
+ALTER TABLE produit_templates   DROP CONSTRAINT IF EXISTS produit_templates_module_check;
+ALTER TABLE produit_templates   ADD CONSTRAINT produit_templates_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
 `;
 
 // Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre
@@ -1776,6 +1821,10 @@ const CATEGORIES_PAR_DEFAUT = [
   { module: 'Poulailler', nom: 'Œufs', ordre: 1 },
   { module: 'Poulailler', nom: 'Volailles vivantes', ordre: 2 },
   { module: 'Poulailler', nom: 'Autre', ordre: 3 },
+  { module: 'Pisciculture', nom: 'Aliment', ordre: 0 },
+  { module: 'Pisciculture', nom: 'Poissons vivants', ordre: 1 },
+  { module: 'Pisciculture', nom: 'Alevins', ordre: 2 },
+  { module: 'Pisciculture', nom: 'Autre', ordre: 3 },
 ];
 
 // Fusionne cultures_stocks/poulailler_stocks dans produits, repointe les 4 tables qui
@@ -2521,6 +2570,32 @@ async function seedPaymentTermsForExistingEntreprises() {
   }
 }
 
+// Module Pisciculture : les entreprises déjà existantes n'ont pas ces 4 catégories tant
+// qu'elles n'activent pas le module — les créer par avance pour que StocksTab ait de quoi
+// travailler dès la première activation (mirroir de seedPaymentTermsForExistingEntreprises
+// ci-dessus). Les nouvelles inscriptions les reçoivent déjà via
+// CATEGORIES_PRODUITS_PAR_DEFAUT dans routes/auth.js.
+async function seedPiscicultureCategoriesForExistingEntreprises() {
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM produit_categories pc WHERE pc.entreprise_id = e.id AND pc.module = 'Pisciculture')`
+  );
+  for (const { id } of entreprises) {
+    for (const cat of CATEGORIES_PAR_DEFAUT.filter((c) => c.module === 'Pisciculture')) {
+      await client.query(
+        `INSERT INTO produit_categories (entreprise_id, module, nom, ordre) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (entreprise_id, module, nom) DO NOTHING`,
+        [id, cat.module, cat.nom, cat.ordre]
+      );
+    }
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Pisciculture : catégories par défaut créées pour ${entreprises.length} entreprise(s).`);
+  } else {
+    console.log('ℹ️  Pisciculture : rien à créer (déjà fait).');
+  }
+}
+
 // Étape 2 Comptabilité : crée le plan de comptes + les journaux par défaut pour toute
 // entreprise qui n'a aucun journal. Idempotent (garde sur l'absence de account_journal +
 // ON CONFLICT DO NOTHING sur les deux tables). Mêmes listes que routes/auth.js (seed à
@@ -2851,6 +2926,7 @@ async function migrate() {
     await seedComptaConfigForExistingEntreprises();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();
+    await seedPiscicultureCategoriesForExistingEntreprises();
     await seedUnitesMesureForExistingEntreprises();
     await backfillProduitsUniteId();
     await backfillProduitsTemplates();
