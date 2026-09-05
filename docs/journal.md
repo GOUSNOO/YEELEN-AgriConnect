@@ -2173,3 +2173,34 @@ observations, aucune ne justifiant une correction non demandée :
 - **Équipements vérifié sain** — `EquipementsModule.jsx` utilise bien la totalité du CRUD
   équipements + sous-ressource maintenance (y compris `updateEquipement`, contrairement au
   pattern ci-dessus) ; aucun gap trouvé.
+
+### Jalon 1 — durcissement, dernier reliquat : auth/mfa/contacts/achats/banques/feedback/recherche (2026-09-05)
+
+Audit du dernier lot de routes non repassées cette session — les plus anciennes et déjà les
+plus exercées (passe API du 2026-08-13, correctifs du 2026-08-30). Lecture complète de chaque
+fichier (pas seulement le comptage croisé DELETE/PUT utilisé sur les lots précédents) vu leur
+poids sécurité/argent : `auth.js` (register transactionnel + tous les seeds par défaut,
+login avec ses 6 branches d'audit et messages génériques anti-énumération, rate-limit MFA/
+inscriptions), `mfa.js` (setup/verify/resend/disable TOTP+email). **Rien trouvé** — les deux
+fichiers sont solides, cohérents avec ce qui est déjà documenté.
+
+`contacts.js`/`achats.js`/`banques.js`/`feedback.js`/`recherche.js` : mêmes vérifications
+(existence checks DELETE/PUT, cloisonnement `entreprise_id`, paramétrage SQL) — tout est déjà
+correctement corrigé (banques : confirmé, le bug du 2026-08-30 ne s'est pas reproduit, la
+vérification se fait via `banquesService.js` et non `rowCount` directement, d'où un faux
+positif dans le grep automatisé du lot précédent). Une seule observation, mineure et déjà
+sans conséquence pratique : `GET /contacts/:id/prix-effectifs` (déjà notée comme sans aucun
+appelant frontend) interroge `listes_prix_lignes` avec un schéma **antérieur** à la réécriture
+du moteur de tarification Odoo étape 4 (2026-09-04) — `INNER JOIN produits ON id = stock_id`
+exclurait silencieusement toute règle `applied_on != 'variante'` (stock_id NULL), et ne gère
+pas le mode `pourcentage` (`prix` est NULL dans ce cas). Sans conséquence tant que rien ne
+l'appelle ; à corriger seulement si un jour un aperçu groupé des prix par contact est construit
+sur cette route.
+
+**Passe de durcissement Jalon 1/3 déclarée complète** pour cette session : tous les modules de
+l'app ont été repassés (Stock A/B/C, Pisciculture, Abonnement, Catalogue Odoo, Météo, RH,
+Comptabilité, Équipements, Cultures, auth/MFA/contacts/achats/banques/feedback/recherche). Un
+bug sévère trouvé et corrigé (signature publique de devis), un bug mineur trouvé et corrigé
+(`DELETE /produits/:id`), une poignée d'observations mineures documentées (ledgers morts,
+panneau unités de mesure absent, schéma de prix-effectifs par contact obsolète) — aucune ne
+bloquante, toutes signalées plutôt que corrigées sans confirmation.
