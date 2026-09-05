@@ -11,7 +11,7 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud
 } from 'lucide-react';
 import {
   clearToken,
@@ -45,12 +45,15 @@ import {
   getMessages, createMessage,
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte, updateRecolte, deleteRecolte,
-  getOnboardingStatus, updateOnboardingStatus, updateEntreprise,
+  getOnboardingStatus, updateOnboardingStatus, updateEntreprise, getEntreprise,
   getBillingStatus,
+  rechercherVilleMeteo, getMeteo, getParcellesLocalisees,
 } from './lib/api';
 import { getRecaptchaToken } from './lib/recaptcha.js';
 import BillingAdminPanel from './components/BillingAdminPanel';
 import AbonnementBloque from './components/AbonnementBloque';
+import MeteoModule from './components/MeteoModule';
+import MeteoWidget from './components/MeteoWidget';
 import { Badge, Button, Card, DataTable, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 import { ObservationListView } from './components/ObservationListView'; // Import the new component
 import { RegistreIntrantsView } from './components/RegistreIntrantsView';
@@ -4125,6 +4128,113 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
 
 const VANNE_ACTION_CODES = ['vanne_auto_open', 'vanne_auto_close', 'vanne_manual_open', 'vanne_manual_close'];
 
+// Section pliable « Météo de cette parcelle » (voir routes/meteo.js) — recherche de ville
+// optionnelle propre à la parcelle (même patron « au fil de la frappe » que ProfilModule/
+// GlobalSearch) ; si non renseignée, la météo affichée retombe sur la localisation de
+// l'entreprise (source indiquée par le backend).
+function ParcelleMeteoSection({ parcelle }) {
+  const { t } = useTranslation();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [villeQuery, setVilleQuery] = useState('');
+  const [villeResultats, setVilleResultats] = useState([]);
+  const [villeBusy, setVilleBusy] = useState(false);
+  const timerRef = useRef(null);
+  const reqIdRef = useRef(0);
+
+  const charger = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await getMeteo(parcelle.id));
+    } catch (err) {
+      setError(err.message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [parcelle.id]);
+
+  useEffect(() => { charger(); }, [charger]);
+
+  useEffect(() => {
+    clearTimeout(timerRef.current);
+    if (villeQuery.trim().length < 2) { setVilleResultats([]); return undefined; }
+    timerRef.current = setTimeout(async () => {
+      const myId = ++reqIdRef.current;
+      try {
+        const { villes } = await rechercherVilleMeteo(villeQuery.trim());
+        if (reqIdRef.current === myId) setVilleResultats(villes || []);
+      } catch (err) {
+        console.error('[ParcelleMeteoSection]', err);
+      }
+    }, 250);
+    return () => clearTimeout(timerRef.current);
+  }, [villeQuery]);
+
+  const choisirVille = async (v) => {
+    setVilleBusy(true);
+    try {
+      await updateParcelle(parcelle.id, { ville: v.nom, latitude: v.latitude, longitude: v.longitude });
+      setVilleQuery('');
+      setVilleResultats([]);
+      await charger();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setVilleBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ position: 'relative' }}>
+        <Field
+          label={t('cultures.meteoParcelleRecherche')}
+          placeholder={t('profil.locationSearchPlaceholder')}
+          value={villeQuery}
+          onChange={(e) => setVilleQuery(e.target.value)}
+        />
+        {villeResultats.length > 0 && (
+          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, marginTop: 4, overflow: 'hidden' }}>
+            {villeResultats.map((v, i) => (
+              <button
+                key={`${v.nom}-${i}`}
+                type="button"
+                disabled={villeBusy}
+                onClick={() => choisirVille(v)}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none' }}
+              >
+                {v.nom}{v.region ? `, ${v.region}` : ''}{v.pays ? ` — ${v.pays}` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+      ) : error ? (
+        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{error}</div>
+      ) : data ? (
+        <div style={{ fontSize: 12.5, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div>
+            <b>{data.ville}</b> ({data.source === 'parcelle' ? t('cultures.meteoParcelleSourcePropre') : t('cultures.meteoParcelleSourceEntreprise')})
+          </div>
+          <div>{t('meteo.temperature')} : {data.actuel.temperature}° · {t('meteo.humidite')} : {data.actuel.humidite}%</div>
+          {data.alertes.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {data.alertes.map((a) => (
+                <Badge key={a.type} tone={a.gravite === 'haute' ? 'red' : a.gravite === 'moyenne' ? 'ochre' : 'blue'}>{a.message}</Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CulturesModule({ farmId, highlightProduitId }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState('parcelles');
@@ -4295,6 +4405,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
 
   const [generatingPlanId, setGeneratingPlanId] = useState(null);
   const [planningOpenId, setPlanningOpenId] = useState(null);
+  const [meteoOpenId, setMeteoOpenId] = useState(null);
 
   const handleGenererPlan = async (id, nom) => {
     if (!window.confirm(t('cultures.confirmGenererPlan', { nom }))) return;
@@ -4419,6 +4530,20 @@ function CulturesModule({ farmId, highlightProduitId }) {
                       {t('cultures.genererPlan')}
                     </Button>
                     <ActivitesSection ressourceType="parcelle" ressourceId={p.id} />
+                  </div>
+                )}
+              </div>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
+                <button
+                  onClick={() => setMeteoOpenId(id => (id === p.id ? null : p.id))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                >
+                  <ChevronRight size={14} style={{ transform: meteoOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                  {t('cultures.meteoParcelleTitle')}
+                </button>
+                {meteoOpenId === p.id && (
+                  <div style={{ marginTop: 10 }}>
+                    <ParcelleMeteoSection parcelle={p} />
                   </div>
                 )}
               </div>
@@ -5757,6 +5882,7 @@ function ReportsModule({ farmId, activated }) {
 function HomeOverview({ farmId, activated }) {
   const { t } = useTranslation();
   const { fmtMoney } = useLocale();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     chiffreAffaires: 0,
     depenses: 0,
@@ -5876,6 +6002,7 @@ function HomeOverview({ farmId, activated }) {
           </ul>
         )}
       </Card>
+      <MeteoWidget onOuvrirMeteo={() => navigate('/app/meteo')} />
     </div>
   );
 }
@@ -7843,6 +7970,7 @@ export default function App() {
     activated.finances && roleConfig.permissions.includes('finances') && { id: 'factures', label: t('nav.factures'), icon: FileText, category: 'finance' },
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: t('nav.notifications'), icon: Bell, category: 'operations' },
     { id: 'observations', label: t('nav.observations'), icon: ClipboardList, category: 'operations' },
+    { id: 'meteo', label: t('nav.meteo'), icon: Cloud, category: 'operations' },
     roleConfig.permissions.includes('equipements') && { id: 'equipements', label: t('nav.equipements'), icon: Wrench, category: 'operations' },
     { id: 'feedback', label: t('nav.feedback'), icon: MessageSquare, category: null },
     { id: 'aide', label: t('nav.aide'), icon: HelpCircle, category: null },
@@ -8099,6 +8227,7 @@ export default function App() {
             {tab === 'factures' && <FacturesModule />}
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
             {tab === 'observations' && <ObservationListView />}
+            {tab === 'meteo' && <MeteoModule />}
             {tab === 'equipements' && <EquipementsModule canManage={['admin', 'directeur', 'gestionnaire'].includes(role)} />}
             {tab === 'feedback' && <FeedbackModule isPlatformAdmin={isPlatformAdmin} />}
             {tab === 'billing' && isPlatformAdmin && <BillingAdminPanel />}
@@ -8136,6 +8265,64 @@ function ProfilModule({ role }) {
       setPrefMsg(err.message);
     } finally {
       setPrefBusy(false);
+    }
+  };
+
+  // Localisation météo de l'entreprise (voir routes/meteo.js) — recherche « au fil de la
+  // frappe » façon GlobalSearch (timer 250 ms + garde reqIdRef contre les réponses obsolètes).
+  const [villeActuelle, setVilleActuelle] = useState(null);
+  const [villeQuery, setVilleQuery] = useState('');
+  const [villeResultats, setVilleResultats] = useState([]);
+  const [villeLoading, setVilleLoading] = useState(false);
+  const [villeSelection, setVilleSelection] = useState(null);
+  const [villeBusy, setVilleBusy] = useState(false);
+  const [villeMsg, setVilleMsg] = useState('');
+  const villeTimerRef = useRef(null);
+  const villeReqIdRef = useRef(0);
+
+  useEffect(() => {
+    getEntreprise().then(({ entreprise }) => {
+      if (entreprise?.ville) setVilleActuelle({ ville: entreprise.ville, latitude: entreprise.latitude, longitude: entreprise.longitude });
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    clearTimeout(villeTimerRef.current);
+    if (villeQuery.trim().length < 2) { setVilleResultats([]); return undefined; }
+    villeTimerRef.current = setTimeout(async () => {
+      const myId = ++villeReqIdRef.current;
+      setVilleLoading(true);
+      try {
+        const { villes } = await rechercherVilleMeteo(villeQuery.trim());
+        if (villeReqIdRef.current === myId) setVilleResultats(villes || []);
+      } catch (err) {
+        console.error('[ProfilModule ville]', err);
+      } finally {
+        if (villeReqIdRef.current === myId) setVilleLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(villeTimerRef.current);
+  }, [villeQuery]);
+
+  const choisirVille = (v) => {
+    setVilleSelection(v);
+    setVilleResultats([]);
+    setVilleQuery(`${v.nom}${v.pays ? ', ' + v.pays : ''}`);
+  };
+
+  const enregistrerVille = async () => {
+    if (!villeSelection) return;
+    setVilleBusy(true);
+    setVilleMsg('');
+    try {
+      await updateEntreprise({ ville: villeSelection.nom, latitude: villeSelection.latitude, longitude: villeSelection.longitude });
+      setVilleActuelle({ ville: villeSelection.nom, latitude: villeSelection.latitude, longitude: villeSelection.longitude });
+      setVilleSelection(null);
+      setVilleMsg(t('profil.locationSaved'));
+    } catch (err) {
+      setVilleMsg(err.message);
+    } finally {
+      setVilleBusy(false);
     }
   };
 
@@ -8267,6 +8454,55 @@ function ProfilModule({ role }) {
           )}
           {prefMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{prefMsg}</div>}
         </div>
+      </Card>
+
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 3 }}>
+          {t('profil.locationTitle')}
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+          {t('profil.locationHint')}
+        </div>
+        {villeActuelle && (
+          <div style={{ fontSize: 13, color: COLORS.ink, marginBottom: 12 }}>
+            {t('profil.locationCurrent')} : <b>{villeActuelle.ville}</b>
+          </div>
+        )}
+        {isAdmin && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ position: 'relative' }}>
+              <Field
+                label={t('profil.locationSearch')}
+                placeholder={t('profil.locationSearchPlaceholder')}
+                value={villeQuery}
+                onChange={(e) => { setVilleQuery(e.target.value); setVilleSelection(null); }}
+              />
+              {villeLoading && <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 4 }}>{t('common.loading')}</div>}
+              {villeResultats.length > 0 && (
+                <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, marginTop: 4, overflow: 'hidden' }}>
+                  {villeResultats.map((v, i) => (
+                    <button
+                      key={`${v.nom}-${i}`}
+                      type="button"
+                      onClick={() => choisirVille(v)}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                        background: 'none', border: 'none', cursor: 'pointer', fontSize: 13,
+                        borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none',
+                      }}
+                    >
+                      {v.nom}{v.region ? `, ${v.region}` : ''}{v.pays ? ` — ${v.pays}` : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button variant="green" onClick={enregistrerVille} disabled={!villeSelection || villeBusy} style={{ alignSelf: 'flex-start' }}>
+              {villeBusy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('profil.locationSave')}
+            </Button>
+            {villeMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{villeMsg}</div>}
+          </div>
+        )}
       </Card>
 
       <Card>

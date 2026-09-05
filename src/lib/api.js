@@ -671,6 +671,21 @@ export async function updateEntreprise(payload) {
   return request('/entreprise', { method: 'PUT', body: JSON.stringify(payload) });
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Météo (Open-Meteo, voir routes/meteo.js) — double granularité entreprise/parcelle.
+// ─────────────────────────────────────────────────────────────────────
+export async function rechercherVilleMeteo(q) {
+  return request(`/meteo/villes?q=${encodeURIComponent(q)}`);
+}
+
+export async function getMeteo(parcelleId) {
+  return request(parcelleId ? `/meteo?parcelleId=${parcelleId}` : '/meteo');
+}
+
+export async function getParcellesLocalisees() {
+  return request('/meteo/parcelles-localisees');
+}
+
 export async function getAchatsDocuments(module) {
   return request(`/achats?module=${encodeURIComponent(module)}`, { method: 'GET' });
 }
