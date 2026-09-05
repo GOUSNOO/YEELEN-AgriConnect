@@ -597,6 +597,28 @@
     "colProduit": "Produit",
     "colClient": "Client"
   },
+  "devisPublic": {
+    "chargement": "Chargement du devis…",
+    "introuvableTitre": "Devis introuvable",
+    "introuvable": "Ce lien est invalide ou a expiré.",
+    "pour": "Pour",
+    "colArticle": "Article",
+    "colQte": "Qté",
+    "colPu": "P.U.",
+    "colTotal": "Total",
+    "total": "Total :",
+    "signeTitre": "Devis signé",
+    "signePar": "Signé par",
+    "telechargerPdf": "Télécharger le PDF",
+    "annule": "Ce devis a été annulé.",
+    "signerTitre": "Approuver et signer ce devis",
+    "votreNom": "Votre nom",
+    "votreNomPlaceholder": "Nom du signataire",
+    "nomRequis": "Le nom du signataire est requis.",
+    "erreurSignature": "La signature n'a pas pu être enregistrée. Réessayez.",
+    "envoiEnCours": "Envoi…",
+    "validerSignature": "Valider la signature"
+  },
   "devis": {
     "newTitle": "Nouveau devis",
     "editTitle": "Modifier le devis",

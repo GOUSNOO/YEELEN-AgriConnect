@@ -620,8 +620,11 @@ router.post('/:id/annuler', authRequired, requireRole('admin'), async (req, res)
 router.get('/public/:token', async (req, res) => {
   try {
     const devisResult = await pool.query(
-      `SELECT d.id, d.numero, d.statut, d.date, d.total::float8 AS total, d.notes, d.signature_data AS "signatureData",
-              c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom"
+      `SELECT d.id, d.numero, d.statut, to_char(d.date, 'YYYY-MM-DD') AS date, d.total::float8 AS total, d.notes,
+              d.signature_data AS "signatureData", d.signataire_nom AS "signataireNom",
+              to_char(d.date_signature, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "dateSignature",
+              c.nom AS "clientNom", c.prenom AS "clientPrenom",
+              e.nom AS "entrepriseNom", e.devise, e.locale
        FROM devis d
        LEFT JOIN contacts c ON c.id = d.client_id
        LEFT JOIN entreprises e ON e.id = d.entreprise_id

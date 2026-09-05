@@ -597,6 +597,28 @@
     "colProduit": "Product",
     "colClient": "Customer"
   },
+  "devisPublic": {
+    "chargement": "Loading quote…",
+    "introuvableTitre": "Quote not found",
+    "introuvable": "This link is invalid or has expired.",
+    "pour": "For",
+    "colArticle": "Item",
+    "colQte": "Qty",
+    "colPu": "Unit price",
+    "colTotal": "Total",
+    "total": "Total:",
+    "signeTitre": "Quote signed",
+    "signePar": "Signed by",
+    "telechargerPdf": "Download PDF",
+    "annule": "This quote has been cancelled.",
+    "signerTitre": "Approve and sign this quote",
+    "votreNom": "Your name",
+    "votreNomPlaceholder": "Signatory name",
+    "nomRequis": "The signatory's name is required.",
+    "erreurSignature": "The signature could not be saved. Please try again.",
+    "envoiEnCours": "Sending…",
+    "validerSignature": "Confirm signature"
+  },
   "devis": {
     "newTitle": "New quote",
     "editTitle": "Edit quote",

@@ -2065,5 +2065,70 @@ fichiers suspects.
   pour Météo). **Laissée volontairement de côté** : `id=3` (« Entreprise Test », 2026-07-21,
   elle aussi orpheline mais bien plus ancienne que tout chantier documenté — pas assez de
   certitude sur son origine pour la supprimer unilatéralement, signalée à l'utilisateur au
-  lieu d'être effacée).
+  lieu d'être effacée). **`id=3` vérifiée puis supprimée séparément** après coup — créée le
+  2026-07-21 (antérieure à tout chantier documenté), aucun utilisateur lié (jamais accessible),
+  zéro ligne dans parcelles/cultures/produits/contacts/devis/finances/salaries/poulaillers/
+  banques/feedback, aucune ligne `abonnement_paiements`/`audit_log`. Le `subscription_status
+  = 'active'` qui semblait indiquer une activité récente était en réalité un effet de bord de
+  la migration « grand-père » du 2026-09-04 (`migrate.js:seedComptaConfig…`-like backfill,
+  voir Abonnement Phase 1) appliquée identiquement à toute entreprise pré-existante — pas une
+  action manuelle sur celle-ci. Coquille vide confirmée, supprimée.
+
+### Jalon 1 — durcissement, suite : signature publique de devis totalement inaccessible (2026-09-05)
+
+En poursuivant l'audit (recherche des fonctions `src/lib/api.js` sans aucun appelant dans
+`src/`, une méthode qui avait déjà révélé Observations/Planning par le passé), découverte
+d'un problème bien plus grave que les précédents : **`getDevisPublic`/`signerDevisPublic`
+n'étaient appelées nulle part** — la fonctionnalité « devis/factures (with e-signature) »,
+présentée dans `CLAUDE.md` comme déjà construite et testée, était en réalité **totalement
+inaccessible à un vrai client externe**.
+
+- Le backend était correct (`GET/POST /api/devis/public/:token[...]`) et `src/lib/api.js`
+  ciblait bien la bonne URL — mais **aucun composant React ne les appelait jamais**, et
+  **aucune route frontend n'existait** pour le lien envoyé par email
+  (`${FRONTEND_URL}/devis/${token}`, construit dans `routes/devis.js` `POST /:id/envoyer`) :
+  `App.jsx` (`pathnameToScreen`) ne reconnaît que `/app/*`, `/modules`, `/onboarding-*` — tout
+  le reste retombe sur l'écran de connexion. Concrètement : un client cliquant le lien de
+  l'email « devis envoyé » atterrissait sur le login, sans aucun moyen de voir ni signer son
+  devis.
+- **Ce qui a masqué le problème dans tous les tests précédents** : un contournement admin
+  existe (`POST /devis/:id/valider-manuel`), systématiquement utilisé dans les tests et démos
+  pour faire progresser un devis vers « Signé » sans jamais passer par le vrai lien client —
+  le flux public n'avait donc jamais été réellement exercé, ni même testé (0 test sur
+  `GET/POST /devis/public/*` avant ce correctif).
+- Décision utilisateur explicite sur le mode de signature : **pad de signature dessiné**
+  (canvas), pas une simple confirmation par nom tapé.
+- **Backend** : `GET /devis/public/:token` complétée (`signataireNom`, `dateSignature`,
+  `devise`/`locale` de l'entreprise — absents jusque-là, nécessaires pour un affichage correct
+  côté client). `devisPublicPdfUrl(token)` ajouté à `api.js` (lien direct, pas de fetch+blob —
+  aucune authentification requise contrairement aux téléchargements PDF authentifiés).
+- **Frontend** : nouveau `src/components/DevisPublicView.jsx`, monté **en dehors de `<App/>`**
+  via un petit composant `Root()` dans `main.jsx` qui teste `window.location.pathname` avant
+  de choisir quoi monter — nécessaire car `App()` a des dizaines de hooks dépendant d'un
+  utilisateur connecté, et la règle des hooks React interdit un simple `if` interne qui les
+  court-circuiterait dès qu'un même montage naviguerait entre chemin public et chemin
+  applicatif. Pad de signature construit à la main (canvas + Pointer Events, dimensionné en
+  pixels physiques via `devicePixelRatio` pour un trait net, `touchAction:'none'` pour ne pas
+  scroller la page au doigt) — pas de librairie externe. Affiche devis/lignes/total (formatés
+  dans la devise/locale réelle de l'entreprise, pas un défaut générique), état déjà signé avec
+  image de signature + lien PDP, ou formulaire de signature si encore en attente. i18n
+  `devisPublic.*` fr/en.
+- **3 nouveaux tests d'intégration** (`devis.test.js`, jusque-là zéro couverture sur ces
+  routes) : consultation + devise/locale + token bidon → 404 ; signature + relecture
+  signataire/date + double-signature → 400 + mauvais token → 404 ; PDF public → 200 avant
+  même signature + token bidon → 404. 294/294 tests d'intégration verts après.
+- **Vérifié en navigateur réel** (pas de mock) sur une entreprise jetable : token posé
+  directement en base (l'environnement de dev n'a pas de vrai envoi email configuré non plus),
+  page publique affichée avec les vraies données, nom + signature dessinée à la souris,
+  soumission → badge passe à « Signé », carte de confirmation avec l'image de la signature et
+  le lien PDF, **persistance confirmée par rechargement de page** (pas un état local
+  éphémère). PDF public vérifié via `curl` (200, `application/pdf`, document valide). Cas
+  token inexistant vérifié aussi (message discret, pas d'erreur). Entreprise de test nettoyée.
+- Non traité dans cette passe (signalé, pas corrigé) : `devis.js`'s `DEVIS_COLUMNS` renvoie
+  `d.date`/`d.date_signature` bruts (pas `to_char`'d) pour la vue authentifiée — même risque
+  de décalage TZ pg-DATE→JS-Date déjà corrigé ailleurs (`validity_date`, `date_semis`,
+  `date_echeance`) mais jamais signalé comme un bug réel en pratique ; changer `DEVIS_COLUMNS`
+  aurait un rayon d'effet bien plus large (tous les consommateurs de la vue authentifiée) que
+  ce qui se justifie dans une passe de durcissement — à traiter séparément si un décalage
+  réel est un jour constaté.
 - Suite complète (290 intégration + 1 unitaire) reconfirmée verte après le correctif.

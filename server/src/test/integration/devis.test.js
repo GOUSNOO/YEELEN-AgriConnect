@@ -507,3 +507,83 @@ describe('Devis — POST /:id/envoyer, échec d\'envoi email n\'altère pas l\'�
     expect(envoyer.status).toBe(400);
   });
 });
+
+// Régression Jalon 1 (2026-09-05) : cette route n'avait jamais été testée — c'est ce qui a
+// laissé passer l'absence totale de page frontend consommant getDevisPublic/signerDevisPublic
+// (voir docs/journal.md). L'environnement de test n'ayant pas d'EMAIL_USER (voir ci-dessus),
+// POST /:id/envoyer échoue toujours ici — le token_public est donc posé directement en base,
+// exactement comme un vrai envoi réussi l'aurait fait.
+describe('Devis — consultation et signature publiques (token)', () => {
+  const posesToken = async (devisId) => {
+    const token = `test-token-${devisId}-${Math.random().toString(36).slice(2)}`;
+    await pool.query(`UPDATE devis SET statut = 'Envoyé', token_public = $1 WHERE id = $2`, [token, devisId]);
+    return token;
+  };
+
+  test('GET /public/:token → devis + lignes + devise/locale de l\'entreprise ; token bidon → 404', async () => {
+    const admin = await registerEntreprise();
+    const clientId = await createClient(admin.token);
+    const create = await request(app).post('/api/devis').set(bearer(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 3, prixUnitaire: 500, type: 'produit' }] });
+    const devisId = create.body.devis.id;
+    const token = await posesToken(devisId);
+
+    const res = await request(app).get(`/api/devis/public/${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.devis.statut).toBe('Envoyé');
+    expect(res.body.devis.total).toBe(1500);
+    expect(res.body.devis.devise).toBe('XOF');
+    expect(res.body.devis.locale).toBe('fr-FR');
+    expect(res.body.devis.lignes).toHaveLength(1);
+    expect(res.body.devis.lignes[0].produit).toBe('Maïs');
+
+    const bogus = await request(app).get('/api/devis/public/ce-token-n-existe-pas');
+    expect(bogus.status).toBe(404);
+  });
+
+  test('POST /public/:token/signer → statut Signé + signataire/date renvoyés ; 2e signature → 400 ; mauvais token → 404', async () => {
+    const admin = await registerEntreprise();
+    const clientId = await createClient(admin.token);
+    const create = await request(app).post('/api/devis').set(bearer(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Riz', quantite: 1, prixUnitaire: 200, type: 'produit' }] });
+    const devisId = create.body.devis.id;
+    const token = await posesToken(devisId);
+
+    const bogus = await request(app).post('/api/devis/public/ce-token-n-existe-pas/signer')
+      .send({ signatureData: 'data:image/png;base64,abc', signataireNom: 'Test' });
+    expect(bogus.status).toBe(404);
+
+    const sansNom = await request(app).post(`/api/devis/public/${token}/signer`).send({ signatureData: 'data:image/png;base64,abc' });
+    expect(sansNom.status).toBe(400);
+
+    const signer = await request(app).post(`/api/devis/public/${token}/signer`)
+      .send({ signatureData: 'data:image/png;base64,abc', signataireNom: 'Fatoumata Traoré' });
+    expect(signer.status).toBe(200);
+
+    const relire = await request(app).get(`/api/devis/public/${token}`);
+    expect(relire.body.devis.statut).toBe('Signé');
+    expect(relire.body.devis.signataireNom).toBe('Fatoumata Traoré');
+    expect(relire.body.devis.signatureData).toBe('data:image/png;base64,abc');
+    expect(relire.body.devis.dateSignature).toBeTruthy();
+
+    const resigner = await request(app).post(`/api/devis/public/${token}/signer`)
+      .send({ signatureData: 'data:image/png;base64,xyz', signataireNom: 'Autre' });
+    expect(resigner.status).toBe(400);
+  });
+
+  test('GET /public/:token/pdf → 200 + PDF, y compris avant signature ; token bidon → 404', async () => {
+    const admin = await registerEntreprise();
+    const clientId = await createClient(admin.token);
+    const create = await request(app).post('/api/devis').set(bearer(admin.token))
+      .send({ clientId, lignes: [{ produit: 'Mil', quantite: 2, prixUnitaire: 300, type: 'produit' }] });
+    const devisId = create.body.devis.id;
+    const token = await posesToken(devisId);
+
+    const pdf = await request(app).get(`/api/devis/public/${token}/pdf`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+
+    const bogus = await request(app).get('/api/devis/public/ce-token-n-existe-pas/pdf');
+    expect(bogus.status).toBe(404);
+  });
+});

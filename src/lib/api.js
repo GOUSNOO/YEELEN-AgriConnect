@@ -1089,6 +1089,11 @@ export async function downloadDevisPdf(id, numero) {
   URL.revokeObjectURL(url);
 }
 
+// URL directe (pas de fetch+blob : aucune authentification requise, un <a href> suffit)
+export function devisPublicPdfUrl(token) {
+  return `${API_BASE_URL}/devis/public/${token}/pdf`;
+}
+
 // Consultation publique (aucun token d'authentification requis, juste le token du lien)
 export async function getDevisPublic(token) {
   const response = await fetch(`${API_BASE_URL}/devis/public/${token}`);
