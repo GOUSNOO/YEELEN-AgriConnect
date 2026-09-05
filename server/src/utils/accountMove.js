@@ -13,6 +13,7 @@ import { appliquerTaxesLigne } from './taxeCompute.js';
 import { prochainNumeroJournal } from './journalSequence.js';
 import { genererEcheancesDepuisTerme } from '../routes/paymentTerms.js';
 import { syncFacturePaiement } from './financeSync.js';
+import { convertir } from './currencyRates.js';
 
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -320,6 +321,55 @@ export async function posterMove(client, moveId, entrepriseId) {
   return { name, amountUntaxed: totalHT, amountTax: totalTaxe, amountTotal: totalTTC };
 }
 
+// Multi-devise réel, étape 4 : écart de change. Appelée quand le taux du jour du paiement
+// (`tauxPaiement`) diffère du taux figé à la facturation — la ligne partenaire du paiement
+// (`payPartLineId`), une fois lettrée contre la facture au taux DE LA FACTURE (pas celui du
+// paiement, pour ne jamais rouvrir le calcul déjà posé), garde un résidu fantôme égal à
+// l'écart de conversion. Cette écriture à 2 lignes ferme ce résidu contre un compte Gains/
+// Pertes de change (income_other/expense_other, voir comptaDefauts.js) — jamais de perte
+// réelle, juste un décalage de taux entre les deux dates. `client` = transaction ouverte.
+async function enregistrerEcartChange(client, { entrepriseId, userId, partnerId, comptePartenaire, estVente, payPartLineId, ecart, date, refInvoiceName, journalId }) {
+  // estGain : pour une vente, le change est favorable quand la devise s'est appréciée
+  // (le règlement convertit en PLUS de devise entreprise que prévu, ecart < 0) ; pour un
+  // achat, c'est l'inverse (on doit débourser plus, ecart > 0 = favorable).
+  const line1Balance = round2(estVente ? -ecart : ecart);
+  const montantAbs = Math.abs(line1Balance);
+  const line1Debit = line1Balance > 0 ? montantAbs : 0;
+  const line1Credit = line1Balance > 0 ? 0 : montantAbs;
+  // ligne 1 en débit ⇒ elle ferme un résidu créditeur laissé par un règlement qui a converti
+  // en PLUS de devise entreprise que prévu ⇒ gain (vérifié empiriquement, voir docs/journal.md
+  // étape 4 : un débit ligne 1 correspond systématiquement au scénario gain, dans les deux sens
+  // vente/achat, par substitution directe dans la formule ci-dessus).
+  const estGain = line1Debit > 0;
+  const compteGainPerte = await compteParType(client, entrepriseId, estGain ? 'income_other' : 'expense_other', estGain ? '768000' : '668000');
+
+  const name = await prochainNumeroJournal(client, journalId, entrepriseId, date, {});
+  const mv = await client.query(
+    `INSERT INTO account_move (entreprise_id, journal_id, move_type, state, name, date, partner_id, ref, amount_total)
+     VALUES ($1,$2,'entry','posted',$3,$4,$5,$6,$7) RETURNING id`,
+    [entrepriseId, journalId, name, date, partnerId, `Écart de change — ${refInvoiceName}`, montantAbs]
+  );
+  const ecartMoveId = mv.rows[0].id;
+
+  const l1 = await client.query(
+    `INSERT INTO account_move_line (move_id, entreprise_id, display_type, sequence, name, account_id, partner_id, debit, credit, balance, amount_residual)
+     VALUES ($1,$2,'payment_term',10,'Écart de change',$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [ecartMoveId, entrepriseId, comptePartenaire, partnerId, line1Debit, line1Credit, line1Balance, line1Balance]
+  );
+  await client.query(
+    `INSERT INTO account_move_line (move_id, entreprise_id, display_type, sequence, name, account_id, debit, credit, balance)
+     VALUES ($1,$2,'product',20,$3,$4,$5,$6,$7)`,
+    [ecartMoveId, entrepriseId, estGain ? 'Gain de change' : 'Perte de change', compteGainPerte, line1Credit, line1Debit, line1Credit - line1Debit]
+  );
+
+  await hacherMoveSiRequis(client, ecartMoveId, journalId);
+
+  await lettrerLignesPartenaire(client, entrepriseId, {
+    ligneFactureId: payPartLineId, ligneContreId: l1.rows[0].id, amount: montantAbs, date,
+  });
+  return { ecartMoveId, estGain, montant: montantAbs };
+}
+
 // Enregistre un paiement sur une facture postée : écriture de trésorerie, lettrage partiel
 // contre la ligne créance/dette, lettrage total + matching_number au solde, mise à jour de
 // amount_residual / payment_state, marquage des échéances couvertes, miroir Finances.
@@ -329,15 +379,25 @@ export async function posterMove(client, moveId, entrepriseId) {
 // `skipEcheanceAllocation` : quand l'appelant (POST /devis/:id/echeances/:eid/payer) a déjà
 // marqué l'échéance précise concernée, on ne refait pas l'allocation par ordre (qui
 // déborderait sur les échéances suivantes).
+// Étape 4 : quand la facture est en devise étrangère, le taux du JOUR DU PAIEMENT
+// (`paymentDate`, déjà un paramètre existant) est automatiquement recherché (réutilise
+// utils/currencyRates.js, étape 1) — aucun paramètre supplémentaire à passer par
+// l'appelant, aucune UI nouvelle nécessaire. S'il diffère de celui figé sur la facture,
+// une écriture d'écart de change est postée après coup (voir enregistrerEcartChange) ; le
+// lettrage principal, lui, continue TOUJOURS à utiliser le taux DE LA FACTURE (jamais
+// rouvert). Facture en devise entreprise (l'immense majorité) : aucun appel externe,
+// comportement strictement identique à avant l'étape 4.
 export async function enregistrerPaiementMove(client, { moveId, entrepriseId, userId, amount, paymentDate, journalId, ref, skipFinanceMirror = false, skipEcheanceAllocation = false }) {
   const montant = round2(amount);
   if (!(montant > 0)) throw err400('Le montant doit être positif.');
 
   const mr = await client.query(
-    `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId", name, payment_state AS "paymentState",
-            amount_residual::float8 AS "amountResidual", amount_total::float8 AS "amountTotal",
-            invoice_currency_rate::float8 AS "invoiceCurrencyRate"
-     FROM account_move WHERE id = $1 AND entreprise_id = $2`,
+    `SELECT m.id, m.move_type AS "moveType", m.state, m.partner_id AS "partnerId", m.name, m.payment_state AS "paymentState",
+            m.amount_residual::float8 AS "amountResidual", m.amount_total::float8 AS "amountTotal",
+            m.invoice_currency_rate::float8 AS "invoiceCurrencyRate",
+            COALESCE(m.devise, e.devise) AS devise, e.devise AS "entrepriseDevise"
+     FROM account_move m JOIN entreprises e ON e.id = m.entreprise_id
+     WHERE m.id = $1 AND m.entreprise_id = $2`,
     [moveId, entrepriseId]
   );
   if (mr.rows.length === 0) throw err404('Facture introuvable.');
@@ -347,12 +407,21 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   if (mv.paymentState === 'reversed') throw err400('Facture annulée par un avoir — aucun paiement possible.');
   if (mv.amountResidual <= 0) throw err400('Facture déjà soldée.');
   if (montant > mv.amountResidual + 0.01) throw err400(`Montant supérieur au reste dû (${mv.amountResidual}).`);
-  // Multi-devise réel, étape 3 : `montant` est dans la devise DU DOCUMENT (comme
-  // amount_residual, comparé juste au-dessus) ; le grand livre (treso/partenaire ci-dessous)
-  // doit rester en devise entreprise — même taux figé que la facture d'origine, pas celui
-  // du jour du paiement (l'écart de change au paiement est l'étape 4, pas encore traitée).
-  const tauxChange = mv.invoiceCurrencyRate || 1;
-  const montantCompany = round2(montant * tauxChange);
+  // Multi-devise réel, étape 3+4 : `montant` est dans la devise DU DOCUMENT (comme
+  // amount_residual, comparé juste au-dessus). Le lettrage contre la facture (montantFacture)
+  // utilise TOUJOURS le taux figé de la facture — jamais rouvert, même si un taux de paiement
+  // différent est fourni. Le règlement réel (trésorerie/partenaire ci-dessous) utilise le taux
+  // du jour du paiement s'il est fourni, sinon celui de la facture (comportement identique à
+  // avant l'étape 4). Un écart entre les deux déclenche l'écriture de change après coup.
+  const pdate = paymentDate || new Date().toISOString().slice(0, 10);
+  const tauxFacture = mv.invoiceCurrencyRate || 1;
+  let tauxReglement = tauxFacture;
+  if (mv.devise !== mv.entrepriseDevise) {
+    ({ taux: tauxReglement } = await convertir(1, mv.devise, mv.entrepriseDevise, pdate));
+  }
+  const montantCompany = round2(montant * tauxReglement);
+  const montantCompanyFacture = round2(montant * tauxFacture);
+  const ecartChange = round2(montantCompanyFacture - montantCompany);
 
   const estVente = mv.moveType === 'out_invoice';
   let payJournal = null;
@@ -373,7 +442,6 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
     || await compteParType(client, entrepriseId, 'asset_cash', payJournal.type === 'cash' ? '101402' : '101401');
   const comptePartenaire = await compteParType(client, entrepriseId, estVente ? 'asset_receivable' : 'liability_payable', estVente ? '121000' : '211000');
 
-  const pdate = paymentDate || new Date().toISOString().slice(0, 10);
   const payMoveName = await prochainNumeroJournal(client, payJournal.id, entrepriseId, pdate, {});
   const pm = await client.query(
     `INSERT INTO account_move (entreprise_id, journal_id, move_type, state, name, date, partner_id, ref, amount_total, user_id)
@@ -415,9 +483,19 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   await lettrerLignesPartenaire(client, entrepriseId, {
     ligneFactureId: factPartLine.rows[0].id,
     ligneContreId: payPartLine.rows[0].id,
-    amount: montantCompany,
+    amount: montantCompanyFacture,
     date: pdate,
   });
+
+  // Étape 4 : le taux du jour a bougé depuis la facturation — la ligne de règlement
+  // (payPartLine) garde un résidu fantôme égal à l'écart, fermé par une écriture dédiée.
+  if (Math.abs(ecartChange) > 0.01) {
+    await enregistrerEcartChange(client, {
+      entrepriseId, userId, partnerId: mv.partnerId, comptePartenaire, estVente,
+      payPartLineId: payPartLine.rows[0].id, ecart: ecartChange, date: pdate,
+      refInvoiceName: mv.name, journalId: payJournal.id,
+    });
+  }
 
   const residualFacture = round2(Math.max(0, mv.amountResidual - montant));
   const paymentState = residualFacture <= 0.01 ? 'paid' : (residualFacture < mv.amountTotal ? 'partial' : 'not_paid');

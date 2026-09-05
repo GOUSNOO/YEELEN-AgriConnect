@@ -2485,3 +2485,63 @@ pas une écriture comptable individuelle.
   jour) ; `finances` vérifiée à 65595,64 F CFA (pas 100). Confirmé à l'identique dans le
   navigateur (liste et détail de `FacturesModule` affichant « 100,00 € » partout en en-tête,
   « ≈ équivalent devise entreprise 65 596 F CFA »). Entreprise de test nettoyée.
+
+### 2026-09-06 — Multi-devise réel, étape 4 (écart de change au paiement) — roadmap COMPLETE
+
+Dernière étape de la roadmap multi-devise (étapes 1-3 ci-dessus). Reconnaît la différence
+entre le taux figé à la facturation (`invoice_currency_rate`) et le taux réel au jour du
+paiement, et poste automatiquement l'écriture d'équilibrage correspondante — sans aucun
+nouveau paramètre de route ni changement frontend : `enregistrerPaiementMove` regarde le
+`paymentDate` déjà transmis par `POST /api/factures/:id/register-payment` et convertit à ce
+taux.
+
+- **Schéma** : deux nouveaux comptes par défaut dans `COMPTES_DEFAUT`
+  (`server/src/utils/comptaDefauts.js`) — `768000 Gains de change` (`income_other`) et
+  `668000 Pertes de change` (`expense_other`), codes 6xx/7xx pour rester distincts du plan
+  4xx/5xx existant. `migrate.js:seedComptesChangeForExistingEntreprises()` — backfill dédié
+  (le garde-fou de `seedComptaConfigForExistingEntreprises` ne se redéclenche jamais pour une
+  entreprise déjà passée par l'étape 2 Comptabilité, donc virtuellement toutes) —
+  `ON CONFLICT DO NOTHING`, idempotent. Migration rejouée sur la base dev :
+  `✅ Comptes Gains/Pertes de change créés pour 7 entreprise(s) (14 lignes).`
+- **`server/src/utils/accountMove.js`** : `enregistrerPaiementMove` calcule désormais
+  `tauxReglement` via `convertir(1, mv.devise, mv.entrepriseDevise, pdate)` (réutilise
+  `currencyRates.js` de l'étape 1) chaque fois que `mv.devise !== mv.entrepriseDevise` —
+  `tauxFacture` (figé) reste utilisé pour le lettrage contre la facture (jamais rouvert),
+  `tauxReglement` (du jour du paiement) pour la trésorerie réelle encaissée/décaissée.
+  `ecart = round2(montantCompanyFacture - montantCompany)` ; si `|ecart| > 0.01`, nouvelle
+  fonction `enregistrerEcartChange` poste une écriture à 2 lignes fermant le résidu laissé
+  sur la ligne partenaire du paiement par le lettrage au taux facture : une ligne sur le
+  compte `Clients`/`Fournisseurs` (même compte que la facture) et une ligne en face sur
+  `Gains de change` ou `Pertes de change`.
+- **Bug de sens trouvé et corrigé par débogage empirique, pas par relecture** : la première
+  version dérivait `estGain = line1Credit > 0`, ce qui s'est avéré inversé — vérifié en
+  conditions réelles (entreprise jetable, client EUR, facture 100 € au taux 655,95639501,
+  paiement à un taux inséré manuellement en base à 717,647 — devise EUR appréciée) : la
+  trésorerie reçoit bien 71764,71 F CFA pour 100 €, plus que les 65595,64 F CFA inscrits au
+  bilan → c'est un GAIN, mais le code initial le classait en `668000 Pertes de change`.
+  Root cause : quand la ligne 1 (résidu sur le compte partenaire) est un DÉBIT
+  (`line1Balance > 0`), cela ferme un excédent de crédit laissé par un règlement ayant
+  converti en PLUS de devise entreprise que prévu → c'est un gain, pas l'inverse. Corrigé en
+  `estGain = line1Debit > 0` (équivalent à `line1Balance > 0`) ; vérifié par substitution
+  symbolique que ce sens est cohérent aussi bien pour une vente que pour un achat (rôles de
+  gain/perte inversés selon `estVente`, déjà pris en compte par le signe de `ecart` en amont).
+- **3 nouveaux tests** dans `devis.test.js` (`describe('écart de change au paiement', ...)`) :
+  taux du paiement plus élevé (devise appréciée) → gain de change + facture soldée ; taux plus
+  bas (devise dépréciée) → perte de change ; taux inchangé (même devise, ou taux identique) →
+  aucune écriture de change créée. **320/320 tests d'intégration verts** (317 + 3, zéro
+  régression — le chemin `mv.devise === mv.entrepriseDevise` ne touche jamais
+  `enregistrerEcartChange`, donc toutes les factures mono-devise existantes restent
+  arithmétiquement inchangées).
+- **Vérifié en conditions réelles** contre le backend Docker reconstruit, avec un vrai taux
+  inséré en base (pas seulement les tests mockés) : script Node autonome
+  (`fetch()` natif, contournant un souci d'interopérabilité chemins `/tmp` Bash↔Node sous
+  Windows rencontré en cours de route) rejouant inscription → contact EUR → devis 100 € →
+  validation → facturation échelonnée → paiement à un taux futur contrôlé — écriture d'écart
+  relue directement en base (`account_move`/`account_move_line` join `account_account`),
+  confirmée équilibrée et sur le bon compte après correction. Entreprises/utilisateurs/taux de
+  test nettoyés (2 entreprises jetables, cascade + `finances` NO ACTION nettoyée à la main,
+  comme documenté pour les nettoyages précédents).
+- Pas de rejouement complet de migration en cycle restauration-sauvegarde pour cette étape
+  (jugé pragmatiquement à faible risque : ajout pur, aucun `ALTER` destructeur) — seule une
+  application directe sur la base dev a été faite. À faire avant la prochaine vraie mise en
+  production si ce n'est pas déjà fait entre-temps.

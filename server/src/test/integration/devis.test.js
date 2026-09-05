@@ -694,6 +694,125 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     expect(finances.rows[0].montant).toBeCloseTo(100 * tauxAttendu, 1);
   });
 
+  // Étape 4 : le taux du jour du paiement (recherché automatiquement via paymentDate, aucun
+  // paramètre supplémentaire) diffère de celui figé à la facturation → écart de change posté
+  // et lettré séparément, la facture reste soldée normalement (en devise du document).
+  describe('écart de change au paiement', () => {
+    async function creerFactureEchelonneeEUR(admin) {
+      const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+        .send({ nom: 'Client Ecart Change', estClient: true, deviseFacturation: 'EUR' });
+      const restore = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 }); // taux facture : 600/0.9
+      let devisId;
+      try {
+        const create = await request(app).post('/api/devis').set(bearer(admin.token))
+          .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+        devisId = create.body.devis.id;
+      } finally { restore(); }
+      await request(app).post(`/api/devis/${devisId}/valider-manuel`).set(bearer(admin.token)).send({ confirmePar: 'Test' });
+      // échelonné (une seule échéance, pas encore payée) : la facture reste "Non payé", pour
+      // pouvoir tester register-payment séparément avec une date de paiement postérieure.
+      const facturer = await request(app).post(`/api/devis/${devisId}/facturer`).set(bearer(admin.token))
+        .send({ modePaiement: 'Espèces', modalitePaiement: 'echelonne', echeances: [{ montant: 100, dateEcheance: '2026-09-20' }] });
+      return facturer.body.devis.move.id;
+    }
+
+    test('taux du paiement plus élevé (devise appréciée) → gain de change, facture soldée', async () => {
+      const admin = await registerEntreprise();
+      const moveId = await creerFactureEchelonneeEUR(admin);
+      // Taux du jour du paiement, posé directement en base pour une date future — XOF/EUR
+      // monte à 610/0.85 (l'EUR vaut plus de XOF qu'à la facturation : 610/0.85 > 600/0.9).
+      await pool.query(`INSERT INTO currency_rates (devise, taux_vs_usd, date) VALUES ('XOF', 610, '2026-09-20'), ('EUR', 0.85, '2026-09-20')`);
+
+      const pay = await request(app).post(`/api/factures/${moveId}/register-payment`).set(bearer(admin.token))
+        .send({ amount: 100, paymentDate: '2026-09-20' });
+      expect(pay.status).toBe(200);
+
+      const f = (await request(app).get(`/api/factures/${moveId}`).set(bearer(admin.token))).body.facture;
+      expect(f.paymentState).toBe('paid');
+      expect(f.amountResidual).toBeCloseTo(0, 2); // en devise du document, inchangé
+
+      const ecartMove = await pool.query(
+        `SELECT m.id FROM account_move m WHERE m.entreprise_id = $1 AND m.ref LIKE 'Écart de change%' ORDER BY m.id DESC LIMIT 1`,
+        [admin.entrepriseId]
+      );
+      expect(ecartMove.rows.length).toBe(1);
+      const lignes = await pool.query(
+        `SELECT debit::float8, credit::float8, reconciled, a.account_type AS "accountType"
+         FROM account_move_line l JOIN account_account a ON a.id = l.account_id
+         WHERE l.move_id = $1 ORDER BY l.sequence ASC`,
+        [ecartMove.rows[0].id]
+      );
+      expect(lignes.rows).toHaveLength(2);
+      const sd = lignes.rows.reduce((s, l) => s + l.debit, 0);
+      const sc = lignes.rows.reduce((s, l) => s + l.credit, 0);
+      expect(sd).toBeCloseTo(sc, 2); // écriture équilibrée
+      // la 2e ligne (compte de résultat) est bien sur le compte Gains de change (favorable
+      // pour une vente quand la devise s'apprécie).
+      expect(lignes.rows.some((l) => l.accountType === 'income_other' && l.credit > 0)).toBe(true);
+
+      // la ligne "Règlement" du paiement est bien totalement soldée (résidu fantôme fermé).
+      const payLigne = await pool.query(
+        `SELECT amount_residual::float8 AS r, reconciled FROM account_move_line
+         WHERE move_id != $1 AND display_type = 'payment_term' AND account_id = (SELECT account_id FROM account_move_line WHERE move_id = $1 AND display_type = 'payment_term' LIMIT 1)
+         ORDER BY id DESC LIMIT 1`,
+        [ecartMove.rows[0].id]
+      );
+      expect(Math.abs(payLigne.rows[0].r)).toBeLessThan(0.01);
+      expect(payLigne.rows[0].reconciled).toBe(true);
+    });
+
+    test('taux du paiement plus bas (devise dépréciée) → perte de change', async () => {
+      const admin = await registerEntreprise();
+      const moveId = await creerFactureEchelonneeEUR(admin);
+      // currency_rates est une table PLATEFORME (partagée entre entreprises, voir étape 1) —
+      // date distincte du test précédent pour ne pas violer l'unicité (devise, date).
+      // EUR vaut moins de XOF qu'à la facturation : 590/0.95 < 600/0.9.
+      await pool.query(`INSERT INTO currency_rates (devise, taux_vs_usd, date) VALUES ('XOF', 590, '2026-09-21'), ('EUR', 0.95, '2026-09-21')`);
+
+      const pay = await request(app).post(`/api/factures/${moveId}/register-payment`).set(bearer(admin.token))
+        .send({ amount: 100, paymentDate: '2026-09-21' });
+      expect(pay.status).toBe(200);
+
+      const ecartMove = await pool.query(
+        `SELECT m.id FROM account_move m WHERE m.entreprise_id = $1 AND m.ref LIKE 'Écart de change%' ORDER BY m.id DESC LIMIT 1`,
+        [admin.entrepriseId]
+      );
+      const lignes = await pool.query(
+        `SELECT debit::float8, credit::float8, a.account_type AS "accountType"
+         FROM account_move_line l JOIN account_account a ON a.id = l.account_id
+         WHERE l.move_id = $1`,
+        [ecartMove.rows[0].id]
+      );
+      const sd = lignes.rows.reduce((s, l) => s + l.debit, 0);
+      const sc = lignes.rows.reduce((s, l) => s + l.credit, 0);
+      expect(sd).toBeCloseTo(sc, 2);
+      // cette fois le compte de résultat débité doit être "Pertes de change" (expense_other).
+      expect(lignes.rows.some((l) => l.accountType === 'expense_other' && l.debit > 0)).toBe(true);
+    });
+
+    test('taux du paiement inchangé (même devise ou même taux) → aucune écriture de change', async () => {
+      const admin = await registerEntreprise();
+      const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+        .send({ nom: 'Client Meme Devise', estClient: true });
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Riz', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+      await request(app).post(`/api/devis/${create.body.devis.id}/valider-manuel`).set(bearer(admin.token)).send({ confirmePar: 'Test' });
+      const facturer = await request(app).post(`/api/devis/${create.body.devis.id}/facturer`).set(bearer(admin.token))
+        .send({ modePaiement: 'Espèces', modalitePaiement: 'echelonne', echeances: [{ montant: 100, dateEcheance: '2026-09-20' }] });
+      const moveId = facturer.body.devis.move.id;
+
+      const pay = await request(app).post(`/api/factures/${moveId}/register-payment`).set(bearer(admin.token))
+        .send({ amount: 100, paymentDate: '2026-09-20' });
+      expect(pay.status).toBe(200);
+
+      const ecartMove = await pool.query(
+        `SELECT m.id FROM account_move m WHERE m.entreprise_id = $1 AND m.ref LIKE 'Écart de change%'`,
+        [admin.entrepriseId]
+      );
+      expect(ecartMove.rows).toHaveLength(0);
+    });
+  });
+
   // POST /:id/envoyer recalcule le taux AVANT l'envoi mais ne l'écrit qu'après un envoi
   // réussi (même invariant "email avant écriture" déjà établi pour statut/token_public) —
   // l'environnement de test n'a pas d'EMAIL_USER (voir env.js), donc l'envoi échoue toujours

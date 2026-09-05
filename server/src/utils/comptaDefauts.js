@@ -14,6 +14,10 @@ export const COMPTES_DEFAUT = [
   { code: '500000', name: 'Coût des ventes',      account_type: 'expense',            reconcile: false },
   { code: '251000', name: 'TVA collectée',        account_type: 'liability_current',  reconcile: false },
   { code: '131000', name: 'TVA déductible',       account_type: 'asset_current',      reconcile: false },
+  // Multi-devise réel, étape 4 : écart de change au paiement (voir utils/accountMove.js:
+  // enregistrerEcartChange). Codes 6xx/7xx pour rester distincts du bloc 4xx/5xx existant.
+  { code: '768000', name: 'Gains de change',      account_type: 'income_other',       reconcile: false },
+  { code: '668000', name: 'Pertes de change',     account_type: 'expense_other',       reconcile: false },
 ];
 
 // Journaux par défaut (account.journal-like). `defaultAccountCode` référence un COMPTES_DEFAUT

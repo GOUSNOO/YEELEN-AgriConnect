@@ -2703,6 +2703,34 @@ async function seedComptaConfigForExistingEntreprises() {
   }
 }
 
+// Multi-devise réel, étape 4 : les deux nouveaux comptes (Gains/Pertes de change) ajoutés à
+// COMPTES_DEFAUT n'existent pas encore pour une entreprise déjà configurée avant cette étape —
+// seedComptaConfigForExistingEntreprises ci-dessus ne les rattrape pas (son garde-fou
+// `NOT EXISTS (account_journal)` ne se redéclenche que pour une entreprise sans AUCUN
+// journal, donc jamais pour une entreprise déjà passée par l'étape 2 Comptabilité). Backfill
+// dédié, ne touche que ces deux codes, idempotent.
+async function seedComptesChangeForExistingEntreprises() {
+  const comptesChange = COMPTES_DEFAUT.filter((c) => ['768000', '668000'].includes(c.code));
+  const { rows: entreprises } = await client.query('SELECT id FROM entreprises');
+  let compte = 0;
+  for (const { id } of entreprises) {
+    for (const c of comptesChange) {
+      const { rowCount } = await client.query(
+        `INSERT INTO account_account (entreprise_id, code, name, account_type, reconcile)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (entreprise_id, code) DO NOTHING`,
+        [id, c.code, c.name, c.account_type, c.reconcile]
+      );
+      compte += rowCount;
+    }
+  }
+  if (compte > 0) {
+    console.log(`✅ Comptes Gains/Pertes de change créés pour ${entreprises.length} entreprise(s) (${compte} lignes).`);
+  } else {
+    console.log('ℹ️  Comptes Gains/Pertes de change : déjà présents partout.');
+  }
+}
+
 // Étape 1 alignement Odoo produit/stock : crée les catégories d'unités de mesure + unités
 // par défaut pour toute entreprise qui n'en a aucune. Même liste que routes/auth.js (seed
 // à l'inscription) via utils/unitesMesureDefaut.js.
@@ -2995,6 +3023,7 @@ async function migrate() {
     await migrateTaxeDevisVersLignes();
     await migrateTaxeDevisLignesVersAccountTax();
     await seedComptaConfigForExistingEntreprises();
+    await seedComptesChangeForExistingEntreprises();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();
     await seedPiscicultureCategoriesForExistingEntreprises();
