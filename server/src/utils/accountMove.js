@@ -193,11 +193,17 @@ export async function posterMove(client, moveId, entrepriseId) {
     `SELECT id, move_type AS "moveType", state, journal_id AS "journalId", partner_id AS "partnerId",
             to_char(COALESCE(invoice_date, CURRENT_DATE), 'YYYY-MM-DD') AS "invoiceDate",
             to_char(COALESCE(invoice_date_due, invoice_date, CURRENT_DATE), 'YYYY-MM-DD') AS "dueDate",
-            payment_term_id AS "paymentTermId"
+            payment_term_id AS "paymentTermId", invoice_currency_rate::float8 AS "invoiceCurrencyRate"
      FROM account_move WHERE id = $1 AND entreprise_id = $2`,
     [moveId, entrepriseId]
   );
   if (mr.rows.length === 0) throw err404('Facture introuvable.');
+  // Multi-devise réel, étape 3 : taux figé sur le move à sa création (voir routes/devis.js)
+  // — 1 pour toute facture dans la devise de l'entreprise (comportement historique
+  // inchangé, y compris pour une facture créée hors du flux devis). debit/credit/balance
+  // (le grand livre) restent TOUJOURS en devise entreprise ; amount_currency mémorise le
+  // montant original en devise du document.
+  const tauxChange = mr.rows[0].invoiceCurrencyRate || 1;
   const mv = mr.rows[0];
   if (mv.state !== 'draft') throw err400('Seule une facture en brouillon peut être postée.');
   if (!mv.partnerId) throw err400('Un partenaire est requis pour poster la facture.');
@@ -243,10 +249,12 @@ export async function posterMove(client, moveId, entrepriseId) {
     totalTaxe += taxeTotale;
     for (const [taxId, montant] of parTaxe) taxeParId.set(taxId, round2((taxeParId.get(taxId) || 0) + montant));
     const sub = round2(base);
+    const subCompany = round2(sub * tauxChange);
     await client.query(
       `UPDATE account_move_line SET account_id = $1, price_subtotal = $2, price_total = $3,
-         ${signeProduit} = $2, balance = $4 WHERE id = $5`,
-      [compteProduit, sub, round2(base + taxeTotale), signeProduit === 'debit' ? sub : -sub, l.id]
+         ${signeProduit} = $4, balance = $5, amount_currency = $6 WHERE id = $7`,
+      [compteProduit, sub, round2(base + taxeTotale), subCompany,
+       signeProduit === 'debit' ? subCompany : -subCompany, signeProduit === 'debit' ? sub : -sub, l.id]
     );
   }
   totalHT = round2(totalHT);
@@ -256,20 +264,24 @@ export async function posterMove(client, moveId, entrepriseId) {
   let seqTax = 9000;
   for (const [taxId, montant] of taxeParId) {
     seqTax += 10;
+    const montantCompany = round2(montant * tauxChange);
     await client.query(
       `INSERT INTO account_move_line
-        (move_id, entreprise_id, display_type, sequence, name, account_id, tax_line_id, ${signeProduit}, balance)
-       VALUES ($1,$2,'tax',$3,'Taxe',$4,$5,$6,$7)`,
-      [moveId, entrepriseId, seqTax, compteTaxe, taxId, montant, signeProduit === 'debit' ? montant : -montant]
+        (move_id, entreprise_id, display_type, sequence, name, account_id, tax_line_id, ${signeProduit}, balance, amount_currency)
+       VALUES ($1,$2,'tax',$3,'Taxe',$4,$5,$6,$7,$8)`,
+      [moveId, entrepriseId, seqTax, compteTaxe, taxId, montantCompany,
+       signeProduit === 'debit' ? montantCompany : -montantCompany, signeProduit === 'debit' ? montant : -montant]
     );
   }
 
-  const residualSigne = signePartenaire === 'debit' ? totalTTC : -totalTTC;
+  const totalTTCCompany = round2(totalTTC * tauxChange);
+  const residualSigne = signePartenaire === 'debit' ? totalTTCCompany : -totalTTCCompany;
   await client.query(
     `INSERT INTO account_move_line
-      (move_id, entreprise_id, display_type, sequence, name, account_id, partner_id, ${signePartenaire}, balance, amount_residual, date_maturity)
-     VALUES ($1,$2,'payment_term',100000,'Créance/Dette',$3,$4,$5,$6,$7,$8)`,
-    [moveId, entrepriseId, comptePartenaire, mv.partnerId, totalTTC, residualSigne, residualSigne, mv.dueDate]
+      (move_id, entreprise_id, display_type, sequence, name, account_id, partner_id, ${signePartenaire}, balance, amount_residual, amount_currency, date_maturity)
+     VALUES ($1,$2,'payment_term',100000,'Créance/Dette',$3,$4,$5,$6,$7,$8,$9)`,
+    [moveId, entrepriseId, comptePartenaire, mv.partnerId, totalTTCCompany, residualSigne, residualSigne,
+     signePartenaire === 'debit' ? totalTTC : -totalTTC, mv.dueDate]
   );
 
   const bal = await client.query(
@@ -323,7 +335,8 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
 
   const mr = await client.query(
     `SELECT id, move_type AS "moveType", state, partner_id AS "partnerId", name, payment_state AS "paymentState",
-            amount_residual::float8 AS "amountResidual", amount_total::float8 AS "amountTotal"
+            amount_residual::float8 AS "amountResidual", amount_total::float8 AS "amountTotal",
+            invoice_currency_rate::float8 AS "invoiceCurrencyRate"
      FROM account_move WHERE id = $1 AND entreprise_id = $2`,
     [moveId, entrepriseId]
   );
@@ -334,6 +347,12 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   if (mv.paymentState === 'reversed') throw err400('Facture annulée par un avoir — aucun paiement possible.');
   if (mv.amountResidual <= 0) throw err400('Facture déjà soldée.');
   if (montant > mv.amountResidual + 0.01) throw err400(`Montant supérieur au reste dû (${mv.amountResidual}).`);
+  // Multi-devise réel, étape 3 : `montant` est dans la devise DU DOCUMENT (comme
+  // amount_residual, comparé juste au-dessus) ; le grand livre (treso/partenaire ci-dessous)
+  // doit rester en devise entreprise — même taux figé que la facture d'origine, pas celui
+  // du jour du paiement (l'écart de change au paiement est l'étape 4, pas encore traitée).
+  const tauxChange = mv.invoiceCurrencyRate || 1;
+  const montantCompany = round2(montant * tauxChange);
 
   const estVente = mv.moveType === 'out_invoice';
   let payJournal = null;
@@ -363,15 +382,15 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   );
   const payMoveId = pm.rows[0].id;
 
-  const tresoDebit = estVente ? montant : 0;
-  const tresoCredit = estVente ? 0 : montant;
+  const tresoDebit = estVente ? montantCompany : 0;
+  const tresoCredit = estVente ? 0 : montantCompany;
   await client.query(
     `INSERT INTO account_move_line (move_id, entreprise_id, display_type, sequence, name, account_id, debit, credit, balance)
      VALUES ($1,$2,'product',10,'Trésorerie',$3,$4,$5,$6)`,
     [payMoveId, entrepriseId, compteTreso, tresoDebit, tresoCredit, tresoDebit - tresoCredit]
   );
-  const payPartDebit = estVente ? 0 : montant;
-  const payPartCredit = estVente ? montant : 0;
+  const payPartDebit = estVente ? 0 : montantCompany;
+  const payPartCredit = estVente ? montantCompany : 0;
   const payPartLine = await client.query(
     `INSERT INTO account_move_line
       (move_id, entreprise_id, display_type, sequence, name, account_id, partner_id, debit, credit, balance, amount_residual)
@@ -396,7 +415,7 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   await lettrerLignesPartenaire(client, entrepriseId, {
     ligneFactureId: factPartLine.rows[0].id,
     ligneContreId: payPartLine.rows[0].id,
-    amount: montant,
+    amount: montantCompany,
     date: pdate,
   });
 
@@ -420,8 +439,10 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   }
 
   if (!skipFinanceMirror) {
+    // finances est un miroir en devise ENTREPRISE (comme tous les autres modules qui y
+    // écrivent) — montantCompany, jamais le montant brut en devise du document.
     await syncFacturePaiement(entrepriseId, userId, {
-      montant: estVente ? montant : -montant,
+      montant: estVente ? montantCompany : -montantCompany,
       journalType: payJournal.type,
       numero: mv.name,
       partenaireNom: null,

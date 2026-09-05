@@ -11,7 +11,7 @@ import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 import { genererEcheancesDepuisTerme } from './paymentTerms.js';
 import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
-import { posterMove, enregistrerPaiementMove, journalParType } from '../utils/accountMove.js';
+import { posterMove, enregistrerPaiementMove, journalParType, round2 } from '../utils/accountMove.js';
 import { convertir } from '../utils/currencyRates.js';
 
 // Date de validité par défaut d'un devis : aujourd'hui + 30 jours (comme default_validity_date
@@ -759,14 +759,13 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
     if (check.rows[0].statut !== 'Signé') {
       return res.status(400).json({ error: 'Seul un devis signé peut être converti en facture.' });
     }
-    // Multi-devise réel, étape 2 : la facturation réelle en devise étrangère (account_move
-    // avec ses propres champs de devise) est l'étape 3 de ce chantier, pas encore construite —
-    // ce devis reste consultable/signable dans sa devise, juste pas encore facturable.
-    if (check.rows[0].devise !== check.rows[0].entrepriseDevise) {
-      return res.status(400).json({ error: "La facturation d'un devis en devise étrangère n'est pas encore disponible (prochaine étape du chantier multi-devise). Ce devis reste consultable et signable normalement." });
-    }
 
-    const { total, numero, clientNom, clientPrenom } = check.rows[0];
+    const { total, numero, clientNom, clientPrenom, devise } = check.rows[0];
+    // Multi-devise réel, étape 3 : la facture comptable hérite du taux figé sur le devis
+    // (jamais recalculé au moment de facturer — même principe que la création/l'envoi).
+    // 1 pour un devis dans la devise de l'entreprise (immense majorité des cas).
+    const tauxDevisResult = await client.query('SELECT COALESCE(taux_change, 1)::float8 AS taux FROM devis WHERE id = $1', [req.params.id]);
+    const tauxChange = tauxDevisResult.rows[0].taux;
     const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
 
     // Détermine les échéances + la modalité effective.
@@ -829,7 +828,9 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
         [req.params.id, total]
       );
       await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
-        montant: Number(total),
+        // finances est en devise ENTREPRISE (comme partout ailleurs) — jamais le total brut
+        // en devise du devis.
+        montant: round2(Number(total) * tauxChange),
         modePaiement,
         numero,
         clientNom: clientNomComplet,
@@ -877,10 +878,10 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
     const mv = await client.query(
       `INSERT INTO account_move
         (entreprise_id, journal_id, move_type, state, partner_id, invoice_date, invoice_date_due,
-         invoice_origin, payment_term_id, user_id)
+         invoice_origin, payment_term_id, user_id, devise, invoice_currency_rate)
        VALUES ($1, $2, 'out_invoice', 'draft', (SELECT client_id FROM devis WHERE id = $3),
-               CURRENT_DATE, $4, $5, $6, $7) RETURNING id`,
-      [req.user.entrepriseId, journalVente.id, req.params.id, dueDate, numero, paymentTermIdFinal, req.user.sub]
+               CURRENT_DATE, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [req.user.entrepriseId, journalVente.id, req.params.id, dueDate, numero, paymentTermIdFinal, req.user.sub, devise, tauxChange]
     );
     const moveId = mv.rows[0].id;
     let seqLigne = 0;
@@ -1044,6 +1045,7 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
   try {
     const devisResult = await client.query(
       `SELECT d.mode_paiement AS "modePaiement", d.numero, d.statut, d.move_id AS "moveId",
+              COALESCE(d.taux_change, 1)::float8 AS "tauxChange",
               c.nom AS "clientNom", c.prenom AS "clientPrenom"
        FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
@@ -1060,14 +1062,15 @@ router.post('/:id/echeances/:echeanceId/payer', authRequired, requireRole('admin
       return res.status(400).json({ error: 'Cette échéance est déjà marquée comme payée.' });
     }
 
-    const { modePaiement, numero, clientNom, clientPrenom, moveId } = devisResult.rows[0];
+    const { modePaiement, numero, clientNom, clientPrenom, moveId, tauxChange } = devisResult.rows[0];
     const clientNomComplet = `${clientPrenom || ''} ${clientNom || ''}`.trim();
 
     await client.query('BEGIN');
     await client.query(`UPDATE echeances_paiement SET statut = 'Payé', date_paiement = now() WHERE id = $1`, [req.params.echeanceId]);
 
     await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
-      montant: echeanceResult.rows[0].montant,
+      // finances est en devise ENTREPRISE — jamais le montant brut de l'échéance (devise du devis).
+      montant: round2(echeanceResult.rows[0].montant * tauxChange),
       modePaiement,
       numero,
       clientNom: clientNomComplet,

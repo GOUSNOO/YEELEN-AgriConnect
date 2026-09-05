@@ -30,6 +30,8 @@ const MOVE_COLUMNS = `
   m.invoice_origin AS "invoiceOrigin", m.payment_term_id AS "paymentTermId",
   m.amount_untaxed::float8 AS "amountUntaxed", m.amount_tax::float8 AS "amountTax",
   m.amount_total::float8 AS "amountTotal", m.amount_residual::float8 AS "amountResidual",
+  COALESCE(m.devise, e.devise) AS devise, COALESCE(m.invoice_currency_rate, 1)::float8 AS "invoiceCurrencyRate",
+  ROUND(m.amount_total * COALESCE(m.invoice_currency_rate, 1), 2)::float8 AS "amountTotalDeviseEntreprise",
   m.payment_state AS "paymentState", m.reversed_entry_id AS "reversedEntryId",
   m.inalterable_hash AS "inalterableHash", m.secure_sequence_number AS "secureSequenceNumber",
   m.relance_niveau AS "relanceNiveau", to_char(m.derniere_relance, 'YYYY-MM-DD') AS "derniereRelance",
@@ -93,6 +95,7 @@ async function getFactureComplete(id, entrepriseId) {
   const m = await pool.query(
     `SELECT ${MOVE_COLUMNS} FROM account_move m
      LEFT JOIN contacts c ON c.id = m.partner_id
+     JOIN entreprises e ON e.id = m.entreprise_id
      WHERE m.id = $1 AND m.entreprise_id = $2`,
     [id, entrepriseId]
   );
@@ -102,6 +105,7 @@ async function getFactureComplete(id, entrepriseId) {
             l.quantity::float8 AS quantity, l.price_unit::float8 AS "priceUnit", l.discount::float8 AS discount,
             l.price_subtotal::float8 AS "priceSubtotal", l.price_total::float8 AS "priceTotal",
             l.debit::float8 AS debit, l.credit::float8 AS credit, l.balance::float8 AS balance,
+            l.amount_currency::float8 AS "amountCurrency",
             l.tax_line_id AS "taxLineId", l.amount_residual::float8 AS "amountResidual",
             l.reconciled, l.matching_number AS "matchingNumber",
             to_char(l.date_maturity, 'YYYY-MM-DD') AS "dateMaturity",
@@ -180,6 +184,7 @@ router.get('/', authRequired, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT ${MOVE_COLUMNS} FROM account_move m
        LEFT JOIN contacts c ON c.id = m.partner_id
+       JOIN entreprises e ON e.id = m.entreprise_id
        WHERE ${cond.join(' AND ')} ORDER BY m.id DESC`,
       params
     );
@@ -238,6 +243,7 @@ router.get('/overdue', authRequired, async (req, res) => {
               (CURRENT_DATE - COALESCE(m.invoice_date_due, m.invoice_date, m.date)) AS "daysOverdue"
        FROM account_move m
        LEFT JOIN contacts c ON c.id = m.partner_id
+       JOIN entreprises e ON e.id = m.entreprise_id
        WHERE m.entreprise_id = $1 AND m.state = 'posted' AND m.move_type = 'out_invoice'
          AND m.payment_state IN ('not_paid', 'partial')
          AND COALESCE(m.invoice_date_due, m.invoice_date, m.date) < CURRENT_DATE

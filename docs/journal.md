@@ -2406,3 +2406,82 @@ facturable** en devise étrangère, ce point étant explicitement réservé à l
   blocage affiché correctement comme notification. Entreprise de test nettoyée (parcelles/
   poulaillers par défaut inclus, aucune n'a de cascade `ON DELETE` — même procédure que les
   chantiers précédents).
+
+### Multi-devise réel — Étape 3 : facturation réelle en devise étrangère (2026-09-06)
+
+Suite immédiate de l'étape 2, sur demande explicite de l'utilisateur (« enchaîne sur l'étape
+3 »). Le blocage volontaire posé à l'étape 2 (`POST /devis/:id/facturer` refusait un devis en
+devise étrangère) est levé : une facture comptable réelle (`account_move`), avec un grand
+livre correctement équilibré et converti, peut désormais être générée depuis un devis dans
+n'importe quelle devise.
+
+**Conception reprise directement de la recherche Odoo de l'étape 1** (`res_currency.py` /
+`account_move_line.py` lus en détail à ce moment-là) : `debit`/`credit`/`balance`/
+`amount_residual` sur `account_move_line` — le grand livre — restent **toujours** dans la
+devise de l'entreprise (intégrité comptable non négociable), un nouveau champ
+**`amount_currency`** mémorise le montant en devise **d'origine** du document, et le taux
+(`invoice_currency_rate`, figé sur le move à sa création, jamais recalculé) sert de facteur de
+conversion. En revanche `account_move.amount_untaxed`/`amount_tax`/`amount_total`/
+`amount_residual` restent dans la devise **du document** — même convention que `devis.total`
+depuis l'étape 2, pour la cohérence : ces champs d'en-tête décrivent « ce qui a été facturé »,
+pas une écriture comptable individuelle.
+
+- **Schéma** : `account_move.devise TEXT`, `account_move.invoice_currency_rate NUMERIC(18,8)`
+  (tous deux nullables — `1` par défaut/absence, transparent pour toute facture déjà en devise
+  entreprise) ; `account_move_line.amount_currency NUMERIC(16,2)`.
+- **`utils/accountMove.js:posterMove`** : lit `invoice_currency_rate` sur le move (`1` si
+  absent), multiplie chaque montant document-devise (`sub`, taxe, `totalTTC`) par ce taux pour
+  obtenir les `debit`/`credit`/`balance` en devise entreprise, tout en conservant le montant
+  brut (signé) dans `amount_currency`. `amount_untaxed`/`amount_tax`/`amount_total` restent
+  calculés sans conversion (comme avant) — c'est la même arithmétique document-devise
+  qu'auparavant, juste étiquetée différemment maintenant que la distinction existe. La
+  vérification Σdébit=Σcrédit reste valide sans changement : multiplier chaque ligne par le
+  même taux préserve l'égalité.
+- **`utils/accountMove.js:enregistrerPaiementMove`** : `amount` reçu est dans la devise **du
+  document** (comme `amount_residual`, auquel il est comparé) ; converti en `montantCompany`
+  (`= amount × invoice_currency_rate`, **le taux figé de la facture d'origine, pas celui du
+  jour du paiement** — assumé pour cette étape, l'écart de change étant l'étape 4) pour les
+  lignes de trésorerie/partenaire et pour `lettrerLignesPartenaire` (qui opère sur des résidus
+  déjà en devise entreprise). Le miroir `finances` (`syncFacturePaiement`) reçoit lui aussi
+  `montantCompany`, jamais le brut — `finances` est un registre en devise entreprise comme
+  tous ses autres appelants.
+- **`routes/devis.js:facturer`** : le blocage de l'étape 2 est retiré ; le taux figé du devis
+  (`COALESCE(taux_change, 1)`) est lu et propagé à l'`INSERT INTO account_move` (`devise`,
+  `invoice_currency_rate`). Les deux appels `syncDevisPaiement` (paiement complet immédiat et
+  paiement d'échéance individuelle) sont corrigés pour convertir leur montant en devise
+  entreprise avant écriture dans `finances` — **oubli qui aurait silencieusement écrit un
+  montant brut en devise étrangère dans un registre censé être en devise entreprise**, trouvé
+  en relisant le code plutôt qu'en testant (les tests existants ne pouvaient pas le révéler,
+  aucun devis en devise étrangère n'avait jamais été facturé avant cette étape).
+- **`routes/factures.js`** : `MOVE_COLUMNS` gagne `devise`/`invoiceCurrencyRate`/
+  `amountTotalDeviseEntreprise` (calculé) ; les lignes gagnent `amountCurrency`. 3 requêtes
+  (liste, `aged-receivable`'s move n'en a pas besoin, `overdue`, détail) ajustées pour joindre
+  `entreprises e` (nécessaire pour le `COALESCE(m.devise, e.devise)`).
+- **1 test remplacé, pas juste ajouté** : l'ancien test de l'étape 2 (« facturer en devise
+  étrangère → 400 ») échouait désormais légitimement (le blocage a été retiré exprès) — le
+  premier signal, très net, que le reste de la suite (70 autres tests) n'avait subi aucune
+  régression. Remplacé par un test bout-en-bout complet : facturation + paiement immédiat d'un
+  devis de 100 € → move posté/équilibré/soldé, `amountTotal` du move toujours 100 (devise
+  document), grand livre vérifié à 100 × taux (devise entreprise, équilibré), ligne produit
+  vérifiée sur `amountCurrency` ET `balance`, `finances` vérifié converti. **317/317 tests
+  d'intégration verts** (zéro régression sur `factures.test.js`, `factureHash.test.js`,
+  `factureAvoir.test.js`, `paiements.test.js`, `agedReceivable.test.js` — la valeur par défaut
+  `invoice_currency_rate = 1` rend tout le nouveau code arithmétiquement transparent pour
+  l'existant).
+- **Frontend** : `FacturesModule` (liste + détail) affiche désormais le montant dans la devise
+  de la facture (colonnes Total HT **et** Total TTC de la liste, corrigées toutes les deux —
+  la première n'avait pas été vue au premier passage, trouvée en vérifiant dans le navigateur
+  et corrigée dans la foulée) + une ligne « ≈ équivalent devise entreprise » sur le détail,
+  même patron que `DevisModule` à l'étape 2. **Même limite connue et assumée qu'à l'étape 2** :
+  les sous-tableaux du détail (lignes de facture, échéances, paiements) affichent encore la
+  devise de l'entreprise partout — seuls les montants d'en-tête (HT/TTC/payé/reste dû) sont
+  corrects dans les deux devises.
+- **Vérifié en conditions réelles** (vrai appel à l'API de taux, pas de mock) sur une
+  entreprise jetable : client facturé en EUR, devis de 100 € facturé et payé intégralement en
+  un seul appel → move `INV/2026/0001` posté, `paymentState:'paid'`, `amountResidual:0`,
+  `amountTotal:100` (devise document) ; grand livre relu directement (`GET /api/factures/:id`)
+  — ligne produit `credit:65595.64` / `amountCurrency:-100`, ligne créance `debit:65595.64` /
+  `amountCurrency:100`, Σdébit=Σcrédit=65595,64 F CFA (= 100 × 655,95639501, le vrai taux du
+  jour) ; `finances` vérifiée à 65595,64 F CFA (pas 100). Confirmé à l'identique dans le
+  navigateur (liste et détail de `FacturesModule` affichant « 100,00 € » partout en en-tête,
+  « ≈ équivalent devise entreprise 65 596 F CFA »). Entreprise de test nettoyée.

@@ -644,23 +644,54 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     } finally { restore(); }
   });
 
-  test('facturer un devis en devise étrangère → 400 explicite (étape 3 pas encore construite)', async () => {
+  // Étape 3 : la facturation réelle en devise étrangère fonctionne désormais — le grand
+  // livre (account_move_line.debit/credit/balance) reste en devise entreprise, amount_currency
+  // et les totaux du move (comme devis.total) restent dans la devise DU DOCUMENT.
+  test('facturer (complet) un devis en devise étrangère → move posté, équilibré et soldé, montants corrects dans les 2 devises', async () => {
     const admin = await registerEntreprise();
     const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
       .send({ nom: 'Client Etranger', estClient: true, deviseFacturation: 'EUR' });
     const restoreCreate = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
     let devisId;
+    let tauxAttendu;
     try {
       const create = await request(app).post('/api/devis').set(bearer(admin.token))
         .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
       devisId = create.body.devis.id;
+      tauxAttendu = create.body.devis.tauxChange; // 600/0.9
+      expect(create.body.devis.total).toBe(100);
     } finally { restoreCreate(); }
 
     await request(app).post(`/api/devis/${devisId}/valider-manuel`).set(bearer(admin.token)).send({ confirmePar: 'Test' });
     const facturer = await request(app).post(`/api/devis/${devisId}/facturer`).set(bearer(admin.token))
       .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
-    expect(facturer.status).toBe(400);
-    expect(facturer.body.error).toMatch(/devise étrangère/);
+    expect(facturer.status).toBe(200);
+    expect(facturer.body.devis.statut).toBe('Facturé');
+    expect(facturer.body.devis.move.state).toBe('posted');
+    expect(facturer.body.devis.move.paymentState).toBe('paid');
+    expect(facturer.body.devis.move.amountResidual).toBeCloseTo(0, 2);
+    // amountTotal du move reste dans la devise DU DOCUMENT (comme devis.total) : 100, pas 66667.
+    expect(facturer.body.devis.move.amountTotal).toBeCloseTo(100, 2);
+
+    const f = (await request(app).get(`/api/factures/${facturer.body.devis.move.id}`).set(bearer(admin.token))).body.facture;
+    expect(f.devise).toBe('EUR');
+    expect(f.invoiceCurrencyRate).toBeCloseTo(tauxAttendu, 4);
+    // le grand livre (debit/credit) est en devise ENTREPRISE, équilibré, et correctement converti.
+    const dd = f.lignes.reduce((s, l) => s + l.debit, 0);
+    const cc = f.lignes.reduce((s, l) => s + l.credit, 0);
+    expect(dd).toBeCloseTo(cc, 2);
+    expect(dd).toBeCloseTo(100 * tauxAttendu, 1);
+    // la ligne produit garde son montant en devise du document via amount_currency.
+    const ligneProduit = f.lignes.find((l) => l.displayType === 'product');
+    expect(Math.abs(ligneProduit.amountCurrency)).toBeCloseTo(100, 2);
+    expect(Math.abs(ligneProduit.balance)).toBeCloseTo(100 * tauxAttendu, 1);
+
+    // finances (miroir en devise ENTREPRISE) reflète le montant converti, pas 100 brut.
+    const finances = await pool.query(
+      `SELECT montant::float8 AS montant FROM finances WHERE entreprise_id = $1 AND source_module = 'Devis' ORDER BY id DESC LIMIT 1`,
+      [admin.entrepriseId]
+    );
+    expect(finances.rows[0].montant).toBeCloseTo(100 * tauxAttendu, 1);
   });
 
   // POST /:id/envoyer recalcule le taux AVANT l'envoi mais ne l'écrit qu'après un envoi

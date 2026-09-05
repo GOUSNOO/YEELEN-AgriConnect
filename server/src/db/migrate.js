@@ -1203,6 +1203,19 @@ CREATE INDEX IF NOT EXISTS idx_currency_rates_devise_date ON currency_rates(devi
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS devise TEXT;
 ALTER TABLE devis ADD COLUMN IF NOT EXISTS taux_change NUMERIC(18, 8);
 
+-- Multi-devise réel, étape 3 : la facture comptable (account_move) hérite désormais de la
+-- devise/du taux du devis d'origine (voir routes/devis.js:facturer, utils/accountMove.js:
+-- posterMove). Même conventions que Odoo, reprises telles quelles (voir journal) :
+-- amount_untaxed/amount_tax/amount_total/amount_residual sur account_move restent dans la
+-- devise DU DOCUMENT (comme devis.total) — aucun changement de sens pour une facture déjà
+-- existante, toujours en devise entreprise. Seules les lignes comptables (account_move_line)
+-- ont une double expression : debit/credit/balance/amount_residual restent la vérité
+-- comptable, TOUJOURS en devise entreprise (intégrité du grand livre) ; amount_currency est
+-- leur miroir en devise du document, purement informatif.
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS devise TEXT;
+ALTER TABLE account_move ADD COLUMN IF NOT EXISTS invoice_currency_rate NUMERIC(18, 8);
+ALTER TABLE account_move_line ADD COLUMN IF NOT EXISTS amount_currency NUMERIC(16, 2);
+
 -- Intégration météo (Open-Meteo, voir routes/meteo.js) — localisation par défaut de
 -- l'entreprise. Nullable : fonctionnalité entièrement opt-in, aucun impact sur une entreprise
 -- qui ne la configure jamais. Les parcelles peuvent avoir leur propre localisation (voir plus

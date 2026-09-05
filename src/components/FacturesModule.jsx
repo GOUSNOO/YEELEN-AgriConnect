@@ -7,7 +7,7 @@ import {
   verifyFactureHash, reverseFacture, getContacts, getTaxes,
 } from '../lib/api.js';
 import { taxesLigneCalc } from '../lib/taxes.js';
-import { useLocale } from '../lib/locale.jsx';
+import { useLocale, fmtMoneyWith } from '../lib/locale.jsx';
 import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
@@ -46,7 +46,11 @@ function echeanceLabel(dateStr, t) {
 
 export default function FacturesModule() {
   const { t } = useTranslation();
-  const { fmtMoney, fmtDate } = useLocale();
+  const { fmtMoney, fmtDate, locale, devise: deviseEntreprise } = useLocale();
+  // Multi-devise réel, étape 3 : une facture peut désormais être dans une devise différente
+  // de l'entreprise (héritée du devis d'origine) — affiche alors dans SA devise, pas celle
+  // de l'entreprise par défaut (même patron que DevisModule).
+  const montantAffiche = (f) => (f.devise && f.devise !== deviseEntreprise ? fmtMoneyWith(locale, f.devise, f.amountTotal) : fmtMoney(f.amountTotal));
   const [factures, setFactures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtreState, setFiltreState] = useState('');
@@ -251,8 +255,8 @@ export default function FacturesModule() {
                   <td style={{ color: f.invoiceDateDue && f.state === 'posted' && f.paymentState !== 'paid' && new Date(f.invoiceDateDue) < new Date() ? '#B23B2E' : INK_SOFT }}>
                     {f.invoiceDateDue ? `${fmtDate(f.invoiceDateDue)} · ${echeanceLabel(f.invoiceDateDue, t)}` : '—'}
                   </td>
-                  <td style={{ textAlign: 'right' }}>{fmtMoney(f.amountUntaxed)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(f.amountTotal)}</td>
+                  <td style={{ textAlign: 'right' }}>{montantAffiche({ devise: f.devise, amountTotal: f.amountUntaxed })}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{montantAffiche(f)}</td>
                   <td>{f.state === 'posted' && <Badge tone={PAY_TONE[f.paymentState]}>{t(`factures.pay.${f.paymentState}`)}</Badge>}</td>
                   <td><Badge tone={STATE_TONE[f.state]}>{t(`factures.state.${f.state}`)}</Badge></td>
                 </tr>
@@ -458,10 +462,15 @@ export default function FacturesModule() {
               )}
 
               <dl className="oe-subtotal">
-                <dt>{t('factures.amountUntaxed')}</dt><dd>{fmtMoney(detail.amountUntaxed)}</dd>
-                {taxesRecap(detail).map(([nom, montant]) => (<React.Fragment key={nom}><dt>{nom}</dt><dd>{fmtMoney(montant)}</dd></React.Fragment>))}
-                <div className="sep"><span>{t('factures.amountTotal')}</span><span>{fmtMoney(detail.amountTotal)}</span></div>
-                {detail.state === 'posted' && (<><dt style={{ marginTop: 4 }}>{t('factures.paid')}</dt><dd style={{ marginTop: 4 }}>{fmtMoney(detail.amountTotal - detail.amountResidual)}</dd><dt style={{ fontWeight: 700 }}>{t('factures.amountResidual')}</dt><dd style={{ fontWeight: 700 }}>{fmtMoney(detail.amountResidual)}</dd></>)}
+                <dt>{t('factures.amountUntaxed')}</dt><dd>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountUntaxed })}</dd>
+                {taxesRecap(detail).map(([nom, montant]) => (<React.Fragment key={nom}><dt>{nom}</dt><dd>{montantAffiche({ devise: detail.devise, amountTotal: montant })}</dd></React.Fragment>))}
+                <div className="sep"><span>{t('factures.amountTotal')}</span><span>{montantAffiche(detail)}</span></div>
+                {detail.devise && detail.devise !== deviseEntreprise && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#5B6357' }}>
+                    <span>{t('devis.totalDeviseEntreprise')}</span><span>{fmtMoney(detail.amountTotalDeviseEntreprise)}</span>
+                  </div>
+                )}
+                {detail.state === 'posted' && (<><dt style={{ marginTop: 4 }}>{t('factures.paid')}</dt><dd style={{ marginTop: 4 }}>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountTotal - detail.amountResidual })}</dd><dt style={{ fontWeight: 700 }}>{t('factures.amountResidual')}</dt><dd style={{ fontWeight: 700 }}>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountResidual })}</dd></>)}
               </dl>
 
               {detail.echeances && detail.echeances.length > 0 && (
