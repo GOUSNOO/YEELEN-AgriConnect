@@ -2266,3 +2266,78 @@ créer — sur le modèle du reCAPTCHA déjà dans l'app.
   pas un blocage du chantier.
 - Suite complète reconfirmée verte (305 tests d'intégration / 36 fichiers, 103 frontend),
   build OK. Entreprise de test nettoyée.
+
+### Multi-devise réel — roadmap (4 étapes), Étape 1 : fondations taux de change (2026-09-05)
+
+Chantier suivant sur le backlog long terme, choisi par l'utilisateur après un point d'étape
+roadmap sur ce qui reste à faire. Décision explicite sur l'ampleur (via `AskUserQuestion`) :
+la version **complète, comptablement correcte** (comme Odoo — client avec sa propre devise,
+devis/facture émis dans cette devise, grand livre en devise entreprise avec écart de change au
+paiement), pas la version « conversion d'affichage seule » plus légère. Vu l'ampleur
+(comparable au roadmap ERP Comptabilité initial, 6 étapes sur plusieurs sessions), ce chantier
+est **staged sur 4 étapes** — ce journal documente la roadmap complète, seule l'étape 1 étant
+construite cette session :
+
+- **Étape 1 (faite)** : fondations — taux de change quotidiens + utilitaire de conversion.
+- **Étape 2 (à venir)** : `contacts.devise_facturation` + `devis.devise`/`taux_change`/
+  `total_devise` — un devis peut être créé/envoyé dans la devise du contact, PDF affiche les
+  deux montants. Règlement/échéances encore trackés en devise entreprise (conversion au moment
+  de la synchro finances) — pas encore d'intégration `account_move`.
+- **Étape 3 (à venir)** : `account_move`/`account_move_line` gagnent `devise`/
+  `invoice_currency_rate`/`amount_currency` (patron Odoo exact — voir plus bas) ; `facturer`
+  propage la devise/le taux du devis vers la pièce comptable.
+- **Étape 4 (à venir, la plus délicate)** : écart de change au paiement — nouveaux comptes
+  par défaut `Gains de change`/`Pertes de change` (`income_other`/`expense_other`, déjà
+  présents dans le CHECK `account_type` — rien à modifier là), `enregistrerPaiementMove`
+  étendu pour détecter un taux différent entre facture et paiement et poster automatiquement
+  l'écriture d'équilibrage.
+
+**Recherche menée** : Odoo (clone source local, `addons/base/models/res_currency.py` lu en
+détail) a ici, contrairement à tous les chantiers précédents (météo, agriculture de précision,
+pisciculture), un **vrai modèle mature et directement transposable** — principe central repris
+pour les étapes 3-4 : `debit`/`credit`/`balance` restent **toujours** dans la devise de
+l'entreprise (intégrité du grand livre), un champ **`amount_currency`** complémentaire porte le
+montant dans la devise **d'origine** du document, et le taux de conversion est **figé à la date
+de la pièce** (`currency_rate`), jamais recalculé rétroactivement même si le taux bouge plus
+tard. GitHub : `LerianStudio/midaz` (437 étoiles, actif) est un vrai grand livre multi-devise
+mature, mais en Go/microservices, non réutilisable dans ce projet Node/Express/Postgres
+monolithique — confirme qu'une référence sérieuse existe sans qu'il y ait de code à en tirer.
+
+**API de taux de change retenue** : `https://open.er-api.com/v6/latest/USD` — gratuite,
+**sans clé**, testée en direct (XOF, XAF, MAD, NGN, GHS, KES — toutes les devises de la liste
+`DEVISES` du frontend — bien couvertes ; XOF et XAF confirmées à parité 1:1 comme attendu dans
+la réalité, les deux francs CFA étant historiquement alignés). Mise à jour une fois par jour.
+Usage commercial autorisé, redistribution interdite, **attribution discrète requise** par les
+conditions d'utilisation dès qu'une UI affichera un taux/une conversion — pas encore le cas à
+cette étape (aucune UI construite), à ne pas oublier à l'étape 2.
+
+**Étape 1, détail** :
+- `migrate.js` : nouvelle table `currency_rates` (`devise TEXT`, `taux_vs_usd NUMERIC(18,8)`,
+  `date DATE`, `UNIQUE(devise, date)`) — **table plateforme, pas de `entreprise_id`** : un taux
+  de change n'appartient à aucun locataire, il est partagé par toutes les entreprises. Taux
+  stockés vs USD (pivot) plutôt qu'en N² paires — convertir(A, B) calcule le cross-rate à la
+  volée via `taux_vs_usd(A)/taux_vs_usd(B)`, USD choisi car c'est le pivot naturel de l'API
+  retenue.
+- `server/src/utils/currencyRates.js` : `rafraichirTauxDuJour()` (upsert une ligne par devise
+  pour la date du jour, transaction explicite), `obtenirTaux(devise, date)` (repli sur le
+  dernier taux connu ≤ date — les weekends où le fournisseur ne republie pas ne cassent rien —
+  et un seul essai de rafraîchissement paresseux si rien n'existe du tout, pas de cron dans ce
+  projet, même esprit que `meteo.js`), `convertir(montant, deviseSource, deviseCible, date)`.
+- `server/src/routes/devises.js` : `GET /api/devises/taux?de=&vers=&date=`, monté sur
+  `/api/devises`.
+- **6 tests d'intégration** (`de`/`vers` manquants, même devise des deux côtés → taux 1 sans
+  appel réseau, conversion avec rafraîchissement paresseux, devise inconnue → 400, échec
+  fournisseur → 502, repli sur le dernier taux connu → pas de nouvel appel réseau). 311/311
+  tests d'intégration verts après.
+- **Bug réel trouvé pendant l'implémentation, corrigé avant tout commit** : le même décalage
+  TZ pg-DATE→JS-Date déjà documenté à plusieurs reprises dans ce projet (`validity_date`,
+  `date_semis`, `date_echeance`, et signalé comme risque théorique non traité pour
+  `DEVIS_COLUMNS` lors du chantier météo) — cette fois dans du code neuf : `tauxVsUsd()`
+  renvoyait `date` brut (colonne `DATE`) au lieu de `to_char(date, 'YYYY-MM-DD')`, faisant
+  échouer 2 des 6 tests dès la première exécution (date attendue `2026-09-05`, reçue
+  `2026-09-04T22:00:00.000Z`). Corrigé immédiatement, tests repassés verts.
+- Migration rejouée ×2 sur copie de sauvegarde restaurée puis appliquée réellement. Vérifié en
+  conditions réelles après reconstruction Docker : `curl` contre `/api/devises/taux` avec de
+  vraies données (XOF→EUR ≈ 0,001524 — cohérent avec la parité fixe XOF/EUR connue de
+  655,96 XOF pour 1 EUR ; EUR→USD ≈ 1,161, plausible), 166 devises effectivement persistées en
+  base pour la date du jour. Entreprise de test nettoyée.

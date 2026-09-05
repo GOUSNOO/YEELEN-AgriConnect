@@ -1172,6 +1172,23 @@ CREATE INDEX IF NOT EXISTS idx_salaries_temps_date ON salaries_temps(entreprise_
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS devise TEXT NOT NULL DEFAULT 'XOF';
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'fr-FR';
 
+-- ═══════════════ Multi-devise réel, étape 1 : taux de change ═══════════════
+-- Table de référence PLATEFORME (pas de entreprise_id : un taux de change n'appartient à
+-- aucun locataire, il est le même pour tout le monde) — voir utils/currencyRates.js et
+-- routes/devises.js. Taux stockés vs USD (pivot) plutôt qu'en N² paires : convertir(A, B)
+-- calcule le cross-rate à la volée via taux_vs_usd(A)/taux_vs_usd(B). Alimentée
+-- paresseusement (pas de cron dans ce projet) depuis l'API gratuite sans clé
+-- open.er-api.com, une fois par jour.
+CREATE TABLE IF NOT EXISTS currency_rates (
+  id            SERIAL PRIMARY KEY,
+  devise        TEXT NOT NULL,
+  taux_vs_usd   NUMERIC(18, 8) NOT NULL,
+  date          DATE NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (devise, date)
+);
+CREATE INDEX IF NOT EXISTS idx_currency_rates_devise_date ON currency_rates(devise, date DESC);
+
 -- Intégration météo (Open-Meteo, voir routes/meteo.js) — localisation par défaut de
 -- l'entreprise. Nullable : fonctionnalité entièrement opt-in, aucun impact sur une entreprise
 -- qui ne la configure jamais. Les parcelles peuvent avoir leur propre localisation (voir plus
