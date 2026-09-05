@@ -121,6 +121,11 @@
       "desc": "Suivez l'ambiance du poulailler et gérez l'ensemble de votre activité avicole au quotidien.",
       "features": ["Température et humidité du poulailler", "Stocks (aliments, œufs, volailles)", "Ventes, achats et livraisons", "Comptabilité automatique"]
     },
+    "pisciculture": {
+      "title": "Gestion piscicole",
+      "desc": "Suivez la qualité de l'eau des bassins et gérez l'ensemble de votre activité piscicole au quotidien.",
+      "features": ["pH, oxygène dissous et température de l'eau", "Stocks (aliments, alevins, poissons)", "Ventes, achats et livraisons", "Comptabilité automatique"]
+    },
     "clients": {
       "title": "Gestion des clients",
       "desc": "Enregistrez vos clients, suivez leurs achats, leurs paiements et leur dette restante.",
@@ -470,6 +475,67 @@
       "poussins": "poussins",
       "kg": "kg",
       "oeufs": "œufs",
+      "unite": "unité",
+      "u": "u"
+    }
+  },
+  "pisciculture": {
+    "tabBassins": "Bassins",
+    "tabSuivi": "Suivi",
+    "tabStocks": "Stocks",
+    "tabVentes": "Ventes",
+    "tabAchats": "Achats",
+    "tabLivraisons": "Livraisons",
+    "tabComptabilite": "Comptabilité",
+    "bassinsTitle": "Qualité de l'eau des bassins",
+    "conditionsWatch": "Conditions à surveiller",
+    "conditionsNormal": "Conditions normales",
+    "ph": "pH",
+    "oxygene": "Oxygène dissous",
+    "temperatureEau": "Température de l'eau",
+    "phEvolution": "Évolution du pH",
+    "oxygeneEvolution": "Évolution de l'oxygène dissous",
+    "livraisonsLoading": "Chargement des livraisons…",
+    "livraisonPlanifiee": "Livraison planifiée.",
+    "livraisonAddError": "Impossible d'enregistrer la livraison.",
+    "confirmDeleteLivraison": "Supprimer la livraison « {{produit}} » ?",
+    "livraisonDeleted": "Livraison supprimée.",
+    "livraisonDeleteError": "Impossible de supprimer la livraison.",
+    "statutUpdateError": "Le statut n'a pas pu être mis à jour.",
+    "client": "Client",
+    "clientPlaceholder": "Nom",
+    "produit": "Produit",
+    "produitPlaceholder": "Ex: Tilapia",
+    "quantite": "Quantité",
+    "planifier": "Planifier",
+    "colQte": "Qté",
+    "statut": {
+      "En attente": "En attente",
+      "En cours": "En cours",
+      "Livré": "Livré"
+    },
+    "suiviLoading": "Chargement du suivi…",
+    "entrySaved": "Entrée enregistrée.",
+    "entrySaveError": "Impossible d'enregistrer cette entrée.",
+    "suiviTitle": "Suivi quotidien des bassins",
+    "detail": "Détail",
+    "detailPlaceholder": "Ex: bassin 1",
+    "quantiteAvecUnite": "Quantité ({{unit}})",
+    "suiviEmpty": "Aucune donnée enregistrée.",
+    "summaryMortalite": "Mortalité",
+    "summaryCroissance": "Croissance",
+    "summaryAliments": "Aliments",
+    "summaryTraitements": "Traitements",
+    "type": {
+      "mortalite": "Mortalité",
+      "croissance": "Croissance / pesée",
+      "alimentation": "Consommation d'aliments",
+      "traitement": "Traitement"
+    },
+    "unit": {
+      "poissons": "poissons",
+      "kg": "kg",
+      "dose": "dose",
       "unite": "unité",
       "u": "u"
     }
@@ -1240,6 +1306,10 @@
         "title": "Poulailler",
         "text": "Même logique que Cultures, appliquée à l'élevage : température/humidité du poulailler, stocks (aliments, œufs, volailles) avec catalogue de prix, ventes/achats/livraisons, et comptabilité automatique."
       },
+      "pisciculture": {
+        "title": "Pisciculture",
+        "text": "Même logique que Poulailler, appliquée à l'élevage piscicole : qualité de l'eau des bassins (pH, oxygène dissous, température), stocks (aliments, alevins, poissons) avec catalogue de prix, ventes/achats/livraisons, et comptabilité automatique."
+      },
       "clientsFournisseurs": {
         "title": "Clients & Fournisseurs",
         "text": "Une même fiche contact peut être client, fournisseur, ou les deux à la fois — cochez la case correspondante sur la fiche. Coordonnées, historique des achats pour un client, historique des commandes pour un fournisseur. Cliquez sur une fiche dans la liste de gauche pour voir son détail à droite, avec la liste de prix qui lui est éventuellement assignée."
@@ -1611,6 +1681,7 @@
     "reports": "Rapports",
     "cultures": "Cultures & irrigation",
     "poulailler": "Poulailler",
+    "pisciculture": "Pisciculture",
     "clients": "Clients",
     "fournisseurs": "Fournisseurs",
     "employees": "Employés",

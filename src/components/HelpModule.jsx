@@ -6,7 +6,7 @@ import { Card } from './ui.jsx';
 // Ordre d'affichage des sections ; le contenu (titre + texte/points) est dans i18n
 // sous help.sections.<id>.
 const SECTION_IDS = [
-  'accueil', 'calendrier', 'recoltes', 'cultures', 'poulailler', 'clientsFournisseurs',
+  'accueil', 'calendrier', 'recoltes', 'cultures', 'poulailler', 'pisciculture', 'clientsFournisseurs',
   'finances', 'devis', 'factures', 'salaries', 'equipements', 'observations', 'assistant',
   'previsionsRapports', 'notifications', 'feedback', 'profil',
 ];

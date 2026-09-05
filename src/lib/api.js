@@ -385,6 +385,36 @@ export async function createPoulaillerSuivi(payload) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Pisciculture — Livraisons
+// ─────────────────────────────────────────────────────────────────────
+export async function getPiscicultureLivraisons() {
+  return request('/pisciculture/livraisons');
+}
+
+export async function createPiscicultureLivraison(payload) {
+  return safeRequest('/pisciculture/livraisons', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updatePiscicultureLivraison(id, payload) {
+  return safeRequest(`/pisciculture/livraisons/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deletePiscicultureLivraison(id) {
+  return safeRequest(`/pisciculture/livraisons/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Pisciculture — Suivi quotidien
+// ─────────────────────────────────────────────────────────────────────
+export async function getPiscicultureSuivi() {
+  return request('/pisciculture/suivi');
+}
+
+export async function createPiscicultureSuivi(payload) {
+  return safeRequest('/pisciculture/suivi', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Sync offline — rejoue les opérations en attente vers le backend
 // ─────────────────────────────────────────────────────────────────────
 export async function flushOfflineQueue() {

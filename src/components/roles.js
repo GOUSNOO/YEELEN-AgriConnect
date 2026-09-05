@@ -2,12 +2,12 @@ export const ROLE_DEFINITIONS = {
   admin: {
     label: 'Administrateur',
     description: 'Accès complet à toutes les fonctionnalités',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'clients', 'fournisseurs', 'employees', 'finances', 'notifications', 'modules', 'reports', 'equipements'],
+    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'pisciculture', 'clients', 'fournisseurs', 'employees', 'finances', 'notifications', 'modules', 'reports', 'equipements'],
   },
   directeur: {
     label: 'Directeur',
     description: 'Direction générale : accès complet aux opérations et aux finances',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'clients', 'fournisseurs', 'employees', 'finances', 'notifications', 'modules', 'reports', 'equipements'],
+    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'pisciculture', 'clients', 'fournisseurs', 'employees', 'finances', 'notifications', 'modules', 'reports', 'equipements'],
   },
   comptable: {
     label: 'Comptable',
@@ -22,12 +22,12 @@ export const ROLE_DEFINITIONS = {
   ouvrier: {
     label: 'Ouvrier',
     description: 'Suivi terrain et opérations courantes',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'notifications'],
+    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'pisciculture', 'notifications'],
   },
   gestionnaire: {
     label: 'Gestionnaire',
     description: 'Pilotage opérationnel et reporting',
-    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'clients', 'fournisseurs', 'finances', 'notifications', 'modules', 'reports', 'equipements'],
+    permissions: ['home', 'calendar', 'recoltes', 'assistant', 'cultures', 'poulailler', 'pisciculture', 'clients', 'fournisseurs', 'finances', 'notifications', 'modules', 'reports', 'equipements'],
   },
 };
 

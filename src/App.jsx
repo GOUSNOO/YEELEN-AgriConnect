@@ -11,7 +11,7 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish
 } from 'lucide-react';
 import {
   clearToken,
@@ -32,6 +32,8 @@ import {
   getSalaries, createSalarie, updateSalarie, deleteSalarie,
   getPostes, getDepartements,
   getPoulaillerHistorique, getCulturesHistorique,
+  getPiscicultureLivraisons, createPiscicultureLivraison, updatePiscicultureLivraison, deletePiscicultureLivraison,
+  getPiscicultureSuivi, createPiscicultureSuivi,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getPrixEffectif,
@@ -211,6 +213,59 @@ function EnvironnementTab({ farmId }) {
             { label: days[2], value: 54 },
             { label: days[3], value: 60 },
           ]} color={COLORS.blue} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Mirroir d'EnvironnementTab — aucun backend/persistance (simulation client identique),
+// vocabulaire qualité de l'eau (pH/oxygène dissous/température) inspiré du schéma FIWARE
+// Smart Data Models Aquaculture (FishContainment/Sump) : voir le plan de ce chantier.
+function BassinsEnvironnementTab({ farmId }) {
+  const { t } = useTranslation();
+  const [env, setEnv] = useState({ ph: 7.2, oxygene: 6.5, temperature: 24 });
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setEnv(prev => ({
+        ph: Math.max(5, Math.min(10, prev.ph + (Math.random() - 0.5) * 0.2)),
+        oxygene: Math.max(2, Math.min(10, prev.oxygene + (Math.random() - 0.5) * 0.5)),
+        temperature: Math.max(15, Math.min(35, prev.temperature + (Math.random() - 0.5) * 1)),
+      }));
+    }, 6000);
+    return () => clearInterval(timer);
+  }, []);
+  const alerte = env.ph < 6 || env.ph > 9 || env.oxygene < 4 || env.temperature > 30;
+  const days = t('common.days', { returnObjects: true });
+  return (
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('pisciculture.bassinsTitle')}</div>
+        <Badge tone={alerte ? 'red' : 'green'}>{alerte ? t('pisciculture.conditionsWatch') : t('pisciculture.conditionsNormal')}</Badge>
+      </div>
+      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0', flexWrap: 'wrap' }}>
+        <GaugeDial value={env.ph} max={14} label={t('pisciculture.ph')} unit="" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
+        <GaugeDial value={env.oxygene} max={10} label={t('pisciculture.oxygene')} unit=" mg/L" colorMain={COLORS.green} colorTrack={COLORS.greenSoft} icon={<Droplet size={15} color={COLORS.green} />} />
+        <GaugeDial value={env.temperature} max={40} label={t('pisciculture.temperatureEau')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.phEvolution')}</div>
+          <MiniChart data={[
+            { label: days[0], value: 7.1 },
+            { label: days[1], value: 7.3 },
+            { label: days[2], value: 7.0 },
+            { label: days[3], value: 7.2 },
+          ]} color={COLORS.blue} />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.oxygeneEvolution')}</div>
+          <MiniChart data={[
+            { label: days[0], value: 6.8 },
+            { label: days[1], value: 6.2 },
+            { label: days[2], value: 5.9 },
+            { label: days[3], value: 6.5 },
+          ]} color={COLORS.green} />
         </div>
       </div>
     </Card>
@@ -2626,6 +2681,12 @@ const DEFAULT_STOCKS = [
   { nom: 'Poulets de chair', categorie: 'Volailles vivantes', quantite: 180, unite: 'têtes', seuil: 20 },
 ];
 
+const DEFAULT_STOCKS_PISCICULTURE = [
+  { nom: 'Aliment poisson', categorie: 'Aliment', quantite: 15, unite: 'sacs 25kg', seuil: 5 },
+  { nom: 'Alevins tilapia', categorie: 'Alevins', quantite: 500, unite: 'unités', seuil: 100 },
+  { nom: 'Tilapia adulte', categorie: 'Poissons vivants', quantite: 220, unite: 'kg', seuil: 30 },
+];
+
 function useTable(farmId, key, defaults) {
   const [rows, setRows] = useState(defaults);
   const loadedRef = useRef(false);
@@ -2909,9 +2970,12 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         setUnites(fetchedUnites || []);
 
         const { stocks: fetched } = await api.get();
-        if (fetched.length === 0 && moduleType === 'Poulailler') {
+        const seedList = moduleType === 'Poulailler' ? DEFAULT_STOCKS
+          : moduleType === 'Pisciculture' ? DEFAULT_STOCKS_PISCICULTURE
+          : null;
+        if (fetched.length === 0 && seedList) {
           const seeded = [];
-          for (const s of DEFAULT_STOCKS) {
+          for (const s of seedList) {
             const cat = (fetchedCats || []).find(c => c.nom === s.categorie);
             if (!cat) continue;
             try {
@@ -3428,6 +3492,112 @@ function LivraisonsTab({ farmId }) {
   );
 }
 
+// Mirroir quasi verbatim de LivraisonsTab, câblé sur les routes /api/pisciculture/livraisons.
+function PiscicultureLivraisonsTab({ farmId }) {
+  const { t } = useTranslation();
+  const [rows, setRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [form, setForm] = useState({ client: '', produit: '', quantite: '' });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { livraisons } = await getPiscicultureLivraisons();
+        setRows(livraisons);
+      } catch (err) {
+        console.error('[PiscicultureLivraisonsTab load]', err);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [farmId]);
+
+  const add = async (e) => {
+    e.preventDefault();
+    if (!form.client || !form.produit) return;
+    try {
+      const { livraison } = await createPiscicultureLivraison({ client: form.client, produit: form.produit, quantite: Number(form.quantite || 0) });
+      if (livraison) {
+        setRows(r => [livraison, ...r]);
+        notifySuccess(t('pisciculture.livraisonPlanifiee'));
+      }
+    } catch (err) {
+      console.error('[PiscicultureLivraisonsTab add]', err);
+      notifyError(err, t('pisciculture.livraisonAddError'));
+    }
+    setForm({ client: '', produit: '', quantite: '' });
+  };
+  const remove = async (id, produit) => {
+    if (!window.confirm(t('pisciculture.confirmDeleteLivraison', { produit }))) return;
+    try {
+      await deletePiscicultureLivraison(id);
+      setRows(r => r.filter(x => x.id !== id));
+      notifySuccess(t('pisciculture.livraisonDeleted'));
+    } catch (err) {
+      console.error('[PiscicultureLivraisonsTab remove]', err);
+      notifyError(err, t('pisciculture.livraisonDeleteError'));
+    }
+  };
+  const setStatut = async (id, statut) => {
+    setRows(r => r.map(x => x.id === id ? { ...x, statut } : x));
+    try {
+      await updatePiscicultureLivraison(id, { statut });
+    } catch (err) {
+      console.error('[PiscicultureLivraisonsTab setStatut]', err);
+      notifyError(err, t('pisciculture.statutUpdateError'));
+    }
+  };
+
+  if (!loaded) {
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('pisciculture.livraisonsLoading')}</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card>
+        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label={t('pisciculture.client')} placeholder={t('pisciculture.clientPlaceholder')} value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} />
+          <Field label={t('pisciculture.produit')} placeholder={t('pisciculture.produitPlaceholder')} value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
+          <Field label={t('pisciculture.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
+          <Button variant="ochre" type="submit"><Plus size={15} /> {t('pisciculture.planifier')}</Button>
+        </form>
+      </Card>
+      <Card style={{ padding: 0 }}>
+        <DataTable>
+          <thead>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>{t('common.date')}</th><th>{t('pisciculture.client')}</th><th>{t('pisciculture.produit')}</th><th>{t('pisciculture.colQte')}</th><th>{t('common.status')}</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id}>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(r.date)}</td>
+                <td>{r.client}</td>
+                <td>{r.produit}</td>
+                <td>{r.quantite}</td>
+                <td>
+                  <select value={r.statut} onChange={e => setStatut(r.id, e.target.value)} style={{
+                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: 999,
+                    padding: '4px 8px', background: COLORS.surfaceAlt, color: COLORS.ink
+                  }}>
+                    {STATUTS.map(s => <option key={s} value={s}>{t(`pisciculture.statut.${s}`, { defaultValue: s })}</option>)}
+                  </select>
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <button onClick={() => remove(r.id, r.produit)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
+                    <Trash2 size={15} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      </Card>
+    </div>
+  );
+}
+
 function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', remoteVentes, remoteAchats, remoteHistorique }) {
   const { t } = useTranslation();
   const { fmtMoney, fmtDate } = useLocale();
@@ -3697,6 +3867,140 @@ function PoultryMonitoringTab({ farmId }) {
           <tbody>
             {records.length === 0 ? (
               <tr><td colSpan="4" style={{ color: COLORS.inkSoft }}>{t('poulailler.suiviEmpty')}</td></tr>
+            ) : records.map(item => (
+              <tr key={item.id}>
+                <td>{formatDateFr(item.date)}</td>
+                <td><Badge tone={typeMeta[item.type]?.tone || 'green'}>{typeLabel(item.type)}</Badge></td>
+                <td>{item.quantity} {unitLabel(item.type, 'u')}</td>
+                <td>{item.detail || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      </Card>
+    </div>
+  );
+}
+
+// Mirroir de PoultryMonitoringTab — types mortalite/croissance/alimentation/traitement au
+// lieu de mortalite/naissance/vaccination/alimentation/oeufs, câblé sur
+// /api/pisciculture/suivi.
+function PiscicultureMonitoringTab({ farmId }) {
+  const { t } = useTranslation();
+  const todayValue = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const [records, setRecords] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [form, setForm] = useState({ date: todayValue(), type: 'mortalite', quantity: '', detail: '' });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { suivi } = await getPiscicultureSuivi();
+        setRecords(suivi.map(r => ({ id: r.id, date: r.date, type: r.type, quantity: r.quantite, detail: r.detail })));
+      } catch (err) {
+        console.error('[PiscicultureMonitoringTab load]', err);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [farmId]);
+
+  const addRecord = async (e) => {
+    e.preventDefault();
+    if (!form.date || form.quantity === '') return;
+    try {
+      const { entry } = await createPiscicultureSuivi({ date: form.date, type: form.type, quantite: Number(form.quantity), detail: form.detail });
+      if (entry) {
+        setRecords(prev => [{ id: entry.id, date: entry.date, type: entry.type, quantity: entry.quantite, detail: entry.detail }, ...prev]);
+        notifySuccess(t('pisciculture.entrySaved'));
+      }
+    } catch (err) {
+      console.error('[PiscicultureMonitoringTab addRecord]', err);
+      notifyError(err, t('pisciculture.entrySaveError'));
+    }
+    setForm({ date: todayValue(), type: form.type, quantity: '', detail: '' });
+  };
+
+  const typeMeta = {
+    mortalite: { tone: 'red', unit: 'poissons' },
+    croissance: { tone: 'blue', unit: 'kg' },
+    alimentation: { tone: 'ochre', unit: 'kg' },
+    traitement: { tone: 'green', unit: 'dose' },
+  };
+  const typeLabel = (type) => t(`pisciculture.type.${type}`, { defaultValue: type });
+  const unitLabel = (type, fallback = 'unite') => t(`pisciculture.unit.${typeMeta[type]?.unit || fallback}`);
+
+  const summary = records.reduce((acc, item) => {
+    if (item.type === 'mortalite') acc.mortalite += item.quantity;
+    if (item.type === 'croissance') acc.croissance += item.quantity;
+    if (item.type === 'alimentation') acc.alimentation += item.quantity;
+    if (item.type === 'traitement') acc.traitement += item.quantity;
+    return acc;
+  }, { mortalite: 0, croissance: 0, alimentation: 0, traitement: 0 });
+
+  const quantityLabel = unitLabel(form.type);
+
+  if (!loaded) {
+    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('pisciculture.suiviLoading')}</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('pisciculture.suiviTitle')}</div>
+        <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <Field label={t('common.date')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+          <Select label={t('compta.type')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
+            <option value="mortalite">{typeLabel('mortalite')}</option>
+            <option value="croissance">{typeLabel('croissance')}</option>
+            <option value="alimentation">{typeLabel('alimentation')}</option>
+            <option value="traitement">{typeLabel('traitement')}</option>
+          </Select>
+          <Field label={t('pisciculture.quantiteAvecUnite', { unit: quantityLabel })} type="number" placeholder="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} />
+          <Field label={t('pisciculture.detail')} placeholder={t('pisciculture.detailPlaceholder')} value={form.detail} onChange={e => setForm({ ...form, detail: e.target.value })} />
+          <Button variant="ochre" type="submit"><Plus size={15} /> {t('common.add')}</Button>
+        </form>
+      </Card>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        <Card style={{ background: COLORS.redSoft, border: 'none' }}>
+          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryMortalite')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
+        </Card>
+        <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
+          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryCroissance')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{summary.croissance} {t('pisciculture.unit.kg')}</div>
+        </Card>
+        <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
+          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryAliments')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('pisciculture.unit.kg')}</div>
+        </Card>
+        <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
+          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryTraitements')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{summary.traitement}</div>
+        </Card>
+      </div>
+
+      <Card style={{ padding: 0 }}>
+        <DataTable>
+          <thead>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>{t('common.date')}</th>
+              <th>{t('compta.type')}</th>
+              <th>{t('pisciculture.quantite')}</th>
+              <th>{t('pisciculture.detail')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.length === 0 ? (
+              <tr><td colSpan="4" style={{ color: COLORS.inkSoft }}>{t('pisciculture.suiviEmpty')}</td></tr>
             ) : records.map(item => (
               <tr key={item.id}>
                 <td>{formatDateFr(item.date)}</td>
@@ -4187,6 +4491,44 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
         remoteVentes={async () => (await getVentesLedger()).mouvements}
         remoteAchats={async () => (await getAchatsLedger('Poulailler')).mouvements}
         remoteHistorique={getPoulaillerHistorique}
+      />}
+    </div>
+  );
+}
+
+// Mirroir de PoulaillerModule — voir CLAUDE.md/docs/journal.md pour le contexte : le stock
+// (produits) et les vraies ventes/achats réutilisent les composants génériques ci-dessus tels
+// quels (moduleType="Pisciculture"), seuls Bassins/Suivi/Livraisons sont dédiés (comme côté
+// Poulailler). Pas de remoteHistorique : Pisciculture n'a pas de "mouvements" texte-libre à
+// auditer (ce ledger, côté Poulailler, est un vestige de l'ancien système).
+function PiscicultureModule({ farmId, highlightProduitId }) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState('environnement');
+
+  useEffect(() => {
+    if (highlightProduitId) setTab('stocks');
+  }, [highlightProduitId]);
+  const tabs = [
+    { id: 'environnement', label: t('pisciculture.tabBassins'), icon: Droplet },
+    { id: 'suivi', label: t('pisciculture.tabSuivi'), icon: ClipboardList },
+    { id: 'stocks', label: t('pisciculture.tabStocks'), icon: Package },
+    { id: 'ventes', label: t('pisciculture.tabVentes'), icon: TrendingUp },
+    { id: 'achats', label: t('pisciculture.tabAchats'), icon: ShoppingCart },
+    { id: 'livraisons', label: t('pisciculture.tabLivraisons'), icon: Truck },
+    { id: 'comptabilite', label: t('pisciculture.tabComptabilite'), icon: Wallet },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} accentColor={COLORS.blue} />
+      {tab === 'environnement' && <BassinsEnvironnementTab farmId={farmId} />}
+      {tab === 'suivi' && <PiscicultureMonitoringTab farmId={farmId} />}
+      {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Pisciculture" highlightId={highlightProduitId} />}
+      {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Pisciculture" />}
+      {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-pisciculture" moduleType="Pisciculture" />}
+      {tab === 'livraisons' && <PiscicultureLivraisonsTab farmId={farmId} />}
+      {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
+        remoteVentes={async () => (await getVentesLedger()).mouvements}
+        remoteAchats={async () => (await getAchatsLedger('Pisciculture')).mouvements}
       />}
     </div>
   );
@@ -7103,6 +7445,7 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
   const MODULES = [
     { key: 'cultures', icon: Leaf, accent: 'green' },
     { key: 'poulailler', icon: Bird, accent: 'ochre' },
+    { key: 'pisciculture', icon: Fish, accent: 'blue' },
     { key: 'clients', icon: Users, accent: 'blue' },
     { key: 'employees', icon: Briefcase, accent: 'ochre' },
     { key: 'fournisseurs', icon: Truck, accent: 'ochre' },
@@ -7257,7 +7600,7 @@ export default function App() {
   // chargé. `mode` pilote l'affichage (trial/readonly/locked/active) — voir GET /billing/status.
   const [billing, setBilling] = useState(null);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
-  const [activated, setActivated] = useState({ cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
+  const [activated, setActivated] = useState({ cultures: false, poulailler: false, pisciculture: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
   const tab = screen === 'dashboard' ? (urlTab || 'accueil') : null;
   const [initLoaded, setInitLoaded] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
@@ -7293,7 +7636,8 @@ export default function App() {
       navigate(`/app/${item.estClient ? 'clients' : 'fournisseurs'}`);
       setHighlightContactId(item.id);
     } else if (kind === 'produit') {
-      navigate(`/app/${item.module === 'Cultures' ? 'cultures' : 'poulailler'}`);
+      const ongletParModule = { Cultures: 'cultures', Poulailler: 'poulailler', Pisciculture: 'pisciculture' };
+      navigate(`/app/${ongletParModule[item.module] || 'cultures'}`);
       setHighlightProduit({ module: item.module, id: item.id });
     } else if (kind === 'devis') {
       // Un devis n'a pas d'écran dédié (voir DevisModule, imbriqué dans les
@@ -7318,7 +7662,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const saved = await storageGet('agriconnect-modules', { cultures: false, poulailler: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
+      const saved = await storageGet('agriconnect-modules', { cultures: false, poulailler: false, pisciculture: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false });
       setActivated(saved);
       setInitLoaded(true);
     })();
@@ -7490,6 +7834,7 @@ export default function App() {
     roleConfig.permissions.includes('reports') && { id: 'reports', label: t('nav.reports'), icon: FileText, category: 'analyse' },
     activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: t('nav.cultures'), icon: Sprout, category: 'operations' },
     activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: t('nav.poulailler'), icon: Egg, category: 'operations' },
+    activated.pisciculture && roleConfig.permissions.includes('pisciculture') && { id: 'pisciculture', label: t('nav.pisciculture'), icon: Fish, category: 'operations' },
     activated.clients && roleConfig.permissions.includes('clients') && { id: 'clients', label: t('nav.clients'), icon: Users, category: 'commercial' },
     activated.fournisseurs && roleConfig.permissions.includes('fournisseurs') && { id: 'fournisseurs', label: t('nav.fournisseurs'), icon: Truck, category: 'commercial' },
     activated.employees && roleConfig.permissions.includes('employees') && { id: 'employees', label: t('nav.employees'), icon: Briefcase, category: 'rh' },
@@ -7738,6 +8083,12 @@ export default function App() {
               <PoulaillerModule
                 farmId={user}
                 highlightProduitId={highlightProduit?.module === 'Poulailler' ? highlightProduit.id : null}
+              />
+            )}
+            {tab === 'pisciculture' && (
+              <PiscicultureModule
+                farmId={user}
+                highlightProduitId={highlightProduit?.module === 'Pisciculture' ? highlightProduit.id : null}
               />
             )}
             {tab === 'clients' && <ContactsTab type="client" highlightId={highlightContactId || highlightFromUrl} />}

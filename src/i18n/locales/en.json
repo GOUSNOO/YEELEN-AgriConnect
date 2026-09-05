@@ -121,6 +121,11 @@
       "desc": "Track the poultry house environment and manage your whole poultry operation day to day.",
       "features": ["Poultry house temperature and humidity", "Stock (feed, eggs, birds)", "Sales, purchases and deliveries", "Automatic accounting"]
     },
+    "pisciculture": {
+      "title": "Fish farming management",
+      "desc": "Track pond water quality and manage your whole fish farming operation day to day.",
+      "features": ["Water pH, dissolved oxygen and temperature", "Stock (feed, fry, fish)", "Sales, purchases and deliveries", "Automatic accounting"]
+    },
     "clients": {
       "title": "Customer management",
       "desc": "Record your customers, track their purchases, payments and outstanding balance.",
@@ -470,6 +475,67 @@
       "poussins": "chicks",
       "kg": "kg",
       "oeufs": "eggs",
+      "unite": "unit",
+      "u": "u"
+    }
+  },
+  "pisciculture": {
+    "tabBassins": "Ponds",
+    "tabSuivi": "Tracking",
+    "tabStocks": "Stock",
+    "tabVentes": "Sales",
+    "tabAchats": "Purchases",
+    "tabLivraisons": "Deliveries",
+    "tabComptabilite": "Accounting",
+    "bassinsTitle": "Pond water quality",
+    "conditionsWatch": "Conditions to monitor",
+    "conditionsNormal": "Normal conditions",
+    "ph": "pH",
+    "oxygene": "Dissolved oxygen",
+    "temperatureEau": "Water temperature",
+    "phEvolution": "pH trend",
+    "oxygeneEvolution": "Dissolved oxygen trend",
+    "livraisonsLoading": "Loading deliveries…",
+    "livraisonPlanifiee": "Delivery scheduled.",
+    "livraisonAddError": "Could not save the delivery.",
+    "confirmDeleteLivraison": "Delete delivery “{{produit}}”?",
+    "livraisonDeleted": "Delivery deleted.",
+    "livraisonDeleteError": "Could not delete the delivery.",
+    "statutUpdateError": "The status could not be updated.",
+    "client": "Customer",
+    "clientPlaceholder": "Name",
+    "produit": "Product",
+    "produitPlaceholder": "e.g. Tilapia",
+    "quantite": "Quantity",
+    "planifier": "Schedule",
+    "colQte": "Qty",
+    "statut": {
+      "En attente": "Pending",
+      "En cours": "In progress",
+      "Livré": "Delivered"
+    },
+    "suiviLoading": "Loading tracking…",
+    "entrySaved": "Entry saved.",
+    "entrySaveError": "Could not save this entry.",
+    "suiviTitle": "Daily pond tracking",
+    "detail": "Details",
+    "detailPlaceholder": "e.g. pond 1",
+    "quantiteAvecUnite": "Quantity ({{unit}})",
+    "suiviEmpty": "No data recorded.",
+    "summaryMortalite": "Mortality",
+    "summaryCroissance": "Growth",
+    "summaryAliments": "Feed",
+    "summaryTraitements": "Treatments",
+    "type": {
+      "mortalite": "Mortality",
+      "croissance": "Growth / weigh-in",
+      "alimentation": "Feed consumption",
+      "traitement": "Treatment"
+    },
+    "unit": {
+      "poissons": "fish",
+      "kg": "kg",
+      "dose": "dose",
       "unite": "unit",
       "u": "u"
     }
@@ -1240,6 +1306,10 @@
         "title": "Poultry",
         "text": "Same logic as Crops, applied to livestock: poultry-house temperature/humidity, stock (feed, eggs, birds) with a price catalog, sales/purchases/deliveries, and automatic accounting."
       },
+      "pisciculture": {
+        "title": "Fish farming",
+        "text": "Same logic as Poultry, applied to fish farming: pond water quality (pH, dissolved oxygen, temperature), stock (feed, fry, fish) with a price catalog, sales/purchases/deliveries, and automatic accounting."
+      },
       "clientsFournisseurs": {
         "title": "Customers & Suppliers",
         "text": "A single contact record can be a customer, a supplier, or both at once — tick the matching box on the record. Contact details, purchase history for a customer, order history for a supplier. Click a record in the left list to see its details on the right, with the price list possibly assigned to it."
@@ -1611,6 +1681,7 @@
     "reports": "Reports",
     "cultures": "Crops & irrigation",
     "poulailler": "Poultry",
+    "pisciculture": "Fish farming",
     "clients": "Customers",
     "fournisseurs": "Suppliers",
     "employees": "Employees",
