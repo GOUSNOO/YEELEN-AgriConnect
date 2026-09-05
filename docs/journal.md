@@ -2131,4 +2131,45 @@ inaccessible à un vrai client externe**.
   aurait un rayon d'effet bien plus large (tous les consommateurs de la vue authentifiée) que
   ce qui se justifie dans une passe de durcissement — à traiter séparément si un décalage
   réel est un jour constaté.
-- Suite complète (290 intégration + 1 unitaire) reconfirmée verte après le correctif.
+- Suite complète reconfirmée verte après le correctif (294 tests d'intégration / 35 fichiers + 1 unitaire).
+
+### Jalon 1 — durcissement, suite : RH / Comptabilité / Équipements / Cultures / Catalogue (2026-09-05)
+
+Poursuite de la même méthode (fonctions `src/lib/api.js` sans aucun appelant dans `src/`) sur
+les modules restants. Rien de la gravité de la signature publique de devis ; trois
+observations, aucune ne justifiant une correction non demandée :
+
+- **`cultures_mouvements` confirmé mort/vestige** — `createCulturesMouvement`/
+  `deleteCulturesMouvement`/`updateCulturesMouvement`/`getCulturesMouvementHistorique` sans
+  aucun appelant, exactement la même situation que `poulailler_mouvements` (déjà documentée
+  comme morte lors du chantier Pisciculture) mais jamais explicitement signalée pour Cultures.
+  Confirmé par les données : les 4 seules lignes de la table datent du 25/07 au 02/08/2026,
+  **avant** l'unification produits/devis du 18/08 — aucune nouvelle ligne depuis, malgré des
+  dizaines de ventes/achats Cultures créés depuis via `VentesWithDevis`/`AchatModule` (le vrai
+  flux, basé sur `produits`/`stock_mouvements`). Aucune action : même statut que le ledger
+  Poulailler, un futur nettoyage de code mort pourrait les regrouper.
+- **Unités de mesure : aucun panneau de gestion** — `routes/unitesMesure.js`/
+  `unitesMesureCategories.js` ont un CRUD complet, testé, gated admin/directeur — mais
+  `createUniteMesure`/`updateUniteMesure`/`deleteUniteMesure` (+ variantes catégories) n'ont
+  aucun appelant ; seule la lecture (`getUnitesMesure`, pour peupler un menu déroulant) est
+  utilisée. Contrairement à tous les autres référentiels de l'app (taxes, comptes, journaux,
+  conditions de paiement, départements/postes/types de congé, catégories/gabarits produit),
+  qui ont chacun un panneau dédié, celui-ci n'existe pas. Moins grave que la signature de
+  devis : des unités par défaut sont seedées à l'inscription (`UNITES_MESURE_DEFAUT`), l'app
+  reste utilisable — seule la personnalisation (ajouter une unité propre) est bloquée. Signalé
+  à l'utilisateur, pas construit sans confirmation.
+- **`getContactPrixEffectifs` (aperçu groupé des prix d'un contact) inutilisé** —
+  `GET /contacts/:id/prix-effectifs` fonctionne et est testé, mais seule la résolution par
+  article isolé (`getPrixEffectif`, utilisée dans `DevisModule`) est réellement appelée. Pure
+  fonctionnalité de confort manquante (voir le prix de tous les articles d'un coup pour un
+  client donné), pas un chemin bloqué.
+- **Confirmé sain, pattern délibéré et non un bug** : ~10 référentiels de l'app (banques,
+  contrats salariés, factures brouillon, départements/postes/types de congé, gabarits/
+  catégories produit) exposent Ajouter + Supprimer via l'UI mais jamais Modifier en place
+  (l'utilisateur supprime et recrée) — leurs fonctions `update*` d'`api.js` sont routinièrement
+  sans appelant. Confirmé comme une convention UX cohérente et intentionnelle dans tout le
+  projet (déjà notée pour `updateBanque`/`updateSalarie` lors du premier passage Jalon 1 du
+  2026-08-13), pas quelque chose à corriger au cas par cas.
+- **Équipements vérifié sain** — `EquipementsModule.jsx` utilise bien la totalité du CRUD
+  équipements + sous-ressource maintenance (y compris `updateEquipement`, contrairement au
+  pattern ci-dessus) ; aucun gap trouvé.
