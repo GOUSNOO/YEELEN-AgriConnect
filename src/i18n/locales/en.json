@@ -232,6 +232,7 @@
     "meteoParcelleRecherche": "Location specific to this plot (optional)",
     "meteoParcelleSourcePropre": "plot's own location",
     "meteoParcelleSourceEntreprise": "company location",
+    "precisionTitle": "Precision agriculture",
     "vanneAction": {
       "vanne_auto_open": "Valve opened automatically",
       "vanne_auto_close": "Valve closed automatically",
@@ -542,6 +543,34 @@
       "dose": "dose",
       "unite": "unit",
       "u": "u"
+    }
+  },
+  "precisionAgricole": {
+    "solTitle": "Soil analysis",
+    "ndviTitle": "Vegetation health (satellite NDVI)",
+    "texture": "Texture",
+    "argile": "clay",
+    "sable": "sand",
+    "limon": "silt",
+    "carboneOrganique": "organic carbon",
+    "azote": "nitrogen",
+    "culturesSuggerees": "Suitable crops",
+    "ndviNonConfigure": "Satellite imagery not configured for this installation.",
+    "ndviAucuneImage": "No recent cloud-free satellite image available (free-tier limit).",
+    "textureClasse": {
+      "argileux": "clay",
+      "argilo-sableux": "sandy clay",
+      "argilo-limoneux": "clay loam",
+      "sableux": "sandy",
+      "sablo-limoneux": "sandy loam",
+      "limoneux": "silty",
+      "limon": "loam"
+    },
+    "bande": {
+      "sol_nu": "Bare soil / severe stress",
+      "clairsemee": "Sparse vegetation",
+      "moderee": "Moderate vegetation",
+      "dense": "Dense, healthy vegetation"
     }
   },
   "meteo": {

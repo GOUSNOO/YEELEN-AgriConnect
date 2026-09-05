@@ -47,7 +47,7 @@ import {
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte, updateRecolte, deleteRecolte,
   getOnboardingStatus, updateOnboardingStatus, updateEntreprise, getEntreprise,
   getBillingStatus,
-  rechercherVilleMeteo, getMeteo, getParcellesLocalisees,
+  rechercherVilleMeteo, getMeteo, getParcellesLocalisees, getAnalyseSol, getNdvi,
 } from './lib/api';
 import { getRecaptchaToken } from './lib/recaptcha.js';
 import BillingAdminPanel from './components/BillingAdminPanel';
@@ -4235,6 +4235,85 @@ function ParcelleMeteoSection({ parcelle }) {
   );
 }
 
+const BANDE_NDVI_TONE = { sol_nu: 'red', clairsemee: 'ochre', moderee: 'blue', dense: 'green' };
+
+function ParcellePrecisionSection({ parcelle }) {
+  const { t } = useTranslation();
+  const [sol, setSol] = useState(null);
+  const [solError, setSolError] = useState(null);
+  const [solLoading, setSolLoading] = useState(true);
+  const [ndvi, setNdvi] = useState(null);
+  const [ndviError, setNdviError] = useState(null);
+  const [ndviLoading, setNdviLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setSolLoading(true);
+      try { setSol(await getAnalyseSol(parcelle.id)); }
+      catch (err) { setSolError(err.message); }
+      finally { setSolLoading(false); }
+    })();
+    (async () => {
+      setNdviLoading(true);
+      try { setNdvi(await getNdvi(parcelle.id)); }
+      catch (err) { setNdviError(err.message); }
+      finally { setNdviLoading(false); }
+    })();
+  }, [parcelle.id]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+          {t('precisionAgricole.solTitle')}
+        </div>
+        {solLoading ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+        ) : solError ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{solError}</div>
+        ) : sol ? (
+          <div style={{ fontSize: 12.5, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div>
+              {t('precisionAgricole.texture')} : <b>{sol.texture.classe ? t(`precisionAgricole.textureClasse.${sol.texture.classe}`) : '—'}</b>
+              {' '}({t('precisionAgricole.argile')} {sol.texture.argile}% · {t('precisionAgricole.sable')} {sol.texture.sable}% · {t('precisionAgricole.limon')} {sol.texture.limon}%)
+            </div>
+            <div>pH : <b>{sol.ph ?? '—'}</b> · {t('precisionAgricole.carboneOrganique')} : {sol.carboneOrganique ?? '—'} g/kg · {t('precisionAgricole.azote')} : {sol.azote ?? '—'} g/kg</div>
+            {sol.culturesSuggerees.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                <span style={{ color: COLORS.inkSoft }}>{t('precisionAgricole.culturesSuggerees')} :</span>
+                {sol.culturesSuggerees.map((c) => <Badge key={c} tone="green">{c}</Badge>)}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+          {t('precisionAgricole.ndviTitle')}
+        </div>
+        {ndviLoading ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+        ) : ndviError ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{ndviError}</div>
+        ) : ndvi && ndvi.configured === false ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviNonConfigure')}</div>
+        ) : ndvi && ndvi.historique.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviAucuneImage')}</div>
+        ) : ndvi ? (
+          <div style={{ fontSize: 12.5, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>
+              NDVI : <b>{ndvi.ndviActuel}</b> ({ndvi.dateActuelle}) —{' '}
+              <Badge tone={BANDE_NDVI_TONE[ndvi.bande] || 'blue'}>{t(`precisionAgricole.bande.${ndvi.bande}`)}</Badge>
+            </div>
+            <MiniChart data={ndvi.historique.map((h) => ({ label: h.label.slice(5), value: h.value }))} color={COLORS.green} height={70} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function CulturesModule({ farmId, highlightProduitId }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState('parcelles');
@@ -4406,6 +4485,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
   const [generatingPlanId, setGeneratingPlanId] = useState(null);
   const [planningOpenId, setPlanningOpenId] = useState(null);
   const [meteoOpenId, setMeteoOpenId] = useState(null);
+  const [precisionOpenId, setPrecisionOpenId] = useState(null);
 
   const handleGenererPlan = async (id, nom) => {
     if (!window.confirm(t('cultures.confirmGenererPlan', { nom }))) return;
@@ -4544,6 +4624,20 @@ function CulturesModule({ farmId, highlightProduitId }) {
                 {meteoOpenId === p.id && (
                   <div style={{ marginTop: 10 }}>
                     <ParcelleMeteoSection parcelle={p} />
+                  </div>
+                )}
+              </div>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
+                <button
+                  onClick={() => setPrecisionOpenId(id => (id === p.id ? null : p.id))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                >
+                  <ChevronRight size={14} style={{ transform: precisionOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                  {t('cultures.precisionTitle')}
+                </button>
+                {precisionOpenId === p.id && (
+                  <div style={{ marginTop: 10 }}>
+                    <ParcellePrecisionSection parcelle={p} />
                   </div>
                 )}
               </div>

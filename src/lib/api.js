@@ -686,6 +686,14 @@ export async function getParcellesLocalisees() {
   return request('/meteo/parcelles-localisees');
 }
 
+export async function getAnalyseSol(parcelleId) {
+  return request(`/precision/sol?parcelleId=${parcelleId}`);
+}
+
+export async function getNdvi(parcelleId) {
+  return request(`/precision/ndvi?parcelleId=${parcelleId}`);
+}
+
 export async function getAchatsDocuments(module) {
   return request(`/achats?module=${encodeURIComponent(module)}`, { method: 'GET' });
 }

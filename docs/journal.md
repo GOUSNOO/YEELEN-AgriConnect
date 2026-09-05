@@ -2204,3 +2204,65 @@ bug sévère trouvé et corrigé (signature publique de devis), un bug mineur tr
 (`DELETE /produits/:id`), une poignée d'observations mineures documentées (ledgers morts,
 panneau unités de mesure absent, schéma de prix-effectifs par contact obsolète) — aucune ne
 bloquante, toutes signalées plutôt que corrigées sans confirmation.
+
+### Agriculture de précision : analyse de sol + NDVI satellite (2026-09-05)
+
+Chantier suivant sur le backlog long terme (item « Won't have » du MoSCoW, jamais commencé),
+choisi par l'utilisateur après un point d'étape roadmap. Même rigueur de recherche préalable
+qu'exigée pour Pisciculture/Météo : Odoo (clone source local — un vrai module IoT existe dans
+le cœur, `addons/iot_base`/`iot_drivers`, mais entièrement dédié au matériel de caisse/atelier,
+rien pour l'agricole), GitHub (recherche « precision agriculture », « ndvi », « crop-
+monitoring » — les résultats les plus étoilés sont soit des « awesome lists » sans code
+(`px39n/Awesome-Precision-Agriculture`, 142 étoiles mais `language: null`), soit de vrais
+dépôts très peu matures, `Tensornetics/precision-agriculture`, 8 étoiles), GitLab (5 meilleurs
+résultats, tous 0 étoile). Conclusion identique aux chantiers précédents : rien à réutiliser
+au-delà d'API de données externes gratuites.
+
+Décision explicite de l'utilisateur (via `AskUserQuestion`) : **analyse de sol ET NDVI
+satellite**, pas seulement le sol, en acceptant que le NDVI nécessite une clé API gratuite à
+créer — sur le modèle du reCAPTCHA déjà dans l'app.
+
+- **SoilGrids (ISRIC)** — gratuit, sans clé, vérifié en direct sur une vraie coordonnée. Le
+  `d_factor` (diviseur pour convertir la valeur brute en unité réelle) **varie par propriété**
+  — 10 pour la plupart, **100 pour l'azote** — vérifié en direct plutôt que supposé constant,
+  ce qui aurait produit un azote 10× trop élevé si codé en dur.
+- **Agromonitoring/OpenWeather Agro API** — clé optionnelle. Contrainte dure découverte en
+  lisant la doc officielle : la surface d'un polygone doit être **entre 1 et 3000 hectares**.
+  L'app n'a aucune brique cartographique pour dessiner le contour réel d'une parcelle
+  (`ParcelMapTab` n'est qu'un positionnement de points par pourcentage, purement décoratif) —
+  un **carré approximatif** est donc construit à partir de latitude/longitude/superficie de la
+  parcelle (`utils/agroPolygon.js`), limite assumée et documentée.
+- **Backend** : `server/src/routes/precisionAgricole.js` (`GET /sol`, `GET /ndvi`),
+  `utils/solAgronomie.js` (classification de texture par triangle textural simplifié +
+  table de suggestion de cultures par pH/texture, mêmes ~10 cultures que
+  `cultureService.js`), `utils/agroPolygon.js` (génération du polygone, création
+  paresseuse mise en cache dans la nouvelle colonne `parcelles.agro_polygon_id`,
+  suppression best-effort côté Agromonitoring). `PUT /cultures/parcelles/:id` invalide le
+  polygone dès que latitude/longitude/superficie changent — et **`superficie` devient au
+  passage éditable via `PUT`**, elle ne l'était pas avant (toutes les autres écritures de la
+  route l'étaient déjà, gap probablement non intentionnel corrigé en passant).
+- **Migration rejouée ×2** sur copie de sauvegarde restaurée puis appliquée réellement
+  (`parcelles.agro_polygon_id`).
+- **11 tests d'intégration** : sol (texture/pH/suggestions, 404 sans coordonnées, 502 externe,
+  et le cas décrit plus bas), NDVI (clé absente → `{configured:false}` jamais une erreur,
+  création puis réutilisation du polygone — pas de 2e appel de création confirmé, 400 hors
+  bornes de superficie, invalidation après changement de parcelle, isolation multi-tenant,
+  502 externe).
+- **Frontend** : nouvelle section pliable « Agriculture de précision » sur chaque carte de
+  `CulturesModule` (même patron que « Météo de cette parcelle »), deux blocs (sol/NDVI),
+  `MiniChart` réutilisé tel quel pour la tendance NDVI. i18n `precisionAgricole.*`.
+- **Bug réel trouvé en vérification navigateur réelle, corrigé** : sur les coordonnées
+  résolues pour « Bamako » (12.609, -7.975 — probablement un pixel du fleuve Niger, qui
+  traverse la ville), SoilGrids répond `200 OK` mais avec **toutes les propriétés à `null`**
+  (pixel sans donnée : plan d'eau ou zone non couverte). La route renvoyait ce succès vide tel
+  quel, affichant une carte « Texture : — » sans aucune explication. Corrigé : si `ph` et
+  `argile`/`sable`/`limon` sont tous `null`, la route renvoie désormais un `404` explicite
+  (« Aucune donnée de sol disponible à cet endroit précis… ») — plus un test de régression.
+  Vérifié à nouveau en navigateur réel : message clair affiché, puis succès complet confirmé
+  sur une coordonnée voisine ayant de vraies données (texture limon, pH 6.1, cultures
+  suggérées manioc/maïs/riz/blé affichées).
+- NDVI vérifié uniquement en mode « non configuré » (aucune clé Agromonitoring disponible
+  dans cet environnement de développement) — comportement explicitement anticipé par le plan,
+  pas un blocage du chantier.
+- Suite complète reconfirmée verte (305 tests d'intégration / 36 fichiers, 103 frontend),
+  build OK. Entreprise de test nettoyée.

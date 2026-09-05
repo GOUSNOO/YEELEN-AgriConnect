@@ -232,6 +232,7 @@
     "meteoParcelleRecherche": "Localisation propre à cette parcelle (optionnel)",
     "meteoParcelleSourcePropre": "localisation de la parcelle",
     "meteoParcelleSourceEntreprise": "localisation de l'entreprise",
+    "precisionTitle": "Agriculture de précision",
     "vanneAction": {
       "vanne_auto_open": "Vanne ouverte automatiquement",
       "vanne_auto_close": "Vanne fermée automatiquement",
@@ -542,6 +543,34 @@
       "dose": "dose",
       "unite": "unité",
       "u": "u"
+    }
+  },
+  "precisionAgricole": {
+    "solTitle": "Analyse de sol",
+    "ndviTitle": "Santé de la végétation (NDVI satellite)",
+    "texture": "Texture",
+    "argile": "argile",
+    "sable": "sable",
+    "limon": "limon",
+    "carboneOrganique": "carbone organique",
+    "azote": "azote",
+    "culturesSuggerees": "Cultures adaptées",
+    "ndviNonConfigure": "Imagerie satellite non configurée pour cette installation.",
+    "ndviAucuneImage": "Aucune image satellite récente sans nuages disponible (limite du compte gratuit).",
+    "textureClasse": {
+      "argileux": "argileux",
+      "argilo-sableux": "argilo-sableux",
+      "argilo-limoneux": "argilo-limoneux",
+      "sableux": "sableux",
+      "sablo-limoneux": "sablo-limoneux",
+      "limoneux": "limoneux",
+      "limon": "limon"
+    },
+    "bande": {
+      "sol_nu": "Sol nu / stress sévère",
+      "clairsemee": "Végétation clairsemée",
+      "moderee": "Végétation modérée",
+      "dense": "Végétation dense et saine"
     }
   },
   "meteo": {

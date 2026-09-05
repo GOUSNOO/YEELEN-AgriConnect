@@ -56,6 +56,14 @@ router.get('/sol', authRequired, async (req, res) => {
     const azote = extraireValeur(layers, 'nitrogen');
     const cec = extraireValeur(layers, 'cec');
 
+    // SoilGrids répond 200 avec des `mean` à null sur un pixel sans donnée (plan d'eau,
+    // zone non couverte) — constaté en réel sur les coordonnées de Bamako (probablement le
+    // fleuve Niger, qui la traverse). À distinguer d'un vrai succès, sinon l'UI affiche des
+    // tirets vides sans explication.
+    if (ph == null && argile == null && sable == null && limon == null) {
+      return res.status(404).json({ error: "Aucune donnée de sol disponible à cet endroit précis (probablement un plan d'eau ou une zone non couverte par SoilGrids)." });
+    }
+
     const classe = (argile != null && sable != null && limon != null)
       ? classifierTexture(sable, limon, argile)
       : null;

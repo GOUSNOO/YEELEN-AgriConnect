@@ -75,6 +75,19 @@ describe('GET /api/precision/sol', () => {
       expect(res.status).toBe(502);
     } finally { restore(); }
   });
+
+  // Régression (trouvé en vérification navigateur réelle sur les coordonnées de Bamako,
+  // probablement le fleuve Niger) : SoilGrids répond 200 avec toutes les propriétés à null
+  // sur un pixel sans donnée — doit être un 404 explicite, pas un succès avec des champs vides.
+  test('SoilGrids répond 200 mais sans aucune donnée (plan d\'eau/zone non couverte) → 404', async () => {
+    const admin = await registerEntreprise();
+    const parcelleId = await creerParcelleLocalisee(admin.token);
+    const restore = mockerFetchSol(fabriquerReponseSoilGrids({ ph: null, argile: null, sable: null, limon: null, soc: null, azote: null, cec: null }));
+    try {
+      const res = await request(app).get(`/api/precision/sol?parcelleId=${parcelleId}`).set(bearer(admin.token));
+      expect(res.status).toBe(404);
+    } finally { restore(); }
+  });
 });
 
 describe('GET /api/precision/ndvi', () => {
