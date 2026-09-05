@@ -62,7 +62,8 @@ const CONTACT_COLUMNS = `
   c.adresse_code_postal AS "adresseCodePostal", c.adresse_region AS "adresseRegion", c.adresse_pays AS "adressePays",
   c.est_client AS "estClient", c.est_fournisseur AS "estFournisseur",
   c.liste_prix_id AS "listePrixId", c.is_company AS "isCompany", c.photo, c.fonction, c.notes,
-  c.parent_id AS "parentId", p.nom AS "parentNom", c.created_at AS "createdAt"
+  c.parent_id AS "parentId", p.nom AS "parentNom", c.created_at AS "createdAt",
+  c.devise_facturation AS "deviseFacturation"
 `;
 
 async function attachTags(entrepriseId, contactRows) {
@@ -109,7 +110,7 @@ router.get('/', authRequired, async (req, res) => {
 router.post('/', authRequired, async (req, res) => {
   const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixId,
           adresseRue, adresseRue2, adresseVille, adresseCodePostal, adresseRegion, adressePays,
-          isCompany, photo, fonction, notes, parentId, tagIds } = req.body;
+          isCompany, photo, fonction, notes, parentId, tagIds, deviseFacturation } = req.body;
   if (!nom) {
     return res.status(400).json({ error: 'Le nom du contact est requis.' });
   }
@@ -123,12 +124,12 @@ router.post('/', authRequired, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO contacts (entreprise_id, user_id, nom, prenom, telephone, adresse, email, siret, est_client, est_fournisseur, liste_prix_id,
                               adresse_rue, adresse_rue2, adresse_ville, adresse_code_postal, adresse_region, adresse_pays,
-                              is_company, photo, fonction, notes, parent_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                              is_company, photo, fonction, notes, parent_id, devise_facturation)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING id`,
       [req.user.entrepriseId, req.user.sub, nom, prenom || null, telephone || null, adresse || null, email || null, siret || null, Boolean(estClient), Boolean(estFournisseur), listePrixValide,
        adresseRue || null, adresseRue2 || null, adresseVille || null, adresseCodePostal || null, adresseRegion || null, adressePays || null,
-       Boolean(isCompany), photo || null, fonction || null, notes || null, parentValide]
+       Boolean(isCompany), photo || null, fonction || null, notes || null, parentValide, deviseFacturation || null]
     );
     const newId = result.rows[0].id;
     await syncContactTags(newId, tagsValides);
@@ -147,14 +148,16 @@ router.post('/', authRequired, async (req, res) => {
 router.put('/:id', authRequired, async (req, res) => {
   const { nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur,
           adresseRue, adresseRue2, adresseVille, adresseCodePostal, adresseRegion, adressePays,
-          isCompany, photo, fonction, notes, tagIds } = req.body;
+          isCompany, photo, fonction, notes, tagIds, deviseFacturation } = req.body;
   if (estClient === false && estFournisseur === false) {
     return res.status(400).json({ error: 'Un contact doit être client, fournisseur, ou les deux.' });
   }
-  // listePrixId/parentId ont besoin de distinguer "non fourni" (ne pas toucher) de "fourni
-  // à null" (désassigner) — un simple COALESCE($n, colonne) ne peut jamais écrire NULL.
+  // listePrixId/parentId/deviseFacturation ont besoin de distinguer "non fourni" (ne pas
+  // toucher) de "fourni à null" (désassigner, ex: repasser à la devise de l'entreprise) — un
+  // simple COALESCE($n, colonne) ne peut jamais écrire NULL.
   const listePrixFourni = Object.prototype.hasOwnProperty.call(req.body, 'listePrixId');
   const parentFourni = Object.prototype.hasOwnProperty.call(req.body, 'parentId');
+  const deviseFourni = Object.prototype.hasOwnProperty.call(req.body, 'deviseFacturation');
   try {
     const listePrixValide = listePrixFourni ? await resolveListePrixId(req.user.entrepriseId, req.body.listePrixId) : null;
     const parentValide = parentFourni ? await resolveParentId(req.user.entrepriseId, req.body.parentId, req.params.id) : null;
@@ -179,12 +182,14 @@ router.put('/:id', authRequired, async (req, res) => {
          notes = COALESCE($18, notes),
          adresse_rue2 = COALESCE($19, adresse_rue2),
          adresse_region = COALESCE($20, adresse_region),
-         parent_id = CASE WHEN $21 THEN $22 ELSE parent_id END
+         parent_id = CASE WHEN $21 THEN $22 ELSE parent_id END,
+         devise_facturation = CASE WHEN $25 THEN $26 ELSE devise_facturation END
        WHERE id = $23 AND entreprise_id = $24
        RETURNING id`,
       [nom, prenom, telephone, adresse, email, siret, estClient, estFournisseur, listePrixFourni, listePrixValide,
        adresseRue, adresseVille, adresseCodePostal, adressePays, isCompany, photo, fonction, notes,
-       adresseRue2, adresseRegion, parentFourni, parentValide, req.params.id, req.user.entrepriseId]
+       adresseRue2, adresseRegion, parentFourni, parentValide, req.params.id, req.user.entrepriseId,
+       deviseFourni, deviseFacturation || null]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Contact introuvable.' });

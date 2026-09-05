@@ -304,7 +304,7 @@ const DEVIS_KANBAN_COLUMNS = [
 
 function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFacturer, onRemettreBrouillon, onOpenDetail }) {
   const { t } = useTranslation();
-  const { fmtMoney } = useLocale();
+  const { fmtMoney, locale, devise: deviseEntreprise } = useLocale();
   const [draggedId, setDraggedId] = useState(null);
   const draggedDevis = devisListe.find(d => d.id === draggedId) || null;
 
@@ -353,7 +353,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
                   <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0' }}>{d.clientPrenom} {d.clientNom}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{fmtMoney(d.total)}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{d.devise && d.devise !== deviseEntreprise ? previewMoney(locale, d.devise, d.total) : fmtMoney(d.total)}</span>
                   </div>
                 </div>
               ))}
@@ -549,7 +549,7 @@ function ActivitesSection({ ressourceType, ressourceId }) {
 function DevisModule({ clientsListe, filtreStatut }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { fmtMoney, fmtDate, locale } = useLocale();
+  const { fmtMoney, fmtDate, locale, devise: deviseEntreprise } = useLocale();
   const [devisListe, setDevisListe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
@@ -1315,7 +1315,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
                     {d.expired && <span style={{ marginLeft: 6 }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{fmtMoney(d.total)}</td>
+                  <td style={{ fontWeight: 600 }}>{d.devise && d.devise !== deviseEntreprise ? previewMoney(locale, d.devise, d.total) : fmtMoney(d.total)}</td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                       {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
@@ -1637,8 +1637,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
-                    <span>{t("common.total")}</span><span>{fmtMoney(detailData.total)}</span>
+                    <span>{t("common.total")}</span>
+                    <span>{detailData.devise && detailData.devise !== deviseEntreprise ? previewMoney(locale, detailData.devise, detailData.total) : fmtMoney(detailData.total)}</span>
                   </div>
+                  {detailData.devise && detailData.devise !== deviseEntreprise && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: COLORS.inkSoft }}>
+                      <span>{t("devis.totalDeviseEntreprise")}</span><span>{fmtMoney(detailData.totalDeviseEntreprise)}</span>
+                    </div>
+                  )}
                   {margeInfo && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 }}>
                       <span>{t("devis.marge")}</span><span>{t("devis.margeValeur", { montant: fmtMoney(margeInfo.marge), pct: margeInfo.pourcentage.toFixed(1) })}</span>
@@ -7045,7 +7051,7 @@ function ContactsTab({ type, highlightId }) {
   const emptyForm = {
     nom: '', prenom: '', telephone: '', adresse: '', email: '', siret: '', estAutre: false, listePrixId: null,
     adresseRue: '', adresseRue2: '', adresseVille: '', adresseCodePostal: '', adresseRegion: '', adressePays: '',
-    isCompany: false, photo: null, fonction: '', notes: '', parentId: null, tagIds: [],
+    isCompany: false, photo: null, fonction: '', notes: '', parentId: null, tagIds: [], deviseFacturation: null,
   };
   const [form, setForm]         = useState(emptyForm);
   const [query, setQuery]       = useState('');
@@ -7179,7 +7185,7 @@ function ContactsTab({ type, highlightId }) {
     parentId: f.parentId, tagIds: f.tagIds,
     estClient: type === 'client' ? true : f.estAutre,
     estFournisseur: type === 'fournisseur' ? true : f.estAutre,
-    ...(type === 'client' ? { listePrixId: f.listePrixId } : {}),
+    ...(type === 'client' ? { listePrixId: f.listePrixId, deviseFacturation: f.deviseFacturation } : {}),
   });
 
   useEffect(() => {
@@ -7242,6 +7248,7 @@ function ContactsTab({ type, highlightId }) {
       siret: contact.siret || '',
       estAutre: Boolean(contact[autreFlagKey]),
       listePrixId: contact.listePrixId ?? null,
+      deviseFacturation: contact.deviseFacturation ?? null,
       adresseRue: contact.adresseRue || '',
       adresseRue2: contact.adresseRue2 || '',
       adresseVille: contact.adresseVille || '',
@@ -7397,6 +7404,11 @@ function ContactsTab({ type, highlightId }) {
                   <option value="">{tr("contacts.aucune")}</option>
                   {listesPrix.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
                 </select>
+                <div className="field-group-label">{tr("contacts.labelDeviseFacturation")}</div>
+                <select className="flat-input" value={f.deviseFacturation ?? ''} onChange={e => setF({ ...f, deviseFacturation: e.target.value === '' ? null : e.target.value })}>
+                  <option value="">{tr("contacts.deviseFacturationEntreprise")}</option>
+                  {DEVISES.map(d => <option key={d.code} value={d.code}>{d.label}</option>)}
+                </select>
               </>
             )}
             <div className="field-group-label">{tr("contacts.labelTags")}</div>
@@ -7531,6 +7543,9 @@ function ContactsTab({ type, highlightId }) {
                 {selectedContact[autreFlagKey] && <span style={{ color: cfg.accent, fontWeight: 600 }}>{tr("contacts.estAussi", { autre: L.autre })}</span>}
                 {type === 'client' && (
                   <span>{tr("contacts.detailListePrix", { value: listesPrix.find(l => l.id === selectedContact.listePrixId)?.nom || tr("contacts.aucune") })}</span>
+                )}
+                {type === 'client' && selectedContact.deviseFacturation && (
+                  <span>{tr("contacts.detailDeviseFacturation", { value: selectedContact.deviseFacturation })}</span>
                 )}
                 <span style={{ fontSize: 11.5, color: COLORS.border }}>{tr("contacts.detailId", { value: selectedContact.id })}</span>
               </div>

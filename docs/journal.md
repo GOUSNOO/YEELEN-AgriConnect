@@ -2341,3 +2341,68 @@ cette étape (aucune UI construite), à ne pas oublier à l'étape 2.
   vraies données (XOF→EUR ≈ 0,001524 — cohérent avec la parité fixe XOF/EUR connue de
   655,96 XOF pour 1 EUR ; EUR→USD ≈ 1,161, plausible), 166 devises effectivement persistées en
   base pour la date du jour. Entreprise de test nettoyée.
+
+### Multi-devise réel — Étape 2 : devis en devise étrangère (2026-09-06)
+
+Suite immédiate de l'étape 1 (mêmes fondations réutilisées telles quelles : `convertir()`
+d'`utils/currencyRates.js`). Un devis peut désormais être créé/envoyé dans la devise propre
+d'un contact, avec taux de change figé et affiché — mais **volontairement pas encore
+facturable** en devise étrangère, ce point étant explicitement réservé à l'étape 3.
+
+- **Schéma** : `contacts.devise_facturation TEXT` (nullable — absent = facturation dans la
+  devise de l'entreprise, comportement historique inchangé) ; `devis.devise TEXT` et
+  `devis.taux_change NUMERIC(18,8)` (nullables, résolus à la lecture via
+  `COALESCE(devise, entreprise.devise)` — aucun devis existant n'a eu besoin d'un backfill).
+  **Piège rencontré et corrigé avant tout test** : `contacts.devise_facturation` a d'abord été
+  placée au même endroit que les autres ajouts de cette session (juste après la table
+  `currency_rates`), ce qui a cassé la migration (`relation "contacts" does not exist`) — la
+  table `contacts` n'est créée que bien plus loin dans le script séquentiel. Déplacée juste
+  après `CREATE TABLE contacts` (même contrainte déjà documentée pour d'autres FK vers cette
+  table). Piège distinct rencontré en même temps : un commentaire SQL contenant des
+  **backticks** (`` `devise` ``, `` `total` ``) a fait planter le parsing JS du fichier entier
+  — tout `migrate.js` est un unique gros template literal JS, un backtick dans un commentaire
+  SQL referme prématurément la chaîne JS. Corrigé en reformulant sans backticks.
+- **`routes/devis.js:resoudreDeviseEtTaux`** : devise explicite (body) > `devise_facturation`
+  du contact > devise de l'entreprise ; appelle `convertir(1, devise, deviseEntreprise)`
+  (réutilise l'étape 1 telle quelle) pour figer `taux_change`. Appelée à `POST /` (création) et
+  refaite à `POST /:id/envoyer` (le taux du jour de l'envoi réel prime sur celui, provisoire,
+  de la création — mais le calcul se fait **avant** l'envoi de l'email et l'écriture en base
+  n'a lieu qu'**après** un envoi réussi, même invariant déjà établi pour `statut`/
+  `token_public` lors du correctif du 2026-09-05 sur ce même fichier). `devis.total` continue
+  de porter le montant **dans la devise du devis** (pas de changement de sens pour les devis
+  déjà existants, tous en devise entreprise) ; `totalDeviseEntreprise` (calculé à la volée en
+  SQL, jamais stocké) donne l'équivalent en devise entreprise.
+- **`POST /:id/facturer` bloque désormais explicitement (400)** un devis dont la devise diffère
+  de celle de l'entreprise, avec un message clair renvoyé jusqu'au frontend : la facturation
+  réelle (un `account_move` avec ses propres champs de devise) est l'étape 3, pas encore
+  construite — ce garde-fou évite d'avoir à toucher au moteur `enregistrerPaiementMove`/
+  `financeSync` déjà lourdement testé, tant que cette étape n'est pas faite proprement.
+- **Frontend** : sélecteur de devise de facturation sur la fiche client (`ContactsModule`,
+  gaté `type === 'client'`, même patron que le sélecteur de liste de prix juste au-dessus).
+  `DevisModule` (liste, Kanban, détail) : le montant affiché suit désormais la devise du devis
+  (`d.devise`/`detailData.devise`), pas systématiquement celle de l'entreprise comme avant —
+  **bug réel trouvé en vérification navigateur** : la liste affichait « 500 F CFA » pour un
+  devis de 500 €, corrigé dans les 3 vues (liste, Kanban, détail) en comparant `d.devise` à la
+  devise de l'entreprise (`useLocale()`) et en formatant avec `fmtMoneyWith` dans le bon cas.
+  Le détail affiche en plus une ligne « ≈ équivalent devise entreprise ».
+  **Limite connue, non traitée à cette étape** (à corriger à l'étape 3 en même temps que
+  l'intégration `account_move`, pas avant) : les montants par ligne (P.U., total ligne,
+  montant HT/taxes) et le PDF du devis affichent encore systématiquement la devise de
+  l'entreprise, même quand `devis.devise` diffère — seul le total agrégé est correct dans les
+  deux devises pour l'instant.
+- **11 tests d'intégration** ajoutés à `devis.test.js` : sans devise particulière (aucune devise
+  spéciale) → devise/taux entreprise sans appel réseau ; client avec devise propre → héritée
+  par défaut, taux figé et cohérent (vérifié par calcul explicite du cross-rate attendu) ;
+  devise explicite prime sur celle du contact ; facturer un devis étranger → 400 avec message
+  explicite ; envoyer ne réécrit le taux qu'après un envoi réussi (email indisponible dans cet
+  environnement de test → taux inchangé, pas écrasé par le calcul fait avant l'échec) ; contact
+  désassigné de sa devise via `PUT {deviseFacturation:null}` → repli sur la devise entreprise.
+  317/317 tests d'intégration verts après (306 + 11), 103 tests frontend inchangés, build OK.
+- **Vérifié en conditions réelles** sur une entreprise jetable : client « Client Europe SARL »
+  facturé en EUR, devis de 500 € créé via l'API réelle → `tauxChange` 655,956 (parité fixe
+  XOF/EUR exacte), `totalDeviseEntreprise` 327 978,20 F CFA — confirmé à l'identique dans le
+  navigateur (liste « 500,00 € », détail « Total 500,00 € / ≈ équivalent devise entreprise
+  327 978 F CFA »). Validation manuelle du devis puis tentative de facturation → message de
+  blocage affiché correctement comme notification. Entreprise de test nettoyée (parcelles/
+  poulaillers par défaut inclus, aucune n'a de cascade `ON DELETE` — même procédure que les
+  chantiers précédents).

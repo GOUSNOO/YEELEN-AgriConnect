@@ -1189,6 +1189,20 @@ CREATE TABLE IF NOT EXISTS currency_rates (
 );
 CREATE INDEX IF NOT EXISTS idx_currency_rates_devise_date ON currency_rates(devise, date DESC);
 
+-- Multi-devise réel, étape 2 : devis en devise étrangère (voir routes/devis.js pour la
+-- résolution devise contact > devise entreprise). contacts.devise_facturation est ajoutée
+-- plus bas, juste après la création de la table contacts qui n'existe pas encore à ce point
+-- du script (même contrainte déjà rencontrée pour d'autres FK vers contacts).
+--
+-- devise/taux_change nullables : un devis existant (créé avant cette étape) est traité comme
+-- étant dans la devise de l'entreprise avec un taux de 1 — pas de backfill nécessaire, la
+-- résolution se fait à la lecture (COALESCE(devise, entreprise.devise)). taux_change =
+-- combien vaut 1 unité de la devise du devis en devise de l'entreprise (multiplier le total
+-- par ce taux donne l'équivalent en devise entreprise) — figé à la création puis à
+-- l'envoi, jamais recalculé rétroactivement (même principe que le taux Odoo, voir journal).
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS devise TEXT;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS taux_change NUMERIC(18, 8);
+
 -- Intégration météo (Open-Meteo, voir routes/meteo.js) — localisation par défaut de
 -- l'entreprise. Nullable : fonctionnalité entièrement opt-in, aucun impact sur une entreprise
 -- qui ne la configure jamais. Les parcelles peuvent avoir leur propre localisation (voir plus
@@ -1676,6 +1690,12 @@ CREATE INDEX IF NOT EXISTS idx_contacts_entreprise_id ON contacts(entreprise_id)
 -- article utilise son prix par défaut tel quel. ON DELETE SET NULL (pas CASCADE) :
 -- supprimer une liste détache les contacts qui l'utilisaient, ne les supprime pas.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS liste_prix_id INTEGER REFERENCES listes_prix(id) ON DELETE SET NULL;
+
+-- Multi-devise réel, étape 2 (voir plus haut, section currency_rates, pour le contexte
+-- complet) : nullable = le contact facture dans la devise de l'entreprise (comportement
+-- historique inchangé) ; sinon un nouveau devis pour ce contact propose cette devise par
+-- défaut (voir routes/devis.js:resoudreDeviseEtTaux).
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS devise_facturation TEXT;
 
 -- Alignement visuel ERP (2026-08-27) : adresse décomposée (rue/ville/code postal/pays)
 -- pour l'affichage façon fiche Sales Order, additive à côté de l'ancien champ adresse

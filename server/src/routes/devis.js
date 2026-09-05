@@ -12,6 +12,7 @@ import { logAuditEvent } from '../utils/auditLog.js';
 import { genererEcheancesDepuisTerme } from './paymentTerms.js';
 import { appliquerTaxesLigne } from '../utils/taxeCompute.js';
 import { posterMove, enregistrerPaiementMove, journalParType } from '../utils/accountMove.js';
+import { convertir } from '../utils/currencyRates.js';
 
 // Date de validité par défaut d'un devis : aujourd'hui + 30 jours (comme default_validity_date
 // d'un ERP de référence). Format 'YYYY-MM-DD'.
@@ -27,6 +28,8 @@ const DEVIS_COLUMNS = `
   d.id, d.numero, d.statut, d.date, d.date_signature AS "dateSignature",
   d.signataire_nom AS "signataireNom", d.total::float8 AS total, d.notes,
   d.remise_globale::float8 AS "remiseGlobale",
+  COALESCE(d.devise, e.devise) AS devise, COALESCE(d.taux_change, 1)::float8 AS "tauxChange",
+  ROUND(d.total * COALESCE(d.taux_change, 1), 2)::float8 AS "totalDeviseEntreprise",
   d.conditions_paiement AS "conditionsPaiement", d.livraison_promise AS "livraisonPromise",
   to_char(d.validity_date, 'YYYY-MM-DD') AS "validityDate", d.payment_term_id AS "paymentTermId",
   (d.statut IN ('Brouillon', 'Devis', 'Envoyé') AND d.validity_date IS NOT NULL AND d.validity_date < CURRENT_DATE) AS expired,
@@ -188,6 +191,24 @@ async function insererLignes(client, devisId, lignesNormalisees, entrepriseId, t
   }
 }
 
+// Multi-devise réel, étape 2 : résout la devise effective d'un devis (explicite > celle du
+// contact > celle de l'entreprise) et fige son taux de change vs la devise de l'entreprise à
+// l'instant présent — voir utils/currencyRates.js. Le taux n'est PAS recalculé plus tard (même
+// principe que le taux d'une facture Odoo) : seuls POST / (création) et POST /:id/envoyer
+// (voir plus bas) le fixent, jamais un simple PUT de lignes.
+async function resoudreDeviseEtTaux(dbClient, entrepriseId, clientId, deviseDemandee) {
+  const ent = await dbClient.query('SELECT devise FROM entreprises WHERE id = $1', [entrepriseId]);
+  const deviseEntreprise = ent.rows[0].devise;
+  let deviseContact = null;
+  if (clientId) {
+    const contact = await dbClient.query('SELECT devise_facturation FROM contacts WHERE id = $1 AND entreprise_id = $2', [clientId, entrepriseId]);
+    deviseContact = contact.rows[0]?.devise_facturation || null;
+  }
+  const devise = deviseDemandee || deviseContact || deviseEntreprise;
+  const { taux } = await convertir(1, devise, deviseEntreprise);
+  return { devise, tauxChange: taux };
+}
+
 // Génère un numéro de devis lisible, propre à l'entreprise (ex: DEV-2026-0007)
 async function genererNumero(entrepriseId) {
   const year = new Date().getFullYear();
@@ -203,7 +224,8 @@ async function genererNumero(entrepriseId) {
 async function getDevisComplet(devisId, entrepriseId) {
   const devisResult = await pool.query(
     `SELECT ${DEVIS_COLUMNS}, d.mode_paiement AS "modePaiement", d.modalite_paiement AS "modalitePaiement"
-     FROM devis d LEFT JOIN contacts c ON c.id = d.client_id WHERE d.id = $1 AND d.entreprise_id = $2`,
+     FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
+     WHERE d.id = $1 AND d.entreprise_id = $2`,
     [devisId, entrepriseId]
   );
   if (devisResult.rows.length === 0) return null;
@@ -272,12 +294,12 @@ router.get('/', authRequired, async (req, res) => {
     // sous-ensemble filtré.
     const result = clientId
       ? await pool.query(
-          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
+          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
            WHERE d.entreprise_id = $1 AND d.client_id = $2 ORDER BY d.id DESC`,
           [req.user.entrepriseId, clientId]
         )
       : await pool.query(
-          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
+          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
            WHERE d.entreprise_id = $1 ORDER BY d.id DESC`,
           [req.user.entrepriseId]
         );
@@ -344,7 +366,7 @@ router.get('/:id/journal', authRequired, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/', authRequired, async (req, res) => {
-  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise, validityDate } = req.body;
+  const { clientId, lignes, notes, remiseGlobale, conditionsPaiement, livraisonPromise, validityDate, devise } = req.body;
   if (!clientId || !Array.isArray(lignes) || lignes.length === 0) {
     return res.status(400).json({ error: 'Un client et au moins une ligne de produit sont requis.' });
   }
@@ -357,13 +379,14 @@ router.post('/', authRequired, async (req, res) => {
     const lignesNormalisees = lignes.map(normalizeLigne);
     const taxMap = await chargerTaxMap(req.user.entrepriseId, client);
     const total = calculerTotal(lignesNormalisees, remiseGlobale, taxMap);
+    const { devise: deviseResolue, tauxChange } = await resoudreDeviseEtTaux(client, req.user.entrepriseId, clientId, devise);
 
     const devisResult = await client.query(
-      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise, validity_date)
-       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9, $10) RETURNING id`,
+      `INSERT INTO devis (entreprise_id, user_id, client_id, numero, statut, total, notes, remise_globale, conditions_paiement, livraison_promise, validity_date, devise, taux_change)
+       VALUES ($1, $2, $3, $4, 'Brouillon', $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
       [req.user.entrepriseId, req.user.sub, clientId, numero, total, notes || null,
        Number(remiseGlobale) || 0, conditionsPaiement || null, livraisonPromise || null,
-       validityDate || validiteParDefaut()]
+       validityDate || validiteParDefaut(), deviseResolue, tauxChange]
     );
     const devisId = devisResult.rows[0].id;
     await insererLignes(client, devisId, lignesNormalisees, req.user.entrepriseId, taxMap);
@@ -524,9 +547,20 @@ router.post('/:id/envoyer', authRequired, async (req, res) => {
     if (!devis.clientEmail) return res.status(400).json({ error: "Le client n'a pas d'adresse email renseignée." });
 
     const token = crypto.randomBytes(24).toString('hex');
-    const entrepriseResult = await pool.query('SELECT nom FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
+    const entrepriseResult = await pool.query('SELECT nom, devise FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
     const entrepriseNom = entrepriseResult.rows[0]?.nom || 'Votre exploitant';
     const lienConsultation = `${process.env.FRONTEND_URL || 'http://localhost:8090'}/devis/${token}`;
+
+    // Multi-devise réel, étape 2 : le taux est refigé au moment de l'envoi (pas seulement à la
+    // création) — c'est ce taux-là, celui du jour où le client reçoit réellement le devis, qui
+    // doit rester figé ensuite (même principe que la validation d'une facture chez Odoo).
+    // Seulement si la devise diffère de celle de l'entreprise : pas d'appel externe inutile
+    // pour l'immense majorité des devis, toujours dans la devise de l'entreprise.
+    let tauxChangeEnvoi = null;
+    if (devis.devise !== entrepriseResult.rows[0].devise) {
+      const { taux } = await convertir(1, devis.devise, entrepriseResult.rows[0].devise);
+      tauxChangeEnvoi = taux;
+    }
 
     // L'email est envoyé AVANT toute écriture en base (même patron que mfa.js pour le code
     // par email) : si l'envoi échoue, le devis ne doit pas se retrouver coincé en 'Envoyé'
@@ -539,7 +573,10 @@ router.post('/:id/envoyer', authRequired, async (req, res) => {
       return res.status(502).json({ error: "L'email n'a pas pu être envoyé. Le devis reste en brouillon, réessayez." });
     }
 
-    await pool.query(`UPDATE devis SET statut = 'Envoyé', token_public = $1 WHERE id = $2`, [token, req.params.id]);
+    await pool.query(
+      `UPDATE devis SET statut = 'Envoyé', token_public = $1, taux_change = COALESCE($2, taux_change) WHERE id = $3`,
+      [token, tauxChangeEnvoi, req.params.id]
+    );
     await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
       { statut: devis.statut }, { statut: 'Envoyé' }, ['statut']);
 
@@ -710,8 +747,9 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
   const client = await pool.connect();
   try {
     const check = await client.query(
-      `SELECT d.statut, d.total, d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom"
-       FROM devis d LEFT JOIN contacts c ON c.id = d.client_id
+      `SELECT d.statut, d.total, d.numero, c.nom AS "clientNom", c.prenom AS "clientPrenom",
+              COALESCE(d.devise, e.devise) AS devise, e.devise AS "entrepriseDevise"
+       FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
        WHERE d.id = $1 AND d.entreprise_id = $2`,
       [req.params.id, req.user.entrepriseId]
     );
@@ -720,6 +758,12 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
     }
     if (check.rows[0].statut !== 'Signé') {
       return res.status(400).json({ error: 'Seul un devis signé peut être converti en facture.' });
+    }
+    // Multi-devise réel, étape 2 : la facturation réelle en devise étrangère (account_move
+    // avec ses propres champs de devise) est l'étape 3 de ce chantier, pas encore construite —
+    // ce devis reste consultable/signable dans sa devise, juste pas encore facturable.
+    if (check.rows[0].devise !== check.rows[0].entrepriseDevise) {
+      return res.status(400).json({ error: "La facturation d'un devis en devise étrangère n'est pas encore disponible (prochaine étape du chantier multi-devise). Ce devis reste consultable et signable normalement." });
     }
 
     const { total, numero, clientNom, clientPrenom } = check.rows[0];

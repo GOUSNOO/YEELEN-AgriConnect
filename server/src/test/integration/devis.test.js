@@ -587,3 +587,124 @@ describe('Devis — consultation et signature publiques (token)', () => {
     expect(bogus.status).toBe(404);
   });
 });
+
+// Multi-devise réel, étape 2 : un devis peut être créé/envoyé dans la devise du contact.
+function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
+  const original = global.fetch;
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: 'success', rates }) });
+  return () => { global.fetch = original; };
+}
+
+describe('Devis — multi-devise réel (étape 2)', () => {
+  test('sans devise particulière → devise/tauxChange de l\'entreprise, aucun appel réseau', async () => {
+    const admin = await registerEntreprise();
+    const clientId = await createClient(admin.token);
+    const original = global.fetch;
+    global.fetch = async () => { throw new Error('ne devrait jamais être appelé : même devise'); };
+    try {
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 2, prixUnitaire: 1000, type: 'produit' }] });
+      expect(create.status).toBe(201);
+      expect(create.body.devis.devise).toBe('XOF');
+      expect(create.body.devis.tauxChange).toBe(1);
+      expect(create.body.devis.totalDeviseEntreprise).toBe(2000);
+    } finally { global.fetch = original; }
+  });
+
+  test('client avec devise_facturation propre → le devis l\'hérite par défaut, taux figé', async () => {
+    const admin = await registerEntreprise();
+    const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+      .send({ nom: 'Client Europe', estClient: true, deviseFacturation: 'EUR' });
+    const clientId = contact.body.contact.id;
+    expect(contact.body.contact.deviseFacturation).toBe('EUR');
+
+    const restore = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    try {
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+      expect(create.status).toBe(201);
+      expect(create.body.devis.devise).toBe('EUR');
+      // 1 EUR en devise entreprise (XOF) : (1/0.9) / (1/600) = 600/0.9
+      expect(create.body.devis.tauxChange).toBeCloseTo(600 / 0.9, 4);
+      expect(create.body.devis.total).toBe(100);
+      expect(create.body.devis.totalDeviseEntreprise).toBeCloseTo(100 * (600 / 0.9), 1);
+    } finally { restore(); }
+  });
+
+  test('devise explicite dans la requête prime sur celle du contact', async () => {
+    const admin = await registerEntreprise();
+    const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+      .send({ nom: 'Client Europe 2', estClient: true, deviseFacturation: 'EUR' });
+    const restore = mockerFetchTaux({ USD: 1, XOF: 600, GBP: 0.75 });
+    try {
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId: contact.body.contact.id, devise: 'GBP', lignes: [{ produit: 'Riz', quantite: 1, prixUnitaire: 50, type: 'produit' }] });
+      expect(create.status).toBe(201);
+      expect(create.body.devis.devise).toBe('GBP');
+    } finally { restore(); }
+  });
+
+  test('facturer un devis en devise étrangère → 400 explicite (étape 3 pas encore construite)', async () => {
+    const admin = await registerEntreprise();
+    const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+      .send({ nom: 'Client Etranger', estClient: true, deviseFacturation: 'EUR' });
+    const restoreCreate = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    let devisId;
+    try {
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+      devisId = create.body.devis.id;
+    } finally { restoreCreate(); }
+
+    await request(app).post(`/api/devis/${devisId}/valider-manuel`).set(bearer(admin.token)).send({ confirmePar: 'Test' });
+    const facturer = await request(app).post(`/api/devis/${devisId}/facturer`).set(bearer(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+    expect(facturer.status).toBe(400);
+    expect(facturer.body.error).toMatch(/devise étrangère/);
+  });
+
+  // POST /:id/envoyer recalcule le taux AVANT l'envoi mais ne l'écrit qu'après un envoi
+  // réussi (même invariant "email avant écriture" déjà établi pour statut/token_public) —
+  // l'environnement de test n'a pas d'EMAIL_USER (voir env.js), donc l'envoi échoue toujours
+  // ici : ce test vérifie que taux_change n'est donc PAS réécrit dans ce cas, pas le
+  // recalcul réussi lui-même (qui nécessiterait de mocker le transport email).
+  test('envoyer : le nouveau taux n\'est écrit que si l\'envoi réussit (email indisponible ici → inchangé)', async () => {
+    const admin = await registerEntreprise();
+    const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+      .send({ nom: 'Client Taux Change', estClient: true, email: 'client-taux@test.local', deviseFacturation: 'EUR' });
+    let devisId;
+    const restoreCreate = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    try {
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+      devisId = create.body.devis.id;
+      expect(create.body.devis.tauxChange).toBeCloseTo(600 / 0.9, 4);
+    } finally { restoreCreate(); }
+
+    const restoreEnvoi = mockerFetchTaux({ USD: 1, XOF: 610, EUR: 0.85 });
+    try {
+      const envoyer = await request(app).post(`/api/devis/${devisId}/envoyer`).set(bearer(admin.token));
+      expect(envoyer.status).toBe(502); // email indisponible dans cet environnement de test
+    } finally { restoreEnvoi(); }
+
+    const relire = await request(app).get(`/api/devis/${devisId}`).set(bearer(admin.token));
+    expect(relire.body.devis.tauxChange).toBeCloseTo(600 / 0.9, 4); // inchangé, pas écrasé par le taux calculé avant l'échec
+  });
+
+  test('contact sans devise_facturation (désassignée via PUT) → repli sur la devise de l\'entreprise', async () => {
+    const admin = await registerEntreprise();
+    const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
+      .send({ nom: 'Client Reset', estClient: true, deviseFacturation: 'EUR' });
+    const put = await request(app).put(`/api/contacts/${contact.body.contact.id}`).set(bearer(admin.token))
+      .send({ deviseFacturation: null });
+    expect(put.body.contact.deviseFacturation).toBeNull();
+
+    const original = global.fetch;
+    global.fetch = async () => { throw new Error('ne devrait jamais être appelé : plus de devise contact'); };
+    try {
+      const create = await request(app).post('/api/devis').set(bearer(admin.token))
+        .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
+      expect(create.body.devis.devise).toBe('XOF');
+    } finally { global.fetch = original; }
+  });
+});
