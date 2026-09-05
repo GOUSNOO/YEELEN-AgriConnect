@@ -15,7 +15,8 @@ const PARCELLE_COLUMNS = `
   seuil::float8 AS seuil,
   pos_x::float8 AS x, pos_y::float8 AS y,
   superficie, localisation, created_at AS "createdAt",
-  to_char(date_semis, 'YYYY-MM-DD') AS "dateSemis"
+  to_char(date_semis, 'YYYY-MM-DD') AS "dateSemis",
+  ville, latitude::float8 AS latitude, longitude::float8 AS longitude
 `;
 
 const HISTORIQUE_COLUMNS = `
@@ -48,16 +49,16 @@ router.get('/parcelles', authRequired, async (req, res) => {
 });
 
 router.post('/parcelles', authRequired, async (req, res) => {
-  const { nom, culture, humidite = 50, temperature = 25, mode = 'auto', vanneOuverte = false, seuil = 35, x = 50, y = 50, superficie, localisation, dateSemis } = req.body;
+  const { nom, culture, humidite = 50, temperature = 25, mode = 'auto', vanneOuverte = false, seuil = 35, x = 50, y = 50, superficie, localisation, dateSemis, ville, latitude, longitude } = req.body;
   if (!nom) {
     return res.status(400).json({ error: 'Le nom de la parcelle est requis.' });
   }
   try {
     const result = await pool.query(
-      `INSERT INTO parcelles (entreprise_id, user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation, date_semis)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO parcelles (entreprise_id, user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation, date_semis, ville, latitude, longitude)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING ${PARCELLE_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null, dateSemis || null]
+      [req.user.entrepriseId, req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null, dateSemis || null, ville || null, latitude ?? null, longitude ?? null]
     );
     return res.status(201).json({ parcelle: result.rows[0] });
   } catch (err) {
@@ -67,7 +68,7 @@ router.post('/parcelles', authRequired, async (req, res) => {
 });
 
 router.put('/parcelles/:id', authRequired, async (req, res) => {
-  const { nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, dateSemis } = req.body;
+  const { nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, dateSemis, ville, latitude, longitude } = req.body;
   try {
     const result = await pool.query(
       `UPDATE parcelles SET
@@ -80,10 +81,13 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
          seuil = COALESCE($7, seuil),
          pos_x = COALESCE($8, pos_x),
          pos_y = COALESCE($9, pos_y),
-         date_semis = COALESCE($10, date_semis)
-       WHERE id = $11 AND entreprise_id = $12
+         date_semis = COALESCE($10, date_semis),
+         ville = COALESCE($11, ville),
+         latitude = COALESCE($12, latitude),
+         longitude = COALESCE($13, longitude)
+       WHERE id = $14 AND entreprise_id = $15
        RETURNING ${PARCELLE_COLUMNS}`,
-      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, dateSemis, req.params.id, req.user.entrepriseId]
+      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, dateSemis, ville, latitude, longitude, req.params.id, req.user.entrepriseId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Parcelle introuvable.' });

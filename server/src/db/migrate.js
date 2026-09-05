@@ -653,6 +653,13 @@ ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS pos_y         NUMERIC(5, 2) NOT N
 -- calendrier se calcule depuis la date du jour (comportement de repli, pas une erreur).
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS date_semis    DATE;
 
+-- Localisation propre à la parcelle (optionnelle) — prime sur celle de l'entreprise pour la
+-- météo (voir routes/meteo.js) quand elle est renseignée ; sinon repli automatique sur
+-- entreprises.ville/latitude/longitude. Utile pour des parcelles géographiquement dispersées.
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS ville         TEXT;
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS latitude      NUMERIC(9, 6);
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS longitude     NUMERIC(9, 6);
+
 -- Historique des vannes, lié aux parcelles existantes par id entier
 CREATE TABLE IF NOT EXISTS parcelles_historique (
   id           SERIAL PRIMARY KEY,
@@ -1158,6 +1165,14 @@ CREATE INDEX IF NOT EXISTS idx_salaries_temps_date ON salaries_temps(entreprise_
 -- Défauts XOF / fr-FR : valeurs de départ du projet, modifiables dans les réglages entreprise.
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS devise TEXT NOT NULL DEFAULT 'XOF';
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'fr-FR';
+
+-- Intégration météo (Open-Meteo, voir routes/meteo.js) — localisation par défaut de
+-- l'entreprise. Nullable : fonctionnalité entièrement opt-in, aucun impact sur une entreprise
+-- qui ne la configure jamais. Les parcelles peuvent avoir leur propre localisation (voir plus
+-- bas, ALTER TABLE parcelles) qui prime sur celle-ci quand elle est renseignée.
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS ville      TEXT;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS latitude   NUMERIC(9, 6);
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS longitude  NUMERIC(9, 6);
 
 -- ═══════════════ Catalogue produit minimal — prix par défaut sur les articles de stock
 -- déjà existants (pas de nouvelle table produits séparée : un article de stock EST déjà
