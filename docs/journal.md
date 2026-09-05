@@ -1948,3 +1948,78 @@ reproduite pour Pisciculture.
   Entreprise de test nettoyée (cascade `ON DELETE` désormais complète pour `produits`/
   `produit_categories`/`pisciculture_*` — plus besoin du nettoyage manuel multi-tables
   documenté pour d'anciennes entreprises de test).
+
+### Module Météo (2026-09-05)
+
+Dernier item « Could have » du MoSCoW jamais commencé. Recherche préalable (même rigueur que
+Pisciculture) : cœur Odoo (clone source local) — zéro mention de météo ; le seul module météo
+de l'Odoo Apps Store (`agriculture_weather_records`) est payant (247 €) et propriétaire, sans
+dépôt public ; recherche GitHub/GitLab (« agriculture weather dashboard », « open-meteo
+agriculture », « farm weather ») — uniquement des projets étudiants/hobby (0-4 étoiles,
+souvent inachevés), aucun projet mature. Conclusion : rien à réutiliser architecturalement
+au-delà de l'API **Open-Meteo** elle-même (gratuite, sans clé, CC BY 4.0) — projet construit
+sur mesure.
+
+Premier passage jugé trop minimal par l'utilisateur (« pas une simple coquille ») — projet
+complet demandé. Décision de conception validée explicitement : **double granularité** —
+localisation par défaut au niveau de l'entreprise, **et** surcharge optionnelle par parcelle
+avec repli automatique, chaque entreprise choisissant naturellement son niveau de précision.
+
+- **Lot 1 (backend : schéma + routes)** : `entreprises` et `parcelles` gagnent chacune
+  `ville TEXT`/`latitude NUMERIC(9,6)`/`longitude NUMERIC(9,6)` (nullable, opt-in, pas de
+  backfill). `PUT /api/entreprise` et `PUT/POST /cultures/parcelles` acceptent les 3 champs
+  (même patron `COALESCE` déjà utilisé pour `dateSemis`). Nouveau `routes/meteo.js` :
+  `GET /villes?q=` (proxy géocodage Open-Meteo), `GET /?parcelleId=` (résout la localisation —
+  parcelle si coordonnées propres, sinon entreprise, sinon `404` explicite — interroge
+  `api.open-meteo.com/v1/forecast` avec un jeu complet de paramètres agronomiques : actuel
+  température/humidité/précipitation/vent ; quotidien 14 jours température min/max,
+  précipitations + probabilité, UV max, lever/coucher soleil, durée du jour, ET0
+  évapotranspiration, vent max ; horaire température/humidité du sol à deux profondeurs,
+  point de rosée, déficit de pression de vapeur — moyennés sur les 24 prochaines heures), et
+  calcule des **alertes dérivées à la volée, jamais persistées** (gel si tempMin ≤ 2°C sous
+  3 jours, pluie forte > 30 mm, vent fort > 50 km/h, UV élevé > 8, sol sec sur l'humidité
+  racinaire — seuils indicatifs non calibrés par culture/sol, documentés comme tels).
+  `GET /parcelles-localisees` liste les parcelles de l'entreprise ayant leurs propres
+  coordonnées. Toujours côté serveur (mirroir de `recaptcha.js` pour le principe d'appel
+  externe, mais `502` sur échec — pas de repli gracieux, la météo ne protège aucune action
+  primaire contrairement au recaptcha). Migration rejouée ×2 sur copie de sauvegarde restaurée
+  (idempotente), puis appliquée réellement.
+- **Lot 2 (tests backend)** : `meteo.test.js` (15 tests) — géocodage, résolution entreprise
+  vs parcelle vs aucune (404), un test par type d'alerte + un « conditions normales → [] »,
+  `502` sur échec externe, isolation multi-tenant (`parcelleId` d'une autre entreprise ignoré,
+  repli sur celle de l'appelant), `parcelles-localisees` scopé par entreprise. Piège retrouvé
+  et évité d'emblée (déjà documenté pour `abonnement.test.js`) : `jest.fn()` lève
+  `ReferenceError: jest is not defined` dans le runner d'intégration natif-ESM — mock de
+  `global.fetch` avec une fonction simple, pas `jest.fn(...)`.
+- **Lots 3-4 (frontend)** : `src/lib/api.js` (`rechercherVilleMeteo`, `getMeteo`,
+  `getParcellesLocalisees`). Nouvelle carte « Localisation » dans `ProfilModule` (recherche
+  de ville au fil de la frappe façon `GlobalSearch`, préremplie via `getEntreprise()` —
+  jusque-là jamais appelée côté frontend). Nouvelle section pliable « Météo de cette
+  parcelle » sur chaque carte de `CulturesModule` (même patron visuel que « Plan
+  d'intervention » déjà existant). Nouveaux `src/components/MeteoModule.jsx` (onglet dédié,
+  toujours visible et non gated — mirroir d'`observations` — sélecteur entreprise/parcelle,
+  conditions actuelles, sol, aujourd'hui avec lever/coucher/UV/ET0, tableau de prévision
+  14 jours, alertes) et `src/components/MeteoWidget.jsx` (résumé sur `HomeOverview` — conditions
+  actuelles + alerte la plus grave, lien vers l'onglet complet). i18n `meteo.*`/
+  `profil.location*`/`cultures.meteoParcelle*` (fr + en). `MeteoModule.test.jsx` (4 tests) +
+  `MeteoWidget.test.jsx` (3 tests).
+  **Bug réel trouvé en test navigateur réel, corrigé** : les deux nouveaux boutons de
+  résultat de recherche de ville (Profil et parcelle) rendaient un texte invisible — même
+  cause racine déjà documentée dans les commentaires de `GlobalSearch.jsx` (un `<button>`
+  sans `color` explicite hérite du blanc du `color-scheme: light dark` du navigateur,
+  invisible sur fond blanc). Corrigé en ajoutant `color: COLORS.ink` aux deux styles de
+  bouton.
+- **Vérification finale** : suite complète verte (backend intégration + unitaire, 103
+  frontend), build OK. Vérifié en navigateur réel sur entreprise jetable, **avec de vraies
+  données Open-Meteo (aucun mock côté navigateur)** : (1) ville d'entreprise « Bamako »
+  configurée → widget tableau de bord et onglet Météo se peuplent tous deux avec les mêmes
+  données réelles, lien widget → onglet fonctionnel ; (2) ville propre à une parcelle
+  (« Dakar ») configurée → météo distincte de celle de l'entreprise (température/humidité
+  différentes), `source` indique bien « localisation de la parcelle » vs « de l'entreprise » ;
+  (3) entreprise sans aucune localisation configurée → message discret dans le widget et
+  l'onglet, aucune erreur. Les deux entreprises jetables (« Ferme Meteo Test SARL »,
+  « Ferme SansMeteo Test ») et leurs parcelles/comptes nettoyés manuellement après coup —
+  `parcelles`/`cultures`/`poulaillers`/`recoltes`/`finances`/etc. n'ont **pas** de cascade
+  `ON DELETE` sur `entreprise_id` (contrairement à `produits`/`contacts`/la plupart des tables
+  plus récentes, toutes `CASCADE`) ; requête `information_schema` utilisée pour lister
+  précisément les tables encore en `NO ACTION` avant de les vider dans le bon ordre.

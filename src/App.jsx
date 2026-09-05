@@ -4204,7 +4204,7 @@ function ParcelleMeteoSection({ parcelle }) {
                 type="button"
                 disabled={villeBusy}
                 onClick={() => choisirVille(v)}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none' }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: COLORS.ink, borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none' }}
               >
                 {v.nom}{v.region ? `, ${v.region}` : ''}{v.pays ? ` — ${v.pays}` : ''}
               </button>
@@ -8487,7 +8487,7 @@ function ProfilModule({ role }) {
                       onClick={() => choisirVille(v)}
                       style={{
                         display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
-                        background: 'none', border: 'none', cursor: 'pointer', fontSize: 13,
+                        background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: COLORS.ink,
                         borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none',
                       }}
                     >
