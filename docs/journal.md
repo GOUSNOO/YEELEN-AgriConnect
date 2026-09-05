@@ -2023,3 +2023,47 @@ avec repli automatique, chaque entreprise choisissant naturellement son niveau d
   `ON DELETE` sur `entreprise_id` (contrairement à `produits`/`contacts`/la plupart des tables
   plus récentes, toutes `CASCADE`) ; requête `information_schema` utilisée pour lister
   précisément les tables encore en `NO ACTION` avant de les vider dans le bon ordre.
+
+### Jalon 1 — passe de durcissement ciblée sur les chantiers récents (2026-09-05)
+
+Audit statique (pas un E2E complet) des routes backend ajoutées depuis la dernière passe
+« manuelle E2E » documentée (2026-08-13) — Stock A/B/C, Pisciculture, Abonnement, Catalogue
+produit (5 étapes Odoo), Météo — à la recherche des deux classes de bugs déjà trouvées à
+plusieurs reprises dans ce projet : (1) `DELETE`/`PUT` qui ne vérifie pas `rowCount`/
+`rows.length` et renvoie `200` même sur un id bidon ou d'une autre entreprise, (2) écriture
+non cloisonnée par `entreprise_id`. Méthode : comptage croisé `router.delete(`/`router.put(`
+vs mentions `rowCount`/`rows.length === 0` par fichier de route, puis lecture ciblée des
+fichiers suspects.
+
+- **Bug réel trouvé et corrigé** : `DELETE /api/produits/:id` (`routes/produits.js`) ne
+  vérifiait jamais le résultat de la requête — renvoyait toujours `{success:true}`/`200`
+  même sur un produit d'une autre entreprise ou un id inexistant, exactement la même classe
+  de bug déjà corrigée à plusieurs reprises (`contacts`, `banques`, parcelles, livraisons
+  poulailler, écritures finances). **Aucun test ne couvrait cette route** (seul le
+  sous-chemin `/produits/lots/:lotId` était testé) — c'est ce qui l'a laissé passer. Corrigé
+  (`RETURNING id` + `rows.length === 0` → `404`) + test de régression ajouté dans
+  `produits.test.js` (suppression réussie, 2e suppression → 404, suppression depuis une
+  autre entreprise → 404). Vérifié à la fois par la suite d'intégration (290/290 verts) et
+  en conditions réelles contre le conteneur backend reconstruit (`200` puis `404` via
+  `curl`).
+- Fichiers audités et jugés sains (contrôles d'existence déjà corrects ou non nécessaires) :
+  `attributsProduit.js`, `produitCategories.js`, `produitTemplates.js`, `listesPrix.js`,
+  `activites.js`, `applicationsIntrants.js`, `contactTags.js`, `unitesMesure(Categories).js`,
+  `pisciculture.js`, `billing.js` (platform-admin uniquement, transactionnel sur `/activer`,
+  pas de souci de cloisonnement puisque volontairement cross-tenant). Gating `requireRole`
+  absent sur `produits`/`produitTemplates`/`produitCategories`/`listesPrix`/
+  `attributsProduit`/`applicationsIntrants`/`pisciculture` confirmé **volontaire** (même
+  convention que `poulailler.js`/`cultures.js`/`achats.js` : domaine opérationnel ouvert à
+  tout rôle, seul le domaine comptable — `banques`/`business` finances — est gated
+  admin/directeur).
+- **Effet de bord découvert en marge** : 4 entreprises de test jamais nettoyées trouvées
+  dans la base de dev, restes de sessions passées — `id=25` (2026-08-13, orpheline, aucun
+  utilisateur lié), `id=128`/`132` (« E2E Etape3 Curl SARL »/« E2E Lot2 SARL », 2026-09-04,
+  restes de l'étape 3 du catalogue Odoo dont le journal ne mentionnait explicitement aucun
+  nettoyage contrairement aux étapes 2 et 4), plus l'entreprise jetable créée pour le smoke
+  test de cette passe. Toutes les quatre supprimées (même procédure `information_schema` que
+  pour Météo). **Laissée volontairement de côté** : `id=3` (« Entreprise Test », 2026-07-21,
+  elle aussi orpheline mais bien plus ancienne que tout chantier documenté — pas assez de
+  certitude sur son origine pour la supprimer unilatéralement, signalée à l'utilisateur au
+  lieu d'être effacée).
+- Suite complète (290 intégration + 1 unitaire) reconfirmée verte après le correctif.

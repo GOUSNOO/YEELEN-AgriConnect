@@ -243,7 +243,11 @@ router.put('/:id', authRequired, async (req, res) => {
 
 router.delete('/:id', authRequired, async (req, res) => {
   try {
-    await pool.query('DELETE FROM produits WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const result = await pool.query(
+      'DELETE FROM produits WHERE id = $1 AND entreprise_id = $2 RETURNING id',
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Produit introuvable.' });
     return res.json({ success: true });
   } catch (err) {
     console.error('[DELETE /produits]', err);

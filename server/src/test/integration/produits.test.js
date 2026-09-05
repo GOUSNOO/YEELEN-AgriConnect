@@ -82,6 +82,14 @@ describe('Produits — fiche intrant enrichie (étape A « élargissement stock 
     const listeB = (await request(app).get('/api/produits').set(bearer(b.token))).body.stocks;
     expect(listeB.some((s) => s.id === created.id)).toBe(false);
   });
+
+  test('DELETE supprime et renvoie 404 sur une 2e suppression ; 404 aussi depuis une autre entreprise', async () => {
+    const created = (await creer({ typeIntrant: 'autre' })).body.stock;
+    const b = await registerEntreprise();
+    expect((await request(app).delete(`/api/produits/${created.id}`).set(bearer(b.token))).status).toBe(404);
+    expect((await request(app).delete(`/api/produits/${created.id}`).set(bearer(admin.token))).status).toBe(200);
+    expect((await request(app).delete(`/api/produits/${created.id}`).set(bearer(admin.token))).status).toBe(404);
+  });
 });
 
 describe('Produits — suivi de lot + péremption (étape B)', () => {
