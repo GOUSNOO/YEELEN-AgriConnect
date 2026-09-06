@@ -46,6 +46,7 @@ import {
   openDevisPdf, downloadDevisPdf, validerDevisManuel, payerEcheance, remettreDevisBrouillon, updateDevisLigneQuantites, annulerDevis,
   getCalendarEvents, createCalendarEvent, updateCalendarEvent, getRecoltes, createRecolte, updateRecolte, deleteRecolte,
   getOnboardingStatus, updateOnboardingStatus, updateEntreprise, getEntreprise,
+  getModulesActifs, updateModulesActifs, getTarifsModules,
   getBillingStatus,
   rechercherVilleMeteo, getMeteo, getParcellesLocalisees, getAnalyseSol, getNdvi,
 } from './lib/api';
@@ -7892,11 +7893,25 @@ function ContactsTab({ type, highlightId }) {
   );
 }
 
+// Les 3 modules « activités agricoles » sont facturés à l'unité (voir
+// server/src/utils/tarificationModules.js:MODULES_TARIFES, même liste) ; les 5 autres restent
+// inclus gratuitement dès qu'un module facturé est actif — décision explicite de l'utilisateur.
+const MODULES_TARIFES_FRONT = ['cultures', 'poulailler', 'pisciculture'];
+
 function ModulesScreen({ activated, onToggle, onContinue }) {
   const { t } = useTranslation();
+  const { fmtMoney } = useLocale();
   const anyActive = activated.cultures || activated.poulailler || activated.clients;
-  const price = t('modulesScreen.pricePlaceholder');
   const feats = (k) => t(`modulesScreen.${k}.features`, { returnObjects: true });
+  const [tarifs, setTarifs] = useState(null);
+  useEffect(() => { getTarifsModules().then(setTarifs).catch(() => {}); }, []);
+
+  const prixModule = (key) => {
+    if (!MODULES_TARIFES_FRONT.includes(key)) return t('modulesScreen.included');
+    if (!tarifs) return t('common.loading');
+    return t('modulesScreen.pricePerMonth', { amount: fmtMoney(tarifs.prixParModule.montant) });
+  };
+
   const MODULES = [
     { key: 'cultures', icon: Leaf, accent: 'green' },
     { key: 'poulailler', icon: Bird, accent: 'ochre' },
@@ -7912,6 +7927,11 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 24, marginBottom: 6 }}>{t('modulesScreen.title')}</div>
         <div style={{ fontSize: 14, color: COLORS.inkSoft }}>{t('modulesScreen.subtitle')}</div>
+        {tarifs && (
+          <div style={{ fontSize: 13, color: COLORS.green, marginTop: 8, fontWeight: 600 }}>
+            {t('modulesScreen.bundleHint', { amount: fmtMoney(tarifs.prixBundle.montant) })}
+          </div>
+        )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
         {MODULES.map(m => (
@@ -7921,7 +7941,7 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
             title={t(`modulesScreen.${m.key}.title`)}
             description={t(`modulesScreen.${m.key}.desc`)}
             features={feats(m.key)}
-            price={price}
+            price={prixModule(m.key)}
             onToggle={() => onToggle(m.key)}
           />
         ))}
@@ -8391,6 +8411,23 @@ export default function App() {
   // Partagé entre une connexion normale et la fin du parcours de confirmation
   // d'inscription (voir handleConfirmerInscription) — les deux aboutissent au même état
   // "connecté".
+  // Modules activés : le serveur (entreprises.modules_actifs, 2026-09-06) fait désormais foi
+  // — le localStorage chargé au tout premier rendu n'est qu'un affichage immédiat le temps que
+  // cet appel réponde. Appelée après CHAQUE authentification réussie (login, confirmation
+  // d'inscription) et à la restauration de session sur rechargement — sans ça, un login
+  // classique garde l'état localStorage périmé jusqu'au prochain rechargement de page.
+  // Best-effort : une erreur ici ne doit jamais bloquer la connexion.
+  const refreshModulesActifs = async () => {
+    try {
+      const { modules } = await getModulesActifs();
+      const complet = { cultures: false, poulailler: false, pisciculture: false, clients: false, employees: false, finances: false, notifications: false, fournisseurs: false, ...modules };
+      setActivated(complet);
+      storageSet('agriconnect-modules', complet);
+    } catch (err) {
+      console.error('[modules_actifs]', err);
+    }
+  };
+
   const finalizeAuth = async (authResult) => {
     setToken(authResult.token);
     const uiRole = mapBackendRoleToUi(authResult.user.role);
@@ -8401,6 +8438,7 @@ export default function App() {
     applyEntrepriseLocale(authResult.entreprise);
     refreshBillingStatus();
     await checkOnboardingNeeded(uiRole);
+    await refreshModulesActifs();
     goToScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
     return authResult;
   };
@@ -8434,6 +8472,12 @@ export default function App() {
     setActivated(prev => {
       const next = { ...prev, [key]: !prev[key] };
       storageSet('agriconnect-modules', next);
+      // Persistance serveur best-effort (tarification par module, 2026-09-06) : réservée
+      // admin/directeur côté backend (requireRole) — un autre rôle voit son choix appliqué
+      // localement pour la session en cours, mais il sera écrasé par l'état serveur à la
+      // prochaine connexion (voir l'effet getModulesActifs au montage). Compromis accepté
+      // pour rester dans le périmètre "calcul de prix", sans redessiner les permissions.
+      updateModulesActifs(next).catch(err => console.error('[modules_actifs]', err));
       return next;
     });
   };
@@ -8542,6 +8586,7 @@ export default function App() {
         applyEntrepriseLocale(entreprise);
         refreshBillingStatus();
         await checkOnboardingNeeded(uiRole);
+        await refreshModulesActifs();
         const hasModulesAccess = selectedConfig.permissions.includes('modules');
         const currentScreen = pathnameToScreen(location.pathname);
         if (currentScreen === 'login') {

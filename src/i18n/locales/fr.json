@@ -128,7 +128,9 @@
     "title": "Choisissez vos options",
     "subtitle": "Activez un ou deux modules selon les besoins de votre exploitation. Vous pourrez les modifier à tout moment.",
     "continue": "Continuer",
-    "pricePlaceholder": "Option incluse dans l'abonnement",
+    "included": "Inclus avec un module activé",
+    "pricePerMonth": "{{amount}}/mois",
+    "bundleHint": "Les 3 modules d'activité pour {{amount}}/mois au lieu du plein tarif",
     "cultures": {
       "title": "Suivi cultures et irrigation",
       "desc": "Surveillez l'humidité et la température du sol, recevez des recommandations d'arrosage et pilotez vos vannes à distance.",
@@ -1429,6 +1431,7 @@
       "removeExemption": "Retirer l'exemption",
       "exemptionRemoved": "Exemption retirée.",
       "activateTitle": "Activer un abonnement",
+      "suggestedPrice": "Prix suggéré : {{amount}} ({{modules}} module(s) activé(s), palier {{palier}})",
       "activate": "Activer",
       "activated": "Abonnement activé.",
       "amount": "Montant",

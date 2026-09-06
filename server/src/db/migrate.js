@@ -1184,6 +1184,17 @@ ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS telephone   TEXT;
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS pays        TEXT;
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS numero_tva  TEXT;
 
+-- ═══════════════ Tarification par module (2026-09-06) ═══════════════════════════════
+-- modules_actifs : jusqu'ici, quel module est « activé » n'existait QUE côté client
+-- (localStorage, clé 'agriconnect-modules', voir App.jsx:toggleModule) — jamais persisté
+-- côté serveur, jamais scopé par entreprise_id. Sans ça, impossible de calculer un prix
+-- suggéré côté platform-admin (routes/billing.js) ou de l'afficher de façon fiable dans
+-- ModulesScreen sur un autre appareil. DEFAULT '{}' : une entreprise déjà existante démarre
+-- sans aucun module marqué actif côté serveur — la première ouverture de ModulesScreen après
+-- cette migration doit re-synchroniser depuis le localStorage existant (fait côté frontend,
+-- pas ici : migrate.js n'a pas accès au localStorage du navigateur).
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS modules_actifs JSONB NOT NULL DEFAULT '{}';
+
 -- ═══════════════ Multi-devise réel, étape 1 : taux de change ═══════════════
 -- Table de référence PLATEFORME (pas de entreprise_id : un taux de change n'appartient à
 -- aucun locataire, il est le même pour tout le monde) — voir utils/currencyRates.js et

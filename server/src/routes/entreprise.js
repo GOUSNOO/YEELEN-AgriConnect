@@ -3,8 +3,11 @@ import { authRequired } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { pool } from '../db.js';
 import { logAuditEvent } from '../utils/auditLog.js';
+import { MODULES_TARIFES, calculerPrixUSD } from '../utils/tarificationModules.js';
 
 const router = express.Router();
+
+const MODULES_CONNUS = [...MODULES_TARIFES, 'clients', 'fournisseurs', 'employees', 'finances', 'notifications'];
 
 router.get('/', authRequired, async (req, res) => {
   try {
@@ -132,6 +135,52 @@ router.put('/onboarding-status', authRequired, requireRole('admin', 'directeur')
   } catch (err) {
     console.error('[PUT /entreprise/onboarding-status]', err);
     return res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  }
+});
+
+// ─── Modules activés (tarification par module, 2026-09-06) ────────────────
+// Jusqu'ici, quel module est « activé » n'existait qu'en localStorage côté navigateur (voir
+// App.jsx:toggleModule) — jamais scopé par entreprise_id côté serveur, donc impossible d'en
+// tirer un prix fiable. GET ouvert à tout rôle authentifié (comme le reste de cette route),
+// PUT réservé admin/directeur car ça a désormais une vraie conséquence financière (voir
+// routes/billing.js pour le calcul du montant suggéré).
+router.get('/modules', authRequired, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT modules_actifs FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Entreprise introuvable.' });
+    return res.json({ modules: rows[0].modules_actifs || {} });
+  } catch (err) {
+    console.error('[GET /entreprise/modules]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des modules.' });
+  }
+});
+
+router.put('/modules', authRequired, requireRole('admin', 'directeur'), async (req, res) => {
+  const { modules } = req.body;
+  if (!modules || typeof modules !== 'object' || Array.isArray(modules)) {
+    return res.status(400).json({ error: 'modules doit être un objet { cle: booléen }.' });
+  }
+  // Ne garde que des clés de modules connus et des valeurs booléennes — un objet arbitraire
+  // envoyé par un client ne doit pas pouvoir écrire n'importe quoi dans la colonne JSONB.
+  const filtre = {};
+  for (const cle of MODULES_CONNUS) {
+    if (cle in modules) filtre[cle] = !!modules[cle];
+  }
+  try {
+    const { rows } = await pool.query(
+      'UPDATE entreprises SET modules_actifs = $1::jsonb WHERE id = $2 RETURNING modules_actifs, pays',
+      [JSON.stringify(filtre), req.user.entrepriseId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Entreprise introuvable.' });
+    await logAuditEvent({
+      entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,
+      action: 'modules_actifs_updated', req, details: filtre,
+    });
+    const prix = calculerPrixUSD(rows[0].pays, rows[0].modules_actifs);
+    return res.json({ modules: rows[0].modules_actifs, prix });
+  } catch (err) {
+    console.error('[PUT /entreprise/modules]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour des modules.' });
   }
 });
 

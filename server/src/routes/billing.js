@@ -9,9 +9,25 @@ import { requirePlatformAdmin } from '../middleware/requirePlatformAdmin.js';
 import { pool } from '../db.js';
 import { evaluerAcces, invaliderCacheAbonnement } from '../middleware/subscriptionGuard.js';
 import { logAuditEvent } from '../utils/auditLog.js';
+import { PRIX_MODULE_USD, PRIX_BUNDLE_USD, calculerPrixUSD } from '../utils/tarificationModules.js';
+import { convertir, DeviseInconnueError } from '../utils/currencyRates.js';
 
 const router = express.Router();
 const ecritureAdmin = [authRequired, requirePlatformAdmin];
+
+// Convertit un montant USD dans la devise demandée ; repli silencieux sur le montant USD brut
+// si la devise est inconnue de currency_rates ou si l'appel réseau (taux du jour) échoue —
+// jamais bloquant, même logique de repli gracieux que le reste de l'app (recaptcha.js, etc.).
+async function convertirDepuisUSD(montantUSD, deviseCible) {
+  if (!deviseCible || deviseCible === 'USD') return { montant: montantUSD, devise: 'USD' };
+  try {
+    const { montant } = await convertir(montantUSD, 'USD', deviseCible);
+    return { montant, devise: deviseCible };
+  } catch (err) {
+    if (!(err instanceof DeviseInconnueError)) console.error('[billing] conversion tarif', err);
+    return { montant: montantUSD, devise: 'USD' };
+  }
+}
 
 // Nombre de jours entiers (arrondi au supérieur, jamais négatif) jusqu'à une date donnée —
 // null si la date elle-même est absente.
@@ -66,6 +82,41 @@ router.get('/status', authRequired, async (req, res) => {
   }
 });
 
+// GET /api/billing/tarifs — route locataire (tout utilisateur authentifié) : la grille de
+// prix par module pour LE PALIER DE L'APPELANT (déterminé par entreprises.pays) + le montant
+// suggéré à partir de ses modules réellement activés (entreprises.modules_actifs), converti
+// dans sa propre devise. Sert à afficher un vrai prix dans ModulesScreen (jusqu'ici un texte
+// factice « Option incluse dans l'abonnement »).
+router.get('/tarifs', authRequired, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT pays, devise, modules_actifs FROM entreprises WHERE id = $1',
+      [req.user.entrepriseId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Entreprise introuvable.' });
+    const { pays, devise, modules_actifs: modulesActifs } = rows[0];
+    const prix = calculerPrixUSD(pays, modulesActifs);
+
+    const [prixModuleConverti, prixBundleConverti, prixTotalConverti] = await Promise.all([
+      convertirDepuisUSD(PRIX_MODULE_USD[prix.palier], devise),
+      convertirDepuisUSD(PRIX_BUNDLE_USD[prix.palier], devise),
+      convertirDepuisUSD(prix.prixTotalUSD, devise),
+    ]);
+
+    return res.json({
+      palier: prix.palier,
+      modulesFactures: prix.modulesFactures,
+      bundleApplique: prix.bundleApplique,
+      prixParModule: prixModuleConverti,
+      prixBundle: prixBundleConverti,
+      prixTotal: prixTotalConverti,
+    });
+  } catch (err) {
+    console.error('[GET /billing/tarifs]', err);
+    return res.status(500).json({ error: 'Erreur lors du calcul des tarifs.' });
+  }
+});
+
 // Statut recalculé à partir des seules dates (même logique qu'evaluerAcces, mais sans la
 // notion de méthode HTTP — sert à /reactiver et /exempter pour retomber sur le bon statut
 // plutôt que de deviner) : période payée en cours prime sur l'essai, sinon 'expired'.
@@ -115,7 +166,8 @@ router.get('/entreprises/:id', ...ecritureAdmin, async (req, res) => {
               to_char(trial_ends_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "trialEndsAt",
               to_char(activated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "activatedAt",
               to_char(activated_until, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "activatedUntil",
-              to_char(grace_until, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "graceUntil"
+              to_char(grace_until, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "graceUntil",
+              pays, devise, modules_actifs AS "modulesActifs"
          FROM entreprises WHERE id = $1`,
       [req.params.id]
     );
@@ -127,7 +179,16 @@ router.get('/entreprises/:id', ...ecritureAdmin, async (req, res) => {
          FROM abonnement_paiements WHERE entreprise_id = $1 ORDER BY created_at DESC`,
       [req.params.id]
     );
-    return res.json({ entreprise: rows[0], paiements: paiements.rows });
+    // Montant suggéré pour le prochain /activer, calculé à partir des modules réellement
+    // activés (entreprises.modules_actifs) — un simple repère pour le platform-admin, jamais
+    // imposé : le formulaire d'activation garde un champ `montant` librement modifiable.
+    const prix = calculerPrixUSD(rows[0].pays, rows[0].modulesActifs);
+    const prixSuggereConverti = await convertirDepuisUSD(prix.prixTotalUSD, rows[0].devise);
+    return res.json({
+      entreprise: rows[0],
+      paiements: paiements.rows,
+      prixSuggere: { ...prix, prixTotalUSD: prix.prixTotalUSD, converti: prixSuggereConverti },
+    });
   } catch (err) {
     console.error('[GET /billing/entreprises/:id]', err);
     return res.status(500).json({ error: 'Erreur lors de la récupération de l\'entreprise.' });

@@ -345,6 +345,43 @@ copier son **architecture** (base par tenant) non — clarifié explicitement av
   frontend, ses changements de code exigent `docker compose up -d --build backend` avant toute
   vérification, pas seulement un redémarrage.
 
+### Tarification par module (2026-09-06)
+Comparaison de l'idée de l'utilisateur (prix par module × palier pays + rabais bundle) avec
+Odoo (forfait tout compris, à-la-carte abandonné) et des ERP agricoles réels (FarmERP/
+Conservis : devis sur mesure ; Agworld : paliers nommés ; xFarm : prix par hectare) — personne
+ne publie de calculateur self-service par module, l'idée de l'utilisateur est plus transparente
+que la concurrence. **Portée délibérément limitée** (choix explicite) : calcul de prix affiché
++ montant suggéré côté platform-admin, **pas** de blocage d'accès module par module
+(`subscriptionGuard` reste tout-ou-rien par entreprise — un vrai blocage toucherait le
+middleware + ~25 fichiers de routes, disproportionné tant que l'activation reste manuelle).
+- Grille arrêtée avec l'utilisateur (palier 4 fixé en premier à 17 $/mois pour 3 modules,
+  autres paliers recalculés depuis lui) : palier 1/2/3/4 = 70$/35$/15$/7$ par module,
+  168$/84$/36$/17$ pour le bundle. Seuls cultures/poulailler/pisciculture sont facturés ; les 5
+  fonctions de gestion transverses restent incluses gratuitement.
+- Paliers pays : classification Banque mondiale FY26/27 (recherche web réelle, pas inventée),
+  champ `palier` ajouté à chaque entrée de `PAYS` (`src/lib/locale.jsx`), dupliqué côté serveur
+  (`server/src/utils/tarificationModules.js:PALIER_PAYS`).
+- **Bug réel trouvé** : `modules_actifs` était 100 % côté client (`localStorage` via
+  `toggleModule`/`storageSet`), jamais scopé par entreprise côté serveur — impossible de
+  calculer un prix suggéré fiable. Nouvelle colonne `entreprises.modules_actifs JSONB` +
+  `GET`/`PUT /api/entreprise/modules` (PUT réservé admin/directeur, filtre les clés/valeurs).
+- **Deuxième bug réel trouvé en vérification navigateur** : le rafraîchissement des modules
+  depuis le serveur n'était branché que sur la restauration de session au rechargement de
+  page, pas sur un login classique (`finalizeAuth`, chemin de code différent) — un utilisateur
+  qui se reconnectait voyait l'ancien état localStorage. Fixé via `refreshModulesActifs()`
+  partagée entre les deux chemins.
+- Nouvelles routes `GET /api/billing/tarifs` (locataire) et `GET /billing/entreprises/:id`
+  étendu (`prixSuggere`, pré-remplit sans forcer le formulaire d'activation admin) —
+  conversion USD→devise via l'utilitaire `currencyRates.js` déjà construit pour le multi-devise
+  réel. `ModulesScreen` affiche le vrai prix par module + un bandeau bundle.
+- Tests : nouveau `tarificationModules.test.js` (unitaire, fonction pure) + 6 tests
+  d'intégration. **Piège évité** : mocker `global.fetch` dans les nouveaux tests de conversion,
+  sinon le premier appel non mocké de la suite écrit de vrais taux dans `currency_rates` et
+  casse `devis.test.js`/`devisesTaux.test.js` (confirmé en le reproduisant). **343/343 tests
+  d'intégration**, `npm test` (103/103) + build verts. Vérifié en navigateur réel de bout en
+  bout (prix affichés, persistance, panneau admin) sur une entreprise jetable, nettoyée
+  ensuite, images Docker backend + frontend reconstruites.
+
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.
 - `db.js` — the single `pg` `Pool` instance every route imports; it reads DB config straight from `process.env` via its own `dotenv.config()` call. `config/env.js` separately loads the *repo-root* `.env` for `JWT_SECRET`/`PORT`. There's no single shared env-loading entrypoint — check which of the two a given file needs.

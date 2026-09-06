@@ -752,6 +752,22 @@ export async function updateEntreprise(payload) {
   return request('/entreprise', { method: 'PUT', body: JSON.stringify(payload) });
 }
 
+// Modules activés, persistés côté serveur (tarification par module, 2026-09-06) — remplace
+// le localStorage seul comme source de vérité, voir routes/entreprise.js. PUT réservé admin/
+// directeur (conséquence financière).
+export async function getModulesActifs() {
+  return request('/entreprise/modules', { method: 'GET' });
+}
+export async function updateModulesActifs(modules) {
+  return request('/entreprise/modules', { method: 'PUT', body: JSON.stringify({ modules }) });
+}
+
+// Grille de tarifs (palier + prix par module/bundle) pour l'entreprise courante, convertie
+// dans sa devise — voir routes/billing.js:GET /tarifs.
+export async function getTarifsModules() {
+  return request('/billing/tarifs', { method: 'GET' });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Météo (Open-Meteo, voir routes/meteo.js) — double granularité entreprise/parcelle.
 // ─────────────────────────────────────────────────────────────────────

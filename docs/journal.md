@@ -3075,3 +3075,94 @@ activé. Entreprises de test nettoyées, images Docker backend + frontend recons
 deux nécessaires cette fois : le backend n'a pas de bind-mount, ses changements ne sont
 jamais pris en compte sans rebuild — leçon déjà connue pour le frontend, maintenant valable
 aussi côté backend).
+
+### 2026-09-06 — Tarification par module (calcul de prix, sans blocage d'accès)
+
+Chantier demandé après une comparaison de l'idée de l'utilisateur (prix par module × palier
+pays + rabais « tous modules ») avec Odoo (forfait tout compris, a abandonné le à-la-carte) et
+plusieurs ERP agricoles internationaux réels (FarmERP : devis sur mesure ; Agworld : paliers
+de fonctionnalités nommés ; xFarm : prix par hectare ; Conservis : modules + surface — le
+précédent le plus proche). Constat : personne dans ce marché ne publie de calculateur
+self-service par module — l'idée de l'utilisateur est plus transparente que la concurrence,
+pas une copie d'un modèle existant.
+
+**Portée délibérément limitée** (choix explicite après une question de portée) : un calcul de
+prix affiché + un montant suggéré côté platform-admin, **pas** un blocage d'accès module par
+module — `subscriptionGuard` reste tout-ou-rien par entreprise, inchangé. Une vraie
+implémentation d'accès bloqué par module toucherait le middleware + ~25 fichiers de routes,
+jugé disproportionné pour une Phase 1 où l'activation reste de toute façon manuelle/hors-ligne.
+
+**Grille de prix arrêtée avec l'utilisateur** (palier 4 fixé en premier à 17 $/mois pour les 3
+modules, les autres paliers recalculés à partir de lui, puis arrondis) :
+
+| Palier | Prix/module | Bundle (3 modules) |
+|---|---|---|
+| 1 — Revenu élevé | 70 $ | 168 $ |
+| 2 — Revenu interm. sup. | 35 $ | 84 $ |
+| 3 — Revenu interm. inf. | 15 $ | 36 $ |
+| 4 — Revenu faible | 7 $ | 17 $ |
+
+Seuls les 3 modules « activités agricoles » (cultures/poulailler/pisciculture) sont facturés à
+l'unité — décision explicite de l'utilisateur pour garder une grille à 3 lignes plutôt que 8 ;
+les 5 fonctions de gestion transverses (clients/fournisseurs/employees/finances/notifications)
+restent incluses gratuitement dès qu'un module facturé est actif.
+
+**Paliers pays** : classification Banque mondiale FY26/27 par RNB/habitant (recherche web en
+direct, pas inventée), mappée sur les ~120 pays de `PAYS` (`src/lib/locale.jsx`, champ `palier`
+ajouté à chaque entrée) — dupliquée côté serveur dans `server/src/utils/tarificationModules.js`
+(`PALIER_PAYS`), même convention que les autres constantes partagées front/back du projet
+(ex. `CATEGORIES_PRODUITS_PAR_DEFAUT`). Quelques cas non couverts par l'échantillon consulté
+classés à dire d'expert (Seychelles/Arabie saoudite/Pologne/Mexique) ; le Liban placé en
+palier 3 comme cas limite volontaire (crise économique, classification officielle mouvante).
+
+**Bug réel trouvé pendant la vérification (pas en relecture) : `modules_actifs` jusqu'ici
+100 % côté client.** En creusant l'implémentation, `toggleModule` n'écrivait que dans
+`localStorage` (`storageSet`/`storageGet`, voir `utils/storage.js`) — jamais synchronisé au
+serveur, jamais scopé par `entreprise_id`. Impossible de calculer un prix suggéré fiable côté
+platform-admin sans ça. Nouvelle colonne `entreprises.modules_actifs JSONB DEFAULT '{}'` +
+routes `GET`/`PUT /api/entreprise/modules` (`PUT` réservé `admin`/`directeur`, filtre les clés
+inconnues et force des booléens — jamais un objet arbitraire écrit tel quel en JSONB).
+`toggleModule` reste optimiste en local (inchangé) mais persiste désormais aussi côté serveur
+en best-effort.
+
+**Deuxième bug réel trouvé en vérification navigateur (pas en relecture) : le rafraîchissement
+des modules depuis le serveur n'était branché que sur la restauration de session au
+rechargement de page, pas sur un login classique.** Une connexion normale via `LoginScreen`
+passe par `finalizeAuth`, un chemin de code différent de l'effet « token déjà en localStorage
+au montage » où le fetch avait été ajouté en premier — un utilisateur qui venait de se
+reconnecter voyait donc l'ancien état localStorage plutôt que l'état serveur réel, jusqu'au
+prochain rechargement. Fixé en extrayant `refreshModulesActifs()` (fonction partagée) appelée
+désormais des deux côtés.
+
+**Nouvelles routes** : `GET /api/billing/tarifs` (route locataire — palier de l'appelant +
+prix suggéré à partir de ses modules réellement actifs, converti dans sa devise via l'utilitaire
+`currencyRates.js` déjà construit pour le multi-devise réel, repli silencieux sur le montant
+USD brut si la devise est inconnue/l'appel réseau échoue) ; `GET /billing/entreprises/:id`
+(platform-admin) étendu avec un `prixSuggere` identique, pré-remplissant (sans jamais forcer)
+le champ montant du formulaire d'activation dans `BillingAdminPanel.jsx`.
+
+**Frontend** : `ModulesScreen` affiche désormais un vrai prix par module (au lieu du texte
+factice « Option incluse dans l'abonnement ») + un bandeau « Les 3 modules d'activité pour
+X/mois au lieu du plein tarif » quand les 3 sont actifs.
+
+**Tests** : nouveau `tarificationModules.test.js` (unitaire, fonction pure `calculerPrixUSD` —
+paliers, bundle, modules non facturés toujours à 0, cohérence des tables de prix) + 6 tests
+d'intégration dans `abonnement.test.js` (persistance/filtrage des modules, rôle gate PUT,
+tarifs calculés correctement, `prixSuggere` de l'admin, isolation multi-tenant). **Piège de
+test évité** : les nouveaux tests touchant la conversion de devise devaient mocker
+`global.fetch` (même patron que `devis.test.js`/`devisesTaux.test.js`) — sans ça, le premier
+appel non mocké de toute la suite déclenche un vrai appel réseau qui écrit de vrais taux dans
+`currency_rates` pour la date du jour et casse les tests de devis/devisesTaux qui s'attendent
+à leurs propres taux mockés (confirmé en le reproduisant, pas supposé). **343/343 tests
+d'intégration, zéro régression** ; `npm test` (103/103) + build frontend verts.
+
+**Vérifié en conditions réelles** (entreprise jetable, Mali → palier 4, promue platform-admin
+temporairement pour la vérification puis dépromue par la suppression du compte) : formulaire
+d'inscription → `ModulesScreen` affiche 3 954 F CFA/mois par module + bandeau bundle à
+9 603 F CFA/mois (conversion USD→XOF réelle, taux du jour) ; activation d'un module → persisté
+en base (`modules_actifs`) ; **après correction du bug de connexion classique** : l'état
+« Activée » apparaît immédiatement après un login normal, plus seulement après un rechargement
+de page ; panneau `Abonnements` (platform-admin) → détail de l'entreprise affiche bien
+« Prix suggéré : 3 954 F CFA (1 module(s) activé(s), palier 4) » avec le formulaire
+montant/devise pré-rempli. Entreprise de test nettoyée, images Docker backend + frontend
+reconstruites.

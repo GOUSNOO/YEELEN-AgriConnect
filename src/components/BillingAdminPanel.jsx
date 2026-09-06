@@ -124,7 +124,16 @@ function EntrepriseDetailModal({ id, onClose, onChanged }) {
   const charger = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await getBillingEntrepriseDetail(id));
+      const data = await getBillingEntrepriseDetail(id);
+      setDetail(data);
+      // Pré-remplit le montant/devise suggérés (calculés depuis pays + modules_actifs, voir
+      // routes/billing.js) — seulement au premier chargement, pour ne jamais écraser une
+      // saisie déjà commencée par le platform-admin.
+      if (data?.prixSuggere?.converti) {
+        setActiverForm((f) => f.montant === ''
+          ? { ...f, montant: String(data.prixSuggere.converti.montant), devise: data.prixSuggere.converti.devise }
+          : f);
+      }
     } catch (err) {
       notifyError(err, t('billing.admin.loadError'));
     } finally {
@@ -218,6 +227,15 @@ function EntrepriseDetailModal({ id, onClose, onChanged }) {
 
             <form onSubmit={activer} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 14, borderTop: '1px solid #DAD6C4', paddingTop: 14 }}>
               <div style={{ gridColumn: '1 / -1', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><CreditCard size={14} /> {t('billing.admin.activateTitle')}</div>
+              {detail.prixSuggere && (
+                <div style={{ gridColumn: '1 / -1', fontSize: 12.5, color: '#5B6357' }}>
+                  {t('billing.admin.suggestedPrice', {
+                    modules: detail.prixSuggere.modulesFactures.length,
+                    palier: detail.prixSuggere.palier,
+                    amount: fmtMoneyWith('fr-FR', detail.prixSuggere.converti.devise, detail.prixSuggere.converti.montant),
+                  })}
+                </div>
+              )}
               <Field label={t('billing.admin.amount')} type="number" value={activerForm.montant} onChange={(e) => setActiverForm({ ...activerForm, montant: e.target.value })} />
               <Field label={t('billing.admin.currency')} value={activerForm.devise} onChange={(e) => setActiverForm({ ...activerForm, devise: e.target.value })} />
               <Field label={t('billing.admin.method')} value={activerForm.moyen} onChange={(e) => setActiverForm({ ...activerForm, moyen: e.target.value })} />

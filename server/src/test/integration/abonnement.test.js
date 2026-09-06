@@ -2,7 +2,7 @@
 // limite d'inscriptions par IP. Lot 2 : garde-fou d'accès (subscriptionGuard/evaluerAcces).
 // Lot 3 : administration (/api/billing/entreprises*) + reCAPTCHA v3 sur l'inscription.
 // Voir docs/spec-abonnement-phase1.md.
-import { app, pool, request, registerEntreprise, uniqueEmail, createProduit, setEntrepriseSubscription } from './helpers.js';
+import { app, pool, request, registerEntreprise, uniqueEmail, createProduit, setEntrepriseSubscription, createEmployeeLogin } from './helpers.js';
 import { evaluerAcces } from '../../middleware/subscriptionGuard.js';
 
 afterAll(async () => { await pool.end(); });
@@ -391,5 +391,113 @@ describe('reCAPTCHA v3 sur l\'inscription (repli gracieux si non configuré)', (
       global.fetch = fetchOriginal;
       delete process.env.RECAPTCHA_SECRET_KEY;
     }
+  });
+});
+
+// Même patron que devis.test.js/devisesTaux.test.js : /billing/tarifs et
+// /billing/entreprises/:id convertissent le prix USD dans la devise de l'entreprise (XOF par
+// défaut) via utils/currencyRates.js — sans ce mock, le premier appel non mocké de toute la
+// suite déclenche un VRAI appel réseau qui pollue currency_rates pour la date du jour et
+// casse les tests de devis/devisesTaux qui, eux, s'attendent à leurs propres taux mockés.
+function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
+  const original = global.fetch;
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: 'success', rates }) });
+  return () => { global.fetch = original; };
+}
+
+describe('Tarification par module (2026-09-06)', () => {
+  test("GET /entreprise/modules démarre vide, PUT persiste + calcule le prix, GET relit l'état", async () => {
+    const admin = await registerEntreprise(); // typeCompte 'entreprise', pays 'ML' (palier 4)
+
+    const avant = await request(app).get('/api/entreprise/modules').set('Authorization', `Bearer ${admin.token}`);
+    expect(avant.status).toBe(200);
+    expect(avant.body.modules).toEqual({});
+
+    const put = await request(app).put('/api/entreprise/modules')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ modules: { poulailler: true, cultures: false } });
+    expect(put.status).toBe(200);
+    expect(put.body.modules).toEqual({ poulailler: true, cultures: false });
+    expect(put.body.prix.palier).toBe(4);
+    expect(put.body.prix.modulesFactures).toEqual(['poulailler']);
+    expect(put.body.prix.bundleApplique).toBe(false);
+
+    const apres = await request(app).get('/api/entreprise/modules').set('Authorization', `Bearer ${admin.token}`);
+    expect(apres.body.modules).toEqual({ poulailler: true, cultures: false });
+  });
+
+  test('PUT /entreprise/modules filtre les clés inconnues et force des booléens', async () => {
+    const admin = await registerEntreprise();
+    const put = await request(app).put('/api/entreprise/modules')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ modules: { poulailler: 1, cle_inventee: true, finances: 'oui' } });
+    expect(put.status).toBe(200);
+    expect(put.body.modules).toEqual({ poulailler: true, finances: true });
+  });
+
+  test('PUT /entreprise/modules refuse un rôle ouvrier (403), GET reste ouvert', async () => {
+    const admin = await registerEntreprise();
+    const ouvrier = await createEmployeeLogin(admin.token, 'ouvrier');
+    const getOuvrier = await request(app).get('/api/entreprise/modules').set('Authorization', `Bearer ${ouvrier.token}`);
+    expect(getOuvrier.status).toBe(200);
+    const putOuvrier = await request(app).put('/api/entreprise/modules')
+      .set('Authorization', `Bearer ${ouvrier.token}`)
+      .send({ modules: { poulailler: true } });
+    expect(putOuvrier.status).toBe(403);
+  });
+
+  test('GET /billing/tarifs : 1 module facturé = prix unitaire, les 3 = tarif bundle', async () => {
+    const restore = mockerFetchTaux();
+    try {
+      const admin = await registerEntreprise();
+
+      const seul = await request(app).get('/api/billing/tarifs').set('Authorization', `Bearer ${admin.token}`);
+      expect(seul.status).toBe(200);
+      expect(seul.body.palier).toBe(4);
+      expect(seul.body.bundleApplique).toBe(false);
+      expect(seul.body.prixTotal.montant).toBe(0);
+
+      await request(app).put('/api/entreprise/modules').set('Authorization', `Bearer ${admin.token}`)
+        .send({ modules: { cultures: true, poulailler: true, pisciculture: true } });
+
+      const bundle = await request(app).get('/api/billing/tarifs').set('Authorization', `Bearer ${admin.token}`);
+      expect(bundle.status).toBe(200);
+      expect(bundle.body.bundleApplique).toBe(true);
+      expect(bundle.body.modulesFactures.sort()).toEqual(['cultures', 'pisciculture', 'poulailler']);
+    } finally { restore(); }
+  });
+
+  test('GET /billing/entreprises/:id (platform-admin) renvoie un prixSuggere cohérent avec les modules actifs', async () => {
+    const restore = mockerFetchTaux();
+    try {
+      const admin = await registerEntreprise();
+      await request(app).put('/api/entreprise/modules').set('Authorization', `Bearer ${admin.token}`)
+        .send({ modules: { poulailler: true } });
+      const platformToken = await promotePlatformAdmin(admin);
+
+      const detail = await request(app).get(`/api/billing/entreprises/${admin.entrepriseId}`)
+        .set('Authorization', `Bearer ${platformToken}`);
+      expect(detail.status).toBe(200);
+      expect(detail.body.prixSuggere.palier).toBe(4);
+      expect(detail.body.prixSuggere.modulesFactures).toEqual(['poulailler']);
+      expect(detail.body.prixSuggere.converti.montant).toBeGreaterThan(0);
+    } finally { restore(); }
+  });
+
+  test('isolation : une entreprise ne voit ni ne modifie les modules/tarifs d\'une autre', async () => {
+    const restore = mockerFetchTaux();
+    try {
+      const a = await registerEntreprise();
+      const b = await registerEntreprise();
+      await request(app).put('/api/entreprise/modules').set('Authorization', `Bearer ${a.token}`)
+        .send({ modules: { cultures: true, poulailler: true, pisciculture: true } });
+
+      const tarifsB = await request(app).get('/api/billing/tarifs').set('Authorization', `Bearer ${b.token}`);
+      expect(tarifsB.status).toBe(200);
+      expect(tarifsB.body.bundleApplique).toBe(false);
+
+      const modulesB = await request(app).get('/api/entreprise/modules').set('Authorization', `Bearer ${b.token}`);
+      expect(modulesB.body.modules).toEqual({});
+    } finally { restore(); }
   });
 });

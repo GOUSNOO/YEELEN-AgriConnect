@@ -128,7 +128,9 @@
     "title": "Choose your options",
     "subtitle": "Enable one or more modules depending on your farm's needs. You can change them at any time.",
     "continue": "Continue",
-    "pricePlaceholder": "Option included in the subscription",
+    "included": "Included with any active module",
+    "pricePerMonth": "{{amount}}/mo",
+    "bundleHint": "All 3 activity modules for {{amount}}/mo instead of full price",
     "cultures": {
       "title": "Crop & irrigation monitoring",
       "desc": "Monitor soil moisture and temperature, get watering recommendations and control your valves remotely.",
@@ -1429,6 +1431,7 @@
       "removeExemption": "Remove exemption",
       "exemptionRemoved": "Exemption removed.",
       "activateTitle": "Activate a subscription",
+      "suggestedPrice": "Suggested price: {{amount}} ({{modules}} active module(s), tier {{palier}})",
       "activate": "Activate",
       "activated": "Subscription activated.",
       "amount": "Amount",
