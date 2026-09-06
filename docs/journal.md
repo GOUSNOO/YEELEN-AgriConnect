@@ -2859,3 +2859,21 @@ jamais défiler horizontalement lui-même).
   un panneau positionné en absolu juste sous la navbar, donc aucun risque de clip ici. Confirmé
   par un clic réel sur « Opérations » après le fix : dropdown affiché normalement.
 - `npx vite build` vert. Entreprise de test nettoyée.
+
+### 2026-09-06 — Refonte navigation, correctif : menus visibles hors du tableau de bord
+
+Signalé par l'utilisateur : sur l'écran « Choisissez vos options » (`/modules`, et par
+extension les écrans d'onboarding), la barre verte affichait les menus (liens épinglés +
+dropdowns de catégorie) — avant la refonte, ces écrans n'avaient jamais de menu du tout
+(l'ancienne `SidebarNav` n'était montée que dans le bloc `{screen === 'dashboard' && ...}`,
+jamais sur `/modules`/onboarding). En fusionnant l'ancien topbar (montré sur tous les écrans
+sauf login) et l'ancienne sidebar (montrée sur le dashboard seul) dans un seul `TopNavbar`
+monté sans condition d'écran, les menus se sont retrouvés visibles partout par erreur.
+
+**Fix** : les entrées de menu (liens épinglés + dropdowns `NAV_CATEGORIES`) et le bouton
+burger mobile ne se rendent plus que si `screen === 'dashboard'` — même condition que celle
+déjà en place pour « Gérer les options »/la recherche. La marque (logo+nom) et le cluster
+utilisateur/rôle/déconnexion restent visibles sur tous les écrans (comme avant la refonte).
+Vérifié en navigateur réel (`localhost:8090` reconstruit) : écran `/modules` affiche bien la
+barre verte réduite à la marque + utilisateur + déconnexion, sans aucun menu. `npm test`
+(103/103) et `npx vite build` verts, zéro régression.

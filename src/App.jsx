@@ -7775,12 +7775,14 @@ function TopNavbar({
           <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: '#fff', whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
         </div>
 
-        <button className="navbar-burger" onClick={() => setMobileOpen(true)} style={navBtnStyle(false)}>
-          <Menu size={18} />
-        </button>
+        {screen === 'dashboard' && (
+          <button className="navbar-burger" onClick={() => setMobileOpen(true)} style={navBtnStyle(false)}>
+            <Menu size={18} />
+          </button>
+        )}
 
         <div className="navbar-entries" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-          {pinned.map(tb => {
+          {screen === 'dashboard' && pinned.map(tb => {
             const Icon = tb.icon;
             return (
               <button key={tb.id} onClick={() => onSelect(tb.id)} style={navBtnStyle(activeTab === tb.id)}>
@@ -7788,7 +7790,7 @@ function TopNavbar({
               </button>
             );
           })}
-          {categories.map(cat => (
+          {screen === 'dashboard' && categories.map(cat => (
             <div key={cat.id} style={{ position: 'relative', flexShrink: 0 }}
               onMouseEnter={() => { if (openCategory && openCategory !== cat.id) setOpenCategory(cat.id); }}>
               <button onClick={() => setOpenCategory(o => (o === cat.id ? null : cat.id))} style={navBtnStyle(activeCategory?.id === cat.id)}>
