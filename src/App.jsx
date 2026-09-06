@@ -11,7 +11,7 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3
 } from 'lucide-react';
 import {
   clearToken,
@@ -5990,6 +5990,105 @@ function ReportsModule({ farmId, activated }) {
   );
 }
 
+// Modules activables/désactivables affichés en tuile sur la grille d'accueil, même liste que
+// ModulesScreen (icônes alignées sur celles d'availableTabs plutôt que sur ModulesScreen, pour
+// rester visuellement cohérent avec les dropdowns de la navbar) — contrairement à availableTabs,
+// ces entrées existent même quand le module est désactivé (dimmed + badge « à activer »),
+// puisqu'availableTabs omet purement et simplement un module désactivé.
+const HOME_MODULE_TILES = [
+  { key: 'cultures', labelKey: 'nav.cultures', icon: Sprout, category: 'operations' },
+  { key: 'poulailler', labelKey: 'nav.poulailler', icon: Egg, category: 'operations' },
+  { key: 'pisciculture', labelKey: 'nav.pisciculture', icon: Fish, category: 'operations' },
+  { key: 'clients', labelKey: 'nav.clients', icon: Users, category: 'commercial' },
+  { key: 'fournisseurs', labelKey: 'nav.fournisseurs', icon: Truck, category: 'commercial' },
+  { key: 'employees', labelKey: 'nav.employees', icon: Briefcase, category: 'rh' },
+  { key: 'finances', labelKey: 'nav.finances', icon: Landmark, category: 'finance' },
+  { key: 'notifications', labelKey: 'nav.notifications', icon: Bell, category: 'operations' },
+];
+
+// Une tuile de la grille d'accueil — module désactivé : cliquer l'active (onToggle, même
+// fonction que ModulesScreen) puis navigue directement, plutôt que d'exiger un aller-retour
+// par « Gérer les options ». Module toujours actif / destination sans notion d'activation :
+// clic = navigation directe.
+function HomeGridTile({ label, icon: Icon, inactive, onClick }) {
+  const { t } = useTranslation();
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+      minHeight: 116, borderRadius: 14, border: `1px solid ${COLORS.border}`,
+      background: inactive ? COLORS.surfaceAlt : COLORS.surface, cursor: 'pointer',
+      opacity: inactive ? 0.6 : 1, position: 'relative', padding: 12,
+    }}>
+      {inactive && (
+        <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre }}>
+          {t('home.activer')}
+        </span>
+      )}
+      <div style={{ width: 46, height: 46, borderRadius: 12, background: inactive ? COLORS.border : COLORS.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={22} color={inactive ? COLORS.inkSoft : COLORS.green} />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, textAlign: 'center', lineHeight: 1.25 }}>{label}</span>
+    </button>
+  );
+}
+
+// Page d'accueil façon grille de lancement (inspirée du Home Menu d'anciennes versions d'un ERP
+// de référence, plein écran d'icônes carrées) — remplace l'ancien HomeOverview comme contenu de
+// l'onglet 'accueil' ; HomeOverview reste accessible via sa propre tuile (onglet 'tableaubord').
+// Combine deux sources : HOME_MODULE_TILES (modules activables, toujours affichés qu'ils soient
+// actifs ou non) + le reste d'availableTabs par catégorie (destinations sans notion
+// d'activation) — les deux fusionnées pour ne jamais afficher un module en double.
+function HomeGrid({ tabs, activated, permissions, onToggle, onSelect }) {
+  const { t } = useTranslation();
+  const moduleKeys = new Set(HOME_MODULE_TILES.map(m => m.key));
+  const pinned = tabs.filter(tb => !tb.category && tb.id !== 'accueil');
+  const moduleTiles = HOME_MODULE_TILES.filter(m => permissions.includes(m.key));
+  const categories = NAV_CATEGORIES
+    .map(cat => ({
+      ...cat,
+      modules: moduleTiles.filter(m => m.category === cat.id),
+      items: tabs.filter(tb => tb.category === cat.id && !moduleKeys.has(tb.id)),
+    }))
+    .filter(cat => cat.modules.length > 0 || cat.items.length > 0);
+
+  const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 14 };
+  const sectionLabelStyle = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+      {pinned.length > 0 && (
+        <div>
+          <div style={sectionLabelStyle}>{t('home.general')}</div>
+          <div style={gridStyle}>
+            {pinned.map(tb => (
+              <HomeGridTile key={tb.id} label={tb.label} icon={tb.icon} onClick={() => onSelect(tb.id)} />
+            ))}
+          </div>
+        </div>
+      )}
+      {categories.map(cat => (
+        <div key={cat.id}>
+          <div style={sectionLabelStyle}>
+            <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color }} />
+            {t(cat.labelKey)}
+          </div>
+          <div style={gridStyle}>
+            {cat.modules.map(m => (
+              <HomeGridTile
+                key={m.key} label={t(m.labelKey)} icon={m.icon} inactive={!activated[m.key]}
+                onClick={() => { if (!activated[m.key]) onToggle(m.key); onSelect(m.key); }}
+              />
+            ))}
+            {cat.items.map(tb => (
+              <HomeGridTile key={tb.id} label={tb.label} icon={tb.icon} onClick={() => onSelect(tb.id)} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HomeOverview({ farmId, activated }) {
   const { t } = useTranslation();
   const { fmtMoney } = useLocale();
@@ -7741,6 +7840,7 @@ function TopNavbar({
   const { t } = useTranslation();
   const { fmtDate } = useLocale();
   const [openCategory, setOpenCategory] = useState(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navRef = useRef(null);
 
@@ -7750,11 +7850,13 @@ function TopNavbar({
     .filter(cat => cat.items.length > 0);
 
   useEffect(() => {
-    if (!openCategory) return;
-    const onDocClick = (e) => { if (navRef.current && !navRef.current.contains(e.target)) setOpenCategory(null); };
+    if (!openCategory && !avatarOpen) return;
+    const onDocClick = (e) => {
+      if (navRef.current && !navRef.current.contains(e.target)) { setOpenCategory(null); setAvatarOpen(false); }
+    };
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
-  }, [openCategory]);
+  }, [openCategory, avatarOpen]);
 
   const activeCategory = categories.find(cat => cat.items.some(it => it.id === activeTab));
   const activeTabObj = tabs.find(tb => tb.id === activeTab);
@@ -7764,6 +7866,11 @@ function TopNavbar({
     background: active ? 'rgba(255,255,255,.18)' : 'transparent', border: 'none', borderRadius: 0,
     color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
   });
+
+  const navUserMenuItemStyle = {
+    display: 'block', width: '100%', textAlign: 'left', padding: '7px 16px', border: 'none',
+    background: 'transparent', cursor: 'pointer', fontSize: 13, color: COLORS.ink, whiteSpace: 'nowrap',
+  };
 
   return (
     <>
@@ -7828,24 +7935,45 @@ function TopNavbar({
           ))}
         </div>
 
-        <div className="navbar-actions-desktop" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingLeft: 10 }}>
-          {screen === 'dashboard' && showManageOptions && (
-            <button onClick={onManageOptions} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: 'rgba(255,255,255,.85)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-              {t('shell.manageOptions')}
-            </button>
-          )}
-          {screen === 'dashboard' && (
-            <button onClick={onSearch} title={t('shell.globalSearch')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center' }}>
-              <Search size={16} />
-            </button>
-          )}
-          <span style={{ fontSize: 12.2, color: 'rgba(255,255,255,.85)', whiteSpace: 'nowrap' }}>{user}</span>
-          <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: 'rgba(255,255,255,.2)', color: '#fff', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {roleLabel}
-          </span>
-          <button onClick={onLogout} title={t('shell.logout')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex' }}>
-            <LogOut size={17} />
+        <div className="navbar-actions-desktop" style={{ position: 'relative', flexShrink: 0, paddingLeft: 10 }}>
+          <button
+            onClick={() => setAvatarOpen(o => !o)}
+            title={t('shell.userMenu')}
+            style={{
+              width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,.22)',
+              border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {(user || '?').charAt(0).toUpperCase()}
           </button>
+          {avatarOpen && (
+            <div style={{
+              position: 'absolute', top: '100%', right: 0, marginTop: 6, background: COLORS.surface, borderRadius: 4,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`,
+              zIndex: 30, minWidth: 220, overflow: 'hidden',
+            }}>
+              <div style={{ padding: '10px 16px', borderBottom: `1px solid ${COLORS.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user}</div>
+                <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 2 }}>{roleLabel}</div>
+              </div>
+              <div style={{ padding: '4px 0' }}>
+                {screen === 'dashboard' && showManageOptions && (
+                  <button onClick={() => { setAvatarOpen(false); onManageOptions(); }} className="navbar-user-menu-item" style={navUserMenuItemStyle}>
+                    {t('shell.manageOptions')}
+                  </button>
+                )}
+                {screen === 'dashboard' && (
+                  <button onClick={() => { setAvatarOpen(false); onSearch(); }} className="navbar-user-menu-item" style={navUserMenuItemStyle}>
+                    {t('shell.globalSearch')}
+                  </button>
+                )}
+                <button onClick={onLogout} className="navbar-user-menu-item" style={navUserMenuItemStyle}>
+                  {t('shell.logout')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -8231,6 +8359,7 @@ export default function App() {
     roleConfig.permissions.includes('assistant') && { id: 'assistant', label: t('nav.assistant'), icon: Search, category: 'analyse' },
     roleConfig.permissions.includes('assistant') && { id: 'forecasting', label: t('nav.forecasting'), icon: TrendingUp, category: 'analyse' },
     roleConfig.permissions.includes('reports') && { id: 'reports', label: t('nav.reports'), icon: FileText, category: 'analyse' },
+    roleConfig.permissions.includes('home') && { id: 'tableaubord', label: t('nav.tableaubord'), icon: BarChart3, category: 'analyse' },
     activated.cultures && roleConfig.permissions.includes('cultures') && { id: 'cultures', label: t('nav.cultures'), icon: Sprout, category: 'operations' },
     activated.poulailler && roleConfig.permissions.includes('poulailler') && { id: 'poulailler', label: t('nav.poulailler'), icon: Egg, category: 'operations' },
     activated.pisciculture && roleConfig.permissions.includes('pisciculture') && { id: 'pisciculture', label: t('nav.pisciculture'), icon: Fish, category: 'operations' },
@@ -8316,6 +8445,7 @@ export default function App() {
            horizontalement lui-même. */
         .app-shell { overflow-x: hidden; }
         .dashboard-shell { overflow-x: auto; }
+        .navbar-user-menu-item:hover { background: rgba(0,0,0,.08); }
         .navbar-burger { display: none; }
         @media (max-width: 760px) {
           .navbar-entries { display: none !important; }
@@ -8439,7 +8569,13 @@ export default function App() {
 
       {screen === 'dashboard' && (
         <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
-            {tab === 'accueil' && <HomeOverview farmId={user} activated={activated} />}
+            {tab === 'accueil' && (
+              <HomeGrid
+                tabs={availableTabs} activated={activated} permissions={roleConfig.permissions}
+                onToggle={toggleModule} onSelect={(id) => navigate(`/app/${id}`)}
+              />
+            )}
+            {tab === 'tableaubord' && <HomeOverview farmId={user} activated={activated} />}
             {tab === 'calendar' && <AgriculturalCalendarModule farmId={user} />}
             {tab === 'recoltes' && <HarvestsModule farmId={user} />}
             {tab === 'assistant' && <AIAssistantModule farmId={user} activated={activated} />}

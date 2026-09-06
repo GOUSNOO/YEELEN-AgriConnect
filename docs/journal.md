@@ -2877,3 +2877,63 @@ utilisateur/rôle/déconnexion restent visibles sur tous les écrans (comme avan
 Vérifié en navigateur réel (`localhost:8090` reconstruit) : écran `/modules` affiche bien la
 barre verte réduite à la marque + utilisateur + déconnexion, sans aucun menu. `npm test`
 (103/103) et `npx vite build` verts, zéro régression.
+
+### 2026-09-06 — Navbar simplifiée (menu utilisateur) + grille d'accueil façon Odoo
+
+Deux demandes de l'utilisateur : (1) « la barre verte a trop d'information » — recherche
+menée dans le vrai code source d'un ERP de référence sur son menu utilisateur/systray avant
+d'agir (comme pour tout le reste de ce chantier) ; (2) « une page d'accueil avec des menus en
+carré » façon Odoo — vérifié honnêtement que ce plein-écran d'icônes carrées (le « Home Menu »)
+**n'existe plus** dans la source Odoo 19.0 lue (remplacé par les dropdowns de navbar déjà
+construits) — présent dans d'anciennes versions, pattern très répandu ailleurs. Décision de
+l'utilisateur après clarification : remplacer l'Accueil actuel par la grille, en gardant le
+tableau de bord chiffré comme une tuile parmi les autres (pas déplacé dans Finance, pour ne
+pas enterrer des indicateurs non-financiers) ; chaque tuile fait aussi office
+d'activation/désactivation de module.
+
+**Recherche menu utilisateur (agent Explore, source Odoo 19.0)** :
+- `user_menu.xml` : le bouton visible au repos est **l'avatar seul** — le bloc texte nom/email
+  a `d-none` inconditionnel, seulement levé en mode debug d'Odoo (`t-att-class="{'d-lg-inline-
+  block' : env.debug}"`). Aucun badge de rôle/groupe permanent trouvé nulle part dans la navbar.
+- Tout le reste (préférences, raccourcis, déconnexion) vit dans `registry.category("user_menuitems")`,
+  un menu déroulant caché tant qu'on n'a pas cliqué l'avatar.
+- Recherche globale : pas d'icône permanente — `hotkeyService.add("control+k", openMainPalette, ...)`,
+  seulement mentionnée en texte (avec le raccourci clavier) dans le menu déroulant.
+
+**Fix navbar** (`TopNavbar`) : les 5 éléments permanents (Gérer les options / icône recherche /
+email complet / badge rôle / icône déconnexion) remplacés par **un seul bouton avatar**
+(cercle avec l'initiale de l'email, pas de vraie photo dans cette app) ouvrant un menu
+déroulant (état `avatarOpen`, même mécanisme de fermeture au clic extérieur que les dropdowns
+de catégorie) contenant : email + rôle en en-tête, puis Gérer les options/Rechercher (Ctrl+K
+continue de fonctionner au clavier sans changement, juste sans icône permanente)/Se déconnecter.
+
+**Grille d'accueil** (`HomeGrid`, remplace `HomeOverview` comme contenu de l'onglet `accueil` —
+`HomeOverview` reste intact, accessible via une nouvelle tuile/onglet `tableaubord` sous
+Analyse) : deux sources combinées pour ne jamais afficher un module en double —
+`HOME_MODULE_TILES` (modules activables : cultures/poulailler/pisciculture/clients/
+fournisseurs/employees/finances/notifications, **toujours affichés qu'ils soient actifs ou
+non**, contrairement à `availableTabs` qui omet purement et simplement un module désactivé) +
+le reste d'`availableTabs` par catégorie pour les destinations sans notion d'activation. Une
+tuile désactivée : dimmed + badge « À activer » ; clic = active le module (`onToggle`, même
+fonction que `ModulesScreen`) **puis** navigue directement en un seul clic, plutôt que
+d'exiger un aller-retour par « Gérer les options ».
+
+**Bug trouvé pendant la vérification (pas en relecture)** : clé i18n `home.general`/
+`home.activer` ajoutée dans un **second bloc `"home"` dupliqué** au niveau racine des JSON
+fr/en — `JSON.parse` accepte silencieusement des clés dupliquées en gardant la dernière
+occurrence, donc mon bloc était écrasé par le namespace `home.*` déjà existant
+(`cardRevenue`/`cardExpenses`/... de `HomeOverview`) placé plus loin dans le fichier. Les
+tuiles affichaient littéralement la clé brute (`HOME.GENERAL`, `home.activer`) au lieu du
+texte traduit. Fusionné dans le bloc existant plutôt que dupliqué ; vérifié qu'il ne reste
+qu'une seule occurrence de `"home": {` dans chaque fichier.
+
+**Vérifié en conditions réelles** (dev server + backend Docker, entreprise jetable) : menu
+avatar ouvre/ferme correctement (email+rôle+déconnexion sur `/modules`, + Gérer les
+options/Rechercher sur le dashboard) ; grille d'accueil affiche les sections (Général/
+Opérations/Analyse/Commercial/RH) avec les bons badges « À activer » sur les modules
+désactivés ; clic sur une tuile désactivée (Cultures) → active le module + navigue directement
+vers Cultures en un seul clic, sans déconnexion, dans un vrai parcours SPA (un premier essai de
+vérification via rechargement direct d'URL profonde par l'outil de test avait provoqué une
+fausse déconnexion — confirmé comme un artefact du contournement de l'initialisation normale
+de l'app, pas un bug réel, en répétant le même clic dans un parcours normal). `npm test`
+(103/103) + `npx vite build` verts. Entreprise de test nettoyée, image Docker reconstruite.

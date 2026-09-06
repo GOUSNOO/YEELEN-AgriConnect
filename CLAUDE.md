@@ -271,6 +271,27 @@ déroulants par app + un fil d'ariane, sans limite de largeur de page.
   direct (`document.documentElement.scrollWidth === clientWidth`, pas une supposition) à
   plusieurs largeurs de fenêtre, et confirmé que ça ne réintroduit pas le bug de dropdown
   clippé corrigé juste avant (voir `docs/journal.md` pour le raisonnement complet).
+- **Correctif visibilité des menus (même jour)** : les menus (liens épinglés + dropdowns)
+  s'affichaient à tort sur `/modules`/onboarding (avant la refonte, la sidebar était gated à
+  `screen === 'dashboard'` seul ; le nouveau `TopNavbar` fusionnait à tort tout ça sans
+  condition). Gate ajoutée : entrées de menu + burger mobile ne se rendent que si
+  `screen === 'dashboard'`.
+- **Navbar simplifiée + grille d'accueil (même jour)** : recherche menée dans le vrai code
+  source d'un ERP de référence sur son menu utilisateur/systray (`user_menu.xml` : **un seul
+  avatar** visible au repos, aucun nom/email/badge de rôle permanent — texte caché sauf en mode
+  debug ; tout le reste dans un menu déroulant ; pas d'icône de recherche permanente, juste
+  Ctrl+K). Les 5 éléments permanents (Gérer les options/recherche/email/rôle/déconnexion)
+  remplacés par un seul bouton avatar (initiale de l'email) ouvrant un menu déroulant. Nouvelle
+  page d'accueil `HomeGrid` (grille de tuiles façon Home Menu d'anciennes versions d'un ERP de
+  référence — vérifié absent des versions récentes, honnêtement signalé plutôt qu'inventé) :
+  combine les modules activables (toujours affichés, dimmed + badge « À activer » si
+  désactivés — clic les active puis navigue en un seul geste) et le reste des destinations par
+  catégorie. `HomeOverview` (l'ancien tableau de bord chiffré) reste intact, déplacé vers une
+  tuile/onglet dédié `tableaubord` plutôt que fusionné dans Finance (indicateurs non-financiers
+  mélangés). Bug trouvé en vérifiant : clé i18n `home.*` dupliquée au niveau racine des JSON
+  fr/en (`JSON.parse` garde silencieusement la dernière occurrence) — fusionné dans le
+  namespace `home` existant. Vérifié en navigateur réel, `npm test` (103/103) + build verts.
+  Détail complet dans `docs/journal.md`.
 
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.

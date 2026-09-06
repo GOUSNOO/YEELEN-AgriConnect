@@ -47,7 +47,8 @@
     "pendingSync_other": "{{count}} changes to sync",
     "lastSync": "Last sync: {{date}}",
     "noSync": "No sync recorded yet",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "userMenu": "User menu"
   },
   "onboarding": {
     "configTitle": "Set up your business",
@@ -168,6 +169,8 @@
     "defaultCustomer": "Customer"
   },
   "home": {
+    "general": "General",
+    "activer": "Not enabled",
     "cardRevenue": "Revenue this month",
     "cardExpenses": "Expenses this month",
     "cardProfit": "Profit",
@@ -1835,6 +1838,7 @@
     "fournisseurs": "Suppliers",
     "employees": "Employees",
     "monrh": "My HR space",
+    "tableaubord": "Dashboard",
     "finances": "Finances",
     "factures": "Invoices",
     "notifications": "Notifications",

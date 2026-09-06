@@ -47,7 +47,8 @@
     "pendingSync_other": "{{count}} modifications à synchroniser",
     "lastSync": "Dernière synchronisation : {{date}}",
     "noSync": "Aucune synchronisation enregistrée",
-    "logout": "Se déconnecter"
+    "logout": "Se déconnecter",
+    "userMenu": "Menu utilisateur"
   },
   "onboarding": {
     "configTitle": "Configurer votre entreprise",
@@ -168,6 +169,8 @@
     "defaultCustomer": "Client"
   },
   "home": {
+    "general": "Général",
+    "activer": "À activer",
     "cardRevenue": "Chiffre d'affaires du mois",
     "cardExpenses": "Dépenses du mois",
     "cardProfit": "Bénéfice",
@@ -1835,6 +1838,7 @@
     "fournisseurs": "Fournisseurs",
     "employees": "Employés",
     "monrh": "Mon espace RH",
+    "tableaubord": "Tableau de bord",
     "finances": "Finances",
     "factures": "Factures",
     "notifications": "Notifications",
