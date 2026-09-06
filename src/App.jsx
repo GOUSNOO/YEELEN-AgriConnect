@@ -8428,7 +8428,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: 480, borderRadius: 16, color: COLORS.ink }}>
+    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: '100svh', borderRadius: 16, color: COLORS.ink }}>
       <ToastContainer />
       <style>{`
         ${FONT_IMPORT}

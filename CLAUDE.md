@@ -292,6 +292,15 @@ déroulants par app + un fil d'ariane, sans limite de largeur de page.
   fr/en (`JSON.parse` garde silencieusement la dernière occurrence) — fusionné dans le
   namespace `home` existant. Vérifié en navigateur réel, `npm test` (103/103) + build verts.
   Détail complet dans `docs/journal.md`.
+- **Correctif hauteur de page instable (même jour)** : signalé après — en changeant de
+  sous-onglet, la page se contentait de sa hauteur de contenu réelle (`.app-shell` avait
+  `minHeight: 480`, une petite valeur fixe, sans lien avec le viewport), donnant l'impression
+  que la page « rétrécit » sur un écran à peu de lignes (ex. Achats) vs un écran à beaucoup de
+  lignes (ex. Ventes). Fixé en `minHeight: '100svh'` sur `.app-shell` (cohérent avec `#root`
+  dans `index.css`, qui a déjà cette valeur mais ne suffisait pas seul — c'est l'enfant avec
+  son propre fond qui doit être contraint). Vérifié par mesure directe :
+  `scrollHeight === innerHeight` sur une page courte, contenu naturellement dépassant sur une
+  page longue.
 
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.

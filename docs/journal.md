@@ -2937,3 +2937,30 @@ vérification via rechargement direct d'URL profonde par l'outil de test avait p
 fausse déconnexion — confirmé comme un artefact du contournement de l'initialisation normale
 de l'app, pas un bug réel, en répétant le même clic dans un parcours normal). `npm test`
 (103/103) + `npx vite build` verts. Entreprise de test nettoyée, image Docker reconstruite.
+
+### 2026-09-06 — Correctif : hauteur de page instable selon le nombre de lignes
+
+Signalé par l'utilisateur : en changeant de sous-onglet (ex. Ventes avec beaucoup de lignes →
+Achats avec deux ou trois lignes), la page « se met au même niveau que les lignes » — la
+hauteur visible varie selon le contenu au lieu de toujours occuper au moins la fenêtre entière,
+donnant une impression de taille de page instable (distinct du fix de largeur du même jour).
+
+**Cause** : `.app-shell` (le conteneur racine de tout l'écran, sous la navbar) avait
+`minHeight: 480` (480px, une valeur bien plus petite qu'un écran réel) et aucune contrainte
+liée à la hauteur du viewport — une page avec peu de contenu se contentait donc de sa hauteur
+naturelle, laissant apparaître le fond de `<body>`/`#root` en dessous (`#root` a bien son
+propre `min-height: 100svh` dans `index.css`, mais ça ne suffit pas : c'est `.app-shell`,
+l'enfant avec son propre fond `COLORS.bg`, qui doit lui-même être contraint pour que ce fond
+remplisse visuellement tout l'espace).
+
+**Fix** : `minHeight: 480` → `minHeight: '100svh'` sur `.app-shell` (`100svh` plutôt que
+`100vh`, cohérent avec la valeur déjà utilisée par `#root` dans `index.css` — plus sûr sur
+mobile où la barre d'adresse peut apparaître/disparaître).
+
+**Vérifié en conditions réelles** par mesure directe (pas une supposition) : sur un onglet
+court (Achats, formulaire simple sans grand tableau), `document.documentElement.scrollHeight
+=== window.innerHeight` exactement — la page remplit toute la fenêtre, ni plus ni moins ; sur
+un onglet long (Ventes, devis multi-lignes), le contenu dépasse naturellement la fenêtre sans
+être contraint (`appShellHeight > innerHeight`), confirmant que le `min-height` n'écrase pas
+le contenu réellement long. `npm test` (103/103) + `npx vite build` verts. Entreprise de test
+nettoyée, image Docker reconstruite.
