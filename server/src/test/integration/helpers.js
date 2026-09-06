@@ -38,17 +38,37 @@ export async function registerEntreprise(opts = {}) {
     password,
     nomEntreprise: opts.nomEntreprise || `IT ${Date.now()}-${seq}`,
     typeCompte: 'entreprise',
+    telephone: '+22300000000',
+    pays: 'ML',
+    numeroTva: 'ML00000000',
+    adresse: 'Adresse de test',
   });
   if (res.status !== 200 && res.status !== 201) {
     throw new Error(`register a échoué (${res.status}): ${JSON.stringify(res.body)}`);
   }
-  const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${res.body.token}`);
+  // Inscription à deux étapes (2026-09-06, voir routes/auth.js:confirmer-inscription) :
+  // /register ne renvoie plus de token, seulement { confirmationRequired, email }. Les tests
+  // n'ont pas accès à l'email réel envoyé (EMAIL_* est blanchi en env de test, voir env.js) —
+  // on confirme directement en base (même logique d'accès direct que
+  // setEntrepriseSubscription plus bas) plutôt que dériver le code HOTP ici, puis on se
+  // connecte pour obtenir le token.
+  await pool.query(
+    `UPDATE entreprises SET email_confirme = TRUE
+     WHERE id = (SELECT eu.entreprise_id FROM entreprise_utilisateurs eu
+                 JOIN users u ON u.id = eu.user_id
+                 WHERE LOWER(u.email) = LOWER($1) LIMIT 1)`,
+    [email]
+  );
+  const login = await request(app).post('/api/auth/login').send({ email, password });
+  if (login.status !== 200 || !login.body.token) {
+    throw new Error(`login après inscription a échoué (${login.status}): ${JSON.stringify(login.body)}`);
+  }
   return {
-    token: res.body.token,
+    token: login.body.token,
     email,
     password,
-    entrepriseId: me.body.entreprise?.id,
-    userId: me.body.user?.id,
+    entrepriseId: login.body.entreprise?.id,
+    userId: login.body.user?.id,
   };
 }
 

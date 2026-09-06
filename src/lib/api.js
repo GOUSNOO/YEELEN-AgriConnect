@@ -67,16 +67,24 @@ export function clearToken() {
 // ─────────────────────────────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────────────────────────────
-export async function login(email, password, mfaCode) {
-  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, mfaCode }) });
+export async function login(email, password, mfaCode, confirmationCode) {
+  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, mfaCode, confirmationCode }) });
 }
 
 export async function register(email, password, extra) {
-  const { nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken } = extra || {};
+  const { nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken, telephone, pays, numeroTva, adresse } = extra || {};
   return request('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken }),
+    body: JSON.stringify({ email, password, nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken, telephone, pays, numeroTva, adresse }),
   });
+}
+
+export async function confirmerInscription(email, code) {
+  return request('/auth/confirmer-inscription', { method: 'POST', body: JSON.stringify({ email, code }) });
+}
+
+export async function renvoyerCodeInscription(email) {
+  return request('/auth/renvoyer-code-inscription', { method: 'POST', body: JSON.stringify({ email }) });
 }
 
 export async function getMe() {

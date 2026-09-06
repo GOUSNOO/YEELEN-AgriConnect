@@ -67,6 +67,26 @@ export async function sendWelcomeEmail(to, tempPassword, prenom) {
   });
 }
 
+// Envoyé à l'inscription d'une nouvelle entreprise, avant que le compte soit utilisable
+// (voir routes/auth.js:register/confirmer-inscription) — code à 6 chiffres dérivé par
+// utils/mfaCode.js, jamais stocké, même mécanique que le code MFA email mais distinct dans
+// son intitulé pour ne pas laisser croire à un problème de sécurité sur un compte existant.
+export async function sendInscriptionCodeEmail(to, code, nomEntreprise) {
+  await transporter.sendMail({
+    from: `"YEELEN AgriConnect" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: 'Confirmez votre inscription à YEELEN AgriConnect',
+    html: `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2>Bienvenue${nomEntreprise ? ` ${nomEntreprise}` : ''},</h2>
+        <p>Pour activer votre compte YEELEN AgriConnect, saisissez ce code de confirmation :</p>
+        <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${code}</p>
+        <p style="color: #888; font-size: 13px;">Ce code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette inscription, ignorez cet email.</p>
+      </div>
+    `,
+  });
+}
+
 // Envoie un email au client avec un lien vers son devis, pour consultation et signature
 // — le lien pointe vers la route publique /devis/public/:token (pas d'authentification
 // requise côté client, uniquement le token dans l'URL le protège).

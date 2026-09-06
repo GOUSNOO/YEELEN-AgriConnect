@@ -15,7 +15,7 @@ import { logAuditEvent, getAuditLog, countRecentAuditEvents, countRecentAuditEve
 import { TRIAL_DAYS } from '../config/abonnement.js';
 import { verifierRecaptcha } from '../utils/recaptcha.js';
 import { generateEmailCode, verifyEmailCode, requestContext } from '../utils/mfaCode.js';
-import { sendMfaCodeEmail } from '../services/mailer.js';
+import { sendMfaCodeEmail, sendInscriptionCodeEmail } from '../services/mailer.js';
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 import { UNITES_MESURE_DEFAUT } from '../utils/unitesMesureDefaut.js';
 import { EMPLACEMENTS_STOCK_DEFAUT } from '../utils/emplacementsStockDefaut.js';
@@ -71,10 +71,16 @@ const PAYMENT_TERMS_PAR_DEFAUT = [
 // la toute nouvelle entreprise qu'il vient de créer (pas de rejoindre une entreprise
 // existante depuis cette route).
 router.post('/register', async (req, res) => {
-  const { email, password, nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken } = req.body;
+  const { email, password, nomEntreprise, typeCompte, siret, devise, locale, recaptchaToken, telephone, pays, numeroTva, adresse } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis.' });
+  }
+
+  // pays/téléphone/TVA/adresse : facultatifs pour un compte 'particulier' (comme le SIRET),
+  // obligatoires pour 'entreprise' — décision explicite de l'utilisateur, voir docs/journal.md.
+  if ((typeCompte !== 'particulier') && (!telephone || !pays || !numeroTva || !adresse)) {
+    return res.status(400).json({ error: 'Pays, téléphone, numéro de TVA et adresse sont requis pour un compte entreprise.' });
   }
 
   // reCAPTCHA v3 (Lot 3, inspiré du module Odoo google_recaptcha) : repli gracieux total tant
@@ -130,8 +136,8 @@ router.post('/register', async (req, res) => {
     // Nom d'entreprise par défaut si non fourni — dépend du type de compte pour rester
     // cohérent ("Espace de x@y.com" pour un particulier, "Entreprise de x@y.com" sinon).
     const entrepriseResult = await client.query(
-      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale, subscription_status, trial_ends_at)
-       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'), 'trial', now() + ($6 || ' days')::interval)
+      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale, subscription_status, trial_ends_at, email_confirme, telephone, pays, numero_tva, adresse)
+       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'), 'trial', now() + ($6 || ' days')::interval, FALSE, $7, $8, $9, $10)
        RETURNING id, nom, siret, type_compte, devise, locale, subscription_status AS "subscriptionStatus", trial_ends_at AS "trialEndsAt"`,
       [
         nomEntreprise || `${compteType === 'particulier' ? 'Espace' : 'Entreprise'} de ${user.email}`,
@@ -140,6 +146,10 @@ router.post('/register', async (req, res) => {
         devise || null,
         locale || null,
         String(TRIAL_DAYS),
+        compteType === 'entreprise' ? telephone : (telephone || null),
+        compteType === 'entreprise' ? pays : (pays || null),
+        compteType === 'entreprise' ? numeroTva : (numeroTva || null),
+        compteType === 'entreprise' ? adresse : (adresse || null),
       ]
     );
     const entreprise = entrepriseResult.rows[0];
@@ -242,20 +252,19 @@ router.post('/register', async (req, res) => {
       details: { trialDays: TRIAL_DAYS },
     });
 
-    // isPlatformAdmin toujours false ici : ce flag ne peut être activé que
-    // manuellement en base (voir requirePlatformAdmin.js) — une inscription normale
-    // ne peut jamais produire un propriétaire de plateforme.
-    const token = jwt.sign(
-      { sub: user.id, email: user.email, entrepriseId: entreprise.id, role: 'admin', isPlatformAdmin: false },
-      env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    // Confirmation par email obligatoire avant tout token (email_confirme = FALSE posé
+    // ci-dessus) : le code est envoyé maintenant, l'inscription se termine réellement dans
+    // POST /confirmer-inscription. Échec d'envoi = best-effort (comme sendMfaCodeEmail au
+    // login) — l'utilisateur peut toujours redemander un code via /renvoyer-code-inscription.
+    const code = generateEmailCode(user.id, user.email);
+    await logAuditEvent({ entrepriseId: entreprise.id, userId: user.id, email: user.email, action: 'inscription_code_envoye', req });
+    try {
+      await sendInscriptionCodeEmail(user.email, code, entreprise.nom);
+    } catch (mailErr) {
+      console.error('[register] envoi code de confirmation', mailErr);
+    }
 
-    return res.status(201).json({
-      token,
-      user: { id: user.id, email: user.email, role: 'admin', createdAt: user.created_at, isPlatformAdmin: false },
-      entreprise: { id: entreprise.id, nom: entreprise.nom, typeCompte: entreprise.type_compte, devise: entreprise.devise, locale: entreprise.locale },
-    });
+    return res.status(201).json({ confirmationRequired: true, email: user.email });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[register]', err);
@@ -265,12 +274,110 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// ─── POST /api/auth/confirmer-inscription ──────────────────────────────────
+// Deuxième étape de l'inscription : vérifie le code reçu par email et active le compte
+// (entreprises.email_confirme -> TRUE), puis renvoie le même payload {token,user,entreprise}
+// que renvoyait l'ancien /register avant l'ajout de cette étape.
+router.post('/confirmer-inscription', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Email et code requis.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.email, u.created_at, u.is_platform_admin, eu.entreprise_id, eu.role,
+              e.nom AS entreprise_nom, e.type_compte, e.devise, e.locale, e.email_confirme
+       FROM users u
+       JOIN entreprise_utilisateurs eu ON eu.user_id = u.id AND eu.statut = 'Actif'
+       JOIN entreprises e ON e.id = eu.entreprise_id
+       WHERE LOWER(u.email) = LOWER($1)
+       LIMIT 1`,
+      [email]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Compte introuvable.' });
+    }
+    const row = result.rows[0];
+    if (row.email_confirme) {
+      return res.status(400).json({ error: 'Ce compte est déjà confirmé.' });
+    }
+
+    const recent = await countRecentAuditEvents(row.email, ['inscription_code_invalide'], 60);
+    if (recent >= 5) {
+      return res.status(429).json({ error: "Trop de tentatives. Réessayez dans une heure." });
+    }
+
+    if (!verifyEmailCode(row.id, row.email, code)) {
+      await logAuditEvent({ entrepriseId: row.entreprise_id, userId: row.id, email: row.email, action: 'inscription_code_invalide', req });
+      return res.status(401).json({ error: 'Code invalide ou expiré.' });
+    }
+
+    await pool.query('UPDATE entreprises SET email_confirme = TRUE WHERE id = $1', [row.entreprise_id]);
+    await logAuditEvent({ entrepriseId: row.entreprise_id, userId: row.id, email: row.email, action: 'inscription_confirmee', req });
+
+    const isPlatformAdmin = row.is_platform_admin === true;
+    const token = jwt.sign(
+      { sub: row.id, email: row.email, entrepriseId: row.entreprise_id, role: row.role, isPlatformAdmin },
+      env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    return res.json({
+      token,
+      user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, isPlatformAdmin },
+      entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, typeCompte: row.type_compte, devise: row.devise, locale: row.locale },
+    });
+  } catch (err) {
+    console.error('[confirmer-inscription]', err);
+    return res.status(500).json({ error: 'Erreur serveur lors de la confirmation.' });
+  }
+});
+
+// ─── POST /api/auth/renvoyer-code-inscription ──────────────────────────────
+// Réponse volontairement identique que l'email existe ou non / soit déjà confirmé (parité
+// avec la logique anti-énumération du login) : { ok: true } dans tous les cas, l'envoi réel
+// n'a lieu que si un compte en attente de confirmation correspond.
+router.post('/renvoyer-code-inscription', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email requis.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.email, eu.entreprise_id, e.nom AS entreprise_nom, e.email_confirme
+       FROM users u
+       JOIN entreprise_utilisateurs eu ON eu.user_id = u.id AND eu.statut = 'Actif'
+       JOIN entreprises e ON e.id = eu.entreprise_id
+       WHERE LOWER(u.email) = LOWER($1)
+       LIMIT 1`,
+      [email]
+    );
+    const row = result.rows[0];
+    if (row && !row.email_confirme) {
+      const recent = await countRecentAuditEvents(row.email, ['inscription_code_envoye'], 60);
+      if (recent < 5) {
+        const code = generateEmailCode(row.id, row.email);
+        await logAuditEvent({ entrepriseId: row.entreprise_id, userId: row.id, email: row.email, action: 'inscription_code_envoye', req });
+        try {
+          await sendInscriptionCodeEmail(row.email, code, row.entreprise_nom);
+        } catch (mailErr) {
+          console.error('[renvoyer-code-inscription]', mailErr);
+        }
+      }
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[renvoyer-code-inscription]', err);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ─── POST /api/auth/login ──────────────────────────────────────────────────
 // Chaque branche (email inconnu, mauvais mot de passe, MFA requis/échoué, pas
 // d'entreprise, succès) journalise son propre événement dans audit_log — voir
 // CLAUDE.md, section "Jalon 1", pour la liste complète des actions tracées.
 router.post('/login', async (req, res) => {
-  const { email, password, mfaCode } = req.body;
+  const { email, password, mfaCode, confirmationCode } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis.' });
@@ -295,7 +402,7 @@ router.post('/login', async (req, res) => {
     // Récupéré tôt (avant les vérifications) pour pouvoir tracer l'entreprise
     // concernée même sur les tentatives échouées d'un compte existant.
     const rattachement = await pool.query(
-      `SELECT eu.entreprise_id, eu.role, e.nom AS entreprise_nom, e.devise, e.locale
+      `SELECT eu.entreprise_id, eu.role, e.nom AS entreprise_nom, e.devise, e.locale, e.email_confirme
        FROM entreprise_utilisateurs eu
        JOIN entreprises e ON e.id = eu.entreprise_id
        WHERE eu.user_id = $1 AND eu.statut = 'Actif'
@@ -308,6 +415,37 @@ router.post('/login', async (req, res) => {
     if (!valid) {
       await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'login_failed_password', req });
       return res.status(401).json({ error: 'Identifiants invalides.' });
+    }
+
+    // Filet de sécurité pour l'inscription à deux étapes (voir /register et
+    // /confirmer-inscription) : si l'utilisateur a fermé l'onglet avant de saisir son code
+    // et revient se connecter normalement, on le renvoie vers la même étape plutôt que de
+    // le laisser échouer sur "Aucune entreprise associée" (rattachement reste trouvé ici
+    // car entreprise_utilisateurs.statut n'est pas affecté par email_confirme).
+    if (rattachement.rows.length > 0 && rattachement.rows[0].email_confirme === false) {
+      if (!confirmationCode) {
+        const recentEnvoi = await countRecentAuditEvents(user.email, ['inscription_code_envoye'], 60);
+        if (recentEnvoi < 5) {
+          const code = generateEmailCode(user.id, user.email);
+          await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'inscription_code_envoye', req });
+          try {
+            await sendInscriptionCodeEmail(user.email, code, rattachement.rows[0].entreprise_nom);
+          } catch (mailErr) {
+            console.error('[login] envoi code de confirmation', mailErr);
+          }
+        }
+        return res.status(200).json({ confirmationRequired: true, email: user.email });
+      }
+      const recentEchecs = await countRecentAuditEvents(user.email, ['inscription_code_invalide'], 60);
+      if (recentEchecs >= 5) {
+        return res.status(429).json({ error: "Trop de tentatives. Réessayez dans une heure." });
+      }
+      if (!verifyEmailCode(user.id, user.email, confirmationCode)) {
+        await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'inscription_code_invalide', req });
+        return res.status(401).json({ error: 'Code invalide ou expiré.' });
+      }
+      await pool.query('UPDATE entreprises SET email_confirme = TRUE WHERE id = $1', [entrepriseId]);
+      await logAuditEvent({ entrepriseId, userId: user.id, email: user.email, action: 'inscription_confirmee', req });
     }
 
     // Étape MFA si activée sur le compte. Deux méthodes possibles selon user.mfa_method :

@@ -49,6 +49,7 @@ describe('Limite d\'inscriptions par IP (anti-abus)', () => {
 
     const quatrieme = await request(app).post('/api/auth/register').set('X-Forwarded-For', ip).send({
       email: uniqueEmail('ip4'), password: 'Passw0rd!', nomEntreprise: 'Bloquée', typeCompte: 'entreprise',
+      telephone: '+22300000000', pays: 'ML', numeroTva: 'ML00000000', adresse: 'Rue test',
     });
     expect(quatrieme.status).toBe(429);
   });
@@ -352,6 +353,7 @@ describe('reCAPTCHA v3 sur l\'inscription (repli gracieux si non configuré)', (
     delete process.env.RECAPTCHA_SECRET_KEY;
     const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', '203.0.113.99').send({
       email: uniqueEmail('norecaptcha'), password: 'Passw0rd!', nomEntreprise: 'Sans reCAPTCHA', typeCompte: 'entreprise',
+      telephone: '+22300000000', pays: 'ML', numeroTva: 'ML00000000', adresse: 'Rue test',
     });
     expect(res.status).toBe(201);
   });
@@ -364,6 +366,7 @@ describe('reCAPTCHA v3 sur l\'inscription (repli gracieux si non configuré)', (
       const email = uniqueEmail('badrecaptcha');
       const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', '203.0.113.98').send({
         email, password: 'Passw0rd!', nomEntreprise: 'Score insuffisant', typeCompte: 'entreprise', recaptchaToken: 'x',
+        telephone: '+22300000000', pays: 'ML', numeroTva: 'ML00000000', adresse: 'Rue test',
       });
       expect(res.status).toBe(400);
       const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
@@ -381,6 +384,7 @@ describe('reCAPTCHA v3 sur l\'inscription (repli gracieux si non configuré)', (
     try {
       const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', '203.0.113.97').send({
         email: uniqueEmail('recaptchadown'), password: 'Passw0rd!', nomEntreprise: 'Réseau HS', typeCompte: 'entreprise', recaptchaToken: 'x',
+        telephone: '+22300000000', pays: 'ML', numeroTva: 'ML00000000', adresse: 'Rue test',
       });
       expect(res.status).toBe(201);
     } finally {

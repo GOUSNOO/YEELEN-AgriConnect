@@ -312,6 +312,39 @@ déroulants par app + un fil d'ariane, sans limite de largeur de page.
   gridTemplateColumns:'repeat(auto-fit, minmax(280px,1fr))'`. Vérifié en navigateur réel (3
   cartes côte à côte sur 1600px), `npm test` (103/103) + build verts.
 
+### Inscription entreprise — confirmation par code + profil complet (2026-09-06)
+Comparaison demandée avec le vrai flux Odoo (`res_company.py`, `web/controllers/database.py`,
+`auth_signup`) : pas d'équivalent direct (Odoo = une base par tenant), mais deux écarts
+concrets trouvés — pas de pays/téléphone/TVA collectés (adresse existait en colonne mais
+n'était affichée nulle part), et aucun email envoyé à l'inscription (`sendWelcomeEmail`
+n'était utilisé que pour la création de compte salarié RH). Copier les **champs** d'Odoo oui,
+copier son **architecture** (base par tenant) non — clarifié explicitement avec l'utilisateur.
+- **Confirmation par code** (choisie par l'utilisateur : « double opt-in mais avec un code par
+  mail », pas un lien) : réutilise `utils/mfaCode.js` tel quel (HOTP dérivé, jamais stocké).
+  `entreprises.email_confirme BOOLEAN DEFAULT TRUE` (protège les entreprises déjà inscrites).
+  `POST /register` ne renvoie plus de token (`{confirmationRequired:true, email}`) ; nouveaux
+  `POST /confirmer-inscription` et `POST /renvoyer-code-inscription` ; `POST /login` détecte
+  aussi `email_confirme=false` et renvoie `{confirmationRequired:true}` (filet de sécurité si
+  l'utilisateur revient sans avoir confirmé) — sans toucher à `entreprise_utilisateurs.statut`
+  (mécanisme de désactivation employé, resté indépendant).
+- **Profil entreprise complet** : nouvelles colonnes `telephone`/`pays`/`numero_tva` (distinct
+  du SIRET), obligatoires à l'inscription pour un compte 'entreprise' (facultatives pour
+  'particulier', même traitement que le SIRET). Nouvelle carte « Informations de l'entreprise »
+  dans Mes préférences (admin éditable) sur `PUT /api/entreprise` étendu — ferme au passage
+  l'écart `adresse`/`secteur` jamais affichés trouvé pendant la comparaison. Nouvelle constante
+  `PAYS` (~120 pays ISO) dans `src/lib/locale.jsx`.
+- `LoginScreen` : champ confirmation de mot de passe + (type Entreprise uniquement) adresse/
+  téléphone/TVA/pays ; nouvel écran « Confirmez votre inscription » (même patron que l'étape
+  MFA existante).
+- Helper de test partagé `registerEntreprise` (~40 fichiers) adapté : confirme directement en
+  base puis se reconnecte, plutôt que de dériver le code HOTP. **337/337 tests d'intégration**,
+  `npm test` (103/103) + build frontend verts. Vérifié en navigateur réel (types Entreprise et
+  Particulier, code dérivé via le vrai `JWT_SECRET`, filet de sécurité au login, renvoi de
+  code, carte Informations de l'entreprise pré-remplie et modifiable) sur deux entreprises
+  jetables, nettoyées ensuite. **Leçon** : le backend Docker n'a pas de bind-mount — comme le
+  frontend, ses changements de code exigent `docker compose up -d --build backend` avant toute
+  vérification, pas seulement un redémarrage.
+
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.
 - `db.js` — the single `pg` `Pool` instance every route imports; it reads DB config straight from `process.env` via its own `dotenv.config()` call. `config/env.js` separately loads the *repo-root* `.env` for `JWT_SECRET`/`PORT`. There's no single shared env-loading entrypoint — check which of the two a given file needs.

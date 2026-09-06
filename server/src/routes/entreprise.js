@@ -10,7 +10,8 @@ router.get('/', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, nom, siret, adresse, secteur, devise, locale, created_at AS "createdAt",
-              ville, latitude::float8 AS latitude, longitude::float8 AS longitude
+              ville, latitude::float8 AS latitude, longitude::float8 AS longitude,
+              telephone, pays, numero_tva AS "numeroTva"
        FROM entreprises WHERE id = $1`,
       [req.user.entrepriseId]
     );
@@ -25,7 +26,7 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.put('/', authRequired, requireRole('admin'), async (req, res) => {
-  const { nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude } = req.body;
+  const { nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva } = req.body;
   try {
     const result = await pool.query(
       `UPDATE entreprises SET
@@ -37,15 +38,19 @@ router.put('/', authRequired, requireRole('admin'), async (req, res) => {
          locale = COALESCE($6, locale),
          ville = COALESCE($7, ville),
          latitude = COALESCE($8, latitude),
-         longitude = COALESCE($9, longitude)
-       WHERE id = $10
+         longitude = COALESCE($9, longitude),
+         telephone = COALESCE($10, telephone),
+         pays = COALESCE($11, pays),
+         numero_tva = COALESCE($12, numero_tva)
+       WHERE id = $13
        RETURNING id, nom, siret, adresse, secteur, devise, locale, created_at AS "createdAt",
-                 ville, latitude::float8 AS latitude, longitude::float8 AS longitude`,
-      [nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, req.user.entrepriseId]
+                 ville, latitude::float8 AS latitude, longitude::float8 AS longitude,
+                 telephone, pays, numero_tva AS "numeroTva"`,
+      [nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva, req.user.entrepriseId]
     );
     await logAuditEvent({
       entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,
-      action: 'entreprise_updated', req, details: { nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude },
+      action: 'entreprise_updated', req, details: { nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva },
     });
     return res.json({ entreprise: result.rows[0] });
   } catch (err) {

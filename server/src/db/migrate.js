@@ -1172,6 +1172,18 @@ CREATE INDEX IF NOT EXISTS idx_salaries_temps_date ON salaries_temps(entreprise_
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS devise TEXT NOT NULL DEFAULT 'XOF';
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'fr-FR';
 
+-- ═══════════════ Inscription : confirmation par email + profil entreprise étendu ═══════
+-- email_confirme : DEFAULT TRUE pour ne jamais bloquer une entreprise déjà inscrite —
+-- seule une inscription passée par le nouveau flux (voir routes/auth.js:register) démarre
+-- à FALSE, le temps que le code reçu par email soit saisi (routes/auth.js:confirmer-
+-- inscription). telephone/pays/numero_tva complètent adresse (déjà existante) pour
+-- rapprocher le profil entreprise du modèle res.company d'un ERP de référence (pays pilote
+-- entre autres le futur plan comptable localisé, pas encore branché).
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS email_confirme BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS telephone   TEXT;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS pays        TEXT;
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS numero_tva  TEXT;
+
 -- ═══════════════ Multi-devise réel, étape 1 : taux de change ═══════════════
 -- Table de référence PLATEFORME (pas de entreprise_id : un taux de change n'appartient à
 -- aucun locataire, il est le même pour tout le monde) — voir utils/currencyRates.js et

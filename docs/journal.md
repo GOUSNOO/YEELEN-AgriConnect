@@ -2994,3 +2994,84 @@ bien « Mes préférences » ; la page elle-même montre les 3 cartes (Préfére
 (météo) / Sécurité du compte) alignées côte à côte en une seule ligne sur un écran 1600px de
 large. `npm test` (103/103) + `npx vite build` verts. Entreprise de test nettoyée, image Docker
 reconstruite.
+
+### 2026-09-06 — Inscription entreprise : confirmation par code + profil entreprise complet
+
+Chantier demandé après une comparaison avec le vrai flux d'inscription/création de base
+d'Odoo (`odoo/addons/base/models/res_company.py`, `addons/web/controllers/database.py`,
+`addons/auth_signup`) : Odoo n'a pas de « création d'entreprise » comparable (une base
+PostgreSQL = un tenant, modèle mono-tenant), mais son formulaire de création de base
+collecte pays/téléphone en plus du nom/langue/email/mot de passe, et `res.company` porte en
+plus adresse complète/TVA (`vat`)/n° d'immatriculation (`company_registry`, l'équivalent du
+SIRET). Comparaison faite avec `LoginScreen`/`auth.js:register` : ni pays, ni téléphone, ni
+adresse (colonne existante mais jamais collectée nulle part, ni à l'inscription ni ensuite),
+ni email de confirmation (`sendWelcomeEmail` existe mais n'est utilisé que pour la création
+de compte salarié RH, jamais pour l'auto-inscription). Clarification importante donnée à
+l'utilisateur : ne pas copier l'**architecture** d'Odoo (une base par entreprise ne convient
+pas au modèle multi-tenant déjà en place et éprouvé) — seulement ses **champs/fonctionnalités**.
+Décisions utilisateur : (1) confirmation par **code reçu par email plutôt qu'un lien
+cliquable** (« double opt-in mais en demandant d'insérer le code reçu par mail ») ; (2)
+pays/téléphone/TVA/adresse **obligatoires pour un compte 'entreprise'**, facultatifs pour
+'particulier' — même traitement que le SIRET déjà en place.
+
+**Confirmation par code** : réutilise telle quelle la dérivation HOTP existante
+(`utils/mfaCode.js:generateEmailCode`/`verifyEmailCode`, déjà utilisée pour le MFA email —
+jamais stocké, expire en 10-20 min), pas de nouveau mécanisme. Nouvelle colonne
+`entreprises.email_confirme BOOLEAN NOT NULL DEFAULT TRUE` — le défaut `TRUE` protège toutes
+les entreprises déjà inscrites, seules les nouvelles inscriptions démarrent à `FALSE`.
+`POST /register` crée le compte comme avant (même transaction, mêmes seeds) mais ne renvoie
+plus de token : `{ confirmationRequired: true, email }`, après avoir envoyé le code (best-
+effort, comme `sendMfaCodeEmail` au login — un échec d'envoi ne bloque pas l'inscription).
+Nouveaux `POST /confirmer-inscription` (email+code → active le compte, renvoie
+`{token,user,entreprise}`) et `POST /renvoyer-code-inscription` (réponse `{ok:true}`
+volontairement identique que le compte existe ou non, anti-énumération comme le reste du
+login). `POST /login` gagne le même garde-fou : si `email_confirme=false`, renvoie
+`{ confirmationRequired: true }` au lieu de connecter — pour le cas où l'utilisateur ferme
+l'onglet avant de saisir le code et revient se connecter normalement plus tard ; le
+rattachement `entreprise_utilisateurs.statut='Actif'` n'est lui jamais touché, donc aucun
+risque de confusion avec le mécanisme de désactivation d'un employé (deux concepts
+distincts, deux colonnes distinctes).
+
+**Profil entreprise complet** : nouvelles colonnes `entreprises.telephone`/`pays`/
+`numero_tva` (distinct du SIRET). Nouvelle constante `PAYS` dans `src/lib/locale.jsx` (liste
+ISO ~120 pays, code+libellé FR, aux côtés de `DEVISES`/`LOCALES` — l'app cible tous les
+continents, pas de liste régionale courte). Ces 4 champs, devenus obligatoires à
+l'inscription pour un compte entreprise, doivent rester corrigibles ensuite : nouvelle carte
+« Informations de l'entreprise » dans Mes préférences (nom/SIRET/TVA/adresse/téléphone/pays,
+lecture pour tous les rôles, édition admin uniquement), branchée sur `PUT /api/entreprise`
+(déjà existant, étendu pour accepter les 3 nouveaux champs) — referme au passage l'écart
+trouvé lors de la comparaison (`adresse`/`secteur` étaient acceptés par l'API sans qu'aucun
+écran ne les affiche).
+
+**Frontend** : `LoginScreen` gagne un champ « Confirmez le mot de passe » (validation côté
+client, mismatch → message dédié) et, pour le type « Entreprise » uniquement, adresse/
+téléphone/TVA/pays (marqués requis, absents pour « Particulier »). Nouvel écran « Confirmez
+votre inscription » (code à 6 chiffres + bouton renvoyer), même patron visuel que l'étape MFA
+déjà en place — déclenché aussi bien juste après l'inscription qu'après une tentative de
+connexion normale sur un compte encore non confirmé.
+
+**Tests** : le helper d'intégration partagé `registerEntreprise` (utilisé par ~40 fichiers de
+test) confirme désormais directement en base (`email_confirme=TRUE`) plutôt que de dériver le
+code HOTP — plus simple, cohérent avec `setEntrepriseSubscription` qui fait déjà des
+écritures directes pour les besoins des tests — puis se reconnecte pour obtenir un token
+(`/register` n'en renvoie plus). Nouveaux tests dédiés dans `auth.test.js` couvrant le vrai
+cycle (mauvais code → 401, bon code dérivé via `generateEmailCode` → token, double
+confirmation → 400, login avant confirmation → `confirmationRequired`) + validation des
+champs obligatoires par type de compte. 3 tests de `abonnement.test.js` (limite IP,
+reCAPTCHA) mis à jour pour inclure les nouveaux champs obligatoires — un des trois passait
+déjà « par accident » (mauvaise raison, bon statut HTTP) avant la correction.
+**337/337 tests d'intégration, zéro régression** ; `npm test` (103/103) + `npx vite build`
+frontend verts.
+
+**Vérifié en conditions réelles** (deux entreprises jetables, une par type de compte) :
+inscription complète type « Entreprise » avec les 4 nouveaux champs → écran de code →
+compte introuvable avec un mauvais code → code dérivé côté serveur (via `generateEmailCode`
+avec le vrai `JWT_SECRET`) → compte activé → connecté ; carte « Informations de
+l'entreprise » pré-remplie avec les valeurs saisies à l'inscription, modification d'adresse
+sauvegardée avec succès ; inscription type « Particulier » sans les 4 champs → inscription
+abandonnée avant confirmation → tentative de connexion normale → bien redirigée vers le même
+écran de code (filet de sécurité) → « Renvoyer le code » fonctionne → code dérivé → compte
+activé. Entreprises de test nettoyées, images Docker backend + frontend reconstruites (les
+deux nécessaires cette fois : le backend n'a pas de bind-mount, ses changements ne sont
+jamais pris en compte sans rebuild — leçon déjà connue pour le frontend, maintenant valable
+aussi côté backend).

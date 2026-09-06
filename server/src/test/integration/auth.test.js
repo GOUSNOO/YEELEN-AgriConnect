@@ -1,21 +1,68 @@
 import { app, pool, request, registerEntreprise, createEmployeeLogin, createClient, uniqueEmail } from './helpers.js';
+import { generateEmailCode } from '../../utils/mfaCode.js';
 
 afterAll(async () => { await pool.end(); });
 
 describe('Auth — register / login', () => {
-  test('register crée une entreprise + renvoie un token exploitable', async () => {
+  test('register (entreprise) sans pays/téléphone/TVA/adresse → 400', async () => {
     const email = uniqueEmail('reg');
     const res = await request(app).post('/api/auth/register').send({
       email, password: 'Passw0rd!', nomEntreprise: 'Reg SARL', typeCompte: 'entreprise',
     });
-    expect([200, 201]).toContain(res.status);
-    expect(res.body.token).toBeTruthy();
+    expect(res.status).toBe(400);
+    expect(res.body.token).toBeUndefined();
+  });
 
-    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${res.body.token}`);
+  test('register (particulier) accepte sans pays/téléphone/TVA/adresse', async () => {
+    const email = uniqueEmail('reg-part');
+    const res = await request(app).post('/api/auth/register').send({
+      email, password: 'Passw0rd!', nomEntreprise: 'Diallo Agriculture', typeCompte: 'particulier',
+    });
+    expect([200, 201]).toContain(res.status);
+    expect(res.body.confirmationRequired).toBe(true);
+  });
+
+  test('register (entreprise complet) renvoie confirmationRequired, pas de token ; le code de confirmation active le compte', async () => {
+    const email = uniqueEmail('reg');
+    const res = await request(app).post('/api/auth/register').send({
+      email, password: 'Passw0rd!', nomEntreprise: 'Reg SARL', typeCompte: 'entreprise',
+      telephone: '+22300000000', pays: 'ML', numeroTva: 'ML00000000', adresse: 'Rue test',
+    });
+    expect([200, 201]).toContain(res.status);
+    expect(res.body.token).toBeUndefined();
+    expect(res.body.confirmationRequired).toBe(true);
+
+    // Le compte existe mais ne peut pas encore se connecter (email non confirmé).
+    const loginAvant = await request(app).post('/api/auth/login').send({ email, password: 'Passw0rd!' });
+    expect(loginAvant.status).toBe(200);
+    expect(loginAvant.body.confirmationRequired).toBe(true);
+    expect(loginAvant.body.token).toBeUndefined();
+
+    const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    const userId = rows[0].id;
+
+    const mauvaisCode = await request(app).post('/api/auth/confirmer-inscription').send({ email, code: '000000' });
+    expect(mauvaisCode.status).toBe(401);
+
+    const bonCode = generateEmailCode(userId, email);
+    const confirmation = await request(app).post('/api/auth/confirmer-inscription').send({ email, code: bonCode });
+    expect(confirmation.status).toBe(200);
+    expect(confirmation.body.token).toBeTruthy();
+
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${confirmation.body.token}`);
     expect(me.status).toBe(200);
     expect(me.body.user.email).toBe(email.toLowerCase());
     expect(me.body.user.role).toBe('admin');
     expect(me.body.entreprise.id).toEqual(expect.any(Number));
+
+    // Une fois confirmé, un login normal fonctionne directement (plus de confirmationRequired).
+    const loginApres = await request(app).post('/api/auth/login').send({ email, password: 'Passw0rd!' });
+    expect(loginApres.status).toBe(200);
+    expect(loginApres.body.token).toBeTruthy();
+
+    // Un compte déjà confirmé refuse une seconde confirmation.
+    const reconfirmation = await request(app).post('/api/auth/confirmer-inscription').send({ email, code: bonCode });
+    expect(reconfirmation.status).toBe(400);
   });
 
   test('register refuse un email déjà pris', async () => {

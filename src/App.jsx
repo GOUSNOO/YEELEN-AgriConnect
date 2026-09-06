@@ -3,7 +3,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
-import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES } from './lib/locale.jsx';
+import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES, PAYS } from './lib/locale.jsx';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import {
   clearToken,
-  getFinances, getMe, getToken, login, register, setToken,
+  getFinances, getMe, getToken, login, register, confirmerInscription, renvoyerCodeInscription, setToken,
   getContacts, createContact, updateContact, deleteContact,
   getContactTags, createContactTag, deleteContactTag,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
@@ -4770,14 +4770,19 @@ function PiscicultureModule({ farmId, highlightProduitId }) {
   );
 }
 
-function LoginScreen({ onAuth }) {
+function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [nomEntreprise, setNomEntreprise] = useState('');
   const [typeCompte, setTypeCompte] = useState('entreprise'); // 'entreprise' | 'particulier'
   const [siret, setSiret] = useState('');
+  const [telephone, setTelephone] = useState('');
+  const [pays, setPays] = useState('');
+  const [numeroTva, setNumeroTva] = useState('');
+  const [adresse, setAdresse] = useState('');
   const [devise, setDevise] = useState('XOF');
   const [locale, setLocale] = useState('fr-FR');
   const [busy, setBusy] = useState(false);
@@ -4785,16 +4790,30 @@ function LoginScreen({ onAuth }) {
   const [mfaStep, setMfaStep] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaMethod, setMfaMethod] = useState('totp');
+  // Étape de confirmation d'inscription (code par email, voir routes/auth.js) — distincte
+  // du MFA ci-dessus : un compte tout juste créé, pas une connexion à un compte existant.
+  const [confirmationStep, setConfirmationStep] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState('');
+  const [confirmationCode, setConfirmationCode] = useState('');
+  const [resendMsg, setResendMsg] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
     if (busy) return;
     setError('');
+    if (mode === 'register' && password !== confirmPassword) {
+      setError(t('auth.passwordMismatch'));
+      return;
+    }
     setBusy(true);
     try {
       const extra = mode === 'register'
         ? {
             nomEntreprise, typeCompte, siret: typeCompte === 'entreprise' ? siret : undefined, devise, locale,
+            telephone: typeCompte === 'entreprise' ? telephone : undefined,
+            pays: typeCompte === 'entreprise' ? pays : undefined,
+            numeroTva: typeCompte === 'entreprise' ? numeroTva : undefined,
+            adresse: typeCompte === 'entreprise' ? adresse : undefined,
             // reCAPTCHA v3 : undefined si VITE_RECAPTCHA_SITE_KEY n'est pas configuré (repli
             // gracieux côté serveur aussi, voir lib/recaptcha.js) — n'empêche jamais l'inscription.
             recaptchaToken: await getRecaptchaToken('register'),
@@ -4804,6 +4823,9 @@ function LoginScreen({ onAuth }) {
       if (result?.mfaRequired) {
         setMfaStep(true);
         if (result.mfaMethod) setMfaMethod(result.mfaMethod);
+      } else if (result?.confirmationRequired) {
+        setConfirmationEmail(result.email || email);
+        setConfirmationStep(true);
       }
     } catch (err) {
       setError(err.message || (mode === 'login' ? t('auth.loginFailed') : t('auth.registerFailed')));
@@ -4825,6 +4847,77 @@ function LoginScreen({ onAuth }) {
       setBusy(false);
     }
   };
+
+  const submitConfirmation = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      await onConfirmerInscription(confirmationEmail, confirmationCode);
+    } catch (err) {
+      setError(err.message || t('auth.confirmationInvalid'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resendConfirmationCode = async () => {
+    if (busy) return;
+    setResendMsg('');
+    setBusy(true);
+    try {
+      await onRenvoyerCodeInscription(confirmationEmail);
+      setResendMsg(t('auth.resendSent'));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (confirmationStep) {
+    return (
+      <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
+        <div style={{ width: '100%', maxWidth: 380 }}>
+          <Card>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
+              {t('auth.confirmationTitle')}
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
+              {t('auth.confirmationHint', { email: confirmationEmail })}
+            </div>
+            <form onSubmit={submitConfirmation} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Field label={t('auth.confirmationCode')} placeholder="123456" value={confirmationCode} onChange={e => setConfirmationCode(e.target.value)} required maxLength={6} />
+              {error && (
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <AlertTriangle size={14} /> {error}
+                </div>
+              )}
+              {resendMsg && (
+                <div style={{ background: COLORS.greenSoft, color: COLORS.green, borderRadius: 8, padding: '9px 12px', fontSize: 13 }}>
+                  {resendMsg}
+                </div>
+              )}
+              <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
+                {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('auth.confirmationSubmit')}
+              </Button>
+            </form>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+              <button type="button" onClick={resendConfirmationCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
+                {t('auth.resendCode')}
+              </button>
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 8, textAlign: 'center' }}>
+              <button type="button" onClick={() => { setConfirmationStep(false); setConfirmationCode(''); setError(''); setResendMsg(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
+                {t('common.back')}
+              </button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (mfaStep) {
     return (
@@ -4939,6 +5032,9 @@ function LoginScreen({ onAuth }) {
             <Field label={t('auth.email')} type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={e => setEmail(e.target.value)} required />
             <Field label={t('auth.password')} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 6 : undefined} />
             {mode === 'register' && (
+              <Field label={t('auth.confirmPassword')} type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} />
+            )}
+            {mode === 'register' && (
               <Field
                 label={typeCompte === 'entreprise' ? t('auth.companyName') : t('auth.activityName')}
                 placeholder={typeCompte === 'entreprise' ? t('auth.companyNamePlaceholder') : t('auth.activityNamePlaceholder')}
@@ -4948,6 +5044,19 @@ function LoginScreen({ onAuth }) {
             )}
             {mode === 'register' && typeCompte === 'entreprise' && (
               <Field label={t('auth.siret')} placeholder={t('auth.siretPlaceholder')} value={siret} onChange={e => setSiret(e.target.value)} />
+            )}
+            {mode === 'register' && typeCompte === 'entreprise' && (
+              <>
+                <Field label={t('auth.address')} placeholder={t('auth.addressPlaceholder')} value={adresse} onChange={e => setAdresse(e.target.value)} required />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <Field label={t('auth.phone')} placeholder={t('auth.phonePlaceholder')} value={telephone} onChange={e => setTelephone(e.target.value)} required style={{ flex: 1 }} />
+                  <Field label={t('auth.vatNumber')} placeholder={t('auth.vatNumberPlaceholder')} value={numeroTva} onChange={e => setNumeroTva(e.target.value)} required style={{ flex: 1 }} />
+                </div>
+                <Select label={t('auth.country')} value={pays} onChange={e => setPays(e.target.value)} required>
+                  <option value="" disabled>{t('auth.countryPlaceholder')}</option>
+                  {PAYS.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                </Select>
+              </>
             )}
             {mode === 'register' && (
               <div style={{ display: 'flex', gap: 10 }}>
@@ -8279,27 +8388,47 @@ export default function App() {
     }
   };
 
-  const handleAuth = async (mode, email, password, extra, mfaCode) => {
+  // Partagé entre une connexion normale et la fin du parcours de confirmation
+  // d'inscription (voir handleConfirmerInscription) — les deux aboutissent au même état
+  // "connecté".
+  const finalizeAuth = async (authResult) => {
+    setToken(authResult.token);
+    const uiRole = mapBackendRoleToUi(authResult.user.role);
+    const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
+    setUser(authResult.user.email);
+    setRole(uiRole);
+    setIsPlatformAdmin(authResult.user.isPlatformAdmin === true);
+    applyEntrepriseLocale(authResult.entreprise);
+    refreshBillingStatus();
+    await checkOnboardingNeeded(uiRole);
+    goToScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
+    return authResult;
+  };
+
+  const handleAuth = async (mode, email, password, extra, mfaCode, confirmationCode) => {
   const authResult = mode === 'login'
-    ? await login(email, password, mfaCode)
+    ? await login(email, password, mfaCode, confirmationCode)
     : await register(email, password, extra);
 
-  if (authResult?.mfaRequired) {
-    return authResult; // on ne connecte pas encore, LoginScreen va demander le code
+  if (authResult?.mfaRequired || authResult?.confirmationRequired) {
+    // On ne connecte pas encore : LoginScreen affiche l'étape suivante (code MFA ou
+    // code de confirmation d'inscription).
+    return authResult;
   }
 
-  setToken(authResult.token);
-  const uiRole = mapBackendRoleToUi(authResult.user.role);
-  const selectedConfig = ROLE_DEFINITIONS[uiRole] || ROLE_DEFINITIONS.admin;
-  setUser(authResult.user.email);
-  setRole(uiRole);
-  setIsPlatformAdmin(authResult.user.isPlatformAdmin === true);
-  applyEntrepriseLocale(authResult.entreprise);
-  refreshBillingStatus();
-  await checkOnboardingNeeded(uiRole);
-  goToScreen(selectedConfig.permissions.includes('modules') ? 'modules' : 'dashboard');
-  return authResult;
+  return finalizeAuth(authResult);
 };
+
+  // Deuxième étape de l'inscription (voir routes/auth.js:confirmer-inscription) : le code
+  // reçu par email active le compte et renvoie le même payload qu'un login réussi.
+  const handleConfirmerInscription = async (email, code) => {
+    const authResult = await confirmerInscription(email, code);
+    return finalizeAuth(authResult);
+  };
+
+  const handleRenvoyerCodeInscription = async (email) => {
+    return renvoyerCodeInscription(email);
+  };
 
   const toggleModule = (key) => {
     setActivated(prev => {
@@ -8495,7 +8624,7 @@ export default function App() {
         />
       )}
 
-      {screen === 'login' && <LoginScreen onAuth={handleAuth} />}
+      {screen === 'login' && <LoginScreen onAuth={handleAuth} onConfirmerInscription={handleConfirmerInscription} onRenvoyerCodeInscription={handleRenvoyerCodeInscription} />}
 
       {screen === 'modules' && initLoaded && (
   <ModulesScreen activated={activated} onToggle={toggleModule} onContinue={isOnboarding ? goToOnboardingChoice : goToDashboard} />
@@ -8647,6 +8776,28 @@ function ProfilModule({ role }) {
     }
   };
 
+  // Informations de l'entreprise (nom/SIRET/TVA/adresse/téléphone/pays — voir
+  // routes/entreprise.js) : champs devenus obligatoires à l'inscription pour un compte
+  // 'entreprise' (voir routes/auth.js:register), donc réutilisables ici pour corriger une
+  // erreur de saisie. Chargés par le même effet que la localisation météo ci-dessous
+  // (un seul GET /api/entreprise pour les deux).
+  const [infoEntreprise, setInfoEntreprise] = useState({ nom: '', siret: '', numeroTva: '', adresse: '', telephone: '', pays: '' });
+  const [infoBusy, setInfoBusy] = useState(false);
+  const [infoMsg, setInfoMsg] = useState('');
+
+  const saveInfoEntreprise = async () => {
+    setInfoBusy(true);
+    setInfoMsg('');
+    try {
+      await updateEntreprise(infoEntreprise);
+      setInfoMsg(t('profil.companyInfoSaved'));
+    } catch (err) {
+      setInfoMsg(err.message);
+    } finally {
+      setInfoBusy(false);
+    }
+  };
+
   // Localisation météo de l'entreprise (voir routes/meteo.js) — recherche « au fil de la
   // frappe » façon GlobalSearch (timer 250 ms + garde reqIdRef contre les réponses obsolètes).
   const [villeActuelle, setVilleActuelle] = useState(null);
@@ -8662,6 +8813,12 @@ function ProfilModule({ role }) {
   useEffect(() => {
     getEntreprise().then(({ entreprise }) => {
       if (entreprise?.ville) setVilleActuelle({ ville: entreprise.ville, latitude: entreprise.latitude, longitude: entreprise.longitude });
+      if (entreprise) {
+        setInfoEntreprise({
+          nom: entreprise.nom || '', siret: entreprise.siret || '', numeroTva: entreprise.numeroTva || '',
+          adresse: entreprise.adresse || '', telephone: entreprise.telephone || '', pays: entreprise.pays || '',
+        });
+      }
     }).catch(() => {});
   }, []);
 
@@ -8800,6 +8957,36 @@ function ProfilModule({ role }) {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'start' }}>
+
+      <Card>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 3 }}>
+          {t('profil.companyInfoTitle')}
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+          {t('profil.companyInfoHint')}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Field label={t('auth.companyName')} value={infoEntreprise.nom} onChange={e => setInfoEntreprise(v => ({ ...v, nom: e.target.value }))} disabled={!isAdmin} />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Field label={t('auth.siret')} value={infoEntreprise.siret} onChange={e => setInfoEntreprise(v => ({ ...v, siret: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }} />
+            <Field label={t('auth.vatNumber')} value={infoEntreprise.numeroTva} onChange={e => setInfoEntreprise(v => ({ ...v, numeroTva: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }} />
+          </div>
+          <Field label={t('auth.address')} value={infoEntreprise.adresse} onChange={e => setInfoEntreprise(v => ({ ...v, adresse: e.target.value }))} disabled={!isAdmin} />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Field label={t('auth.phone')} value={infoEntreprise.telephone} onChange={e => setInfoEntreprise(v => ({ ...v, telephone: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }} />
+            <Select label={t('auth.country')} value={infoEntreprise.pays} onChange={e => setInfoEntreprise(v => ({ ...v, pays: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }}>
+              <option value="">{t('auth.countryPlaceholder')}</option>
+              {PAYS.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+            </Select>
+          </div>
+          {isAdmin && (
+            <Button variant="green" onClick={saveInfoEntreprise} disabled={infoBusy} style={{ alignSelf: 'flex-start' }}>
+              {infoBusy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('profil.saveCompanyInfo')}
+            </Button>
+          )}
+          {infoMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{infoMsg}</div>}
+        </div>
+      </Card>
 
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
