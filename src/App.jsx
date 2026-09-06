@@ -8303,6 +8303,17 @@ export default function App() {
         ${FONT_IMPORT}
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        /* Beaucoup de tableaux (.data-table) sont rendus sans conteneur de défilement propre
+           (contrairement à celui du composant partagé DataTable de ui.jsx qui, lui, s'enveloppe
+           correctement) — un tableau à beaucoup de colonnes poussait alors toute la page à
+           s'élargir, faisant paraître la largeur de la page « instable » d'un onglet à l'autre.
+           Fixé une bonne fois pour toutes ici plutôt que dans chaque fichier : .dashboard-shell
+           absorbe tout débordement horizontal en interne (barre de défilement locale plutôt que
+           données coupées), .app-shell est un filet de sécurité pour tout le reste (navbar,
+           écrans d'authentification/onboarding) — le corps de la page ne doit jamais défiler
+           horizontalement lui-même. */
+        .app-shell { overflow-x: hidden; }
+        .dashboard-shell { overflow-x: auto; }
         .navbar-burger { display: none; }
         @media (max-width: 760px) {
           .navbar-entries { display: none !important; }

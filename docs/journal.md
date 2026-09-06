@@ -2824,3 +2824,38 @@ l'utilisateur a tranché : **« il faut tout remplacer par le modèle odoo sauf 
   `cultures`/`parcelles_historique` avaient des lignes issues des données de démo par défaut,
   nettoyées avec les noms de tables actuels — post-fusion produits/contacts, pas les anciens
   noms `clients`/`poulailler_stocks` évoqués par une note plus ancienne du projet).
+
+### 2026-09-06 — Refonte navigation, correctif : largeur de page instable
+
+Signalé par l'utilisateur juste après la refonte ci-dessus : la largeur de la page paraissait
+« s'agrandir et se rétrécir » selon le nombre de lignes/colonnes d'un écran à l'autre.
+
+**Cause réelle** : la grande majorité des tableaux de l'app (`className="data-table"`, une
+vingtaine d'usages bruts dans 11 fichiers) sont rendus **sans** conteneur de défilement propre
+— contrairement au composant partagé `DataTable` (`ui.jsx`), qui s'enveloppe déjà correctement
+d'un `<div style={{overflowX:'auto'}}>`. Un tableau à beaucoup de colonnes poussait alors son
+conteneur, puis `.dashboard-shell`, puis potentiellement `<body>`/`<html>`, à s'élargir au-delà
+du viewport — d'où l'impression de largeur de page qui varie d'un onglet à l'autre.
+
+**Fix choisi** : plutôt que d'auditer/corriger une vingtaine d'usages au cas par cas (risque de
+manquer une instance, et cohérent avec la philosophie déjà documentée de `.data-table` — « une
+seule classe partagée plutôt qu'un réglage au cas par cas »), un filet de sécurité posé une
+seule fois au niveau des conteneurs de page : `.dashboard-shell { overflow-x: auto }` (tout
+débordement horizontal reste local à la zone de contenu, avec sa propre barre de défilement —
+donnée jamais coupée, juste scrollable) + `.app-shell { overflow-x: hidden }` (filet de sécurité
+pour le reste — navbar, écrans d'authentification/onboarding — le corps de la page ne doit
+jamais défiler horizontalement lui-même).
+
+**Vérifié en conditions réelles** (dev server + backend Docker) sur une entreprise jetable :
+- Fenêtre réduite à 884px puis 700px sur l'écran Factures (tableau à 8 colonnes) :
+  `document.documentElement.scrollWidth === clientWidth` à chaque largeur (confirmé par script
+  JS direct dans la page, pas une supposition) — la page elle-même ne défile jamais
+  horizontalement, quelle que soit la largeur de fenêtre.
+- Vérifié que le fix n'a **pas** réintroduit le bug de dropdown-clippé corrigé plus tôt dans la
+  même session (`overflow-x` posé sans `overflow-y` force ce dernier non-`visible`) : le
+  dropdown de catégorie de la navbar reste dans le DOM du `.app-shell`, dont la boîte s'étend
+  sur toute la hauteur de la page — contrairement à l'ancien `.navbar-entries` qui n'avait que
+  la hauteur d'une seule ligne de boutons, `.app-shell` est largement assez grand pour contenir
+  un panneau positionné en absolu juste sous la navbar, donc aucun risque de clip ici. Confirmé
+  par un clic réel sur « Opérations » après le fix : dropdown affiché normalement.
+- `npx vite build` vert. Entreprise de test nettoyée.

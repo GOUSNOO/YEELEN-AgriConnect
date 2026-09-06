@@ -259,6 +259,18 @@ déroulants par app + un fil d'ariane, sans limite de largeur de page.
   navigation + fil d'ariane corrects, item épinglé sans dropdown, panneau mobile glissant sous
   760px avec pied de page utilisateur — tous les scénarios validés puis données nettoyées.
   `npm test` (103 tests) et `npx vite build` verts, zéro régression.
+- **Correctif largeur de page instable (même jour)** : signalé par l'utilisateur juste après —
+  la page paraissait s'élargir/se rétrécir d'un onglet à l'autre. Cause réelle : la plupart des
+  tableaux (`className="data-table"`, ~20 usages bruts dans 11 fichiers) sont rendus **sans**
+  conteneur de défilement propre, contrairement au composant partagé `DataTable` (`ui.jsx`) qui
+  s'enveloppe déjà correctement — un tableau à beaucoup de colonnes poussait alors la page
+  entière à s'élargir au-delà du viewport. Fixé une bonne fois pour toutes au niveau des
+  conteneurs plutôt qu'en auditant chaque tableau : `.dashboard-shell { overflow-x: auto }`
+  (tout débordement reste local, sa propre barre de défilement, donnée jamais coupée) +
+  `.app-shell { overflow-x: hidden }` (filet de sécurité pour le reste). Vérifié par script JS
+  direct (`document.documentElement.scrollWidth === clientWidth`, pas une supposition) à
+  plusieurs largeurs de fenêtre, et confirmé que ça ne réintroduit pas le bug de dropdown
+  clippé corrigé juste avant (voir `docs/journal.md` pour le raisonnement complet).
 
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.
