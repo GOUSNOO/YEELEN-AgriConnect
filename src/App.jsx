@@ -11,7 +11,7 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X
 } from 'lucide-react';
 import {
   clearToken,
@@ -95,8 +95,13 @@ const COLORS = {
   redSoft: '#FED7D7',
 };
 
-// Regroupement de la sidebar — même taxonomie que le champ `category` d'availableTabs.
-// labelKey résolu via i18n au rendu (SidebarNav), le module-level ne peut pas utiliser le hook.
+// Navbar : bordure basse = COLORS.green assombri de 10% (même logique que la bordure de
+// navbar d'un ERP de référence, calculée une fois plutôt qu'à la volée en l'absence d'un
+// darken() SCSS côté JS).
+const NAVBAR_BORDER = '#32915F';
+
+// Regroupement des menus de la navbar — même taxonomie que le champ `category` d'availableTabs.
+// labelKey résolu via i18n au rendu (TopNavbar), le module-level ne peut pas utiliser le hook.
 const NAV_CATEGORIES = [
   { id: 'operations', labelKey: 'navGroup.operations', color: COLORS.green },
   { id: 'analyse', labelKey: 'navGroup.analyse', color: COLORS.blue },
@@ -7722,11 +7727,169 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
   );
 }
 
-function SidebarNav({ tabs, activeTab, onSelect, top }) {
-  const { t: tr } = useTranslation();
+// Navigation de premier niveau — remplace l'ancienne sidebar gauche persistante par le vrai
+// modèle Odoo (voir docs/journal.md, refonte navigation) : barre du haut fixe (46px, radius 0,
+// pas d'ombre) + un Dropdown par NAV_CATEGORIES (1er clic ouvre, survoler un autre déclencheur
+// pendant qu'un dropdown est ouvert bascule directement dessus, aucune animation d'ouverture —
+// mêmes comportements que dropdown.js d'un ERP de référence), items épinglés (category: null)
+// en liens directs sans dropdown. Couleurs de l'app conservées (vert de marque au lieu du
+// violet Odoo) — seule la structure est reprise à l'identique.
+function TopNavbar({
+  tabs, activeTab, onSelect, screen, user, roleLabel, showManageOptions,
+  onManageOptions, onSearch, onLogout, isOnline, pendingSyncCount, lastSync,
+}) {
+  const { t } = useTranslation();
+  const { fmtDate } = useLocale();
+  const [openCategory, setOpenCategory] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const navRef = useRef(null);
+
+  const pinned = tabs.filter(tb => !tb.category);
+  const categories = NAV_CATEGORIES
+    .map(cat => ({ ...cat, items: tabs.filter(tb => tb.category === cat.id) }))
+    .filter(cat => cat.items.length > 0);
+
+  useEffect(() => {
+    if (!openCategory) return;
+    const onDocClick = (e) => { if (navRef.current && !navRef.current.contains(e.target)) setOpenCategory(null); };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [openCategory]);
+
+  const activeCategory = categories.find(cat => cat.items.some(it => it.id === activeTab));
+  const activeTabObj = tabs.find(tb => tb.id === activeTab);
+
+  const navBtnStyle = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 6, height: 46, padding: '0 .63em',
+    background: active ? 'rgba(255,255,255,.18)' : 'transparent', border: 'none', borderRadius: 0,
+    color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+  });
+
+  return (
+    <>
+      <div ref={navRef} style={{ display: 'flex', alignItems: 'center', height: 46, padding: '0 16px', background: COLORS.green, borderBottom: `1px solid ${NAVBAR_BORDER}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: 14, flexShrink: 0 }}>
+          <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(255,255,255,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Sprout size={15} color="#fff" />
+          </div>
+          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: '#fff', whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
+        </div>
+
+        <button className="navbar-burger" onClick={() => setMobileOpen(true)} style={navBtnStyle(false)}>
+          <Menu size={18} />
+        </button>
+
+        <div className="navbar-entries" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+          {pinned.map(tb => {
+            const Icon = tb.icon;
+            return (
+              <button key={tb.id} onClick={() => onSelect(tb.id)} style={navBtnStyle(activeTab === tb.id)}>
+                <Icon size={14} /> {tb.label}
+              </button>
+            );
+          })}
+          {categories.map(cat => (
+            <div key={cat.id} style={{ position: 'relative', flexShrink: 0 }}
+              onMouseEnter={() => { if (openCategory && openCategory !== cat.id) setOpenCategory(cat.id); }}>
+              <button onClick={() => setOpenCategory(o => (o === cat.id ? null : cat.id))} style={navBtnStyle(activeCategory?.id === cat.id)}>
+                {t(cat.labelKey)} <ChevronRight size={12} style={{ transform: openCategory === cat.id ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s ease' }} />
+              </button>
+              {openCategory === cat.id && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, background: COLORS.surface, borderRadius: 4,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`,
+                  zIndex: 30, minWidth: 200, overflow: 'hidden', padding: '4px 0',
+                }}>
+                  {cat.items.map(it => {
+                    const Icon = it.icon;
+                    const active = activeTab === it.id;
+                    return (
+                      <button
+                        key={it.id}
+                        onClick={() => { onSelect(it.id); setOpenCategory(null); }}
+                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(0,0,0,.08)'; }}
+                        onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                          padding: '3px 20px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: 14,
+                          background: active ? `${cat.color}22` : 'transparent',
+                          color: active ? cat.color : COLORS.ink, fontWeight: active ? 700 : 500,
+                        }}
+                      >
+                        <Icon size={14} /> {it.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="navbar-actions-desktop" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingLeft: 10 }}>
+          {screen === 'dashboard' && showManageOptions && (
+            <button onClick={onManageOptions} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: 'rgba(255,255,255,.85)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+              {t('shell.manageOptions')}
+            </button>
+          )}
+          {screen === 'dashboard' && (
+            <button onClick={onSearch} title={t('shell.globalSearch')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center' }}>
+              <Search size={16} />
+            </button>
+          )}
+          <span style={{ fontSize: 12.2, color: 'rgba(255,255,255,.85)', whiteSpace: 'nowrap' }}>{user}</span>
+          <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: 'rgba(255,255,255,.2)', color: '#fff', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {roleLabel}
+          </span>
+          <button onClick={onLogout} title={t('shell.logout')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex' }}>
+            <LogOut size={17} />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '8px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, fontSize: 12.5 }}>
+        <span style={{ color: COLORS.inkSoft }}>
+          {activeCategory && <>{t(activeCategory.labelKey)}<span style={{ padding: '0 8px' }}>/</span></>}
+          <strong style={{ color: COLORS.ink }}>{activeTabObj?.label}</strong>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ padding: '6px 10px', borderRadius: 999, background: isOnline ? COLORS.greenSoft : COLORS.ochreSoft, color: isOnline ? COLORS.green : COLORS.ochre, fontWeight: 600 }}>
+            {isOnline ? t('shell.online') : t('shell.offline')}
+          </span>
+          <span style={{ color: COLORS.inkSoft }}>
+            {pendingSyncCount > 0
+              ? t('shell.pendingSync', { count: pendingSyncCount })
+              : lastSync
+                ? t('shell.lastSync', { date: fmtDate(lastSync, { dateStyle: 'short', timeStyle: 'short' }) })
+                : t('shell.noSync')}
+          </span>
+        </span>
+      </div>
+
+      {mobileOpen && (
+        <MobileNavPanel
+          pinned={pinned} categories={categories} activeTab={activeTab} user={user} roleLabel={roleLabel}
+          onSelect={(id) => { onSelect(id); setMobileOpen(false); }} onLogout={onLogout} onClose={() => setMobileOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// Panneau glissant mobile (< 760px) — remplace la sidebar desktop dans ce cas de figure,
+// mêmes valeurs qu'un ERP de référence pour son propre panneau mobile équivalent :
+// width: min(360px, 80vw), transform translateX, transition .2s ease.
+function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSelect, onLogout, onClose }) {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState({});
-  const pinned = tabs.filter(t => !t.category);
-  const toggleGroup = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const handleClose = () => { setVisible(false); setTimeout(onClose, 200); };
 
   const itemStyle = (active, indent) => ({
     display: 'flex', alignItems: 'center', gap: 9, width: '100%',
@@ -7738,57 +7901,60 @@ function SidebarNav({ tabs, activeTab, onSelect, top }) {
   });
 
   return (
-    <nav className="sidebar-nav" style={{
-      width: 224, flexShrink: 0, borderRight: `1px solid ${COLORS.border}`,
-      padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 2,
-      position: 'sticky', top, alignSelf: 'flex-start',
-      maxHeight: top ? `calc(100vh - ${top}px)` : '100vh', overflowY: 'auto',
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${COLORS.border}` }}>
-        {pinned.map(t => {
-          const Icon = t.icon;
-          const active = activeTab === t.id;
+    <>
+      <div onClick={handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.3)', zIndex: 40 }} />
+      <div style={{
+        position: 'fixed', top: 0, left: 0, bottom: 0, width: 'min(360px, 80vw)', background: COLORS.surface,
+        zIndex: 41, boxShadow: '2px 0 16px rgba(0,0,0,.15)', overflowY: 'auto', padding: '16px 10px',
+        display: 'flex', flexDirection: 'column', gap: 2,
+        transform: visible ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .2s ease',
+      }}>
+        <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <X size={16} /> {t('common.close')}
+        </button>
+        {pinned.map(tb => {
+          const Icon = tb.icon;
+          const active = activeTab === tb.id;
           return (
-            <button key={t.id} className="sidebar-item" onClick={() => onSelect(t.id)} style={itemStyle(active, 10)}>
-              <Icon size={15} /> {t.label}
+            <button key={tb.id} onClick={() => onSelect(tb.id)} style={itemStyle(active, 10)}>
+              <Icon size={15} /> {tb.label}
             </button>
           );
         })}
+        {categories.map(cat => {
+          const isCollapsed = !!collapsed[cat.id];
+          return (
+            <div key={cat.id} style={{ marginTop: 4 }}>
+              <button onClick={() => setCollapsed(c => ({ ...c, [cat.id]: !c[cat.id] }))} style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none',
+                padding: '6px 10px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color, flexShrink: 0 }} />
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft, flex: 1 }}>
+                  {t(cat.labelKey)}
+                </span>
+                <ChevronRight size={12} style={{ color: COLORS.inkSoft, transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease' }} />
+              </button>
+              {!isCollapsed && cat.items.map(tb => {
+                const Icon = tb.icon;
+                const active = activeTab === tb.id;
+                return (
+                  <button key={tb.id} onClick={() => onSelect(tb.id)} style={itemStyle(active, 26)}>
+                    <Icon size={14} /> {tb.label}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+        <div style={{ marginTop: 'auto', paddingTop: 14, borderTop: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{user} — {roleLabel}</span>
+          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 13, padding: '7px 10px' }}>
+            <LogOut size={15} /> {t('shell.logout')}
+          </button>
+        </div>
       </div>
-
-      {NAV_CATEGORIES.map(cat => {
-        const items = tabs.filter(t => t.category === cat.id);
-        if (items.length === 0) return null;
-        const isCollapsed = !!collapsed[cat.id];
-        return (
-          <div key={cat.id} style={{ marginTop: 4 }}>
-            <button onClick={() => toggleGroup(cat.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none',
-              padding: '6px 10px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-            }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft, flex: 1 }}>
-                {tr(cat.labelKey)}
-              </span>
-              <ChevronRight size={12} style={{ color: COLORS.inkSoft, transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
-            </button>
-            {!isCollapsed && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {items.map(t => {
-                  const Icon = t.icon;
-                  const active = activeTab === t.id;
-                  return (
-                    <button key={t.id} className="sidebar-item" onClick={() => onSelect(t.id)} style={itemStyle(active, 26)}>
-                      <Icon size={14} /> {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </nav>
+    </>
   );
 }
 
@@ -7848,8 +8014,6 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [lastSync, setLastSync] = useState(typeof window !== 'undefined' ? localStorage.getItem('agri-last-sync') : null);
-  const headerRef = useRef(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
 
   // Recherche globale (Ctrl+K) — voir GlobalSearch.jsx. highlightContactId/
   // highlightProduit ne servent qu'à faire atterrir l'utilisateur sur le bon
@@ -7892,15 +8056,6 @@ export default function App() {
       }
     }
   };
-
-  useEffect(() => {
-    if (!headerRef.current || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(entries => {
-      setHeaderHeight(entries[0].contentRect.height);
-    });
-    observer.observe(headerRef.current);
-    return () => observer.disconnect();
-  }, [screen]);
 
   useEffect(() => {
     (async () => {
@@ -7980,7 +8135,7 @@ export default function App() {
   };
 
   const { t } = useTranslation();
-  const { setLocaleConfig, fmtDate } = useLocale();
+  const { setLocaleConfig } = useLocale();
 
   // Applique la devise + la locale de l'entreprise (formatage des montants/dates), et —
   // seulement si l'utilisateur n'a jamais choisi de langue explicitement — aligne la
@@ -8148,15 +8303,11 @@ export default function App() {
         ${FONT_IMPORT}
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .app-shell { max-width: 1500px; margin: 0 auto; }
-        .topbar { background: #FFFFFF; box-shadow: 0 6px 24px rgba(20,35,24,0.06); }
-        .dashboard-layout { max-width: 1500px; margin: 0 auto; display: flex; align-items: flex-start; }
-        .dashboard-shell { flex: 1; min-width: 0; }
-        .sidebar-item:hover { background: ${COLORS.surfaceAlt}; }
+        .navbar-burger { display: none; }
         @media (max-width: 760px) {
-          .sidebar-nav { position: static !important; width: 100% !important; max-height: none !important;
-            border-right: none !important; border-bottom: 1px solid ${COLORS.border}; }
-          .dashboard-layout { flex-direction: column; }
+          .navbar-entries { display: none !important; }
+          .navbar-actions-desktop { display: none !important; }
+          .navbar-burger { display: flex !important; }
         }
         input:focus, select:focus { border-color: ${COLORS.green} !important; box-shadow: 0 0 0 3px ${COLORS.greenSoft}; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -8164,53 +8315,22 @@ export default function App() {
       `}</style>
 
       {screen !== 'login' && (
-        <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 20, background: COLORS.bg }}>
-          <div className="topbar" style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
-            padding: '14px 22px', borderBottom: `1px solid ${COLORS.border}`
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Sprout size={16} color="#fff" />
-              </div>
-              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {screen === 'dashboard' && roleConfig.permissions.includes('modules') && (
-                <button onClick={() => { setIsOnboarding(false); goToScreen('modules'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.3, color: COLORS.inkSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                  {t('shell.manageOptions')}
-                </button>
-              )}
-              {screen === 'dashboard' && (
-                <button
-                  onClick={() => setSearchOpen(true)}
-                  title={t('shell.globalSearch')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 4 }}
-                >
-                  <Search size={16} />
-                </button>
-              )}
-              <span style={{ fontSize: 12.2, color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{user}</span>
-              <span style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                {t(`role.${role}`, roleConfig.label)}
-              </span>
-              <button onClick={() => { clearToken(); navigate('/login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }} title={t('shell.logout')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
-                <LogOut size={17} />
-              </button>
-            </div>
-          </div>
-          <div style={{ padding: '8px 22px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12.5, padding: '6px 10px', borderRadius: 999, background: isOnline ? COLORS.greenSoft : COLORS.ochreSoft, color: isOnline ? COLORS.green : COLORS.ochre, fontWeight: 600 }}>
-              {isOnline ? t('shell.online') : t('shell.offline')}
-            </span>
-            <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
-              {pendingSyncCount > 0
-                ? t('shell.pendingSync', { count: pendingSyncCount })
-                : lastSync
-                  ? t('shell.lastSync', { date: fmtDate(lastSync, { dateStyle: 'short', timeStyle: 'short' }) })
-                  : t('shell.noSync')}
-            </span>
-          </div>
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: COLORS.bg }}>
+          <TopNavbar
+            tabs={availableTabs}
+            activeTab={tab}
+            onSelect={(id) => navigate(`/app/${id}`)}
+            screen={screen}
+            user={user}
+            roleLabel={t(`role.${role}`, roleConfig.label)}
+            showManageOptions={roleConfig.permissions.includes('modules')}
+            onManageOptions={() => { setIsOnboarding(false); goToScreen('modules'); }}
+            onSearch={() => setSearchOpen(true)}
+            onLogout={() => { clearToken(); navigate('/login'); setUser(null); setRole('admin'); setIsPlatformAdmin(false); }}
+            isOnline={isOnline}
+            pendingSyncCount={pendingSyncCount}
+            lastSync={lastSync}
+          />
           {billing?.mode === 'trial' && !trialBannerDismissed && (
             <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: 8, background: COLORS.greenSoft, color: COLORS.green, fontSize: 12.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
               <span>{t('billing.trialBanner', { count: billing.daysLeft })}</span>
@@ -8305,11 +8425,7 @@ export default function App() {
 )}
 
       {screen === 'dashboard' && (
-        <div className="dashboard-layout">
-          {availableTabs.length > 1 && (
-            <SidebarNav tabs={availableTabs} activeTab={tab} onSelect={(id) => navigate(`/app/${id}`)} top={headerHeight} />
-          )}
-          <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
+        <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
             {tab === 'accueil' && <HomeOverview farmId={user} activated={activated} />}
             {tab === 'calendar' && <AgriculturalCalendarModule farmId={user} />}
             {tab === 'recoltes' && <HarvestsModule farmId={user} />}
@@ -8348,7 +8464,6 @@ export default function App() {
             {tab === 'billing' && isPlatformAdmin && <BillingAdminPanel />}
             {tab === 'aide' && <HelpModule />}
             {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
-          </div>
         </div>
       )}
 

@@ -209,6 +209,57 @@ Dernier item « Could have » du MoSCoW, construit sur mesure (recherche préala
 - **Devis Kanban** — `DevisModule` renders a drag-and-drop board; valid transitions gated by `isValidDevisTransition`. Plus per-devis "activités planifiées" (`/api/activites`, a generic activity model attachable via `ressourceType`/`ressourceId`, also used on contact détail) and a message thread / chatter (`/api/messages`).
 - **URL routing** (phase 1) + adaptive tab bar in the root shell.
 
+### Refonte navigation — modèle Odoo (2026-09-06)
+La sidebar gauche persistante (choisie fin août, mémoire `project_navigation_grouped_sidebar`)
+a été **remplacée entièrement** par le vrai modèle de navigation d'un ERP de référence, sur
+demande explicite de l'utilisateur (« il faut tout remplacer par le modèle odoo sauf les
+couleurs ») après un audit basé sur une lecture réelle du code source (`navbar.variables.scss`,
+`dropdown.js`, `control_panel.scss`, `webclient_layout.scss` — pas d'invention, mesures citées
+telles quelles). Constat déclencheur : contrairement à la sidebar déjà en place, un ERP de
+référence n'a **aucune sidebar persistante en desktop** — juste une barre du haut + des menus
+déroulants par app + un fil d'ariane, sans limite de largeur de page.
+- **`TopNavbar`** (`App.jsx`, remplace `SidebarNav` et l'ancien `.topbar` inline) : barre unique
+  46px de haut, `padding-v: 0`, fond `COLORS.green` (couleur de marque de l'app — seul point où
+  la couleur diffère de la référence, qui utilise son propre violet de marque), `border-bottom`
+  1px (vert assombri, constante `NAVBAR_BORDER`), **aucune `box-shadow`**, items carrés
+  (`border-radius: 0`). Items épinglés (`category: null` — accueil/feedback/aide/profil) en
+  liens directs ; les 5 `NAV_CATEGORIES` (operations/analyse/commercial/finance/rh) en
+  déclencheurs de dropdown.
+- **Dropdown de catégorie** : mêmes comportements que le composant `Dropdown` de la référence —
+  premier clic ouvre, survoler un autre déclencheur pendant qu'un dropdown est déjà ouvert
+  bascule directement dessus sans reclic, **aucune animation d'ouverture**. Panneau `border-
+  radius: 4px`, items `padding: 3px 20px`, hover `rgba(0,0,0,.08)` — valeurs exactes de la
+  référence. Un listener `document click` ferme au clic extérieur (absent du "Plus" existant de
+  `ModuleTabBar`, mais justifié ici vu la fréquence d'usage d'une navbar persistante).
+- **Fil d'ariane** : nouvelle ligne sous la navbar (fond blanc, `border-bottom` 1px, padding
+  `8px 16px 16px`), fusionnée avec l'ancienne ligne « En ligne / dernière synchro » plutôt que
+  d'empiler une ligne de plus. `NomCatégorie / NomOnglet actif`, séparateur `/` simple.
+- **Mobile (< 760px)** : navbar desktop + fil d'ariane masqués, icône burger ouvre
+  `MobileNavPanel` — panneau glissant `width: min(360px, 80vw)`, `transform: translateX(...)`,
+  `transition: transform .2s ease` (valeurs exactes de la référence pour son propre panneau
+  mobile équivalent), réutilise la logique de regroupement pinned+catégories de l'ancienne
+  sidebar (elle ne disparaît pas vraiment, elle change de forme), + un pied de page
+  utilisateur/déconnexion (l'accès desktop à ces actions disparaissant en dessous de 760px).
+- **Largeur de page** : `max-width: 1500px` retiré de `.app-shell`/`.dashboard-layout` — pleine
+  largeur du viewport, comme la référence (aucune limite constatée au niveau du webclient).
+- **Hors périmètre, explicitement** : `ModuleTabBar` (la barre d'onglets pilules horizontale à
+  l'intérieur d'un module — Ambiance/Suivi/Stocks/Ventes/Achats/Registre/Comptabilité dans
+  Cultures/Poulailler/Pisciculture) n'est pas touchée — l'audit portait sur la navigation de
+  premier niveau, pas ce second niveau interne à un module ; un vrai remplacement fidèle
+  imbriquerait ce niveau dans le même mécanisme de dropdown, un changement bien plus profond
+  touchant tous les modules, différé si voulu dans un chantier séparé.
+- **Bug trouvé et corrigé pendant la vérification navigateur (pas en relecture)** :
+  `overflowX: 'auto'` sur le conteneur des entrées de navbar masquait silencieusement les
+  panneaux déroulants — poser `overflow-x` sans poser `overflow-y` force ce dernier à devenir
+  non-`visible` (règle CSS), ce qui clippait les dropdowns positionnés en absolu juste en
+  dessous des boutons. Retiré ; les dropdowns dépassent maintenant simplement au-delà du
+  conteneur, comme prévu.
+- Vérifié en navigateur réel (dev server + backend Docker) sur une entreprise jetable : ouverture/
+  fermeture au clic, bascule au survol entre catégories ouvertes, fermeture au clic extérieur,
+  navigation + fil d'ariane corrects, item épinglé sans dropdown, panneau mobile glissant sous
+  760px avec pied de page utilisateur — tous les scénarios validés puis données nettoyées.
+  `npm test` (103 tests) et `npx vite build` verts, zéro régression.
+
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.
 - `db.js` — the single `pg` `Pool` instance every route imports; it reads DB config straight from `process.env` via its own `dotenv.config()` call. `config/env.js` separately loads the *repo-root* `.env` for `JWT_SECRET`/`PORT`. There's no single shared env-loading entrypoint — check which of the two a given file needs.

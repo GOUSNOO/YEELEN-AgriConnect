@@ -2755,3 +2755,72 @@ source ERP de référence, Enterprise-only chez Odoo).
   refaire dès qu'elle est disponible, contrairement aux étapes 1 et 2 qui ont eu leur passage
   navigateur réel. Entreprise/utilisateur de test nettoyés après coup.
 - **Roadmap transformation agroalimentaire + HACCP terminée** (3/3 étapes).
+
+### 2026-09-06 — Refonte navigation : remplacement de la sidebar par le modèle Odoo
+
+Demande explicite de l'utilisateur : auditer la taille des pages, l'emplacement des menus/
+sous-menus, leur forme/dimensionnement/façon de s'ouvrir, **sans rien inventer, en se référant
+au vrai code source d'un ERP de référence** (Odoo 19.0 community, clone local `erp-source`).
+Une recherche dédiée (agent Explore, lecture directe du code) a extrait les mesures réelles :
+
+- **Barre du haut** (`navbar.variables.scss`) : hauteur 46px, `padding-v: 0`, fond couleur de
+  marque unie, `border-bottom` 1px (pas de `box-shadow`), items carrés (`border-radius: 0`),
+  padding horizontal `.63em`, font-size 14px.
+- **Menus déroulants** (`dropdown.js`, `bootstrap_overridden.scss`) : composant `Dropdown` —
+  1er clic ouvre, survoler un autre déclencheur du même groupe pendant qu'un dropdown est
+  ouvert bascule directement dessus (`handleMouseEnter`), aucune animation d'ouverture
+  (`animation: false`), items `padding: 3px 20px`, `border-radius: 4px`, hover
+  `rgba(0,0,0,.08)`, marge du panneau nulle sous la navbar.
+- **Pas de sidebar persistante en desktop** (`webclient_layout.scss`, aucun `home_menu/`) —
+  confirmé par absence totale de colonne latérale dans le layout. Mobile uniquement :
+  panneau glissant `width: Min(360px, 80%)`, `transform: translateX`, `transition: transform
+  .2s ease`.
+- **Fil d'ariane** (`control_panel.xml`/`.scss`) : sous la navbar, fond blanc, `border-bottom`
+  1px `#dee2e6`, padding `px-3 pt-2 pb-3` (16/8/16px), séparateur = simple `/`.
+- **Largeur de page** (`webclient_layout.scss`) : aucune limite — plein viewport.
+
+Constat central présenté à l'utilisateur : la sidebar gauche persistante de ce projet (choisie
+fin août, mémoire `project_navigation_grouped_sidebar`, Option A préférée à un dropdown façon
+Odoo) contredit directement ce modèle réel. Après présentation de l'audit via `AskUserQuestion`,
+l'utilisateur a tranché : **« il faut tout remplacer par le modèle odoo sauf les couleurs »**.
+
+**Implémentation** (`src/App.jsx` uniquement — tout vivait déjà dans ce fichier) :
+- `SidebarNav` supprimée, remplacée par **`TopNavbar`** (barre 46px, `COLORS.green` au lieu du
+  violet Odoo — seul écart de couleur — items épinglés en liens directs + un `Dropdown` par
+  `NAV_CATEGORIES`, état `openCategory` géré au niveau du composant, `onMouseEnter` bascule
+  entre catégories déjà ouvertes, listener `document click` pour la fermeture au clic
+  extérieur — absent du "Plus" existant de `ModuleTabBar` mais ajouté ici vu la fréquence
+  d'usage d'une navbar persistante) et **`MobileNavPanel`** (panneau glissant < 760px,
+  `width: min(360px, 80vw)`, `transform`/`transition .2s ease` fidèles, réutilise la logique
+  de regroupement pinned+catégories de l'ancienne sidebar).
+- Fil d'ariane fusionné avec l'ancienne ligne « En ligne / dernière synchro » (une ligne au
+  lieu de deux) : `NomCatégorie / NomOnglet actif`, padding/font-size/séparateur Odoo.
+- `max-width: 1500px` retiré de `.app-shell`/`.dashboard-layout` — pleine largeur, comme la
+  référence. `headerHeight`/`headerRef`/`ResizeObserver` (ne servaient qu'à l'offset sticky de
+  la sidebar) supprimés, code mort.
+- **Hors périmètre, explicité au plan avant exécution** : `ModuleTabBar` (barre pilule
+  horizontale interne à un module — Ambiance/Suivi/Stocks/Ventes/Achats/Registre/Comptabilité)
+  — l'audit portait sur la navigation de premier niveau, pas ce second niveau ; un
+  remplacement fidèle imbriquerait ce niveau dans le même mécanisme de dropdown, un chantier
+  bien plus profond touchant tous les modules, non demandé explicitement.
+- **Bug trouvé et corrigé pendant la vérification navigateur, pas en relecture** :
+  `overflowX: 'auto'` posé sur `.navbar-entries` (pour gérer un éventuel débordement sur
+  fenêtre étroite) masquait silencieusement les panneaux déroulants des catégories — poser
+  `overflow-x` sans poser explicitement `overflow-y` force ce dernier à devenir non-`visible`
+  (règle CSS standard), ce qui clippait les dropdowns positionnés en absolu juste sous les
+  boutons (visibles dans le DOM via `read_page`/JS direct, invisibles à l'écran). Diagnostiqué
+  en comparant le nombre d'enfants du conteneur (`childCount: 2`, donc bien monté) à ce que la
+  capture d'écran montrait (rien) — pas une hypothèse en l'air. Retiré ; les dropdowns
+  débordent maintenant simplement au-delà du conteneur, sans clip.
+- **Vérifié en conditions réelles** : `npx vite build` (succès), `npm test` (103/103, aucune
+  régression), puis navigateur réel (serveur de dev + backend Docker déjà tournant) sur une
+  entreprise jetable — ouverture/fermeture au clic d'un dropdown de catégorie, bascule au
+  survol entre « Opérations » et « Analyse » sans reclic, fermeture au clic extérieur,
+  navigation effective vers un onglet (fil d'ariane « Opérations / Cultures & irrigation »
+  affiché correctement, onglet interne `ModuleTabBar` intact et fonctionnel), item épinglé
+  (« Aide ») en lien direct sans dropdown, panneau mobile glissant sous 760px avec pied de
+  page utilisateur/déconnexion (l'accès desktop à ces actions disparaissant en dessous de ce
+  seuil). Entreprise/utilisateur de test nettoyés après coup (tables `contacts`/`parcelles`/
+  `cultures`/`parcelles_historique` avaient des lignes issues des données de démo par défaut,
+  nettoyées avec les noms de tables actuels — post-fusion produits/contacts, pas les anciens
+  noms `clients`/`poulailler_stocks` évoqués par une note plus ancienne du projet).
