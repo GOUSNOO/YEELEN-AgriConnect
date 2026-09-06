@@ -1507,7 +1507,7 @@
         "text": "A suggestion, a frustration, a bug you hit? Say so here — that's what lets us improve the app as we go, with feedback from real users."
       },
       "profil": {
-        "title": "Profile & security",
+        "title": "My Preferences & security",
         "text": "Your account information, and enabling two-factor authentication (MFA) to secure your sign-in with a code on top of your password."
       }
     }
@@ -1848,7 +1848,7 @@
     "feedback": "Feedback",
     "aide": "Help",
     "billing": "Subscriptions",
-    "profil": "Profile"
+    "profil": "My Preferences"
   },
   "navGroup": {
     "operations": "Operations",

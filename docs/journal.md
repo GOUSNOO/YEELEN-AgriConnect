@@ -2964,3 +2964,33 @@ un onglet long (Ventes, devis multi-lignes), le contenu dépasse naturellement l
 être contraint (`appShellHeight > innerHeight`), confirmant que le `min-height` n'écrase pas
 le contenu réellement long. `npm test` (103/103) + `npx vite build` verts. Entreprise de test
 nettoyée, image Docker reconstruite.
+
+### 2026-09-06 — Renommage « Profil » → « Mes préférences » + mise en grille des 3 cartes
+
+Deux demandes de l'utilisateur sur le menu « Profil » : un nom jugé peu clair (« je pense
+qu'il doit y avoir une autre appellation »), et les 3 cartes de la page (Préférences /
+Localisation météo / Sécurité du compte) empilées verticalement alors qu'un affichage côte à
+côte serait plus lisible. Une première tentative de compréhension du second point s'est
+trompée de cible (le menu déroulant avatar, à 3 entrées) — corrigée par l'utilisateur (« je
+parle juste du menu "Profil" et de son contenu »), confirmant qu'il s'agissait bien des 3
+cartes de `ProfilModule`.
+
+**Nom** : vérifié dans le vrai source Odoo (`user_menu_items.js`, `_t("My Preferences")`) —
+c'est exactement le nom qu'Odoo donne à cette page de réglages personnels. Renommé `nav.profil`
+fr "Profil" → **"Mes préférences"**, en "Profile" → **"My Preferences"** ; `help.profil.title`
+harmonisé de la même façon ("Mes préférences & sécurité" / "My Preferences & security") pour
+rester cohérent avec la page Aide.
+
+**Disposition** : question posée explicitement (grille côte à côte vs onglets façon Odoo, qui
+sépare habituellement des sujets bien distincts en onglets de notebook plutôt qu'en grille) —
+l'utilisateur a choisi la grille. `ProfilModule` : wrapper passé de
+`{ display:'flex', flexDirection:'column', gap:16, maxWidth:480 }` à
+`{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px,1fr))', gap:16,
+alignItems:'start' }` — les 3 cartes s'alignent côte à côte sur un écran large et repassent en
+colonne unique sur mobile via `auto-fit`, sans media query supplémentaire.
+
+**Vérifié en conditions réelles** (entreprise jetable) : navbar + tuile d'accueil affichent
+bien « Mes préférences » ; la page elle-même montre les 3 cartes (Préférences / Localisation
+(météo) / Sécurité du compte) alignées côte à côte en une seule ligne sur un écran 1600px de
+large. `npm test` (103/103) + `npx vite build` verts. Entreprise de test nettoyée, image Docker
+reconstruite.

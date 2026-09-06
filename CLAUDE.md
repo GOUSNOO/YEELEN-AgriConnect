@@ -301,6 +301,16 @@ déroulants par app + un fil d'ariane, sans limite de largeur de page.
   son propre fond qui doit être contraint). Vérifié par mesure directe :
   `scrollHeight === innerHeight` sur une page courte, contenu naturellement dépassant sur une
   page longue.
+- **Renommage « Profil » → « Mes préférences » + grille (même jour)** : deux demandes sur le
+  menu « Profil » — nom peu clair, et ses 3 cartes (Préférences/Localisation météo/Sécurité)
+  empilées verticalement plutôt qu'affichées côte à côte. Nom vérifié dans le vrai source
+  Odoo (`user_menu_items.js`, `_t("My Preferences")`) — renommé `nav.profil` fr "Profil" →
+  "Mes préférences" / en "Profile" → "My Preferences" (+ `help.profil.title` harmonisé).
+  Disposition : question posée explicitement (grille vs onglets façon Odoo, qui sépare
+  habituellement des sujets distincts en onglets plutôt qu'en grille) — l'utilisateur a choisi
+  la grille. `ProfilModule` : wrapper `flex column maxWidth:480` → `grid
+  gridTemplateColumns:'repeat(auto-fit, minmax(280px,1fr))'`. Vérifié en navigateur réel (3
+  cartes côte à côte sur 1600px), `npm test` (103/103) + build verts.
 
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.

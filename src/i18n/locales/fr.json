@@ -1507,7 +1507,7 @@
         "text": "Une suggestion, une frustration, un bug rencontré ? Dites-le ici — c'est ce qui nous permet d'améliorer l'application au fil de l'eau, avec les retours des vrais utilisateurs."
       },
       "profil": {
-        "title": "Profil & sécurité",
+        "title": "Mes préférences & sécurité",
         "text": "Vos informations de compte, et l'activation de la double authentification (MFA) pour sécuriser votre connexion avec un code en plus de votre mot de passe."
       }
     }
@@ -1848,7 +1848,7 @@
     "feedback": "Feedback",
     "aide": "Aide",
     "billing": "Abonnements",
-    "profil": "Profil"
+    "profil": "Mes préférences"
   },
   "navGroup": {
     "operations": "Opérations",
