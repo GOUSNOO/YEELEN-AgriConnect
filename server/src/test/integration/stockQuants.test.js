@@ -29,13 +29,15 @@ async function dernierMove(produitId) {
 }
 
 describe('Emplacements de stock — seed à l\'inscription', () => {
-  test('4 emplacements créés : interne, client, fournisseur, perte', async () => {
+  // 5 depuis la transformation agroalimentaire étape 2 (2026-09-06) : « production », le
+  // virtuel où transitent ingrédients/article fini d'un ordre de transformation.
+  test('5 emplacements créés : interne, client, fournisseur, perte, production', async () => {
     const admin = await registerEntreprise();
     const { rows } = await pool.query(
       'SELECT nom, type FROM emplacements_stock WHERE entreprise_id = $1 ORDER BY type ASC',
       [admin.entrepriseId]
     );
-    expect(rows.map((r) => r.type).sort()).toEqual(['client', 'fournisseur', 'interne', 'perte']);
+    expect(rows.map((r) => r.type).sort()).toEqual(['client', 'fournisseur', 'interne', 'perte', 'production']);
     expect(rows.find((r) => r.type === 'interne').nom).toBe('Emplacement principal');
   });
 

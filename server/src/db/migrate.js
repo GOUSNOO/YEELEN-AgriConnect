@@ -1632,6 +1632,56 @@ CREATE TABLE IF NOT EXISTS produit_recettes_lignes (
 );
 CREATE INDEX IF NOT EXISTS idx_produit_recettes_lignes_recette_id ON produit_recettes_lignes(recette_id);
 
+-- ═══════════════ Transformation agroalimentaire, étape 2 : ordres de transformation ═══════════════
+-- Exécute réellement une recette (produit_recettes ci-dessus) : consomme les ingrédients et
+-- produit l'article fini via un nouvel emplacement virtuel « production » (voir plus bas,
+-- extension du CHECK emplacements_stock.type, et stockSync.js pour les mouvements). Snapshot
+-- textuel (recette_nom/produit_sortie_nom/numero_lot_sortie) à côté des FK nullable ON DELETE
+-- SET NULL — même patron que applications_intrants (produit_nom/parcelle_nom) : une pièce
+-- réglementaire de traçabilité doit survivre à la suppression de la recette/du produit en amont.
+ALTER TABLE emplacements_stock DROP CONSTRAINT IF EXISTS emplacements_stock_type_check;
+ALTER TABLE emplacements_stock ADD CONSTRAINT emplacements_stock_type_check
+  CHECK (type IN ('interne', 'client', 'fournisseur', 'perte', 'production'));
+
+CREATE TABLE IF NOT EXISTS ordres_transformation (
+  id                  SERIAL PRIMARY KEY,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id             INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  recette_id          INTEGER REFERENCES produit_recettes(id) ON DELETE SET NULL,
+  recette_nom         TEXT,
+  produit_sortie_id   INTEGER REFERENCES produits(id) ON DELETE SET NULL,
+  produit_sortie_nom  TEXT,
+  quantite_produite   NUMERIC(12, 2) NOT NULL,
+  lot_sortie_id       INTEGER REFERENCES stock_lots(id) ON DELETE SET NULL,
+  numero_lot_sortie   TEXT,
+  date_transformation DATE NOT NULL DEFAULT CURRENT_DATE,
+  operateur           TEXT,
+  notes               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ordres_transformation_entreprise_id ON ordres_transformation(entreprise_id);
+
+-- Snapshot de ce qui a réellement été consommé (peut différer de la recette si elle a changé
+-- depuis) — nécessaire pour un DELETE (annulation) fidèle, jamais recalculé depuis la recette.
+CREATE TABLE IF NOT EXISTS ordres_transformation_lignes (
+  id                  SERIAL PRIMARY KEY,
+  ordre_id            INTEGER NOT NULL REFERENCES ordres_transformation(id) ON DELETE CASCADE,
+  produit_id          INTEGER REFERENCES produits(id) ON DELETE SET NULL,
+  produit_nom         TEXT,
+  quantite_consommee  NUMERIC(12, 3) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ordres_transformation_lignes_ordre_id ON ordres_transformation_lignes(ordre_id);
+
+-- Tags légers (Option 1, pas de vraie déplétion FIFO — même choix que la traçabilité
+-- parcelle→vente) : quels lots de matière première ont été utilisés, à titre indicatif.
+CREATE TABLE IF NOT EXISTS ordres_transformation_lots_entrants (
+  id          SERIAL PRIMARY KEY,
+  ordre_id    INTEGER NOT NULL REFERENCES ordres_transformation(id) ON DELETE CASCADE,
+  lot_id      INTEGER REFERENCES stock_lots(id) ON DELETE SET NULL,
+  numero_lot  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ordres_transformation_lots_entrants_ordre_id ON ordres_transformation_lots_entrants(ordre_id);
+
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,
@@ -2889,6 +2939,31 @@ async function seedEmplacementsStockForExistingEntreprises() {
   }
 }
 
+// Transformation agroalimentaire, étape 2 (2026-09-06) : backfill dédié pour l'emplacement
+// « Production » — le garde-fou de seedEmplacementsStockForExistingEntreprises ci-dessus
+// (NOT EXISTS *aucun* emplacement) ne se redéclenche jamais pour une entreprise déjà seedée
+// avant cette étape, donc virtuellement toutes. Même idiome que
+// seedComptesChangeForExistingEntreprises (multi-devise étape 4).
+async function seedEmplacementProductionPourEntreprisesExistantes() {
+  const production = EMPLACEMENTS_STOCK_DEFAUT.find((e) => e.type === 'production');
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+     WHERE NOT EXISTS (SELECT 1 FROM emplacements_stock es WHERE es.entreprise_id = e.id AND es.type = 'production')`
+  );
+  for (const { id } of entreprises) {
+    await client.query(
+      `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
+       ON CONFLICT (entreprise_id, nom) DO NOTHING`,
+      [id, production.nom, production.type]
+    );
+  }
+  if (entreprises.length > 0) {
+    console.log(`✅ Emplacement « Production » créé pour ${entreprises.length} entreprise(s).`);
+  } else {
+    console.log('ℹ️  Emplacement « Production » : déjà présent partout.');
+  }
+}
+
 // Étape 3 alignement Odoo produit/stock : initialise un stock_quants à l'emplacement interne
 // pour chaque produit qui n'en a pas encore (quantite = produits.quantite actuel, reservee = 0),
 // puis reconstitue les réservations en cours depuis les devis déjà signés/facturés (tout statut
@@ -3063,6 +3138,7 @@ async function migrate() {
     await backfillProduitsUniteId();
     await backfillProduitsTemplates();
     await seedEmplacementsStockForExistingEntreprises();
+    await seedEmplacementProductionPourEntreprisesExistantes();
     await backfillStockQuants();
     await seedAbonnementBackfill();
     await migratePostesFromSalaries();

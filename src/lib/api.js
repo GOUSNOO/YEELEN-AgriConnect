@@ -340,6 +340,25 @@ export async function deleteProduitRecetteLigne(ligneId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Ordres de transformation (exécution d'une recette : consomme/produit le stock réel)
+// ─────────────────────────────────────────────────────────────────────
+export async function getOrdresTransformation(module) {
+  return request(module ? `/ordres-transformation?module=${encodeURIComponent(module)}` : '/ordres-transformation');
+}
+
+export async function getOrdreTransformation(id) {
+  return request(`/ordres-transformation/${id}`);
+}
+
+export async function createOrdreTransformation(payload) {
+  return safeRequest('/ordres-transformation', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteOrdreTransformation(id) {
+  return safeRequest(`/ordres-transformation/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Équipements (inventaire matériel)
 // ─────────────────────────────────────────────────────────────────────
 export async function getEquipements() {

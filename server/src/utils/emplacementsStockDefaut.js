@@ -9,4 +9,9 @@ export const EMPLACEMENTS_STOCK_DEFAUT = [
   { nom: 'Clients', type: 'client' },
   { nom: 'Fournisseurs', type: 'fournisseur' },
   { nom: 'Pertes', type: 'perte' },
+  // Transformation agroalimentaire, étape 2 (2026-09-06) : emplacement virtuel où transitent
+  // les articles pendant un ordre de transformation — les ingrédients en sortent (consommation),
+  // le produit fini en sort aussi (production), symétrique du couple perte/restitution déjà
+  // en place pour les intrants phytosanitaires. Voir stockSync.js.
+  { nom: 'Production', type: 'production' },
 ];

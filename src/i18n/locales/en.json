@@ -832,6 +832,25 @@
     "ligneAddError": "Could not add the ingredient.",
     "ligneDeleteError": "Could not delete the ingredient."
   },
+  "ordresTransformation": {
+    "title": "Processing orders",
+    "date": "Date",
+    "operateur": "Operator",
+    "numeroLotSortie": "Batch number (optional)",
+    "numeroLotSortiePlaceholder": "Auto if empty",
+    "executer": "Execute",
+    "lotSortie": "Output batch",
+    "ingredientsConsommes": "Ingredients consumed",
+    "produitSupprime": "Deleted product",
+    "aucunOrdre": "No processing orders yet.",
+    "aucuneRecetteDisponible": "Create a recipe above first to be able to execute a processing order.",
+    "ordreCreated": "Processing order executed — stock updated.",
+    "ordreAddError": "Could not execute the processing order.",
+    "ordreDeleted": "Order cancelled — stock restored.",
+    "ordreDeleteError": "Could not cancel the order.",
+    "confirmDeleteOrdre": "Cancel processing order \"{{nom}}\"? Ingredients will be restored and the finished product removed from stock.",
+    "detailLoadError": "Could not load the order detail."
+  },
   "paymentTerms": {
     "title": "Payment terms",
     "name": "Name",

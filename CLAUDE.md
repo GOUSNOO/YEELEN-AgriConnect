@@ -125,14 +125,15 @@ Chantier du backlog long terme choisi explicitement par l'utilisateur dans sa ve
 - **Étape 3 (facturation réelle en devise étrangère)** : `account_move.devise`/`invoice_currency_rate` + `account_move_line.amount_currency` (patron Odoo repris tel quel — voir Recherche ci-dessus). `POST /devis/:id/facturer` **ne bloque plus** la devise étrangère : le taux figé sur le devis se propage à la facture comptable. Principe central dans `utils/accountMove.js:posterMove`/`enregistrerPaiementMove` : `debit`/`credit`/`balance`/`amount_residual` (le grand livre) restent **toujours** en devise entreprise (converties via `invoiceCurrencyRate`) ; `amount_currency` mémorise le montant en devise du document ; `account_move.amount_untaxed/amount_tax/amount_total/amount_residual` restent en devise **du document** (comme `devis.total`, cohérence de convention). `finances` (miroir en devise entreprise) reçoit systématiquement le montant converti, jamais le brut. Frontend : `FacturesModule` (liste + détail) affiche désormais dans la devise de la facture + ligne d'équivalence — même limite connue qu'à l'étape 2 pour les sous-tableaux (lignes/échéances/paiements, encore en devise entreprise). 1 nouveau test d'intégration complet (facturer + payer en EUR, grand livre vérifié équilibré et converti, `finances` vérifié). **317 tests d'intégration, zéro régression** sur toute la suite Comptabilité existante (factures/factureHash/factureAvoir/paiements/agedReceivable) — le défaut `invoice_currency_rate = 1` rend le nouveau code totalement transparent pour toute facture déjà en devise entreprise. Vérifié en conditions réelles (devis 100 € facturé et payé intégralement → move posté équilibré à 65 595,64 F CFA au vrai taux du jour, `finances` et PDF-adjacent cohérents).
 - **Étape 4 (roadmap COMPLETE, 2026-09-06)** : écart de change au paiement, sans aucun nouveau paramètre de route ni changement frontend — `enregistrerPaiementMove` détecte automatiquement `mv.devise !== mv.entrepriseDevise` et convertit au taux du `paymentDate` déjà transmis (via `convertir` de l'étape 1). Deux nouveaux comptes par défaut (`768000 Gains de change`/`668000 Pertes de change`, `income_other`/`expense_other`), backfillés pour les entreprises existantes par `migrate.js:seedComptesChangeForExistingEntreprises`. Le lettrage contre la facture reste au taux **figé** de la facture (jamais rouvert) ; l'écart entre ce taux et celui du règlement ferme le résidu laissé sur la ligne partenaire du paiement via une écriture à 2 lignes (`enregistrerEcartChange` dans `utils/accountMove.js`). **Bug de sens trouvé par débogage empirique (pas par relecture)** : la première version classait le sens gain/perte à l'envers (`estGain = line1Credit > 0`) — corrigé en `estGain = line1Debit > 0` après vérification en conditions réelles (taux inséré en base, ledger relu directement) qu'un débit sur la ligne 1 correspond systématiquement à un gain. 3 nouveaux tests (gain/perte/taux inchangé). **320/320 tests d'intégration, zéro régression.** Détail complet dans `docs/journal.md` (2026-09-06).
 
-### Transformation agroalimentaire + HACCP (roadmap, étape 1 — 2026-09-06)
+### Transformation agroalimentaire + HACCP (roadmap, étapes 1-2 — 2026-09-06)
 Dernier item « Won't have » du MoSCoW jamais commencé jusqu'ici, choisi explicitement par
 l'utilisateur une fois le MVP entièrement livré. Recherche : le module `mrp` (Manufacturing)
 de l'ERP de référence est directement transposable pour la nomenclature/production
 (`mrp_bom`/`mrp_production`) ; aucun module Quality/HACCP dans la source communautaire
 (Enterprise-only côté Odoo) — le registre HACCP (étape 3, différée) sera conçu sur mesure,
 comme la météo et l'agriculture de précision avant lui. Staged en 3 étapes (voir
-`docs/journal.md` pour la roadmap complète) — seule l'étape 1 est construite pour l'instant.
+`docs/journal.md` pour la roadmap complète) — les étapes 1 et 2 sont construites, l'étape 3
+(registre HACCP) reste différée.
 - **Étape 1 (recettes)** : `produit_recettes` (produit de sortie catalogué — aucun 4e module
   nécessaire, la transformation est transverse à Cultures/Poulailler/Pisciculture — + nom +
   quantité produite de référence) + `produit_recettes_lignes` (ingrédients : autre produit +
@@ -147,6 +148,34 @@ comme la météo et l'agriculture de précision avant lui. Staged en 3 étapes (
   (création recette + ajout/suppression de ligne ingrédient, filtrage correct du produit de
   sortie hors de la liste des ingrédients possibles) sur une entreprise jetable, nettoyée
   après coup.
+- **Étape 2 (ordres de transformation, 2026-09-06)** : exécute réellement une recette — une
+  action, pas de workflow brouillon/validé (comme `applications_intrants`). Nouveau 5e
+  emplacement virtuel `production` (`emplacements_stock.type`, CHECK étendu + backfill dédié
+  `seedEmplacementProductionPourEntreprisesExistantes`, même idiome que les comptes de change
+  de l'étape 4 multi-devise) : les ingrédients y transitent à la consommation
+  (`interne`→`production`), l'article fini au moment de sa production (`production`→`interne`)
+  — 4 nouveaux kinds symétriques `transformation_conso`/`_restitution`/`_prod`/`_retrait` dans
+  `stockSync.js`, mêmes conventions que `reception`/`retour_achat`. `ordres_transformation`
+  (+ `_lignes` snapshot de ce qui a été réellement consommé, + `_lots_entrants` tags légers —
+  pas de vrai FIFO, même philosophie que la traçabilité parcelle→vente) : FK nullable `ON
+  DELETE SET NULL` + colonnes texte snapshot (`recette_nom`/`produit_sortie_nom`), même patron
+  que `applications_intrants`. `POST /api/ordres-transformation` calcule le ratio
+  (`quantiteProduite / recette.quantiteProduite`), consomme chaque ingrédient, produit
+  l'article fini, crée un `stock_lots` de sortie (`TR-<id>` si non fourni) ; `DELETE /:id`
+  annule tout (restitue les ingrédients, retire l'article produit, supprime le lot). Frontend :
+  `OrdresTransformationPanel.jsx` dans `StocksTab`, juste après `ProduitRecettesPanel`. **Bug
+  réel trouvé par les tests (pas en relecture)** : `stockSync.js:resoudreEmplacements` avait
+  une liste `type IN (...)` codée en dur qui excluait `'production'` — `produits.quantite`
+  restait correct (mis à jour avant ce garde-fou) mais `stock_quants`/`stock_moves`
+  (traçabilité fine) restaient silencieusement vides pour ces mouvements ; corrigé +
+  régression ajoutée aux tests. Un test existant (`stockQuants.test.js`, « 4 emplacements »)
+  a dû être mis à jour à 5 — cassure attendue, pas une régression. 5 nouveaux tests (ratio,
+  annulation/restitution, validations, gate de rôle, filtre module + isolation).
+  **330/330 tests d'intégration, zéro régression.** Vérifié en navigateur réel (recette →
+  ordre exécuté → stock ingrédient/produit fini vérifiés corrects après rechargement — la
+  liste de `StocksTab` ne se rafraîchit pas automatiquement après une exécution depuis un
+  panneau voisin, limitation UX mineure acceptée, cohérente avec le reste de l'écran) sur une
+  entreprise jetable, nettoyée après coup.
 
 ### Agriculture de précision (complet — 2026-09-05)
 Chantier du backlog long terme (item « Won't have » du MoSCoW), construit sur mesure après recherche (ni Odoo — un vrai module IoT existe dans le cœur mais entièrement dédié au matériel de caisse/atelier, rien pour l'agricole — ni GitHub/GitLab n'avaient de projet mature). Deux sources externes, choisies explicitement par l'utilisateur (analyse de sol **et** NDVI, pas seulement le sol) : **SoilGrids** (ISRIC, gratuit, sans clé) pour la texture/pH/carbone organique/azote/CEC, et **Agromonitoring/OpenWeather Agro API** (clé optionnelle `AGRO_API_KEY`, même repli gracieux que `recaptcha.js`) pour l'historique NDVI satellite. `server/src/routes/precisionAgricole.js` : `GET /sol?parcelleId=` (SoilGrids, calcule la classe de texture via `utils/solAgronomie.js` et suggère des cultures parmi les mêmes ~10 que `cultureService.js` ; `404` explicite si SoilGrids renvoie `mean:null` sur toutes les propriétés — un vrai cas rencontré en vérification réelle sur les coordonnées de Bamako, probablement le fleuve Niger, pas juste une hypothèse théorique) ; `GET /ndvi?parcelleId=` (crée paresseusement un polygone carré approximatif via `utils/agroPolygon.js` — l'app n'a aucune brique cartographique pour dessiner le contour réel d'une parcelle — mis en cache dans `parcelles.agro_polygon_id`, invalidé + supprimé best-effort dès que la localisation/superficie change via `PUT /cultures/parcelles/:id` ; `400` si superficie hors des 1-3000 ha exigés par Agromonitoring ; `{configured:false}` si `AGRO_API_KEY` absente, jamais une erreur). Frontend : nouvelle section pliable « Agriculture de précision » sur chaque carte de `CulturesModule` (même patron que « Météo de cette parcelle »), sous la forme de deux blocs (sol/NDVI). i18n `precisionAgricole.*`/`cultures.precisionTitle`. 11 tests d'intégration (sol, NDVI, cycle de vie du polygone, bornes de superficie, cas sans donnée SoilGrids). Vérifié en navigateur réel avec de vraies données SoilGrids (texture/pH/cultures suggérées affichés correctement) ; NDVI vérifié en mode « non configuré » (aucune clé Agromonitoring disponible dans cet environnement) — comportement anticipé et accepté, pas un blocage du chantier.

@@ -2622,3 +2622,82 @@ elle-même n'a pas été vérifiée en clic réel (le `window.confirm()` — mê
 `ProduitTemplatesPanel`/`PaymentTermsPanel` — a gelé l'onglet d'automatisation du navigateur,
 limitation connue de l'outillage, pas un bug de l'app) mais est couverte par les tests
 d'intégration au niveau API. Entreprise/utilisateur de test nettoyés après coup.
+
+### 2026-09-06 — Transformation agroalimentaire + HACCP, étape 2 (ordres de transformation)
+
+Exécute réellement une recette (étape 1) : consomme les ingrédients, produit l'article fini,
+crée un lot de sortie — le stock réel bouge, contrairement à l'étape 1 qui n'était qu'un
+référentiel. Une action unique (pas de brouillon/validé), mirroring `applications_intrants` :
+un ordre = une exécution immédiate, annulable par `DELETE` (undo complet).
+
+- **Nouveau 5e emplacement virtuel `production`** (`emplacements_stock.type`) : les ingrédients
+  y transitent à la consommation (`interne`→`production`), l'article fini au moment de sa
+  production (`production`→`interne`) — symétrique du couple `perte`/`restitution` déjà en
+  place pour les intrants phytosanitaires. `emplacements_stock_type_check` étendu (DROP+ADD
+  idempotent, même idiome que `produits_module_check` pour Pisciculture) ; nouveau backfill
+  dédié `seedEmplacementProductionPourEntreprisesExistantes` (le garde-fou de
+  `seedEmplacementsStockForExistingEntreprises` — NOT EXISTS *aucun* emplacement — ne se
+  redéclenche jamais pour une entreprise déjà seedée, même idiome que
+  `seedComptesChangeForExistingEntreprises` de l'étape 4 multi-devise). Migration rejouée :
+  `✅ Emplacement « Production » créé pour 7 entreprise(s).`
+- **`server/src/utils/stockSync.js`** : 4 nouveaux kinds dans `CONFIG_MOUVEMENT`, symétriques
+  deux à deux comme `reception`/`retour_achat` et `consommation`/`restitution` — `transformation_conso`
+  (`interne`→`production`, fait), `transformation_restitution` (`production`→`interne`,
+  annule — undo de la consommation), `transformation_prod` (`production`→`interne`, fait),
+  `transformation_retrait` (`interne`→`production`, annule — undo de la production). 4
+  nouvelles fonctions exportées (`consommerIngredientTransformation`/
+  `restituerIngredientTransformation`/`produireSortieTransformation`/
+  `retirerSortieTransformation`), même forme que `consommerProduit`/`restituerProduit` déjà en
+  place pour les intrants.
+- **Schéma** : `ordres_transformation` (`recette_id`/`produit_sortie_id` FK nullable `ON
+  DELETE SET NULL` + colonnes texte snapshot `recette_nom`/`produit_sortie_nom` — une pièce de
+  traçabilité doit survivre à la suppression de la recette/du produit en amont, même patron
+  que `applications_intrants`) + `ordres_transformation_lignes` (snapshot de ce qui a été
+  *réellement* consommé — peut différer de la recette si elle change après coup, nécessaire
+  pour une annulation fidèle) + `ordres_transformation_lots_entrants` (tags légers des lots de
+  matière première utilisés — Option 1, pas de vrai FIFO, même choix déjà tranché pour la
+  traçabilité parcelle→vente ; backend seul, aucune UI de sélection construite dans cette
+  passe pour rester dans un périmètre minimal).
+- **`server/src/routes/ordresTransformation.js`** (`/api/ordres-transformation`) :
+  `POST /` calcule `ratio = quantiteProduite / recette.quantiteProduite`, consomme chaque
+  ligne (`ligne.quantite × ratio`, arrondi à 3 décimales), produit l'article fini, crée un
+  `stock_lots` de sortie (`numero_lot` fourni ou auto `TR-<id>`). `DELETE /:id` annule tout :
+  restitue les ingrédients, retire l'article produit, supprime le lot de sortie (rien d'autre
+  ne peut encore le référencer). `GET /?module=` filtre sur le module du produit de sortie
+  (survit même si la recette d'origine a été supprimée, puisque `produit_sortie_id` est
+  conservé indépendamment). Writes gated `requireRole('admin','directeur')`.
+- **Frontend** : `OrdresTransformationPanel.jsx`, panneau pliable dans `StocksTab` juste après
+  `ProduitRecettesPanel` — formulaire d'exécution (recette/quantité/date/opérateur/n° de lot),
+  liste des ordres passés avec détail dépliable (ingrédients consommés), annulation par
+  corbeille. i18n `ordresTransformation.*`.
+- **Bug réel trouvé par les tests, pas en relecture** : `stockSync.js:resoudreEmplacements`
+  avait une liste `type IN ('interne', 'client', 'fournisseur', 'perte')` codée en dur, oubliée
+  lors de l'ajout de `production` — `produits.quantite` (la valeur "disponible" affichée
+  partout) restait correcte, mise à jour par `adjustStockRow` *avant* ce garde-fou, mais
+  `stock_quants`/`stock_moves` (le journal structuré de traçabilité fine ajouté à l'étape 3 de
+  l'alignement Odoo produit/stock) restaient silencieusement vides pour tout mouvement de
+  transformation — le premier passage des tests avait vérifié `produits.quantite` et
+  passait déjà, ce bug n'a été repéré qu'en ajoutant une assertion dédiée sur `stock_moves`/
+  `stock_quants` (source/dest type, state). Corrigé en ajoutant `'production'` à la liste ;
+  régression conservée dans les tests.
+- **1 test existant mis à jour, pas juste ajouté** : `stockQuants.test.js` affirmait « 4
+  emplacements créés : interne, client, fournisseur, perte » — cassure légitime et attendue
+  (5e emplacement ajouté exprès), mis à jour pour attendre les 5.
+- **5 nouveaux tests** (`ordresTransformation.test.js`) : exécution avec ratio (2× la recette)
+  vérifiée sur `produits.quantite` ET sur `stock_moves`/`stock_quants` (la régression
+  ci-dessus), annulation restitue tout + supprime le lot, validations (recette manquante/hors
+  entreprise/sans ingrédient → 400), gate de rôle (ouvrier lit mais n'exécute pas), filtre
+  `?module=` + isolation locataire. **330/330 tests d'intégration, zéro régression** (325 + 5
+  nouveaux, 1 mis à jour).
+- **Vérifié en conditions réelles** (backend + frontend Docker reconstruits, migration
+  rejouée) sur une entreprise jetable : recette « Poudre d'oeufs » (Aliment ponte × 2 →
+  1 Œufs frais), ordre exécuté pour une quantité produite de 3 → toast de succès, ligne
+  d'ordre affichée avec le lot généré `TR-1`, détail dépliable montrant « Aliment ponte — 6 »
+  (2 × 3, ratio correctement appliqué). Stock vérifié après rechargement de la page :
+  Aliment ponte 12 → 6, Œufs frais 340 → 343 — conforme aux attentes. Note UX mineure
+  observée et acceptée (pas corrigée, hors périmètre demandé) : la liste de stock de
+  `StocksTab` ne se rafraîchit pas automatiquement après une exécution lancée depuis le
+  panneau voisin, il faut recharger la page pour la voir — cohérent avec le comportement déjà
+  existant des autres panneaux de cet écran. Entreprise/utilisateur de test nettoyés après
+  coup.
+- Étape 3 (registre HACCP) reste différée.

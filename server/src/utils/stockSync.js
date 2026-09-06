@@ -88,7 +88,7 @@ async function logMouvement({ entrepriseId, stockModule, stockId, stockNom, delt
 // chaque appel (pas de cache global entre requêtes) — { interne, client, fournisseur, perte }.
 async function resoudreEmplacements(entrepriseId) {
   const { rows } = await pool.query(
-    `SELECT id, type FROM emplacements_stock WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte')`,
+    `SELECT id, type FROM emplacements_stock WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte', 'production')`,
     [entrepriseId]
   );
   const parType = {};
@@ -136,6 +136,14 @@ const CONFIG_MOUVEMENT = {
   liberation: { champ: 'quantite_reservee', source: 'interne', dest: 'client', state: 'annule', champDelta: (d) => -d },
   consommation: { champ: 'quantite', source: 'interne', dest: 'perte', state: 'fait', champDelta: (d) => d },
   restitution: { champ: 'quantite', source: 'perte', dest: 'interne', state: 'annule', champDelta: (d) => d },
+  // Transformation agroalimentaire, étape 2 (2026-09-06) : un ordre de transformation consomme
+  // ses ingrédients (interne → production, comme consommation/perte) puis produit l'article
+  // fini (production → interne, comme reception/fournisseur) — deux couples symétriques
+  // fait/annule, mêmes conventions que ci-dessus.
+  transformation_conso: { champ: 'quantite', source: 'interne', dest: 'production', state: 'fait', champDelta: (d) => d },
+  transformation_restitution: { champ: 'quantite', source: 'production', dest: 'interne', state: 'annule', champDelta: (d) => d },
+  transformation_prod: { champ: 'quantite', source: 'production', dest: 'interne', state: 'fait', champDelta: (d) => d },
+  transformation_retrait: { champ: 'quantite', source: 'interne', dest: 'production', state: 'annule', champDelta: (d) => d },
 };
 
 // Ajuste le produit correspondant (disponible, colonne pont) + le quant interne sous-jacent +
@@ -220,4 +228,25 @@ export async function consommerProduit(entrepriseId, { stockId, produitNom, stoc
 // Inverse de consommerProduit — restitue le stock à la suppression d'une application.
 export async function restituerProduit(entrepriseId, { stockId, produitNom, stockModule, quantite, uomId }, ctx) {
   await mouvementStock('restitution', stockModule || null, entrepriseId, stockId, produitNom, Number(quantite) || 0, ctx, uomId);
+}
+
+// Transformation agroalimentaire, étape 2 : un ingrédient consommé par un ordre de
+// transformation (delta négatif sur produits.quantite) ; restituerIngredientTransformation
+// inverse ça à la suppression de l'ordre.
+export async function consommerIngredientTransformation(entrepriseId, { stockId, produitNom, quantite, uomId }, ctx) {
+  await mouvementStock('transformation_conso', null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx, uomId);
+}
+
+export async function restituerIngredientTransformation(entrepriseId, { stockId, produitNom, quantite, uomId }, ctx) {
+  await mouvementStock('transformation_restitution', null, entrepriseId, stockId, produitNom, Number(quantite) || 0, ctx, uomId);
+}
+
+// Le produit fini d'un ordre de transformation (delta positif sur produits.quantite) ;
+// retirerSortieTransformation inverse ça à la suppression de l'ordre.
+export async function produireSortieTransformation(entrepriseId, { stockId, produitNom, quantite, uomId }, ctx) {
+  await mouvementStock('transformation_prod', null, entrepriseId, stockId, produitNom, Number(quantite) || 0, ctx, uomId);
+}
+
+export async function retirerSortieTransformation(entrepriseId, { stockId, produitNom, quantite, uomId }, ctx) {
+  await mouvementStock('transformation_retrait', null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx, uomId);
 }
