@@ -1682,6 +1682,36 @@ CREATE TABLE IF NOT EXISTS ordres_transformation_lots_entrants (
 );
 CREATE INDEX IF NOT EXISTS idx_ordres_transformation_lots_entrants_ordre_id ON ordres_transformation_lots_entrants(ordre_id);
 
+-- ═══════════════ Transformation agroalimentaire, étape 3 : registre HACCP ═══════════════
+-- Points de contrôle sanitaires liés à un ordre de transformation (étape 2 ci-dessus) — conçu
+-- sur mesure, aucun module Quality/HACCP dans la source ERP de référence (Enterprise-only côté
+-- Odoo). Journal append-only, même patron que applications_intrants (registre phytosanitaire,
+-- étape C élargissement stock) : FK nullable ON DELETE SET NULL + snapshot texte
+-- (ordre_transformation_nom) pour qu'une pièce réglementaire survive à la suppression de
+-- l'ordre en amont. type_controle en CHECK fixe (pas de référentiel séparé, périmètre minimal
+-- volontaire) ; conforme est saisi explicitement (pas recalculé serveur depuis les seuils —
+-- un contrôle « hygiène » n'a souvent pas de valeur numérique à comparer).
+CREATE TABLE IF NOT EXISTS haccp_controles (
+  id                       SERIAL PRIMARY KEY,
+  entreprise_id            INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id                  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ordre_transformation_id  INTEGER REFERENCES ordres_transformation(id) ON DELETE SET NULL,
+  ordre_transformation_nom TEXT,
+  type_controle            TEXT NOT NULL CHECK (type_controle IN ('temperature', 'hygiene', 'tracabilite', 'autre')),
+  valeur_mesuree           NUMERIC(10, 2),
+  unite                    TEXT,
+  seuil_min                NUMERIC(10, 2),
+  seuil_max                NUMERIC(10, 2),
+  conforme                 BOOLEAN NOT NULL DEFAULT TRUE,
+  action_corrective        TEXT,
+  date_controle            DATE NOT NULL DEFAULT CURRENT_DATE,
+  operateur                TEXT,
+  notes                    TEXT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_haccp_controles_entreprise_id ON haccp_controles(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_haccp_controles_ordre_id ON haccp_controles(ordre_transformation_id);
+
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,

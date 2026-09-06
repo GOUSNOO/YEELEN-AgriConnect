@@ -2701,3 +2701,57 @@ un ordre = une exécution immédiate, annulable par `DELETE` (undo complet).
   existant des autres panneaux de cet écran. Entreprise/utilisateur de test nettoyés après
   coup.
 - Étape 3 (registre HACCP) reste différée.
+
+### 2026-09-06 — Transformation agroalimentaire + HACCP, étape 3 (registre HACCP) — roadmap COMPLETE
+
+Points de contrôle sanitaires liés à un ordre de transformation (étape 2). Dernière étape de
+la roadmap — conçue sur mesure, comme prévu (aucun module Quality/HACCP réutilisable dans la
+source ERP de référence, Enterprise-only chez Odoo).
+
+- **Schéma** : `haccp_controles` — `ordre_transformation_id` FK nullable `ON DELETE SET NULL`
+  + colonne texte snapshot `ordre_transformation_nom` (`"<recette_nom> — <date_transformation>"`,
+  figé à la création), même patron que `applications_intrants` (`produit_nom`/`parcelle_nom`) :
+  une pièce réglementaire de traçabilité doit survivre à la suppression/annulation de l'ordre
+  en amont. `type_controle` en CHECK fixe (`temperature`/`hygiene`/`tracabilite`/`autre`) —
+  décision délibérée de ne pas construire un référentiel séparé pour ça, périmètre minimal.
+  `conforme BOOLEAN NOT NULL DEFAULT TRUE` saisi explicitement par l'opérateur, jamais
+  recalculé côté serveur depuis `seuil_min`/`seuil_max` : un contrôle « hygiène » n'a souvent
+  aucune valeur numérique à comparer, contrairement à un contrôle « température ».
+- **`server/src/routes/haccp.js`** (`/api/haccp`) : `POST /` valide que
+  `ordreTransformationId` appartient à l'entreprise puis calcule le snapshot ; `GET /` accepte
+  `?ordreTransformationId=`, `?conforme=true|false`, et `?module=` (jointure
+  `ordres_transformation`→`produits.module`, même idiome que `GET /ordres-transformation?module=`
+  — un contrôle dont l'ordre a été supprimé n'a plus de module résoluble et disparaît du
+  filtre, mais reste visible sans filtre) ; `PUT /:id` ne touche que les métadonnées
+  (valeur/seuils/conforme/action corrective/opérateur/notes), pas le lien vers l'ordre.
+  **Toutes les routes sont `authRequired` seul, sans `requireRole`** — même posture que
+  `applications_intrants` : un registre réglementaire de terrain, pas une action de
+  configuration réservée aux admins.
+- **Frontend** : `HaccpPanel.jsx`, panneau pliable dans `StocksTab` juste après
+  `OrdresTransformationPanel` — badge rouge « N non conforme(s) » sur l'en-tête pliable dès
+  qu'au moins un contrôle est non conforme, formulaire d'ajout (ordre/type/valeur/unité/
+  seuils/conforme + action corrective si non conforme), tableau avec lignes non conformes
+  surlignées, et un bouton d'export CSV (même technique `Blob`/`URL.createObjectURL` que
+  `ReportsModule`). i18n `haccp.*` — piège corrigé avant tout test : les clés
+  `"type.temperature"` etc. avaient été écrites comme des clés PLATES contenant un point
+  littéral, alors que `t(\`haccp.type.${type}\`)` s'appuie sur la résolution par imbrication
+  par défaut d'i18next (comme `reports.period.jour` déjà en place) — corrigé en un vrai objet
+  imbriqué `"type": { "temperature": ..., "hygiene": ..., ... }`, avec le libellé de colonne
+  renommé `typeLabel` pour éviter la collision entre "type" objet et "type" chaîne.
+- **5 nouveaux tests** (`haccp.test.js`) : CRUD complet (création conforme → lecture → mise à
+  jour en non-conforme + action corrective → suppression), validations (ordre/type manquants
+  ou invalides, ordre hors entreprise → 400), **survivance du snapshot à l'annulation de
+  l'ordre lié** (`DELETE /ordres-transformation/:id` puis relecture : `ordreTransformationId`
+  devenu `null`, `ordreTransformationNom` toujours présent), filtres `?conforme=`/`?module=` +
+  isolation locataire, gate de rôle ouvert (un ouvrier peut créer/lire/supprimer, comme
+  `applications_intrants`). **335/335 tests d'intégration, zéro régression** (330 + 5
+  nouveaux).
+- **Vérifié en conditions réelles au niveau API** (backend Docker reconstruit, migration
+  rejouée, script Node autonome avec `fetch()` natif — pas de mock) : recette → ordre exécuté
+  → contrôle créé (`conforme:true`) → filtre par module confirmé → mise à jour en
+  `conforme:false` + action corrective → filtre `conforme=false` confirmé. **Pas de
+  vérification visuelle en navigateur cette fois** : l'extension Chrome de l'outillage était
+  déconnectée pendant cette session et ne s'est pas reconnectée après deux tentatives — à
+  refaire dès qu'elle est disponible, contrairement aux étapes 1 et 2 qui ont eu leur passage
+  navigateur réel. Entreprise/utilisateur de test nettoyés après coup.
+- **Roadmap transformation agroalimentaire + HACCP terminée** (3/3 étapes).

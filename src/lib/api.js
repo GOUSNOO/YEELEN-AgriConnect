@@ -359,6 +359,29 @@ export async function deleteOrdreTransformation(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Registre HACCP (points de contrôle liés à un ordre de transformation)
+// ─────────────────────────────────────────────────────────────────────
+export async function getHaccpControles({ module, ordreTransformationId } = {}) {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  if (ordreTransformationId) params.set('ordreTransformationId', ordreTransformationId);
+  const qs = params.toString();
+  return request(qs ? `/haccp?${qs}` : '/haccp');
+}
+
+export async function createHaccpControle(payload) {
+  return safeRequest('/haccp', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateHaccpControle(id, payload) {
+  return safeRequest(`/haccp/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteHaccpControle(id) {
+  return safeRequest(`/haccp/${id}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Équipements (inventaire matériel)
 // ─────────────────────────────────────────────────────────────────────
 export async function getEquipements() {
