@@ -309,6 +309,37 @@ export async function deleteProduitCategorie(id) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Recettes de transformation (produit fini + lignes d'ingrédients, par module)
+// ─────────────────────────────────────────────────────────────────────
+export async function getProduitRecettes(module) {
+  return request(module ? `/produit-recettes?module=${encodeURIComponent(module)}` : '/produit-recettes');
+}
+
+export async function createProduitRecette(payload) {
+  return safeRequest('/produit-recettes', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateProduitRecette(id, payload) {
+  return safeRequest(`/produit-recettes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteProduitRecette(id) {
+  return safeRequest(`/produit-recettes/${id}`, { method: 'DELETE' });
+}
+
+export async function getProduitRecetteLignes(recetteId) {
+  return request(`/produit-recettes/${recetteId}/lignes`);
+}
+
+export async function createProduitRecetteLigne(recetteId, payload) {
+  return safeRequest(`/produit-recettes/${recetteId}/lignes`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function deleteProduitRecetteLigne(ligneId) {
+  return safeRequest(`/produit-recettes/lignes/${ligneId}`, { method: 'DELETE' });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Équipements (inventaire matériel)
 // ─────────────────────────────────────────────────────────────────────
 export async function getEquipements() {

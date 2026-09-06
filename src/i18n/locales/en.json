@@ -814,6 +814,24 @@
     "variantesRegenerated": "{{count}} new variant(s) generated.",
     "regenerateError": "Could not generate variants."
   },
+  "recettes": {
+    "title": "Processing recipes",
+    "nom": "Recipe name",
+    "produitSortie": "Finished product",
+    "quantiteProduite": "Quantity produced",
+    "nombreIngredients": "Ingredients",
+    "aucuneRecette": "No recipes yet.",
+    "aucunIngredient": "No ingredients yet.",
+    "choisirIngredient": "Choose an ingredient…",
+    "recetteAdded": "Recipe created.",
+    "recetteAddError": "Could not create the recipe.",
+    "recetteDeleted": "Recipe deleted.",
+    "recetteDeleteError": "Could not delete the recipe.",
+    "confirmDeleteRecette": "Delete recipe \"{{nom}}\"?",
+    "lignesLoadError": "Could not load the ingredients.",
+    "ligneAddError": "Could not add the ingredient.",
+    "ligneDeleteError": "Could not delete the ingredient."
+  },
   "paymentTerms": {
     "title": "Payment terms",
     "name": "Name",

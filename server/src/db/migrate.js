@@ -1600,6 +1600,38 @@ CREATE TABLE IF NOT EXISTS applications_intrants (
 CREATE INDEX IF NOT EXISTS idx_applications_intrants_entreprise_id ON applications_intrants(entreprise_id);
 CREATE INDEX IF NOT EXISTS idx_applications_intrants_parcelle_id ON applications_intrants(parcelle_id);
 
+-- ═══════════════ Transformation agroalimentaire, étape 1 : recettes (mrp.bom-like) ═══════════════
+-- Backlog long terme, jamais commencé jusqu'ici. Un produit transformé (fromage, confiture,
+-- filets fumés...) est un produit catalogué comme un autre (module Cultures/Poulailler/
+-- Pisciculture existant, aucun 4e module nécessaire) ; une recette décrit juste, pour ce
+-- produit de sortie, quels ingrédients (autres produits) et en quelle quantité. quantite_produite
+-- = le lot de référence de la recette (« pour produire quantite_produite unités, il faut
+-- ligne.quantite de ligne.produit_id ») — l'étape 2 (ordres de transformation, différée)
+-- multipliera par le facteur réellement demandé, comme mrp.bom.product_qty côté ERP de référence.
+CREATE TABLE IF NOT EXISTS produit_recettes (
+  id                 SERIAL PRIMARY KEY,
+  entreprise_id      INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  produit_sortie_id  INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE,
+  nom                TEXT NOT NULL,
+  quantite_produite  NUMERIC(12, 2) NOT NULL DEFAULT 1,
+  notes              TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_produit_recettes_entreprise_id ON produit_recettes(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_produit_recettes_produit_sortie_id ON produit_recettes(produit_sortie_id);
+
+-- ON DELETE RESTRICT (pas CASCADE comme produit_sortie_id ci-dessus) : un ingrédient encore
+-- référencé par une recette ne doit pas disparaître silencieusement à la suppression du
+-- produit — cohérent avec la 23503 déjà en place sur produit_categories.
+CREATE TABLE IF NOT EXISTS produit_recettes_lignes (
+  id           SERIAL PRIMARY KEY,
+  recette_id   INTEGER NOT NULL REFERENCES produit_recettes(id) ON DELETE CASCADE,
+  produit_id   INTEGER NOT NULL REFERENCES produits(id) ON DELETE RESTRICT,
+  quantite     NUMERIC(12, 3) NOT NULL,
+  notes        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_produit_recettes_lignes_recette_id ON produit_recettes_lignes(recette_id);
+
 -- ═══════════════ Listes de prix nommées et réutilisables (remplace client_prix) ═══════════════
 -- Troisième étape de l'alignement structurel ERP : remplace le prix négocié client+article
 -- (client_prix, une ligne = un override non réutilisable) par un objet nommé, réutilisable,

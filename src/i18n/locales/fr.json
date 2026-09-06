@@ -814,6 +814,24 @@
     "variantesRegenerated": "{{count}} nouvelle(s) variante(s) générée(s).",
     "regenerateError": "Impossible de générer les variantes."
   },
+  "recettes": {
+    "title": "Recettes de transformation",
+    "nom": "Nom de la recette",
+    "produitSortie": "Produit fini",
+    "quantiteProduite": "Quantité produite",
+    "nombreIngredients": "Ingrédients",
+    "aucuneRecette": "Aucune recette pour l'instant.",
+    "aucunIngredient": "Aucun ingrédient pour l'instant.",
+    "choisirIngredient": "Choisir un ingrédient…",
+    "recetteAdded": "Recette créée.",
+    "recetteAddError": "Impossible de créer la recette.",
+    "recetteDeleted": "Recette supprimée.",
+    "recetteDeleteError": "Impossible de supprimer la recette.",
+    "confirmDeleteRecette": "Supprimer la recette « {{nom}} » ?",
+    "lignesLoadError": "Impossible de charger les ingrédients.",
+    "ligneAddError": "Impossible d'ajouter l'ingrédient.",
+    "ligneDeleteError": "Impossible de supprimer l'ingrédient."
+  },
   "paymentTerms": {
     "title": "Conditions de paiement",
     "name": "Nom",

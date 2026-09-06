@@ -2545,3 +2545,80 @@ taux.
   (jugé pragmatiquement à faible risque : ajout pur, aucun `ALTER` destructeur) — seule une
   application directe sur la base dev a été faite. À faire avant la prochaine vraie mise en
   production si ce n'est pas déjà fait entre-temps.
+
+### 2026-09-06 — Transformation agroalimentaire + HACCP, étape 1 (recettes)
+
+Dernier item « Won't have » du MoSCoW jamais commencé, choisi explicitement par l'utilisateur
+après confirmation que le MVP (Must/Should/Could-have) est désormais entièrement livré (en
+route, a aussi corrigé une note obsolète du MoSCoW : « exportable reports » était en fait déjà
+construit — `ReportsModule`, CSV+PDF — juste jamais marqué comme fait). Recherche menée avant
+implémentation (plan validé via `EnterPlanMode`/`ExitPlanMode`) : le clone local de l'ERP de
+référence a un module `mrp` (Manufacturing) complet et directement transposable
+(`mrp_bom.py`/`mrp_production.py`), mais aucun module Quality/HACCP dans la source
+communautaire (Enterprise-only chez Odoo) — le futur registre HACCP sera donc conçu sur
+mesure, comme la météo et l'agriculture de précision avant lui.
+
+Roadmap en 3 étapes (seule l'étape 1 construite cette session) :
+- **Étape 1 (cette session)** : recettes de transformation — référentiel pur, zéro impact
+  stock.
+- **Étape 2 (différée)** : ordres de transformation — consomme les ingrédients / produit
+  l'article fini, répercuté sur le stock réel via une extension de `stockSync.js` (nouveaux
+  kinds `transformation_conso`/`transformation_prod`, nouvel emplacement virtuel
+  `production` — CHECK `emplacements_stock.type` à étendre, même idiome que l'ajout du module
+  Pisciculture), + un nouveau `stock_lots` pour le lot de sortie, + tags FK légers (pas de vrai
+  FIFO — même philosophie que `[[project_tracabilite_parcelle_vente]]`, déjà tranchée) sur les
+  lots de matière première consommés.
+- **Étape 3 (différée)** : registre HACCP — points de contrôle sanitaires liés à un ordre de
+  transformation, exportable (même patron que `ReportsModule`).
+
+**Étape 1 — schéma** (`migrate.js`, juste après le bloc `applications_intrants` de l'étape C
+« élargissement stock ») : `produit_recettes` (`produit_sortie_id` → `produits`, `ON DELETE
+CASCADE` — un produit fini catalogué comme un autre, aucun 4e module nécessaire, la
+transformation est transverse à Cultures/Poulailler/Pisciculture ; `quantite_produite` = le lot
+de référence de la recette, comme `mrp.bom.product_qty`) + `produit_recettes_lignes`
+(`produit_id` → `produits`, **`ON DELETE RESTRICT`** — contrairement à `produit_sortie_id`, un
+ingrédient encore référencé par une recette ne doit pas disparaître silencieusement à la
+suppression du produit, cohérent avec la 23503 déjà en place sur `produit_categories`).
+
+**Route** `server/src/routes/produitRecettes.js` (`/api/produit-recettes`) : mirroring exact du
+patron en-tête + lignes de `listesPrix.js` — `GET /` (filtrable `?module=`, jointure produit +
+COUNT lignes), `POST`/`PUT`/`DELETE /:id` (writes `requireRole('admin','directeur')`, même
+gate que les autres référentiels de configuration), `GET/POST /:id/lignes`, `DELETE
+/lignes/:ligneId` (jointure `USING produit_recettes` pour le cloisonnement, même idiome que
+`DELETE /listes-prix/lignes/:id`). `DELETE` vérifie systématiquement `rowCount`/`rows.length`
+→ 404 (la classe de bug déjà documentée partout ailleurs dans le projet, évitée dès l'écriture
+plutôt que trouvée après coup cette fois).
+
+**Frontend** : nouveau `src/components/ProduitRecettesPanel.jsx`, panneau pliable calqué sur
+`ProduitTemplatesPanel.jsx` (même style, mêmes couleurs), monté dans `StocksTab` juste après
+`<ProduitTemplatesPanel module={moduleType} categories={categories} />` — les recettes sont un
+référentiel de configuration du stock, au même endroit que les gabarits de produits. Le
+sélecteur d'ingrédient exclut le produit de sortie de la recette courante (on ne peut pas
+utiliser le produit fini comme son propre ingrédient). i18n `recettes.*` fr/en.
+
+**Tests** : 5 nouveaux tests d'intégration (`produitRecettes.test.js`) — CRUD complet
+recette+lignes, `produitSortieId` manquant/hors entreprise → 400, ligne avec produit hors
+entreprise → 400, recette/ligne inexistante → 404, gate de rôle (ouvrier lit mais n'écrit pas),
+isolation locataire. **325/325 tests d'intégration, zéro régression** (320 + 5 nouveaux).
+
+**Incident d'environnement (pas un bug de code) découvert en vérifiant la migration** : lancer
+`node src/db/migrate.js` directement depuis l'hôte a échoué avec « la colonne
+« banque_principale_id » ... n'existe pas » — piste initialement troublante puisque cette
+colonne existe bel et bien sur la base Docker. Cause réelle : `server/.env` a `DB_PORT=5432`
+(le port **interne au conteneur**, documenté dans CLAUDE.md comme correct pour le trafic
+backend→db à l'intérieur du réseau Compose) — exécuté depuis l'hôte Windows, le port 5432
+local pointe vers le **Postgres natif Windows** (un tout autre service, indépendant de Docker,
+avec son propre jeu de données plus ancien/incomplet), pas vers le conteneur `db` (exposé sur
+le port hôte 5433). La procédure documentée (`docker exec agri-app-backend-1 node
+src/db/migrate.js`) a été utilisée à la place — succès, tables créées. Leçon reconfirmée :
+ne jamais lancer `migrate.js` nu depuis l'hôte sur cette machine, toujours via `docker exec`
+(ou avec `DB_PORT=5433` explicitement exporté).
+
+**Vérifié en conditions réelles** dans le navigateur (backend + frontend Docker reconstruits) :
+entreprise jetable, panneau ouvert, recette créée (« Poudre d'oeufs » → Œufs frais, un des
+produits seedés par défaut), ligne d'ingrédient ajoutée (Aliment ponte × 3, le produit de
+sortie correctement exclu du sélecteur), ligne supprimée. La suppression de la recette
+elle-même n'a pas été vérifiée en clic réel (le `window.confirm()` — même patron que
+`ProduitTemplatesPanel`/`PaymentTermsPanel` — a gelé l'onglet d'automatisation du navigateur,
+limitation connue de l'outillage, pas un bug de l'app) mais est couverte par les tests
+d'intégration au niveau API. Entreprise/utilisateur de test nettoyés après coup.
