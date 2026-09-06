@@ -3166,3 +3166,16 @@ de page ; panneau `Abonnements` (platform-admin) → détail de l'entreprise aff
 « Prix suggéré : 3 954 F CFA (1 module(s) activé(s), palier 4) » avec le formulaire
 montant/devise pré-rempli. Entreprise de test nettoyée, images Docker backend + frontend
 reconstruites.
+
+**Révision du même jour** : l'utilisateur s'est renseigné sur un prix réel constaté au Mali
+pour un ERP agricole comparable — 5 000 F CFA/module — contre 3 954 F CFA obtenus avec la
+grille initiale (7 $/module, palier 4). Recalcul au taux du jour (1 $ ≈ 564,86 F CFA) :
+5 000 F CFA ≈ 8,85 $, arrondi à 9 $ ; les 3 autres paliers recalculés au même facteur d'échelle
+(×~1,26 par rapport à 70/35/15/7) puis arrondis par l'utilisateur. **Nouvelle grille :**
+75 $/45 $/19 $/9 $ par module (paliers 1 à 4), bundle 180 $/108 $/46 $/22 $ (même règle de
+remise ~20 % sur la somme des 3, dérivée mécaniquement, pas renégociée). Seuls
+`PRIX_MODULE_USD`/`PRIX_BUNDLE_USD` dans `tarificationModules.js` ont changé — aucun autre
+fichier touché, les tests (qui référencent ces constantes plutôt que des montants en dur)
+restent verts sans modification. Vérifié : `calculerPrixUSD('ML', {poulailler:true})` →
+9 $ (≈ 5 084 F CFA au taux du jour, l'écart de ~1,7 % vient de l'arrondi 8,85→9 accepté par
+l'utilisateur) ; `npm test` (11/11 unitaires) vert ; image Docker backend reconstruite.

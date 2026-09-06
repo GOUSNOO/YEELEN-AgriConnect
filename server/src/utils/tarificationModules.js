@@ -32,14 +32,18 @@ export const PALIER_PAYS = {
   AU: 1, NZ: 1,
 };
 
-// Prix de référence en USD — un seul module, par palier.
-export const PRIX_MODULE_USD = { 1: 70, 2: 35, 3: 15, 4: 7 };
+// Prix de référence en USD — un seul module, par palier. Révisé 2026-09-06 : l'utilisateur
+// s'est renseigné sur un prix réel constaté au Mali (palier 4) — 5 000 F CFA/module — soit
+// ~8,85 $ au taux du jour (1 $ ≈ 564,86 F CFA), arrondi à 9 $ ; les autres paliers recalculés
+// au même facteur d'échelle (×~1,26 par rapport à la grille précédente 70/35/15/7), puis
+// arrondis par l'utilisateur.
+export const PRIX_MODULE_USD = { 1: 75, 2: 45, 3: 19, 4: 9 };
 
 // Prix « les 3 modules » (bundle), par palier — remise d'environ 20 % sur la somme des 3
-// (ex. palier 1 : 3×70=210 mais bundle=168). Chiffres arrêtés explicitement avec l'utilisateur,
-// pas dérivés automatiquement d'un pourcentage (le palier 4 est un plancher d'accessibilité
-// fixé en premier : 17 $, les autres paliers recalculés à partir de lui).
-export const PRIX_BUNDLE_USD = { 1: 168, 2: 84, 3: 36, 4: 17 };
+// (ex. palier 1 : 3×75=225 mais bundle=180), même règle que la grille précédente. Chiffres
+// dérivés mécaniquement de PRIX_MODULE_USD (×2,4, arrondi), pas renégociés avec l'utilisateur
+// à cette révision — seuls les prix par module l'ont été.
+export const PRIX_BUNDLE_USD = { 1: 180, 2: 108, 3: 46, 4: 22 };
 
 // Palier par défaut quand le pays de l'entreprise est inconnu/absent (entreprises créées
 // avant que `pays` existe, ou compte 'particulier' qui n'a pas eu à le renseigner) — palier 2

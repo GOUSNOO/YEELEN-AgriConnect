@@ -358,6 +358,12 @@ middleware + ~25 fichiers de routes, disproportionné tant que l'activation rest
   autres paliers recalculés depuis lui) : palier 1/2/3/4 = 70$/35$/15$/7$ par module,
   168$/84$/36$/17$ pour le bundle. Seuls cultures/poulailler/pisciculture sont facturés ; les 5
   fonctions de gestion transverses restent incluses gratuitement.
+  **Révisée le même jour** : l'utilisateur s'est renseigné sur un vrai prix constaté au Mali
+  (5 000 F CFA/module, palier 4) — recalculé au taux du jour (≈8,85 $) puis les autres paliers
+  au même facteur d'échelle. **Grille finale : 75$/45$/19$/9$ par module, 180$/108$/46$/22$
+  pour le bundle** (`PRIX_MODULE_USD`/`PRIX_BUNDLE_USD` dans `tarificationModules.js` — seules
+  constantes touchées, tests inchangés car ils référencent ces constantes, pas des montants
+  en dur).
 - Paliers pays : classification Banque mondiale FY26/27 (recherche web réelle, pas inventée),
   champ `palier` ajouté à chaque entrée de `PAYS` (`src/lib/locale.jsx`), dupliqué côté serveur
   (`server/src/utils/tarificationModules.js:PALIER_PAYS`).
