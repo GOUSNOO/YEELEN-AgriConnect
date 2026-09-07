@@ -1195,6 +1195,20 @@ ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS numero_tva  TEXT;
 -- pas ici : migrate.js n'a pas accès au localStorage du navigateur).
 ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS modules_actifs JSONB NOT NULL DEFAULT '{}';
 
+-- Blocage d'accès par module (2026-09-07, middleware/moduleGuard.js) : modules_actifs
+-- devient exécutoire, plus seulement indicatif pour le prix — sans grand-père, TOUTE
+-- entreprise déjà existante (modules_actifs = '{}' par défaut) perdrait d'un coup l'accès en
+-- écriture à Cultures/Poulailler/Pisciculture/Contacts/Finances/etc. alors que rien n'était
+-- bloqué avant ce chantier. modules_actifs_initialises distingue « jamais configuré, à
+-- grand-périser » de « explicitement vidé par un vrai choix utilisateur » (ex. une entreprise
+-- qui désactive ses 3 modules en pleine connaissance de cause doit RESTER vide au prochain
+-- passage de migrate.js, pas se faire réinitialiser) — même besoin que trial_ends_at IS NULL
+-- pour l'abonnement Phase 1, mais modules_actifs ne peut pas servir de proxy à lui seul
+-- puisque {} est une valeur légitime après grand-père comme avant. Posée à TRUE par
+-- routes/auth.js:register pour toute nouvelle inscription (qui démarre volontairement vide),
+-- afin qu'un futur passage de migrate.js ne la re-grand-périse jamais par erreur.
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS modules_actifs_initialises BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- ═══════════════ Multi-devise réel, étape 1 : taux de change ═══════════════
 -- Table de référence PLATEFORME (pas de entreprise_id : un taux de change n'appartient à
 -- aucun locataire, il est le même pour tout le monde) — voir utils/currencyRates.js et
@@ -3100,6 +3114,27 @@ async function seedAbonnementBackfill() {
   }
 }
 
+// Blocage d'accès par module (2026-09-07) : grand-père toute entreprise dont
+// modules_actifs_initialises est encore FALSE (jamais configuré explicitement) en activant
+// les 3 modules payants — sinon une entreprise déjà existante, jusqu'ici jamais bloquée,
+// perdrait d'un coup l'accès en écriture à la moitié de l'app. Relançable sans effet une fois
+// fait : modules_actifs_initialises passe à TRUE ici, donc le WHERE ne retrouve plus la ligne
+// ensuite — et une entreprise qui choisit plus tard de tout désactiver reste bien à '{}'
+// (modules_actifs_initialises déjà TRUE ne la fait plus jamais retomber ici).
+async function seedModulesActifsBackfill() {
+  const { rowCount } = await client.query(
+    `UPDATE entreprises
+        SET modules_actifs = '{"cultures":true,"poulailler":true,"pisciculture":true}'::jsonb,
+            modules_actifs_initialises = TRUE
+      WHERE modules_actifs_initialises = FALSE`
+  );
+  if (rowCount > 0) {
+    console.log(`✅ Modules payants : ${rowCount} entreprise(s) grand-périsée(s) (3 modules activés).`);
+  } else {
+    console.log('ℹ️  Modules payants : rien à grand-périser (déjà fait).');
+  }
+}
+
 // Crée les 4 types de congés par défaut pour toute entreprise qui n'en a aucun.
 async function seedCongesTypesForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
@@ -3194,6 +3229,7 @@ async function migrate() {
     await seedEmplacementProductionPourEntreprisesExistantes();
     await backfillStockQuants();
     await seedAbonnementBackfill();
+    await seedModulesActifsBackfill();
     await migratePostesFromSalaries();
     await migrateContratsFromSalaries();
   } catch (err) {

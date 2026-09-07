@@ -63,6 +63,19 @@ export async function registerEntreprise(opts = {}) {
   if (login.status !== 200 || !login.body.token) {
     throw new Error(`login après inscription a échoué (${login.status}): ${JSON.stringify(login.body)}`);
   }
+  // Blocage d'accès par module (2026-09-07, voir middleware/moduleGuard.js) : une entreprise
+  // fraîchement inscrite démarre avec modules_actifs = {} — sans ça, la quasi-totalité des
+  // suites de test existantes (qui supposent un accès complet dès l'inscription) échouerait.
+  // Par défaut, les 3 modules payants sont activés ; `opts.modulesActifs` permet de passer un
+  // état différent (ex. `{}` pour les tests qui testent le blocage lui-même). Écriture directe
+  // en base (même logique que email_confirme plus haut) plutôt qu'un appel PUT
+  // /entreprise/modules : plus rapide, et le cache de moduleGuard est de toute façon vide à ce
+  // stade (aucune route gatée n'a encore été appelée pour cette entreprise).
+  const modulesActifs = opts.modulesActifs || { cultures: true, poulailler: true, pisciculture: true };
+  await pool.query(
+    'UPDATE entreprises SET modules_actifs = $1::jsonb WHERE id = $2',
+    [JSON.stringify(modulesActifs), login.body.entreprise?.id]
+  );
   return {
     token: login.body.token,
     email,

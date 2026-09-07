@@ -589,7 +589,14 @@ describe('Devis — consultation et signature publiques (token)', () => {
 });
 
 // Multi-devise réel, étape 2 : un devis peut être créé/envoyé dans la devise du contact.
-function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
+// Purge les taux déjà en base pour AUJOURD'HUI avant d'installer le mock : sans ça,
+// obtenirTaux() (utils/currencyRates.js) ne rafraîchit QUE si aucun taux n'existe encore pour
+// la devise demandée à cette date — si un autre fichier de test (ex. abonnement.test.js,
+// devisesTaux.test.js) a déjà déclenché un vrai appel réseau ou un mock différent plus tôt
+// dans la même suite, ce test lirait leurs taux au lieu des siens. Rend chaque test
+// déterministe quel que soit l'ordre d'exécution des fichiers (non garanti par Jest).
+async function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
+  await pool.query('DELETE FROM currency_rates WHERE date = CURRENT_DATE');
   const original = global.fetch;
   global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: 'success', rates }) });
   return () => { global.fetch = original; };
@@ -618,7 +625,7 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     const clientId = contact.body.contact.id;
     expect(contact.body.contact.deviseFacturation).toBe('EUR');
 
-    const restore = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    const restore = await mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
     try {
       const create = await request(app).post('/api/devis').set(bearer(admin.token))
         .send({ clientId, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
@@ -635,7 +642,7 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     const admin = await registerEntreprise();
     const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
       .send({ nom: 'Client Europe 2', estClient: true, deviseFacturation: 'EUR' });
-    const restore = mockerFetchTaux({ USD: 1, XOF: 600, GBP: 0.75 });
+    const restore = await mockerFetchTaux({ USD: 1, XOF: 600, GBP: 0.75 });
     try {
       const create = await request(app).post('/api/devis').set(bearer(admin.token))
         .send({ clientId: contact.body.contact.id, devise: 'GBP', lignes: [{ produit: 'Riz', quantite: 1, prixUnitaire: 50, type: 'produit' }] });
@@ -651,7 +658,7 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     const admin = await registerEntreprise();
     const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
       .send({ nom: 'Client Etranger', estClient: true, deviseFacturation: 'EUR' });
-    const restoreCreate = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    const restoreCreate = await mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
     let devisId;
     let tauxAttendu;
     try {
@@ -701,7 +708,7 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     async function creerFactureEchelonneeEUR(admin) {
       const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
         .send({ nom: 'Client Ecart Change', estClient: true, deviseFacturation: 'EUR' });
-      const restore = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 }); // taux facture : 600/0.9
+      const restore = await mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 }); // taux facture : 600/0.9
       let devisId;
       try {
         const create = await request(app).post('/api/devis').set(bearer(admin.token))
@@ -823,7 +830,7 @@ describe('Devis — multi-devise réel (étape 2)', () => {
     const contact = await request(app).post('/api/contacts').set(bearer(admin.token))
       .send({ nom: 'Client Taux Change', estClient: true, email: 'client-taux@test.local', deviseFacturation: 'EUR' });
     let devisId;
-    const restoreCreate = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    const restoreCreate = await mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
     try {
       const create = await request(app).post('/api/devis').set(bearer(admin.token))
         .send({ clientId: contact.body.contact.id, lignes: [{ produit: 'Maïs', quantite: 1, prixUnitaire: 100, type: 'produit' }] });
@@ -831,7 +838,7 @@ describe('Devis — multi-devise réel (étape 2)', () => {
       expect(create.body.devis.tauxChange).toBeCloseTo(600 / 0.9, 4);
     } finally { restoreCreate(); }
 
-    const restoreEnvoi = mockerFetchTaux({ USD: 1, XOF: 610, EUR: 0.85 });
+    const restoreEnvoi = await mockerFetchTaux({ USD: 1, XOF: 610, EUR: 0.85 });
     try {
       const envoyer = await request(app).post(`/api/devis/${devisId}/envoyer`).set(bearer(admin.token));
       expect(envoyer.status).toBe(502); // email indisponible dans cet environnement de test

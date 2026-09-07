@@ -399,7 +399,14 @@ describe('reCAPTCHA v3 sur l\'inscription (repli gracieux si non configuré)', (
 // défaut) via utils/currencyRates.js — sans ce mock, le premier appel non mocké de toute la
 // suite déclenche un VRAI appel réseau qui pollue currency_rates pour la date du jour et
 // casse les tests de devis/devisesTaux qui, eux, s'attendent à leurs propres taux mockés.
-function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
+// Purge aussi les taux déjà en base pour AUJOURD'HUI avant d'installer le mock : sans ça,
+// obtenirTaux() ne rafraîchit que si aucun taux n'existe encore pour la devise demandée à
+// cette date — si devis.test.js/devisesTaux.test.js (ou ce fichier lui-même, ré-exécuté) a
+// déjà écrit un taux plus tôt dans la même suite, ce test lirait le leur au lieu du sien.
+// Rend le test déterministe quel que soit l'ordre d'exécution des fichiers (non garanti par
+// Jest — trouvé en le reproduisant, pas supposé).
+async function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
+  await pool.query('DELETE FROM currency_rates WHERE date = CURRENT_DATE');
   const original = global.fetch;
   global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: 'success', rates }) });
   return () => { global.fetch = original; };
@@ -407,7 +414,9 @@ function mockerFetchTaux(rates = { USD: 1, XOF: 600, EUR: 0.9 }) {
 
 describe('Tarification par module (2026-09-06)', () => {
   test("GET /entreprise/modules démarre vide, PUT persiste + calcule le prix, GET relit l'état", async () => {
-    const admin = await registerEntreprise(); // typeCompte 'entreprise', pays 'ML' (palier 4)
+    // modulesActifs: {} explicite — le défaut du helper active les 3 modules pour ne pas
+    // casser le reste de la suite (voir helpers.js), ce test-ci veut justement l'état vide.
+    const admin = await registerEntreprise({ modulesActifs: {} }); // typeCompte 'entreprise', pays 'ML' (palier 4)
 
     const avant = await request(app).get('/api/entreprise/modules').set('Authorization', `Bearer ${admin.token}`);
     expect(avant.status).toBe(200);
@@ -447,9 +456,9 @@ describe('Tarification par module (2026-09-06)', () => {
   });
 
   test('GET /billing/tarifs : 1 module facturé = prix unitaire, les 3 = tarif bundle', async () => {
-    const restore = mockerFetchTaux();
+    const restore = await mockerFetchTaux();
     try {
-      const admin = await registerEntreprise();
+      const admin = await registerEntreprise({ modulesActifs: {} });
 
       const seul = await request(app).get('/api/billing/tarifs').set('Authorization', `Bearer ${admin.token}`);
       expect(seul.status).toBe(200);
@@ -468,7 +477,7 @@ describe('Tarification par module (2026-09-06)', () => {
   });
 
   test('GET /billing/entreprises/:id (platform-admin) renvoie un prixSuggere cohérent avec les modules actifs', async () => {
-    const restore = mockerFetchTaux();
+    const restore = await mockerFetchTaux();
     try {
       const admin = await registerEntreprise();
       await request(app).put('/api/entreprise/modules').set('Authorization', `Bearer ${admin.token}`)
@@ -485,10 +494,10 @@ describe('Tarification par module (2026-09-06)', () => {
   });
 
   test('isolation : une entreprise ne voit ni ne modifie les modules/tarifs d\'une autre', async () => {
-    const restore = mockerFetchTaux();
+    const restore = await mockerFetchTaux();
     try {
       const a = await registerEntreprise();
-      const b = await registerEntreprise();
+      const b = await registerEntreprise({ modulesActifs: {} });
       await request(app).put('/api/entreprise/modules').set('Authorization', `Bearer ${a.token}`)
         .send({ modules: { cultures: true, poulailler: true, pisciculture: true } });
 

@@ -56,6 +56,7 @@ import rhRoutes from "./routes/rh.js";
 import billingRoutes from "./routes/billing.js";
 import { verifierTokenSiPresent } from "./middleware/auth.js";
 import { subscriptionGuard } from "./middleware/subscriptionGuard.js";
+import { moduleGuard } from "./middleware/moduleGuard.js";
 
 dotenv.config();
 
@@ -75,6 +76,11 @@ app.use(express.json({ limit: "2mb" }));
 // pour la justification de ce montage global plutôt qu'un ajout à chaque route existante.
 app.use(verifierTokenSiPresent);
 app.use(subscriptionGuard);
+// Blocage d'accès par module payant (2026-09-07, suite du calcul de prix par module) — voir
+// middleware/moduleGuard.js pour le détail du découpage (modules payants / fonctions
+// transverses incluses / hors périmètre). Toujours après subscriptionGuard : une entreprise
+// dont l'abonnement global est expiré est déjà bloquée avant d'arriver ici.
+app.use(moduleGuard);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);

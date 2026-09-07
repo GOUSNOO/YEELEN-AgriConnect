@@ -136,8 +136,8 @@ router.post('/register', async (req, res) => {
     // Nom d'entreprise par défaut si non fourni — dépend du type de compte pour rester
     // cohérent ("Espace de x@y.com" pour un particulier, "Entreprise de x@y.com" sinon).
     const entrepriseResult = await client.query(
-      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale, subscription_status, trial_ends_at, email_confirme, telephone, pays, numero_tva, adresse)
-       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'), 'trial', now() + ($6 || ' days')::interval, FALSE, $7, $8, $9, $10)
+      `INSERT INTO entreprises (nom, siret, type_compte, devise, locale, subscription_status, trial_ends_at, email_confirme, telephone, pays, numero_tva, adresse, modules_actifs_initialises)
+       VALUES ($1, $2, $3, COALESCE($4, 'XOF'), COALESCE($5, 'fr-FR'), 'trial', now() + ($6 || ' days')::interval, FALSE, $7, $8, $9, $10, TRUE)
        RETURNING id, nom, siret, type_compte, devise, locale, subscription_status AS "subscriptionStatus", trial_ends_at AS "trialEndsAt"`,
       [
         nomEntreprise || `${compteType === 'particulier' ? 'Espace' : 'Entreprise'} de ${user.email}`,

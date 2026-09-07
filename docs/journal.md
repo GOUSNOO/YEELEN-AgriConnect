@@ -3179,3 +3179,79 @@ fichier touché, les tests (qui référencent ces constantes plutôt que des mon
 restent verts sans modification. Vérifié : `calculerPrixUSD('ML', {poulailler:true})` →
 9 $ (≈ 5 084 F CFA au taux du jour, l'écart de ~1,7 % vient de l'arrondi 8,85→9 accepté par
 l'utilisateur) ; `npm test` (11/11 unitaires) vert ; image Docker backend reconstruite.
+
+### 2026-09-07 — Blocage d'accès par module payant (suite de la tarification)
+
+Chantier demandé comme suite logique du calcul de prix par module. Portée précisée avec
+l'utilisateur avant de coder : jusqu'ici, `entreprises.modules_actifs` ne servait qu'à
+calculer un prix affiché — un module désactivé n'empêchait rien réellement (le contrôle
+d'accès `subscriptionGuard` existant ne connaît que l'entreprise dans son ensemble, pas la
+notion de module). Ce chantier lui donne un vrai effet, sans toucher à `subscriptionGuard`.
+
+**Découpage des ~44 groupes de routes montés (`app.js`)**, confirmé avec l'utilisateur avant
+implémentation (un découpage erroné aurait soit cassé des fonctions gratuites, soit laissé des
+trous) :
+- **Modules payants** (bloqué si CE module précis est inactif) : `cultures`
+  (+ `/planning`, `/recoltes`, `/applications-intrants`, `/precision` — logiquement rattachés
+  bien que montés sous un préfixe différent), `poulailler`, `pisciculture`.
+- **« Inclus dès qu'un module payant est actif »** (bloqué seulement si aucun des 3 n'est
+  actif) : contacts, banques, finances, salariés/RH, devis/achats/factures/paiements, tout
+  l'écosystème catalogue produit, comptabilité (taxes/journaux/comptes/conditions de
+  paiement), transformation/HACCP, **et équipements** (décision explicite de l'utilisateur —
+  pas un module à part avec son propre prix, juste rattaché à cette catégorie « any »).
+- **Hors périmètre, jamais bloqué** : auth, entreprise, mfa, feedback, billing, devises,
+  météo, observations, calendrier, recherche, activités, messages — jamais fait partie du
+  système de modules payants, les bloquer serait un nouveau péage sur des fonctions jusqu'ici
+  gratuites, pas l'application de la tarification existante.
+
+**Mécanique** (`server/src/middleware/moduleGuard.js`), même patron que `subscriptionGuard.js`
+(cache par process, TTL 60 s, invalidation explicite depuis `PUT /entreprise/modules`) :
+lecture (GET/HEAD/OPTIONS) toujours permise même module inactif — seule l'écriture est
+bloquée (403, `{error, reason:'module_required', module}`) — pour ne jamais couper l'accès aux
+données déjà créées quand un module est désactivé après coup, même logique que le mode
+« lecture seule » de l'abonnement expiré.
+
+**Bug réel trouvé en construisant (pas en relecture) : le grand-père manquant.**
+`modules_actifs` vaut `{}` par défaut pour toute entreprise — y compris les ~7 entreprises
+déjà existantes dans la base de dev, jamais bloquées jusqu'ici. Sans backfill, ce chantier
+aurait cassé l'accès en écriture de toute entreprise réelle du jour au lendemain. Même
+patron que le grand-père de l'abonnement Phase 1, mais avec une subtilité : `modules_actifs`
+ne peut pas servir de proxy à lui-même (`{}` est une valeur légitime après grand-père comme
+avant — une entreprise peut choisir plus tard de tout désactiver). Nouvelle colonne
+`entreprises.modules_actifs_initialises` pour distinguer les deux cas : posée à `TRUE` par
+`routes/auth.js:register` pour toute nouvelle inscription (qui démarre volontairement vide),
+et par le backfill `seedModulesActifsBackfill()` pour toute ligne où elle valait encore
+`FALSE` (activant les 3 modules). Vérifié : 7 entreprises grand-périsées lors du premier
+passage, 0 au second (idempotent).
+
+**Tests** : nouveau `moduleGuard.test.js` unitaire (fonctions pures `exigenceModulePourChemin`/
+`evaluerAccesModule`, tous les cas dont les collisions de préfixe type `/produits` vs
+`/produit-categories`) + nouveau `moduleGuard.test.js` d'intégration (blocage réel par route
+HTTP, cache invalidé immédiatement après activation, catégorie « any », routes hors périmètre,
+isolation multi-tenant). Le helper partagé `registerEntreprise()` accepte désormais
+`opts.modulesActifs` (défaut : les 3 modules actifs, pour ne pas casser les ~340 tests
+existants qui supposent un accès complet ; les tests qui testent le blocage lui-même passent
+`{}` explicitement).
+
+**Flakiness préexistante corrigée en passant** : en ajoutant ces nouveaux fichiers de test,
+`devis.test.js`/`devisesTaux.test.js` ont commencé à échouer de façon intermittente (taux de
+change réels au lieu des taux mockés attendus — reproduit 2 fois sur 5 lancements). Cause
+racine identifiée : `obtenirTaux()` ne rafraîchit que si AUCUN taux n'existe encore pour la
+devise/date demandée — si un autre fichier de test avait déjà écrit un taux (réel ou mocké
+différent) pour aujourd'hui avant que ces tests ne s'exécutent, leur propre mock était
+silencieusement ignoré. Bug préexistant (déjà rencontré une fois avec `abonnement.test.js`,
+voir plus haut), mais jusqu'ici masqué par un ordre de fichiers favorable — l'ajout de
+nouveaux fichiers a suffi à perturber l'ordonnancement de Jest et le rendre visible. Corrigé
+proprement cette fois : les 3 `mockerFetchTaux()` locaux (`devis.test.js`,
+`devisesTaux.test.js`, `abonnement.test.js`) purgent désormais `currency_rates` pour la date
+du jour avant d'installer leur mock, rendant chaque test déterministe quel que soit l'ordre
+d'exécution. **3 passages consécutifs à 351/351 tests, zéro régression** après ce correctif
+(contre un échec intermittent avant).
+
+**Vérifié en conditions réelles** (entreprise jetable, aucun module puis Poulailler seul
+activé) : appel direct à l'API (contournant l'UI, qui empêche déjà normalement d'atteindre un
+module non activé) → `POST /cultures/parcelles` → 403 avec le message
+« Le module « Cultures » n'est pas actif pour votre entreprise. » ; `POST /poulailler/mouvements`
+(module actif) → 400 de validation métier normal, jamais 403 — confirme que le garde-fou
+laisse bien passer ; `POST /contacts` (catégorie « any », un module payant actif) → 201,
+succès. Entreprise de test nettoyée, image Docker backend reconstruite.

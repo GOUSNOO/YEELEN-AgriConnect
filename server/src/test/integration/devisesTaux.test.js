@@ -4,7 +4,13 @@ afterAll(async () => { await pool.end(); });
 
 const bearer = (t) => ({ Authorization: `Bearer ${t}` });
 
-function mockerFetchTaux(rates = { USD: 1, XOF: 585.5, EUR: 0.92, GBP: 0.79 }) {
+// Purge les taux déjà en base pour AUJOURD'HUI avant d'installer le mock : sans ça,
+// obtenirTaux() ne rafraîchit que si aucun taux n'existe encore pour la devise demandée à
+// cette date — si un autre fichier de test a déjà déclenché un vrai appel réseau ou un mock
+// différent plus tôt dans la même suite, ce test lirait leurs taux au lieu des siens. Rend le
+// test déterministe quel que soit l'ordre d'exécution des fichiers (non garanti par Jest).
+async function mockerFetchTaux(rates = { USD: 1, XOF: 585.5, EUR: 0.92, GBP: 0.79 }) {
+  await pool.query('DELETE FROM currency_rates WHERE date = CURRENT_DATE');
   const original = global.fetch;
   global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: 'success', rates }) });
   return () => { global.fetch = original; };
@@ -29,7 +35,7 @@ describe('GET /api/devises/taux', () => {
   });
 
   test('conversion : rafraîchit paresseusement si aucun taux en base, puis calcule le cross-rate', async () => {
-    const restore = mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
+    const restore = await mockerFetchTaux({ USD: 1, XOF: 600, EUR: 0.9 });
     try {
       const admin = await registerEntreprise();
       const res = await request(app).get('/api/devises/taux?de=XOF&vers=EUR').set(bearer(admin.token));
@@ -41,7 +47,7 @@ describe('GET /api/devises/taux', () => {
   });
 
   test('devise inconnue (absente de la réponse du fournisseur) → 400', async () => {
-    const restore = mockerFetchTaux({ USD: 1, XOF: 600 });
+    const restore = await mockerFetchTaux({ USD: 1, XOF: 600 });
     try {
       const admin = await registerEntreprise();
       const res = await request(app).get('/api/devises/taux?de=XOF&vers=ZZZ').set(bearer(admin.token));

@@ -388,6 +388,47 @@ middleware + ~25 fichiers de routes, disproportionné tant que l'activation rest
   bout (prix affichés, persistance, panneau admin) sur une entreprise jetable, nettoyée
   ensuite, images Docker backend + frontend reconstruites.
 
+### Blocage d'accès par module payant (2026-09-07)
+Suite logique de la tarification par module — `modules_actifs` ne servait jusqu'ici qu'au
+calcul de prix, aucun effet réel. Découpage des ~44 groupes de routes montés (`app.js`),
+confirmé avec l'utilisateur avant de coder : **modules payants** (`cultures` — incluant
+`/planning`/`/recoltes`/`/applications-intrants`/`/precision`, rattachés bien que montés sous
+un préfixe différent —, `poulailler`, `pisciculture`) bloqués si CE module précis est inactif ;
+**fonctions « incluses dès qu'un module payant est actif »** (contacts/banques/finances/RH/
+devis/achats/factures/produits/comptabilité/transformation/**équipements**, décision explicite
+de l'utilisateur de ne pas en faire un module à part) bloquées seulement si aucun des 3 n'est
+actif ; **hors périmètre, jamais bloqué** (auth/entreprise/mfa/feedback/billing/devises/météo/
+observations/calendrier/recherche/activités/messages) — jamais fait partie du système de
+modules payants, les bloquer serait un nouveau péage sur du gratuit.
+- `server/src/middleware/moduleGuard.js`, même patron que `subscriptionGuard.js` (cache
+  process, TTL 60s, invalidé depuis `PUT /entreprise/modules`) : lecture toujours permise,
+  seule l'écriture est bloquée (403 `{error, reason:'module_required', module}`) — même
+  logique « lecture seule » que l'abonnement expiré, pour ne jamais couper l'accès aux
+  données déjà créées.
+- **Bug réel trouvé** : sans grand-père, les ~7 entreprises déjà existantes (`modules_actifs`
+  vide par défaut) auraient perdu l'accès en écriture du jour au lendemain. Nouvelle colonne
+  `entreprises.modules_actifs_initialises` (distingue « jamais configuré, à grand-périser » de
+  « vidé volontairement par un vrai choix utilisateur », que `modules_actifs` seul ne peut pas
+  distinguer) — posée à `TRUE` par `register` (nouvelle inscription, démarre vide
+  volontairement) et par le backfill `seedModulesActifsBackfill()` (entreprises existantes,
+  grand-périsées aux 3 modules actifs). Vérifié : 7 grand-périsées au 1er passage, 0 au 2nd
+  (idempotent).
+- **Flakiness préexistante corrigée en passant** : ajouter ces nouveaux fichiers de test a
+  suffi à perturber l'ordonnancement de Jest et révéler une fragilité déjà présente
+  (`devis.test.js`/`devisesTaux.test.js` échouaient ~1 fois sur 2, taux de change réels au lieu
+  des taux mockés attendus — même classe de bug que celui déjà corrigé une fois pour
+  `abonnement.test.js`). Corrigé à la racine cette fois : les 3 `mockerFetchTaux()` locaux
+  purgent `currency_rates` pour la date du jour avant d'installer leur mock. 3 passages
+  consécutifs à 351/351 après le correctif.
+- Tests : `moduleGuard.test.js` unitaire (fonctions pures) + `moduleGuard.test.js`
+  d'intégration (blocage réel, cache invalidé immédiatement, catégorie « any », routes hors
+  périmètre, isolation). `registerEntreprise()` gagne `opts.modulesActifs` (défaut : les 3
+  actifs, pour ne pas casser les ~340 tests existants). **351/351 tests d'intégration**,
+  `npm test`/build verts. Vérifié en navigateur réel (entreprise jetable, Poulailler seul
+  actif) : Cultures → 403 message clair, Poulailler → 400 validation normale (jamais 403),
+  Contacts (« any », un module payant actif) → 201. Entreprise nettoyée, image backend
+  reconstruite.
+
 ### Backend structure (`server/src/`)
 - `server.js` — thin entrypoint (`testDatabase()` + `listen()`); the Express app itself is the factory `server/src/app.js` (recreated 2026-08-29, shared with the integration test suite). It mounts routes flatly under `/api/*`: `auth`, `business`, `cultures`, `poulailler`, `entreprise`, `salaries`, `banques`, `mfa`, `devis`, `achats`, `observations`, `planning`, `calendar`, `recoltes`, `feedback`, `equipements`, `produits`, `produit-categories`, `contacts`, `contact-tags`, `listes-prix`, `payment-terms`, `taxes`, `journals`, `accounts`, `factures`, `paiements`, `recherche`, `activites`, `messages`, `rh`, `meteo`, `precision`, `devises`. Each route file inlines its own `pg` queries directly — no ORM, no repository layer, no shared query builder.
 - `db.js` — the single `pg` `Pool` instance every route imports; it reads DB config straight from `process.env` via its own `dotenv.config()` call. `config/env.js` separately loads the *repo-root* `.env` for `JWT_SECRET`/`PORT`. There's no single shared env-loading entrypoint — check which of the two a given file needs.

@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import { pool } from '../db.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 import { MODULES_TARIFES, calculerPrixUSD } from '../utils/tarificationModules.js';
+import { invaliderCacheModules } from '../middleware/moduleGuard.js';
 
 const router = express.Router();
 
@@ -172,6 +173,7 @@ router.put('/modules', authRequired, requireRole('admin', 'directeur'), async (r
       [JSON.stringify(filtre), req.user.entrepriseId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Entreprise introuvable.' });
+    invaliderCacheModules(req.user.entrepriseId);
     await logAuditEvent({
       entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,
       action: 'modules_actifs_updated', req, details: filtre,
