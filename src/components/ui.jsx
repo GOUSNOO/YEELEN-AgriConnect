@@ -276,8 +276,8 @@ export function MiniChart({ data, color, height = 110 }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height, marginTop: 8 }}>
-      {data.map(item => (
-        <div key={item.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      {data.map((item, i) => (
+        <div key={item.id != null ? item.id : `${item.label}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           <div style={{ width: '100%', maxWidth: 24, height: `${Math.max(8, (item.value / max) * 100)}%`, minHeight: 8, background: color, borderRadius: '6px 6px 0 0' }} />
           <span style={{ fontSize: 10, color: '#5B6357', textAlign: 'center' }}>{item.label}</span>
         </div>

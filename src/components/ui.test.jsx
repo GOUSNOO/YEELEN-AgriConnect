@@ -100,6 +100,28 @@ describe('MiniChart', () => {
     expect(screen.getByText('M')).toBeInTheDocument();
     expect(screen.getByText('M2')).toBeInTheDocument();
   });
+  test('ne duplique pas les clés React quand deux points portent le même libellé', () => {
+    // Les libellés du graphique Finances sont des dates courtes : deux opérations du même
+    // jour donnent le même texte. React rend bien les deux barres dans ce cas — il ne les
+    // écrase pas — mais avertit sur la clé dupliquée et perd la stabilité d'identité entre
+    // deux rendus, ce que ce test verrouille.
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    render(<MiniChart data={[
+      { id: 1, label: '8 sept.', value: 3 },
+      { id: 2, label: '8 sept.', value: 5 },
+    ]} color="#000" />);
+    expect(screen.getAllByText('8 sept.')).toHaveLength(2);
+    const messages = spy.mock.calls.map((args) => String(args[0])).join(' ');
+    expect(messages).not.toContain('same key');
+    spy.mockRestore();
+  });
+  test('accepte des points sans id (appelants historiques)', () => {
+    render(<MiniChart data={[
+      { label: 'A', value: 1 },
+      { label: 'A', value: 2 },
+    ]} color="#000" />);
+    expect(screen.getAllByText('A')).toHaveLength(2);
+  });
 });
 
 describe('Toasts', () => {

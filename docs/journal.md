@@ -3335,3 +3335,38 @@ un simple `DELETE FROM entreprises` ne suffit pas — voir la note de nettoyage 
 **Repéré en passant, non traité** : dans le module Finances, le libellé de l'axe du graphique
 « Revenus récents » affiche un fragment de date ISO brut (`09-08T21:30:45.904Z`) au lieu d'une
 date formatée.
+
+### 2026-09-08 — Correctif : date ISO brute sur l'axe des graphiques Finances
+
+Défaut repéré pendant la vérification navigateur du chantier multi-devise ci-dessus, traité
+juste après. Les deux graphiques de `src/modules/finances.jsx` (« Revenus récents » /
+« Dépenses récentes ») étiquetaient leurs barres avec `String(e.date).slice(5)` — un découpage
+qui suppose une date au format `'YYYY-MM-DD'` pour n'en garder que `MM-DD`. Or
+`GET /api/business/finances` renvoie `f.created_at` brut, donc un horodatage ISO complet : la
+barre affichait `09-08T21:30:45.904Z`. Le tableau juste en dessous, lui, passait déjà par
+`fmtDate` et affichait correctement.
+
+Corrigé en réutilisant `fmtDate`, qui accepte déjà des options Intl — `{ day: 'numeric',
+month: 'short' }` donne « 8 sept. » — plutôt qu'en ajoutant un formateur maison. Effet de bord
+positif : le libellé suit désormais la locale de l'entreprise (« Sep 8 » en anglais), ce que le
+découpage de chaîne ne faisait pas.
+
+**Second défaut, révélé par le premier** : `MiniChart` (`components/ui.jsx`) utilisait
+`key={item.label}` comme clé React. Tant que les libellés contenaient l'heure ils étaient
+quasi uniques ; avec une date courte, deux opérations du même jour produisent le même libellé
+et donc une clé dupliquée. La clé prend maintenant `item.id` quand l'appelant en fournit un
+(cas de Finances) et retombe sur `label-index` sinon, pour les appelants historiques qui
+passent des séries littérales.
+
+**Ce que le test a corrigé dans mon propre diagnostic** : le premier test écrit affirmait que
+la seconde barre était « écrasée silencieusement ». Vérification faite en retirant le
+correctif, **c'est faux** — React rend bien les deux barres, il émet seulement un avertissement
+de clé dupliquée et perd la stabilité d'identité entre deux rendus. Le test a donc été réécrit
+pour asserter sur l'absence de cet avertissement (`console.error` espionné), et vérifié rouge
+sans le correctif / vert avec. Une première version de cette assertion passait dans les deux
+cas parce qu'elle attendait 4 arguments là où React en passe 3 — d'où la vérification
+systématique qu'un test échoue bien sans son correctif, sans quoi il ne garantit rien.
+
+2 nouveaux tests frontend (`ui.test.jsx`) → **105/105**, build et `oxlint` (0 erreur) verts.
+Pas de vérification navigateur dédiée pour ce correctif : le libellé produit a été contrôlé
+directement (`8 sept.` en fr-FR, `Sep 8` en en-US) plutôt qu'en recréant une entreprise de test.

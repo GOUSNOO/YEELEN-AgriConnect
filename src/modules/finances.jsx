@@ -142,8 +142,16 @@ export function FinancesModule({ role }) {
   const totalDepenses = entries.filter(isDepenseEntry).reduce((s, e) => s + Math.abs(Number(e.montant)), 0);
   const totalRevenus = entries.filter(e => !isDepenseEntry(e)).reduce((s, e) => s + Math.abs(Number(e.montant)), 0);
   const beneficeNet = totalRevenus - totalDepenses;
-  const chartRevenus = entries.filter(e => !isDepenseEntry(e)).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Math.abs(Number(e.montant)) })).reverse();
-  const chartDepenses = entries.filter(isDepenseEntry).slice(0, 6).map(e => ({ label: e.date ? String(e.date).slice(5) : '-', value: Math.abs(Number(e.montant)) })).reverse();
+  // Libellé court des barres. Le slice(5) précédent supposait une date au format
+  // 'YYYY-MM-DD', alors que GET /finances renvoie f.created_at brut, donc un horodatage
+  // ISO complet : la barre affichait le fragment « 09-08T21:30:45.904Z ». fmtDate accepte des
+  // options Intl, on réutilise donc le formatage localisé déjà en place dans le tableau.
+  const labelJour = (d) => (d ? fmtDate(d, { day: 'numeric', month: 'short' }) : '-');
+  // `id` sert de clé React à MiniChart : deux opérations du même jour produisent le même
+  // libellé, qui ne peut donc pas servir de clé (ce que le fragment horodaté masquait).
+  const pointChart = (e) => ({ id: e.id, label: labelJour(e.date), value: Math.abs(Number(e.montant)) });
+  const chartRevenus = entries.filter((e) => !isDepenseEntry(e)).slice(0, 6).map(pointChart).reverse();
+  const chartDepenses = entries.filter(isDepenseEntry).slice(0, 6).map(pointChart).reverse();
 
   const soldesParBanque = useMemo(() => {
     return banques.map(b => {
