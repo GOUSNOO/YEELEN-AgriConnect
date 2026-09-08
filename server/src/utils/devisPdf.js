@@ -6,10 +6,30 @@
 import PDFDocument from 'pdfkit';
 import { appliquerTaxesLigne } from './taxeCompute.js';
 
-// Formate un nombre avec des points comme séparateurs de milliers (ex: 1.234.567),
-// pour éviter les problèmes d'affichage de l'espace insécable dans PDFKit
-function formatMontant(n) {
-  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+// Devises sans sous-unité parmi celles proposées par l'app (DEVISES dans src/lib/locale.jsx) :
+// toutes les autres s'affichent avec 2 décimales. Arrondir un montant en euros à l'entier,
+// comme le faisait la version précédente pour toute devise, perdait les centimes sur un
+// document commercial (25,50 € imprimé « 26 »).
+const DEVISES_SANS_DECIMALES = new Set(['XOF', 'XAF']);
+
+// Libellé imprimé à côté des montants. On imprime le code ISO plutôt qu'un symbole : la
+// police par défaut de PDFKit (WinAnsi) n'a pas de glyphe pour « F CFA » et rendrait mal
+// plusieurs symboles. Seul XOF garde son libellé usuel « FCFA », déjà présent sur tous les
+// documents émis jusqu'ici — le changer ferait régresser l'existant sans rien corriger.
+export function libelleDevise(devise) {
+  if (!devise || devise === 'XOF') return 'FCFA';
+  return devise;
+}
+
+// Formate un nombre avec des espaces comme séparateurs de milliers (ex: 1 234 567) et le
+// nombre de décimales de la devise. Séparateurs posés à la main plutôt que via Intl, dont
+// l'espace insécable s'affiche mal dans PDFKit.
+export function formatMontant(n, devise) {
+  const decimales = DEVISES_SANS_DECIMALES.has(devise || 'XOF') ? 0 : 2;
+  const [entier, frac] = Math.abs(Number(n) || 0).toFixed(decimales).split('.');
+  const signe = Number(n) < 0 ? '-' : '';
+  const groupe = entier.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return signe + groupe + (frac ? ',' + frac : '');
 }
 
 // Génère le PDF d'un devis/facture et l'envoie directement dans la réponse HTTP (streaming).
@@ -17,6 +37,12 @@ function formatMontant(n) {
 // lignes (produit, quantite, prixUnitaire), total, notes, signataireNom, signatureData (base64 PNG), dateSignature
 export function streamDevisPdf(res, devis) {
   const doc = new PDFDocument({ margin: 50 });
+
+  // Devise du document : getDevisComplet la résout toujours (COALESCE sur celle de
+  // l'entreprise), mais on retombe sur XOF si le PDF est généré depuis un objet devis
+  // construit à la main — le comportement d'avant la prise en charge multi-devise.
+  const dev = devis.devise || 'XOF';
+  const lib = libelleDevise(dev);
 
   // `pipe` démarre le flux avant même que tout le contenu ait été décrit ci-dessous —
   // PDFKit écrit au fil de l'eau, la réponse HTTP se termine quand doc.end() est appelé.
@@ -97,10 +123,10 @@ export function streamDevisPdf(res, devis) {
     const libTaxes = taxesLigne.map(t => t.name).join(', ') || '—';
     doc.text(l.produit, 50, y, { width: 170 });
     doc.text(String(l.quantite), 230, y);
-    doc.text(`${formatMontant(l.prixUnitaire)}`, 280, y);
+    doc.text(`${formatMontant(l.prixUnitaire, dev)}`, 280, y);
     doc.text(`${pct.toFixed(0)}%`, 360, y);
     doc.fontSize(8).text(libTaxes, 415, y, { width: 70 });
-    doc.fontSize(10).text(`${formatMontant(base)} FCFA`, 490, y, { width: 80, align: 'right' });
+    doc.fontSize(10).text(`${formatMontant(base, dev)} ${lib}`, 490, y, { width: 80, align: 'right' });
     y += 20;
   });
 
@@ -109,16 +135,16 @@ export function streamDevisPdf(res, devis) {
   let yr = y + 14;
   doc.font('Helvetica').fontSize(10);
   doc.text('Total HT', 350, yr, { width: 120 });
-  doc.text(`${formatMontant(totalHT)} FCFA`, 470, yr, { width: 100, align: 'right' });
+  doc.text(`${formatMontant(totalHT, dev)} ${lib}`, 470, yr, { width: 100, align: 'right' });
   yr += 15;
   for (const [taxId, montant] of totauxParTaxe) {
     const nom = (taxById.get(taxId) || {}).name || 'Taxe';
     doc.text(nom, 350, yr, { width: 120 });
-    doc.text(`${formatMontant(montant)} FCFA`, 470, yr, { width: 100, align: 'right' });
+    doc.text(`${formatMontant(montant, dev)} ${lib}`, 470, yr, { width: 100, align: 'right' });
     yr += 15;
   }
   doc.font('Helvetica-Bold').fontSize(12);
-  doc.text(`Total ${totauxParTaxe.size ? 'TTC' : ''} : ${formatMontant(devis.total)} FCFA`, 350, yr + 4, { width: 220, align: 'right' });
+  doc.text(`Total ${totauxParTaxe.size ? 'TTC' : ''} : ${formatMontant(devis.total, dev)} ${lib}`, 350, yr + 4, { width: 220, align: 'right' });
   doc.font('Helvetica');
   y = yr + 20;
 

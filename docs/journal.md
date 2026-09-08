@@ -3255,3 +3255,83 @@ module non activé) → `POST /cultures/parcelles` → 403 avec le message
 (module actif) → 400 de validation métier normal, jamais 403 — confirme que le garde-fou
 laisse bien passer ; `POST /contacts` (catégorie « any », un module payant actif) → 201,
 succès. Entreprise de test nettoyée, image Docker backend reconstruite.
+
+### 2026-09-08 — Multi-devise : montants faux hors de l'en-tête des documents
+
+Point de départ : une passe de vérification de santé du projet, puis le choix de reprendre la
+« limite connue » notée à l'étape 3 du multi-devise réel (« les sous-tableaux lignes/échéances/
+paiements restent en devise entreprise »). En vérifiant champ par champ à la source plutôt
+qu'en s'en tenant à cette note, ce n'était pas une finition d'affichage mais **trois défauts
+distincts**, dont deux touchent des chiffres, pas des étiquettes.
+
+**Le point de confusion central**, à retenir avant de retoucher quoi que ce soit ici :
+`account_move.amount_residual` est dans la devise **du document**, alors que
+`account_move_line.amount_residual` appartient au grand livre et est donc en devise **de
+l'entreprise**. Deux champs quasi homonymes, deux devises. Même dualité pour
+`account_move.amount_total` (document) vs `debit`/`credit`/`balance` (entreprise).
+
+**1. Balance âgée : total arithmétiquement faux (le plus grave).**
+`GET /api/factures/aged-receivable` sommait `m.amount_residual` de toutes les factures
+impayées sans conversion — une facture de 100 € s'ajoutait donc comme « 100 » à des francs
+CFA. Ce n'est pas une étiquette trompeuse : le total du rapport sur lequel on décide qui
+relancer était faux. Corrigé en convertissant chaque résidu au **taux figé de sa propre
+facture** (`invoice_currency_rate`, déjà stocké — pas d'appel réseau, résultat déterministe),
+comme le fait un ERP pour ce rapport, qui est par nature en devise de la société.
+`GET /overdue`, qui liste facture par facture sans agréger, garde au contraire les montants
+dans la devise du document et les affiche comme tels.
+*Démontré empiriquement, pas seulement par lecture* : le nouveau test échoue sans le
+correctif avec `Received: 1100` au lieu de `66595.7` (vérifié en retirant temporairement la
+correction), et en conditions réelles la balance âgée est passée de « 140 » à 91 833,90 F CFA
+pour un résidu de 140 €.
+
+**2. Affichage : lignes, sous-totaux, échéances et paiements.**
+`FacturesModule` et le détail de `DevisModule` formataient avec `fmtMoney` (devise entreprise)
+des montants stockés en devise du document : prix unitaires, totaux de ligne, montant HT,
+montant des taxes, échéances, paiements. Une échéance de 100 € s'affichait « 100 F CFA », soit
+un facteur ~656 d'écart à l'écran. Un helper `enDevise(montant, devise)` dans chacun des trois
+fichiers concernés remplace les appels fautifs. **Ce qui n'a délibérément pas été touché** :
+les colonnes débit/crédit des écritures comptables, les montants « à affecter » (issus de
+`account_move_line.amount_residual`) et la balance âgée désormais convertie — tous déjà en
+devise entreprise ; les convertir aurait réintroduit le bug en sens inverse.
+
+**3. `computeMarge` : soustraction entre deux devises.**
+`marge = devis.total - coutTotal` mélangeait un total en devise du devis et un coût catalogue
+toujours en devise entreprise. Sur un devis en euros, la marge était absurde. Corrigé en
+ramenant la vente en devise entreprise (`totalDeviseEntreprise`) avant de soustraire — la
+marge reste par construction un indicateur interne, en devise entreprise.
+
+**4. Le PDF envoyé au client (trouvé en fin de passe, le plus exposé).**
+`devisPdf.js` suffixait **« FCFA » en dur** et arrondissait à l'entier via `Math.round`, quelle
+que soit la devise. Deux conséquences : un devis en euros partait chez le client étiqueté
+« 290 FCFA », et — indépendamment du multi-devise — **toute entreprise dont la devise n'est pas
+le franc CFA** recevait des PDF faux, en perdant au passage les centimes (25,50 € imprimé
+« 26 »). `formatMontant(n, devise)` applique désormais les décimales de la devise (XOF/XAF
+sans, les autres à deux) et `libelleDevise(devise)` imprime le code ISO — sauf pour XOF, qui
+garde son libellé usuel « FCFA » pour ne pas faire régresser les documents déjà émis. Le code
+ISO plutôt qu'un symbole : la police par défaut de PDFKit n'a pas de glyphe pour « F CFA ».
+
+**Correction à la source, pas seulement à l'affichage** : le move de paiement était inséré sans
+`devise` ni `invoice_currency_rate` alors que son `amount_total` est en devise du document —
+la donnée elle-même était incohérente (`MOVE_COLUMNS` retombe sur la devise de l'entreprise
+quand `devise` est NULL). Les deux colonnes sont désormais renseignées, avec le taux
+réellement appliqué au règlement. Écarté en revanche : exposer `devise` dans
+`GET /api/paiements`, qui n'a aucun consommateur (ce tableau n'affiche que `unallocated`, déjà
+en devise entreprise) — pas de code sans usage.
+
+**Tests** : +1 test d'intégration (balance âgée avec une facture en devise étrangère, vérifié
+rouge sans le correctif) → **352/352**. +5 tests unitaires sur le formatage PDF, qui n'était
+jusqu'ici couvert que par « le PDF fait plus de 0 octet » → **68 unitaires**. `formatMontant`
+et `libelleDevise` sont exportées uniquement pour cela. Frontend 103/103, build et `oxlint`
+(0 erreur) verts.
+
+**Vérifié en conditions réelles** (entreprise jetable en XOF, client facturé en EUR, devis de
+290 € validé, facturé en deux échéances, une échéance payée, au vrai taux du jour 655,956) :
+détail du devis et de la facture entièrement en euros avec l'équivalent 190 227 F CFA, grand
+livre équilibré et bien en F CFA (163 989 + 26 238 = 190 227 face à la créance), balance âgée
+à 91 834 F CFA, entrée Finances à +98 393 F CFA pour l'échéance de 150 €. Entreprise de test
+intégralement supprimée ensuite (nettoyage multi-tables : le plan comptable est en `RESTRICT`,
+un simple `DELETE FROM entreprises` ne suffit pas — voir la note de nettoyage du 2026-08-13).
+
+**Repéré en passant, non traité** : dans le module Finances, le libellé de l'axe du graphique
+« Revenus récents » affiche un fragment de date ISO brut (`09-08T21:30:45.904Z`) au lieu d'une
+date formatée.

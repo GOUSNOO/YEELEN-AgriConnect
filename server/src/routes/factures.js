@@ -205,7 +205,14 @@ router.get('/aged-receivable', authRequired, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT m.partner_id AS "partnerId",
               COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom, 'Client') AS "partnerName",
-              (CASE WHEN m.move_type = 'out_refund' THEN -1 ELSE 1 END) * m.amount_residual::float8 AS residu,
+              -- Multi-devise réel : amount_residual d'un account_move est dans la devise DU
+              -- DOCUMENT (contrairement à account_move_line.amount_residual, qui appartient au
+              -- grand livre et est donc déjà en devise entreprise). Ce rapport AGRÈGE plusieurs
+              -- factures entre elles, donc chaque résidu est converti en devise entreprise au
+              -- taux figé de sa propre facture avant d'être sommé — sans quoi des euros
+              -- s'additionnent à des francs CFA et le total est faux.
+              ROUND((CASE WHEN m.move_type = 'out_refund' THEN -1 ELSE 1 END)
+                    * m.amount_residual * COALESCE(m.invoice_currency_rate, 1), 2)::float8 AS residu,
               ($1::date - COALESCE(m.invoice_date_due, m.invoice_date, m.date)) AS jours
        FROM account_move m
        LEFT JOIN contacts c ON c.id = m.partner_id

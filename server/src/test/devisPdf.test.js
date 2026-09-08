@@ -49,3 +49,38 @@ describe('streamDevisPdf', () => {
     expect(Buffer.concat(chunks).length).toBeGreaterThan(0);
   });
 });
+
+// Formatage des montants du PDF. Le PDF part chez le client : jusqu'ici il suffixait
+// « FCFA » en dur et arrondissait à l'entier quelle que soit la devise — donc un devis en
+// euros s'imprimait « 26 FCFA » pour 25,50 €. Ces deux fonctions sont exportées uniquement
+// pour être testées ici ; le rendu PDF lui-même reste couvert par le test ci-dessus.
+describe('formatMontant / libelleDevise', () => {
+  const { formatMontant, libelleDevise } = devisPdf;
+
+  it('garde le libellé usuel FCFA pour le franc CFA (aucune régression sur les PDF existants)', () => {
+    expect(libelleDevise('XOF')).toBe('FCFA');
+    expect(libelleDevise(undefined)).toBe('FCFA');
+  });
+
+  it('imprime le code ISO pour les autres devises', () => {
+    expect(libelleDevise('EUR')).toBe('EUR');
+    expect(libelleDevise('USD')).toBe('USD');
+  });
+
+  it("n'affiche pas de décimales pour les devises qui n'en ont pas", () => {
+    expect(formatMontant(190227.35, 'XOF')).toBe('190 227');
+    expect(formatMontant(1234567, 'XAF')).toBe('1 234 567');
+  });
+
+  it('conserve les centimes des devises à sous-unité', () => {
+    expect(formatMontant(25.5, 'EUR')).toBe('25,50');
+    expect(formatMontant(1234.5, 'USD')).toBe('1 234,50');
+    expect(formatMontant(290, 'EUR')).toBe('290,00');
+  });
+
+  it('gère le zéro, les négatifs et une valeur absente', () => {
+    expect(formatMontant(0, 'EUR')).toBe('0,00');
+    expect(formatMontant(-1500.25, 'EUR')).toBe('-1 500,25');
+    expect(formatMontant(null, 'XOF')).toBe('0');
+  });
+});

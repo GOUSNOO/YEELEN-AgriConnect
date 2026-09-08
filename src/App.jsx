@@ -396,8 +396,13 @@ function computeMarge(devis, catalogItems) {
     coutTotal += Number(l.quantite) * Number(produit.cout);
   }
   if (!uneLigneAvecCout) return null;
-  const marge = devis.total - coutTotal;
-  const pourcentage = devis.total > 0 ? (marge / devis.total) * 100 : 0;
+  // `produit.cout` est en devise entreprise, alors que `devis.total` est dans la devise du
+  // devis : on ramène donc la vente en devise entreprise avant de soustraire, sinon un devis
+  // en euros se voyait retrancher un coût en francs CFA (marge absurde). La marge affichée
+  // est par construction en devise entreprise — c'est un indicateur interne.
+  const totalCompany = devis.totalDeviseEntreprise != null ? devis.totalDeviseEntreprise : devis.total;
+  const marge = totalCompany - coutTotal;
+  const pourcentage = totalCompany > 0 ? (marge / totalCompany) * 100 : 0;
   return { marge, pourcentage };
 }
 
@@ -559,6 +564,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { fmtMoney, fmtDate, locale, devise: deviseEntreprise } = useLocale();
+  // Un devis peut être libellé dans la devise de son client : ses lignes, ses sous-totaux et
+  // ses échéances sont alors dans CETTE devise, pas celle de l'entreprise. Seuls l'équivalent
+  // « devise entreprise » et la marge (calculée sur un coût catalogue) restent en fmtMoney.
+  const enDevise = (montant, devise) => (devise && devise !== deviseEntreprise ? previewMoney(locale, devise, montant) : fmtMoney(montant));
   const [devisListe, setDevisListe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
@@ -1324,7 +1333,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
                     {d.expired && <span style={{ marginLeft: 6 }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{d.devise && d.devise !== deviseEntreprise ? previewMoney(locale, d.devise, d.total) : fmtMoney(d.total)}</td>
+                  <td style={{ fontWeight: 600 }}>{enDevise(d.total, d.devise)}</td>
                   <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                       {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
@@ -1604,10 +1613,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
                           ) : '—'}
                         </td>
                         <td style={{ color: COLORS.inkSoft }}>{l.unite || '—'}</td>
-                        <td>{fmtMoney(l.prixUnitaire)}</td>
+                        <td>{enDevise(l.prixUnitaire, detailData.devise)}</td>
                         <td>{pct.toLocaleString(locale)}</td>
                         <td style={{ color: COLORS.inkSoft }}>{taxesLigne.length ? taxesLigne.map(tx => tx.name).join(', ') : '—'}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(netLigne)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{enDevise(netLigne, detailData.devise)}</td>
                       </tr>
                     );
                   })}
@@ -1624,7 +1633,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
                 <div style={{ minWidth: 240 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
-                    <span>{t("devis.montantHT")}</span><span>{fmtMoney(montantHT)}</span>
+                    <span>{t("devis.montantHT")}</span><span>{enDevise(montantHT, detailData.devise)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
                     <span>{t("devis.remiseGlobale")}</span>
@@ -1636,7 +1645,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       (account.tax-like) via la colonne "Taxes" ci-dessus — ce total n'est
                       qu'un récapitulatif de ce que l'ensemble des lignes applique. */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
-                    <span>{t("devis.montantTaxes")}</span><span>{fmtMoney(montantTaxe)}</span>
+                    <span>{t("devis.montantTaxes")}</span><span>{enDevise(montantTaxe, detailData.devise)}</span>
                   </div>
                   {modifiable && (
                     <div style={{ textAlign: 'right', marginTop: 4, marginBottom: 4 }}>
@@ -1647,7 +1656,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
                     <span>{t("common.total")}</span>
-                    <span>{detailData.devise && detailData.devise !== deviseEntreprise ? previewMoney(locale, detailData.devise, detailData.total) : fmtMoney(detailData.total)}</span>
+                    <span>{enDevise(detailData.total, detailData.devise)}</span>
                   </div>
                   {detailData.devise && detailData.devise !== deviseEntreprise && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: COLORS.inkSoft }}>
@@ -1671,7 +1680,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     {detailData.echeances.map(ech => (
                       <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtMoney(ech.montant)}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{enDevise(ech.montant, detailData.devise)}</div>
                           <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{t("devis.echeanceDate", { date: fmtDate(ech.dateEcheance) })}</div>
                         </div>
                         {ech.statut === 'Payé' ? (

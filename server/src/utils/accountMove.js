@@ -443,10 +443,17 @@ export async function enregistrerPaiementMove(client, { moveId, entrepriseId, us
   const comptePartenaire = await compteParType(client, entrepriseId, estVente ? 'asset_receivable' : 'liability_payable', estVente ? '121000' : '211000');
 
   const payMoveName = await prochainNumeroJournal(client, payJournal.id, entrepriseId, pdate, {});
+  // `montant` (donc amount_total) est dans la devise DU DOCUMENT réglé, alors que les lignes
+  // ci-dessous sont en devise entreprise. Sans porter la devise sur le move, amount_total se
+  // lirait comme un montant en devise entreprise (MOVE_COLUMNS retombe sur celle de
+  // l'entreprise quand devise est NULL) — 100 € s'afficheraient « 100 F CFA ». On mémorise
+  // aussi le taux réellement appliqué à ce règlement (celui du jour du paiement, qui peut
+  // différer du taux figé de la facture — c'est précisément l'écart de change de l'étape 4).
   const pm = await client.query(
-    `INSERT INTO account_move (entreprise_id, journal_id, move_type, state, name, date, partner_id, ref, amount_total, user_id)
-     VALUES ($1,$2,'entry','posted',$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [entrepriseId, payJournal.id, payMoveName, pdate, mv.partnerId, ref || `Règlement ${mv.name}`, montant, userId || null]
+    `INSERT INTO account_move (entreprise_id, journal_id, move_type, state, name, date, partner_id, ref, amount_total, user_id, devise, invoice_currency_rate)
+     VALUES ($1,$2,'entry','posted',$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [entrepriseId, payJournal.id, payMoveName, pdate, mv.partnerId, ref || `Règlement ${mv.name}`, montant, userId || null,
+     mv.devise || null, tauxReglement]
   );
   const payMoveId = pm.rows[0].id;
 

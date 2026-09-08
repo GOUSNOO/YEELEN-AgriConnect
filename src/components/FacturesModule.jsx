@@ -50,7 +50,13 @@ export default function FacturesModule() {
   // Multi-devise réel, étape 3 : une facture peut désormais être dans une devise différente
   // de l'entreprise (héritée du devis d'origine) — affiche alors dans SA devise, pas celle
   // de l'entreprise par défaut (même patron que DevisModule).
-  const montantAffiche = (f) => (f.devise && f.devise !== deviseEntreprise ? fmtMoneyWith(locale, f.devise, f.amountTotal) : fmtMoney(f.amountTotal));
+  // `enDevise` est la brique de base : formate un montant dans la devise qu'il porte
+  // réellement. À n'utiliser QUE pour les montants stockés en devise du document (lignes,
+  // échéances, paiements, totaux de l'en-tête) — surtout PAS pour les colonnes débit/crédit
+  // des écritures comptables ni pour les résiduels de lignes, qui sont le grand livre et
+  // donc déjà en devise entreprise : les convertir réintroduirait le bug en sens inverse.
+  const enDevise = (montant, devise) => (devise && devise !== deviseEntreprise ? fmtMoneyWith(locale, devise, montant) : fmtMoney(montant));
+  const montantAffiche = (f) => enDevise(f.amountTotal, f.devise);
   const [factures, setFactures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtreState, setFiltreState] = useState('');
@@ -422,10 +428,10 @@ export default function FacturesModule() {
                           <tr key={l.id}>
                             <td>{l.name || '—'}</td>
                             <td className="num">{l.quantity}</td>
-                            <td className="num">{fmtMoney(l.priceUnit)}</td>
+                            <td className="num">{enDevise(l.priceUnit, detail.devise)}</td>
                             <td className="num">{l.discount ? `${l.discount} %` : ''}</td>
                             <td>{taxNoms.length ? taxNoms.map((n) => <span key={n} className="oe-tag">{n}</span>) : '—'}</td>
-                            <td className="num" style={{ fontWeight: 500 }}>{fmtMoney(l.priceTotal)}</td>
+                            <td className="num" style={{ fontWeight: 500 }}>{enDevise(l.priceTotal, detail.devise)}</td>
                           </tr>
                         );
                       })}
@@ -478,7 +484,7 @@ export default function FacturesModule() {
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{t('factures.echeances')}</div>
                   <table className="oe-list"><tbody>
                     {detail.echeances.map((e) => (
-                      <tr key={e.id}><td style={{ width: '40%' }}>{fmtDate(e.dateEcheance)}</td><td className="num" style={{ width: '40%' }}>{fmtMoney(e.montant)}</td><td style={{ width: '20%', color: e.statut === 'Payé' ? '#28a745' : 'inherit' }}>{e.statut}</td></tr>
+                      <tr key={e.id}><td style={{ width: '40%' }}>{fmtDate(e.dateEcheance)}</td><td className="num" style={{ width: '40%' }}>{enDevise(e.montant, detail.devise)}</td><td style={{ width: '20%', color: e.statut === 'Payé' ? '#28a745' : 'inherit' }}>{e.statut}</td></tr>
                     ))}
                   </tbody></table>
                 </div>
@@ -489,7 +495,7 @@ export default function FacturesModule() {
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{t('factures.paiements')}</div>
                   <table className="oe-list"><tbody>
                     {detail.paiements.map((p) => (
-                      <tr key={p.id}><td style={{ width: '45%' }}>{p.paymentMoveName || `#${p.id}`}</td><td style={{ width: '30%' }}>{p.paymentDate ? fmtDate(p.paymentDate) : ''}</td><td className="num" style={{ width: '25%' }}>{fmtMoney(p.amount)}</td></tr>
+                      <tr key={p.id}><td style={{ width: '45%' }}>{p.paymentMoveName || `#${p.id}`}</td><td style={{ width: '30%' }}>{p.paymentDate ? fmtDate(p.paymentDate) : ''}</td><td className="num" style={{ width: '25%' }}>{enDevise(p.amount, detail.devise)}</td></tr>
                     ))}
                   </tbody></table>
                 </div>

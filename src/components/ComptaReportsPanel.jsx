@@ -6,7 +6,7 @@ import {
   getPaiements, createPaiement, allocatePaiement, getContacts, getFactures,
   getUnallocatedCreditNotes, allocateCreditNote,
 } from '../lib/api.js';
-import { useLocale } from '../lib/locale.jsx';
+import { useLocale, fmtMoneyWith } from '../lib/locale.jsx';
 import { Card, Button, notifyError, notifySuccess } from './ui.jsx';
 
 const INK_SOFT = '#5B6357';
@@ -29,7 +29,12 @@ function Section({ titre, children, defaultOpen = false }) {
 
 export default function ComptaReportsPanel({ onChange }) {
   const { t } = useTranslation();
-  const { fmtMoney, fmtDate } = useLocale();
+  const { fmtMoney, fmtDate, locale, devise: deviseEntreprise } = useLocale();
+  // Une facture peut être libellée dans une devise étrangère : son amount_residual est alors
+  // dans CETTE devise. La balance âgée, elle, est convertie en devise entreprise côté serveur
+  // (elle agrège plusieurs factures), donc elle reste en fmtMoney — de même que les montants
+  // « à affecter », qui viennent des lignes du grand livre.
+  const enDevise = (montant, devise) => (devise && devise !== deviseEntreprise ? fmtMoneyWith(locale, devise, montant) : fmtMoney(montant));
   const [aged, setAged] = useState(null);
   const [overdue, setOverdue] = useState([]);
   const [paiements, setPaiements] = useState([]);
@@ -207,7 +212,7 @@ export default function ComptaReportsPanel({ onChange }) {
                     <td>{f.partnerName || '—'}</td>
                     <td>{f.invoiceDateDue ? fmtDate(f.invoiceDateDue) : '—'}</td>
                     <td style={{ color: '#B23B2E' }}>{t('comptaReports.daysLate', { n: f.daysOverdue })}</td>
-                    <td style={rAmt}>{fmtMoney(f.amountResidual)}</td>
+                    <td style={rAmt}>{enDevise(f.amountResidual, f.devise)}</td>
                     <td style={{ color: INK_SOFT }}>{f.relanceNiveau > 0 ? t('comptaReports.remindedShort', { n: f.relanceNiveau, date: fmtDate(f.derniereRelance) }) : '—'}</td>
                     <td><Button small variant="outline" disabled={busy} onClick={() => relancer(f.id)}>{t('comptaReports.markReminded')}</Button></td>
                   </tr>
@@ -261,7 +266,7 @@ export default function ComptaReportsPanel({ onChange }) {
                             <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.invoice')}
                               <select className="flat-input" value={allocForm.moveId} onChange={(e) => setAllocForm({ ...allocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
                                 <option value="">—</option>
-                                {facturesPartenaire.map((f) => <option key={f.id} value={f.id}>{f.name} · {fmtMoney(f.amountResidual)}</option>)}
+                                {facturesPartenaire.map((f) => <option key={f.id} value={f.id}>{f.name} · {enDevise(f.amountResidual, f.devise)}</option>)}
                               </select>
                             </label>
                             <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.amountOptional')}
@@ -308,7 +313,7 @@ export default function ComptaReportsPanel({ onChange }) {
                             <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.invoice')}
                               <select className="flat-input" value={cnAllocForm.moveId} onChange={(e) => setCnAllocForm({ ...cnAllocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
                                 <option value="">—</option>
-                                {cnFactures.map((f) => <option key={f.id} value={f.id}>{f.name} · {fmtMoney(f.amountResidual)}</option>)}
+                                {cnFactures.map((f) => <option key={f.id} value={f.id}>{f.name} · {enDevise(f.amountResidual, f.devise)}</option>)}
                               </select>
                             </label>
                             <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.amountOptional')}
