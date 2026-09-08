@@ -259,6 +259,75 @@ router.delete('/:id', authRequired, async (req, res) => {
 // append-only, voir server/src/utils/stockSync.js. stock_module n'est plus utilisé pour
 // filtrer ici (un id produits est désormais non-ambigu à lui seul, contrairement à avant
 // la fusion où le même id pouvait exister dans cultures_stocks ET poulailler_stocks).
+// ─── GET /api/produits/evolution-stock?module=&mois= ───
+// Valeur du stock a la fin de chacun des N derniers mois, reconstituee depuis stock_moves.
+// Remplace un graphique dont trois points sur quatre etaient fabriques (total actuel moins
+// 120, 80 puis 40) et presentes comme un historique reel.
+//
+// L'agregation est en VALEUR (quantite x cout), pas en quantite : un module melange des
+// kilos, des litres et des sacs, dont la somme brute ne veut rien dire. Les articles sans
+// cout renseigne comptent donc pour zero — leur nombre est renvoye dans sansCout pour que
+// l'ecran puisse le signaler plutot que de laisser croire a un stock qui vaut moins.
+//
+// Methode : on part de la valeur actuelle et on remonte le temps en defaisant les
+// mouvements 'fait' posterieurs a chaque fin de mois. Un mouvement compte comme entree
+// quand sa destination est un emplacement interne, comme sortie quand sa source l'est
+// (un transfert interne->interne se compense de lui-meme).
+router.get('/evolution-stock', authRequired, async (req, res) => {
+  const { module } = req.query;
+  const mois = Math.min(24, Math.max(2, Number(req.query.mois) || 6));
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) {
+    return res.status(400).json({ error: 'Module invalide (Cultures, Poulailler ou Pisciculture).' });
+  }
+  try {
+    const actuel = await pool.query(
+      `SELECT COALESCE(SUM(quantite * COALESCE(cout, 0)), 0)::float8 AS valeur,
+              COUNT(*) FILTER (WHERE cout IS NULL AND quantite <> 0)::int AS "sansCout"
+       FROM produits WHERE entreprise_id = $1 AND module = $2`,
+      [req.user.entrepriseId, module]
+    );
+
+    // Variation de valeur par mois, du plus recent au plus ancien.
+    const deltas = await pool.query(
+      `SELECT to_char(date_trunc('month', COALESCE(m.date_fait, m.created_at)), 'YYYY-MM') AS mois,
+              COALESCE(SUM(
+                m.quantite * COALESCE(p.cout, 0) *
+                (CASE WHEN dest.type = 'interne' THEN 1 ELSE 0 END
+                 - CASE WHEN src.type = 'interne' THEN 1 ELSE 0 END)
+              ), 0)::float8 AS delta
+       FROM stock_moves m
+       JOIN produits p ON p.id = m.produit_id
+       JOIN emplacements_stock src ON src.id = m.emplacement_source_id
+       JOIN emplacements_stock dest ON dest.id = m.emplacement_dest_id
+       WHERE m.entreprise_id = $1 AND p.module = $2 AND m.state = 'fait'
+       GROUP BY 1`,
+      [req.user.entrepriseId, module]
+    );
+    const parMois = new Map(deltas.rows.map((r) => [r.mois, r.delta]));
+
+    // On construit les N mois en partant du mois courant, puis on remonte : la valeur a la
+    // fin du mois precedent est celle du mois courant moins ce qui a bouge pendant celui-ci.
+    const points = [];
+    const curseur = new Date();
+    let valeur = actuel.rows[0].valeur;
+    for (let k = 0; k < mois; k++) {
+      const cle = curseur.toISOString().slice(0, 7);
+      points.push({ mois: cle, valeur: Math.round(valeur * 100) / 100 });
+      valeur -= parMois.get(cle) || 0;
+      curseur.setMonth(curseur.getMonth() - 1);
+    }
+
+    return res.json({
+      module,
+      points: points.reverse(),
+      sansCout: actuel.rows[0].sansCout,
+    });
+  } catch (err) {
+    console.error('[GET /produits/evolution-stock]', err);
+    return res.status(500).json({ error: "Erreur lors du calcul de l'evolution du stock." });
+  }
+});
+
 router.get('/:id/mouvements', authRequired, async (req, res) => {
   try {
     const result = await pool.query(

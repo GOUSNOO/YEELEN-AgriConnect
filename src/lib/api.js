@@ -246,6 +246,11 @@ export async function deleteCulturesMouvement(id, payload) {
 // Produits (Cultures + Poulailler unifiés, 2026-08-18 — remplace les anciens
 // get/create/update/deletePoulaillerStock(s)/CulturesStock(s) séparés)
 // ─────────────────────────────────────────────────────────────────────
+export async function getEvolutionStock(module, mois) {
+  const q = mois ? `&mois=${mois}` : '';
+  return request(`/produits/evolution-stock?module=${encodeURIComponent(module)}${q}`, { method: 'GET' });
+}
+
 export async function getProduits(module) {
   return request(module ? `/produits?module=${encodeURIComponent(module)}` : '/produits');
 }

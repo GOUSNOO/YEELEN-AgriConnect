@@ -3370,3 +3370,69 @@ systématique qu'un test échoue bien sans son correctif, sans quoi il ne garant
 2 nouveaux tests frontend (`ui.test.jsx`) → **105/105**, build et `oxlint` (0 erreur) verts.
 Pas de vérification navigateur dédiée pour ce correctif : le libellé produit a été contrôlé
 directement (`8 sept.` en fr-FR, `Sep 8` en en-US) plutôt qu'en recréant une entreprise de test.
+
+### 2026-09-09 — Chasse aux chiffres faux : agrégations, données fabriquées
+
+Passe d'audit demandée dans la veine du correctif multi-devise de la veille : chercher des
+calculs faux plutôt que des bugs visibles. Quatre constats, dont un identique à celui déjà
+corrigé — ailleurs, et sur des écrans plus exposés.
+
+**1. Le ledger des ventes additionnait des devises différentes (6 écrans).**
+`GET /api/devis/ledger` renvoyait `prix_unitaire` brut, c'est-à-dire dans la devise DU DEVIS.
+Or il alimente tout ce qui somme des ventes : **Rapports** (et son export CSV + son PDF
+imprimé), l'onglet **Comptabilité** des trois modules, l'**Analyse des ventes**, les
+**Prévisions** et l'**Assistant IA** (dépense par client → « meilleur client » faussé). Une
+ligne à 25 € y était comptée comme 25 F CFA. Le ledger expose désormais `devise`,
+`tauxChange`, `montant` (devise d'origine, pour l'affichage ligne à ligne) et
+`montantDeviseEntreprise` — seule valeur sommable ; un helper `montantLigneEntreprise` côté
+frontend remplace les 9 calculs concernés. Les achats sont volontairement inchangés :
+`achats_documents` n'a pas de colonne devise, ils sont toujours en devise entreprise.
+*Vérifié en conditions réelles* (un devis de 250 € + un de 2 000 XOF) : l'ancien calcul donnait
+2 250, le nouveau 165 989,10, et l'écran Rapports affiche bien 165 989 F CFA.
+
+**2. Les « Prévisions » n'en étaient pas.** Le module multipliait le mois COURANT par des
+coefficients figés (×1,08 ventes, ×1,05 dépenses, ×1,1 récoltes, ×0,9 aliment) tout en
+annonçant « basées sur les tendances récentes ». Pire, sa note affirmait que l'humidité des
+parcelles et le chiffre d'affaires client « servent à ajuster la projection » alors qu'aucun
+des deux n'entrait dans le moindre calcul. Remplacé (choix explicite de l'utilisateur) par une
+moyenne des **mois révolus réellement enregistrés** — le mois courant est exclu parce
+qu'incomplet, et seuls les mois porteurs de données comptent dans la moyenne, sinon trois mois
+dont deux vides donneraient une projection deux fois trop basse. Sans aucun mois révolu, le
+module le dit au lieu d'afficher des zéros. L'indicateur « consommation d'aliments prévue »
+(stock actuel × 0,9) est supprimé : rien ne mesure la consommation, il n'y avait pas de base
+pour le calculer. La note est reformulée en contexte assumé (« ces chiffres sont indicatifs,
+ils n'entrent pas dans le calcul »). *Vérifié* : avec 300 000/200 000 de ventes et
+50 000/100 000 de dépenses sur les deux mois précédents, l'écran affiche 250 000 / 75 000 /
+175 000 et annonce « moyenne des 2 derniers mois révolus ».
+
+**3. « Évolution du stock » était un graphique inventé.** Trois de ses quatre points étaient
+fabriqués en soustrayant 120, 80 puis 40 du total actuel — une progression régulière qui n'a
+jamais eu lieu, présentée sans rien qui la distingue d'une donnée réelle (contrairement aux
+capteurs simulés, eux assumés). Remplacé par une vraie reconstitution serveur
+(`GET /api/produits/evolution-stock`) depuis `stock_moves` : on part de la valeur actuelle et
+on remonte le temps en défaisant les mouvements `fait` postérieurs à chaque fin de mois.
+**L'axe passe en VALEUR (quantité × coût)** parce qu'un module mélange kilos, litres et sacs,
+dont la somme brute ne veut rien dire — ce qui règle du même coup le constat 4 ci-dessous pour
+cet écran. Les articles sans coût comptent pour zéro et leur nombre est affiché, plutôt que de
+laisser croire à un stock qui vaut moins.
+
+**4. Défauts mineurs.** Le filtre `categorie === 'Aliment'` de l'Assistant IA était une égalité
+stricte sur un libellé semé par défaut, alors que les catégories sont configurables depuis la
+fusion du catalogue : renommer la catégorie renvoyait 0 sans que rien ne le signale. Assoupli
+en « commence par aliment », casse et espaces ignorés.
+
+**Piège rencontré, à retenir** : les requêtes SQL de ce projet vivent dans des template
+literals JS. Mettre un identifiant entre backticks dans un commentaire SQL (`-- ... `champ` ...`)
+ferme la chaîne et casse le module — l'erreur remonte sous forme d'un `SyntaxError` de Jest sur
+un fichier de test qui, lui, est valide. Un fichier de sonde minimal a permis de localiser la
+vraie source en une passe.
+
+**Tests** : +2 d'intégration (`ventesLedger.test.js` : montant converti, brut conservé pour
+l'affichage, et assertion explicite que la somme brute — l'ancien calcul — diffère du total
+correct) et +4 (`evolutionStock.test.js` : reconstitution mois par mois, articles sans coût,
+bornes et validation, isolation) → **358/358**. Frontend 105/105, build et `oxlint` (0 erreur)
+verts. Vérifié en navigateur réel sur une entreprise jetable (deux clients, l'un facturé en
+EUR, l'autre en devise entreprise), supprimée ensuite.
+
+**Non traité, repéré en passant** : sur l'écran Rapports, la période « Journalier » affiche 0
+alors que les ventes datent du jour — `matchesPeriod` mérite un coup d'œil.

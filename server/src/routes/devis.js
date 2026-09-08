@@ -321,9 +321,21 @@ router.get('/ledger', authRequired, async (req, res) => {
       `SELECT dl.id, d.date, dl.produit,
               COALESCE(NULLIF(TRIM(CONCAT(c.prenom, ' ', c.nom)), ''), c.nom, 'Client') AS partenaire,
               dl.quantite::float8 AS quantite,
-              dl.prix_unitaire::float8 AS "prixUnitaire"
+              dl.prix_unitaire::float8 AS "prixUnitaire",
+              -- Multi-devise : les lignes de devis sont dans la devise DU DEVIS. Ce ledger
+              -- alimente des écrans qui SOMMENT plusieurs devis entre eux (Rapports,
+              -- Comptabilité de chaque module, Analyse des ventes) : sans montant converti,
+              -- ils additionnaient des euros à des francs CFA. "montant" reste dans la devise
+              -- d'origine pour l'affichage ligne à ligne, "montantDeviseEntreprise" est la
+              -- seule valeur à utiliser pour un total.
+              COALESCE(d.devise, e.devise) AS devise,
+              COALESCE(d.taux_change, 1)::float8 AS "tauxChange",
+              ROUND(dl.quantite * dl.prix_unitaire, 2)::float8 AS montant,
+              ROUND(dl.quantite * dl.prix_unitaire * COALESCE(d.taux_change, 1), 2)::float8
+                AS "montantDeviseEntreprise"
        FROM devis_lignes dl
        JOIN devis d ON d.id = dl.devis_id
+       JOIN entreprises e ON e.id = d.entreprise_id
        LEFT JOIN contacts c ON c.id = d.client_id
        WHERE d.entreprise_id = $1 AND d.statut NOT IN ('Brouillon', 'Annulé') AND dl.type = 'produit'
        ORDER BY d.date DESC, dl.ordre ASC`,

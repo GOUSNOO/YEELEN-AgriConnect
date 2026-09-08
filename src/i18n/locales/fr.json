@@ -325,7 +325,10 @@
     "hideCategories": "Masquer les catégories",
     "newCategorie": "Nouvelle catégorie",
     "categorieParentNone": "Aucune catégorie parente",
-    "stockEvolution": "Évolution du stock",
+    "stockEvolution": "Valeur du stock",
+    "stockEvolutionAide": "Valeur des articles en stock à la fin de chacun des 6 derniers mois, reconstituée depuis les mouvements enregistrés.",
+    "stockEvolutionVide": "Pas encore de mouvement de stock enregistré.",
+    "stockEvolutionSansCout": "{{count}} article(s) sans coût renseigné ne sont pas comptés dans cette valeur.",
     "emptyTable": "Aucun article en stock pour l'instant.",
     "stockLow": "Stock bas ({{seuil}})",
     "historiqueTitle": "Historique des mouvements",
@@ -1581,14 +1584,15 @@
   "forecast": {
     "loading": "Préparation des prévisions…",
     "title": "Prévisions de performance",
-    "subtitle": "Basées sur les tendances récentes et les données enregistrées.",
+    "subtitle": "Moyenne des {{count}} dernier(s) mois révolu(s) réellement enregistré(s). Le mois en cours est exclu car incomplet.",
     "nextSales": "Ventes prévues",
     "nextExpenses": "Dépenses prévues",
     "nextHarvests": "Récoltes prévues",
-    "nextFeed": "Consommation d'aliments prévue",
     "nextProfit": "Bénéfice prévu",
     "noteTitle": "Note de prévision",
-    "note": "L'humidité moyenne des parcelles est de {{humidity}}% et les clients ont déjà généré {{clientSpend}} de chiffre d'affaires historique. Ces éléments servent à ajuster la projection du mois prochain."
+    "pasAssezDeDonnees": "Pas encore assez d'historique pour projeter : aucune donnée sur les mois révolus. Les prévisions apparaîtront après un premier mois complet d'activité.",
+    "noteSansParcelle": "Pour situer le contexte : les ventes enregistrées représentent {{clientSpend}} au total. Ce chiffre est indicatif, il n'entre pas dans le calcul ci-dessus.",
+    "note": "Pour situer le contexte : l'humidité moyenne des parcelles est de {{humidity}}% et les ventes enregistrées représentent {{clientSpend}} au total. Ces deux chiffres sont indicatifs, ils n'entrent pas dans le calcul ci-dessus."
   },
   "reports": {
     "loading": "Préparation du rapport…",

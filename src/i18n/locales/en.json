@@ -325,7 +325,10 @@
     "hideCategories": "Hide categories",
     "newCategorie": "New category",
     "categorieParentNone": "No parent category",
-    "stockEvolution": "Stock trend",
+    "stockEvolution": "Stock value",
+    "stockEvolutionAide": "Value of items in stock at the end of each of the last 6 months, rebuilt from recorded movements.",
+    "stockEvolutionVide": "No stock movement recorded yet.",
+    "stockEvolutionSansCout": "{{count}} item(s) with no cost set are not included in this value.",
     "emptyTable": "No items in stock yet.",
     "stockLow": "Low stock ({{seuil}})",
     "historiqueTitle": "Movement history",
@@ -1581,14 +1584,15 @@
   "forecast": {
     "loading": "Preparing forecasts…",
     "title": "Performance forecasts",
-    "subtitle": "Based on recent trends and recorded data.",
+    "subtitle": "Average of the last {{count}} completed month(s) actually recorded. The current month is excluded as incomplete.",
     "nextSales": "Forecast sales",
     "nextExpenses": "Forecast expenses",
     "nextHarvests": "Forecast harvests",
-    "nextFeed": "Forecast feed consumption",
     "nextProfit": "Forecast profit",
     "noteTitle": "Forecast note",
-    "note": "The average plot moisture is {{humidity}}% and customers have already generated {{clientSpend}} in historical revenue. These figures help adjust next month's projection."
+    "pasAssezDeDonnees": "Not enough history to forecast yet: no data on completed months. Forecasts will appear after a first full month of activity.",
+    "noteSansParcelle": "For context: recorded sales total {{clientSpend}}. This figure is indicative and does not feed the calculation above.",
+    "note": "For context: average plot humidity is {{humidity}}% and recorded sales total {{clientSpend}}. Both figures are indicative and do not feed the calculation above."
   },
   "reports": {
     "loading": "Preparing report…",

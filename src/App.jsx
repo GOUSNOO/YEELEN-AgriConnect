@@ -21,7 +21,8 @@ import {
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique, generatePlanning,
   getCulturesMouvements,
-  getProduits, createProduit, updateProduit, deleteProduit, getProduitMouvements,
+  getProduits, createProduit, updateProduit, deleteProduit,
+  getEvolutionStock, getProduitMouvements,
   getProduitLots, createProduitLot, updateProduitLot, deleteProduitLot, getLotsPerimes,
   getProduitCategories, createProduitCategorie, deleteProduitCategorie,
   getUnitesMesure,
@@ -384,6 +385,17 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
 // simplement pas au coût total, comme dans un ERP de référence (une ligne de service sans coût n'entre pas
 // dans le calcul non plus) — retourne null si aucune ligne n'a de coût connu, pour ne rien
 // afficher plutôt qu'une marge trompeuse basée sur un total partiel.
+// Montant d une ligne du ledger des ventes (GET /devis/ledger), TOUJOURS en devise
+// entreprise : les lignes de devis sont stockees dans la devise de LEUR devis, donc
+// quantite x prix ne peut pas etre somme entre plusieurs devis. Le serveur fournit
+// montantDeviseEntreprise pour cela ; le repli couvre les lignes d achats (jamais en
+// devise etrangere, achats_documents n a pas de colonne devise) et toute reponse
+// anterieure a ce champ.
+function montantLigneEntreprise(l) {
+  if (l && l.montantDeviseEntreprise != null) return Number(l.montantDeviseEntreprise);
+  return (Number(l && l.quantite) || 0) * (Number(l && l.prixUnitaire) || 0);
+}
+
 function computeMarge(devis, catalogItems) {
   if (!devis || !Array.isArray(devis.lignes)) return null;
   let coutTotal = 0;
@@ -2040,7 +2052,7 @@ function VentesAnalyseTab() {
     })();
   }, []);
 
-  const total = mouvements.reduce((s, m) => s + Number(m.quantite) * Number(m.prixUnitaire), 0);
+  const total = mouvements.reduce((s, m) => s + montantLigneEntreprise(m), 0);
 
   return (
     <Card>
@@ -2071,7 +2083,7 @@ function VentesAnalyseTab() {
                   <td>{m.produit}</td>
                   <td>{m.partenaire}</td>
                   <td>{m.quantite}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(Number(m.quantite) * Number(m.prixUnitaire))}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(montantLigneEntreprise(m))}</td>
                 </tr>
               ))}
             </tbody>
@@ -3089,14 +3101,24 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
     }
   };
 
-  const stockTotal = stocks.reduce((sum, item) => sum + item.quantite, 0);
-  const months = t('common.months', { returnObjects: true });
-  const stockEvolution = [
-    { label: months[0], value: Math.max(50, stockTotal - 120) },
-    { label: months[1], value: Math.max(60, stockTotal - 80) },
-    { label: months[2], value: Math.max(70, stockTotal - 40) },
-    { label: months[3], value: stockTotal },
-  ];
+  // Évolution réelle de la VALEUR du stock, reconstituée côté serveur depuis stock_moves.
+  // Avant, trois des quatre points étaient fabriqués (total actuel moins 120, 80 puis 40)
+  // et affichés comme un historique ; l'axe est passé en valeur parce qu'un module mélange
+  // des kilos, des litres et des sacs, dont la somme brute ne veut rien dire.
+  const [evolution, setEvolution] = useState(null);
+  useEffect(() => {
+    let vivant = true;
+    getEvolutionStock(moduleType, 6)
+      .then((d) => { if (vivant) setEvolution(d); })
+      .catch(() => { if (vivant) setEvolution(null); });
+    return () => { vivant = false; };
+  }, [moduleType, stocks.length]);
+  const moisCourts = t('common.months', { returnObjects: true });
+  const stockEvolution = (evolution && evolution.points ? evolution.points : []).map((pt) => ({
+    id: pt.mois,
+    label: Array.isArray(moisCourts) ? moisCourts[Number(pt.mois.slice(5, 7)) - 1] : pt.mois,
+    value: pt.valeur,
+  }));
 
   if (!loaded) {
     return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('stocks.loading')}</div>;
@@ -3152,8 +3174,20 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       <OrdresTransformationPanel module={moduleType} />
       <HaccpPanel module={moduleType} />
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t('stocks.stockEvolution')}</div>
-        <MiniChart data={stockEvolution} color={COLORS.blue} />
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
+        <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginBottom: 6 }}>{t('stocks.stockEvolutionAide')}</div>
+        {stockEvolution.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('stocks.stockEvolutionVide')}</div>
+        ) : (
+          <>
+            <MiniChart data={stockEvolution} color={COLORS.blue} />
+            {evolution && evolution.sansCout > 0 && (
+              <div style={{ fontSize: 11.5, color: COLORS.ochre, marginTop: 6 }}>
+                {t('stocks.stockEvolutionSansCout', { count: evolution.sansCout })}
+              </div>
+            )}
+          </>
+        )}
       </Card>
       {lotsPerimes.length > 0 && (
         <Card style={{ background: COLORS.ochreSoft, border: `1px solid ${COLORS.ochre}`, fontSize: 13 }}>
@@ -3665,12 +3699,12 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
   const ventes = remoteVentes ? fetchedVentes : localVentes;
   const achats = remoteAchats ? fetchedAchats : localAchats;
 
-  const totalVentes = ventes.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
+  const totalVentes = ventes.reduce((s, r) => s + montantLigneEntreprise(r), 0);
   const totalAchats = achats.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
   const solde = totalVentes - totalAchats;
 
   const ledger = [
-    ...ventes.map(v => ({ ...v, type: 'Vente', montant: v.quantite * v.prixUnitaire })),
+    ...ventes.map(v => ({ ...v, type: 'Vente', montant: montantLigneEntreprise(v) })),
     ...achats.map(a => ({ ...a, type: 'Achat', montant: -(a.quantite * a.prixUnitaire) })),
   ].sort((a, b) => {
     const dateDiff = (parseDate(b.date)?.getTime() || 0) - (parseDate(a.date)?.getTime() || 0);
@@ -5753,13 +5787,19 @@ function AIAssistantModule({ farmId, activated }) {
         const revenues = currentMonthEntries.filter(e => !isDepenseEntry(e)).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
         const expenses = currentMonthEntries.filter(isDepenseEntry).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
         const benefit = revenues - expenses;
-        const foodStock = stocks.filter(item => item.categorie === 'Aliment').reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
+        // Les catégories sont configurables par entreprise depuis la fusion du catalogue :
+        // une égalité stricte sur « Aliment » (le libellé semé par défaut) renvoyait 0 dès
+        // que la catégorie était renommée, sans que rien ne le signale. On reconnaît donc
+        // toute catégorie dont le nom commence par « aliment », casse et espaces ignorés.
+        const estAliment = (c) => String(c || "").trim().toLowerCase().startsWith("aliment");
+        const foodStock = stocks.filter((item) => estAliment(item.categorie))
+          .reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
         const parcelsToWater = parcelles.filter(p => Number(p.humidite) < Number(p.seuil || 0));
 
         const spendByClient = new Map();
         ventes.forEach(v => {
           const nom = v.partenaire || 'Client';
-          const total = (Number(v.quantite) || 0) * (Number(v.prixUnitaire) || 0);
+          const total = montantLigneEntreprise(v);
           spendByClient.set(nom, (spendByClient.get(nom) || 0) + total);
         });
         const bestClient = [...spendByClient.entries()]
@@ -5877,40 +5917,75 @@ function ForecastingModule({ farmId, activated }) {
         const CATEGORIES_DEPENSES = ['Depenses diverses', 'Carburant', 'Salaire', 'Entretien'];
         const isDepenseEntry = (e) => CATEGORIES_DEPENSES.includes(e.categorie) || Number(e.montant) < 0;
 
-        const harvestTotal = harvests.reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
-        const avgHarvest = harvests.length > 0 ? harvestTotal / Math.max(1, harvests.length) : 100;
-        const feedStock = stocks.filter(item => item.categorie === 'Aliment').reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
-        const clientSpend = ventes.reduce((sum, v) => sum + (Number(v.quantite) || 0) * (Number(v.prixUnitaire) || 0), 0);
-        const monthlyFinance = financeEntries.filter(entry => {
-          const d = parseDate(entry.date);
-          if (!d) return true;
-          const now = new Date();
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-        });
-        const revenue = monthlyFinance.filter(e => !isDepenseEntry(e)).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
-        const expenses = monthlyFinance.filter(isDepenseEntry).reduce((sum, e) => sum + Math.abs(Number(e.montant) || 0), 0);
-        const avgParcelleHumidity = parcelles.length > 0
-          ? parcelles.reduce((sum, p) => sum + (Number(p.humidite) || 0), 0) / parcelles.length
-          : 40;
+        // Projection assise sur les mois RÉVOLUS réellement enregistrés, et non sur le mois
+        // en cours multiplié par un coefficient figé (×1,08 / ×1,05 / ×1,1) comme avant : le
+        // module annonçait « basées sur les tendances récentes » sans calculer la moindre
+        // tendance. Le mois courant est exclu de la base parce qu il est incomplet — l inclure
+        // tirerait mécaniquement la moyenne vers le bas selon le jour du mois.
+        const MOIS_BASE = 3;
+        const cleMois = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 0)}`;
+        const maintenant = new Date();
+        const clesBase = [];
+        for (let k = 1; k <= MOIS_BASE; k++) {
+          clesBase.push(cleMois(new Date(maintenant.getFullYear(), maintenant.getMonth() - k, 1)));
+        }
 
-        const nextSales = Math.max(0, revenue * 1.08);
-        const nextExpenses = Math.max(0, expenses * 1.05);
-        const nextHarvests = Math.max(0, avgHarvest * 1.1);
-        const nextFeed = Math.max(0, Math.round(feedStock * 0.9));
+        const financeParMois = new Map();
+        financeEntries.forEach((e) => {
+          const d = parseDate(e.date);
+          if (!d) return;
+          const cle = cleMois(d);
+          if (!financeParMois.has(cle)) financeParMois.set(cle, { revenus: 0, depenses: 0 });
+          const seau = financeParMois.get(cle);
+          const montant = Math.abs(Number(e.montant) || 0);
+          if (isDepenseEntry(e)) seau.depenses += montant;
+          else seau.revenus += montant;
+        });
+
+        const recoltesParMois = new Map();
+        harvests.forEach((h) => {
+          const d = parseDate(h.date);
+          if (!d) return;
+          const cle = cleMois(d);
+          recoltesParMois.set(cle, (recoltesParMois.get(cle) || 0) + (Number(h.quantite) || 0));
+        });
+
+        // On ne moyenne que sur les mois qui portent effectivement des données : trois mois
+        // dont deux vides donneraient une projection deux fois trop basse.
+        const moisFinance = clesBase.filter((c) => financeParMois.has(c));
+        const moisRecoltes = clesBase.filter((c) => recoltesParMois.has(c));
+        const moyenneFinance = (champ) => (moisFinance.length
+          ? moisFinance.reduce((s, c) => s + financeParMois.get(c)[champ], 0) / moisFinance.length
+          : 0);
+        const moyenneRecoltes = moisRecoltes.length
+          ? moisRecoltes.reduce((s, c) => s + recoltesParMois.get(c), 0) / moisRecoltes.length
+          : 0;
+
+        const nextSales = moyenneFinance("revenus");
+        const nextExpenses = moyenneFinance("depenses");
         const nextProfit = nextSales - nextExpenses;
 
+        // Contexte affiché tel quel : ce sont des faits, pas des entrées du calcul. La note
+        // précédente prétendait qu ils « servent à ajuster la projection », ce qui était faux.
+        const clientSpend = ventes.reduce((sum, v) => sum + montantLigneEntreprise(v), 0);
+        const avgParcelleHumidity = parcelles.length > 0
+          ? parcelles.reduce((sum, p) => sum + (Number(p.humidite) || 0), 0) / parcelles.length
+          : 0;
+
         setForecast({
+          moisFinance: moisFinance.length,
+          moisRecoltes: moisRecoltes.length,
           nextSales,
           nextExpenses,
-          nextHarvests,
-          nextFeed,
           nextProfit,
+          nextHarvests: moyenneRecoltes,
           avgParcelleHumidity,
           clientSpend,
+          aDesParcelles: parcelles.length > 0,
         });
       } catch (err) {
         console.error('[ForecastingModule]', err);
-        setForecast({ nextSales: 0, nextExpenses: 0, nextHarvests: 0, nextFeed: 0, nextProfit: 0, avgParcelleHumidity: 0, clientSpend: 0 });
+        setForecast({ moisFinance: 0, moisRecoltes: 0, nextSales: 0, nextExpenses: 0, nextProfit: 0, nextHarvests: 0, avgParcelleHumidity: 0, clientSpend: 0, aDesParcelles: false });
       }
       setLoaded(true);
     })();
@@ -5920,20 +5995,29 @@ function ForecastingModule({ farmId, activated }) {
     return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('forecast.loading')}</div>;
   }
 
+  // Aucune projection tant qu aucun mois révolu ne porte de données : mieux vaut le dire
+  // que d afficher des zéros qui passeraient pour une prévision.
+  const assezDeDonnees = forecast.moisFinance > 0;
   const items = [
     { label: t('forecast.nextSales'), value: fmtMoney(forecast.nextSales), tone: 'green' },
     { label: t('forecast.nextExpenses'), value: fmtMoney(forecast.nextExpenses), tone: 'red' },
-    { label: t('forecast.nextHarvests'), value: `${fmtNumber(forecast.nextHarvests)} kg`, tone: 'ochre' },
-    { label: t('forecast.nextFeed'), value: `${fmtNumber(forecast.nextFeed)} kg`, tone: 'blue' },
     { label: t('forecast.nextProfit'), value: fmtMoney(forecast.nextProfit), tone: forecast.nextProfit >= 0 ? 'green' : 'red' },
   ];
+  if (forecast.moisRecoltes > 0) {
+    items.push({ label: t('forecast.nextHarvests'), value: `${fmtNumber(forecast.nextHarvests)} kg`, tone: 'ochre' });
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>{t('forecast.title')}</div>
-        <div style={{ fontSize: 13.5, color: COLORS.inkSoft }}>{t('forecast.subtitle')}</div>
+        <div style={{ fontSize: 13.5, color: COLORS.inkSoft }}>
+          {assezDeDonnees
+            ? t('forecast.subtitle', { count: forecast.moisFinance })
+            : t('forecast.pasAssezDeDonnees')}
+        </div>
       </Card>
+      {assezDeDonnees && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
         {items.map(item => {
           const accent = item.tone === 'green' ? COLORS.green : item.tone === 'red' ? COLORS.red : item.tone === 'blue' ? COLORS.blue : COLORS.ochre;
@@ -5951,10 +6035,13 @@ function ForecastingModule({ farmId, activated }) {
           );
         })}
       </div>
+      )}
       <Card>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('forecast.noteTitle')}</div>
         <div style={{ fontSize: 13.5, color: COLORS.inkSoft, lineHeight: 1.6 }}>
-          {t('forecast.note', { humidity: forecast.avgParcelleHumidity.toFixed(0), clientSpend: fmtMoney(forecast.clientSpend) })}
+          {forecast.aDesParcelles
+            ? t('forecast.note', { humidity: forecast.avgParcelleHumidity.toFixed(0), clientSpend: fmtMoney(forecast.clientSpend) })
+            : t('forecast.noteSansParcelle', { clientSpend: fmtMoney(forecast.clientSpend) })}
         </div>
       </Card>
     </div>
@@ -6007,7 +6094,7 @@ function ReportsModule({ farmId, activated }) {
     return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('reports.loading')}</div>;
   }
 
-  const totalVentes = filtered.ventes.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
+  const totalVentes = filtered.ventes.reduce((s, r) => s + montantLigneEntreprise(r), 0);
   const totalAchats = filtered.achats.reduce((s, r) => s + r.quantite * r.prixUnitaire, 0);
   const totalRecoltes = filtered.recoltes.reduce((s, r) => s + (Number(r.quantite) || 0), 0);
   const benefice = totalVentes - totalAchats;
@@ -6016,7 +6103,7 @@ function ReportsModule({ farmId, activated }) {
     const printWindow = window.open('', '_blank', 'width=900,height=1000');
     if (!printWindow) return;
     const row = (cols) => `<tr>${cols.map(c => `<td>${c}</td>`).join('')}</tr>`;
-    const rowsVentes = filtered.ventes.map(r => row([fmtDate(r.date), r.partenaire, r.produit, r.quantite, fmtMoney(r.quantite * r.prixUnitaire)])).join('') || `<tr><td colspan="5">${t('reports.noVente')}</td></tr>`;
+    const rowsVentes = filtered.ventes.map(r => row([fmtDate(r.date), r.partenaire, r.produit, r.quantite, fmtMoney(montantLigneEntreprise(r))])).join('') || `<tr><td colspan="5">${t('reports.noVente')}</td></tr>`;
     const rowsAchats = filtered.achats.map(r => row([fmtDate(r.date), r.partenaire, r.produit, r.quantite, fmtMoney(r.quantite * r.prixUnitaire)])).join('') || `<tr><td colspan="5">${t('reports.noAchat')}</td></tr>`;
     const rowsRecoltes = filtered.recoltes.map(r => row([fmtDate(r.date), r.parcelle, r.culture, `${r.quantite} kg`])).join('') || `<tr><td colspan="4">${t('reports.noRecolte')}</td></tr>`;
     printWindow.document.write(`<!doctype html><html><head><title>${t('reports.pdfTitle', { period: periodLabel(period) })}</title>
@@ -6048,7 +6135,7 @@ function ReportsModule({ farmId, activated }) {
   const exportToExcel = () => {
     const rows = [
       [t('reports.csvType'), t('common.date'), t('reports.csvPartenaire'), t('reports.colProduit'), t('reports.colQuantite'), t('common.amount')],
-      ...filtered.ventes.map(r => [t('reports.csvRowVente'), r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
+      ...filtered.ventes.map(r => [t('reports.csvRowVente'), r.date, r.partenaire, r.produit, Number(r.quantite) || 0, montantLigneEntreprise(r)]),
       ...filtered.achats.map(r => [t('reports.csvRowAchat'), r.date, r.partenaire, r.produit, Number(r.quantite) || 0, Number(r.quantite) * Number(r.prixUnitaire) || 0]),
       ...filtered.recoltes.map(r => [t('reports.csvRowRecolte'), r.date, r.parcelle, r.culture, Number(r.quantite) || 0, '']),
     ];
