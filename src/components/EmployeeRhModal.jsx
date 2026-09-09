@@ -13,10 +13,12 @@ import {
   getActivites, createActivite, updateActivite, deleteActivite,
   getMessages, createMessage,
 } from '../lib/api.js';
-import { fmtMoney, fmtDate, useLocale } from '../lib/locale.jsx';
+import { fmtMoney, fmtDate, useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Badge, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Jour de l'entreprise, pas le jour UTC : un champ pré-rempli doit proposer la même date
+// que celle que le serveur retiendrait si on le laissait vide.
+const today = () => aujourdhuiEntreprise();
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const fr = (d) => (d ? fmtDate(d) : '—');
 const fcfa = (n) => fmtMoney(Number(n || 0));

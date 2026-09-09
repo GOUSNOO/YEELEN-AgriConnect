@@ -7,7 +7,7 @@ import {
   verifyFactureHash, reverseFacture, getContacts, getTaxes,
 } from '../lib/api.js';
 import { taxesLigneCalc } from '../lib/taxes.js';
-import { useLocale, fmtMoneyWith } from '../lib/locale.jsx';
+import { useLocale, fmtMoneyWith, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
@@ -38,7 +38,10 @@ function MoveStatusBar({ state }) {
 // Annotation d'échéance façon widget remaining_days d'Odoo (« J+3 » / « 5 j de retard »).
 function echeanceLabel(dateStr, t) {
   if (!dateStr) return '—';
-  const j = Math.round((new Date(dateStr) - new Date(new Date().toISOString().slice(0, 10))) / 864e5);
+  // « Aujourd'hui » se juge dans le fuseau de l'entreprise, comme le fait le serveur pour
+  // décider qu'une facture est en retard : sinon la même facture s'affiche « à échoir » ici
+  // et « en retard » dans la balance âgée, selon l'heure et le fuseau du navigateur.
+  const j = Math.round((new Date(dateStr) - new Date(aujourdhuiEntreprise())) / 864e5);
   if (j < 0) return t('factures.dueLate', { n: -j });
   if (j === 0) return t('factures.dueToday');
   return t('factures.dueIn', { n: j });

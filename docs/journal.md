@@ -3582,3 +3582,45 @@ Entreprise supprimée ensuite.
 
 **Limite connue** : un fuseau reste global à l'entreprise. Une exploitation à cheval sur deux
 fuseaux daterait tout dans celui qu'elle a choisi — cas jugé théorique, non traité.
+
+### 2026-09-09 — Fuseau, suite : les dates posées côté client court-circuitaient le serveur
+
+Reprise de la « limite » laissée par l'entrée précédente (« une exploitation à cheval sur deux
+fuseaux daterait tout dans celui qu'elle a choisi »). En cherchant comment la traiter, le
+constat a changé de nature : **ce cas est déjà couvert** — 12 des 18 dates de pièces acceptent
+une date explicite (`COALESCE($n, date_entreprise(...))`), les 6 autres étant des dates système
+(relance, paiement d'abonnement, comparaison d'échéance) où une saisie n'aurait pas de sens, et
+l'interface expose 39 champs date. Une opération faite dans un autre fuseau se date donc à la
+main. Le fuseau de l'entreprise ne fixe que le **défaut**.
+
+**Mais en vérifiant ce défaut, un vrai reliquat est apparu**, plus concret que le cas théorique
+de départ : plusieurs endroits du client posaient une date avec
+`new Date().toISOString().slice(0, 10)`, c'est-à-dire le jour **UTC du navigateur** — ni le
+fuseau de l'entreprise, ni même le jour local de l'utilisateur.
+
+- **`AchatModule` envoyait cette date explicitement**, écrasant donc le `date_entreprise()` que
+  le serveur venait d'apprendre à poser : la correction serveur était court-circuitée pour tous
+  les achats créés depuis l'UI. Corrigé en **cessant d'envoyer la date** — sans elle, la route
+  applique son défaut, qui est la source qui fait autorité. (À noter : cette ligne venait du
+  correctif du 2026-08-13, qui avait remplacé un `toLocaleDateString('fr-FR')` produisant du
+  `JJ/MM/AAAA` mal interprété par Postgres ; le format avait été corrigé, le fuseau non.)
+- **Champs pré-remplis** (`EmployeeRhModal`, `MonEspaceRh`, `RegistreIntrantsView`) : ils
+  proposaient une date qui pouvait différer de celle que le serveur aurait retenue. Nouveau
+  helper `aujourdhuiEntreprise()` dans `lib/locale.jsx`.
+- **`FacturesModule`** calculait « J+n » / « n j de retard » contre le jour UTC : la même
+  facture pouvait s'afficher « à échoir » dans la liste et « en retard » dans la balance âgée.
+
+**Tests** : 2 tests frontend supplémentaires sur `aujourdhuiEntreprise` (dont un qui fige
+`Date` à un instant où Paris et Honolulu ne sont pas le même jour) → **115 tests frontend**,
+build et `oxlint` (0 erreur) verts.
+
+**Vérifié en conditions réelles**, entreprise réglée sur `Pacific/Honolulu` : le champ date du
+registre des intrants s'est pré-rempli au **2026-09-08**, alors que le navigateur était au
+**2026-09-09** en local comme en UTC. Avant le correctif, il aurait proposé une date en avance
+d'un jour sur la réalité de l'exploitation. Entreprise supprimée ensuite.
+
+**Note d'outillage** : `form_input` du navigateur intégré écrit la valeur dans le DOM sans
+déclencher le `onChange` de React ; l'état du composant reste vide et le formulaire de
+connexion, qui refuse silencieusement une saisie vide, ne se soumettait pas — symptôme
+trompeur, sans rapport avec l'application (l'API répondait 200). Contourné en posant le token
+en `localStorage` puis en rechargeant, ce que fait déjà la restauration de session.

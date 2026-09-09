@@ -6,7 +6,7 @@ import {
   getParcelles, getProduits,
 } from '../lib/api.js';
 import { Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { useLocale } from '../lib/locale.jsx';
+import { useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
 
 const INK_SOFT = '#5B6357';
 const BORDER = '#E2E8F0';
@@ -15,7 +15,7 @@ const OCHRE_SOFT = '#F2EECC';
 const RED = '#E53E3E';
 
 const emptyForm = {
-  parcelleId: '', produitId: '', dateApplication: new Date().toISOString().slice(0, 10),
+  parcelleId: '', produitId: '', dateApplication: aujourdhuiEntreprise(),
   dose: '', doseUnite: 'L/ha', surfaceTraiteeHa: '', quantiteUtilisee: '',
   operateur: '', cible: '', zntRespectee: true, notes: '',
 };

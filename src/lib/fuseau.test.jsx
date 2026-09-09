@@ -1,4 +1,4 @@
-import { jourEntreprise, setLocaleConfigGlobal, DEFAULT_LOCALE_CONFIG } from './locale.jsx';
+import { jourEntreprise, aujourdhuiEntreprise, setLocaleConfigGlobal, DEFAULT_LOCALE_CONFIG } from './locale.jsx';
 
 beforeEach(() => setLocaleConfigGlobal(DEFAULT_LOCALE_CONFIG));
 
@@ -36,5 +36,36 @@ describe('jourEntreprise', () => {
 
   test('accepte une chaîne ISO comme un objet Date', () => {
     expect(jourEntreprise('2026-09-08T23:30:00Z', 'Europe/Paris')).toBe('2026-09-09');
+  });
+});
+
+// Pré-remplissage des champs date. `new Date().toISOString().slice(0, 10)` — le motif qui
+// traînait dans plusieurs formulaires — donne le jour UTC, qui n'est ni celui de l'entreprise
+// ni celui de l'utilisateur : à Honolulu il est en avance d'un jour toute la journée, à Paris
+// il est en retard d'un jour en soirée.
+describe('aujourdhuiEntreprise', () => {
+  test('suit le fuseau de l entreprise, pas UTC', () => {
+    const vrai = Date;
+    // 8 septembre 23h30 UTC : le 9 à Paris, encore le 8 à Honolulu.
+    const fige = new Date('2026-09-08T23:30:00Z');
+    global.Date = class extends vrai {
+      constructor(...args) { return args.length ? new vrai(...args) : fige; }
+      static now() { return fige.getTime(); }
+    };
+    try {
+      setLocaleConfigGlobal({ fuseau: 'UTC' });
+      expect(aujourdhuiEntreprise()).toBe('2026-09-08');
+      setLocaleConfigGlobal({ fuseau: 'Europe/Paris' });
+      expect(aujourdhuiEntreprise()).toBe('2026-09-09');
+      setLocaleConfigGlobal({ fuseau: 'Pacific/Honolulu' });
+      expect(aujourdhuiEntreprise()).toBe('2026-09-08');
+    } finally {
+      global.Date = vrai;
+    }
+  });
+
+  test('renvoie toujours une date au format AAAA-MM-JJ', () => {
+    setLocaleConfigGlobal(DEFAULT_LOCALE_CONFIG);
+    expect(aujourdhuiEntreprise()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

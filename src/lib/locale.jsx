@@ -47,6 +47,14 @@ export function jourEntreprise(d, fuseau) {
   }
 }
 
+// Jour d'aujourd'hui vu depuis le fuseau de l'entreprise, au format AAAA-MM-JJ. À utiliser
+// pour pré-remplir un champ date : `new Date().toISOString().slice(0, 10)` donne le jour
+// UTC, qui n'est ni celui de l'entreprise ni même celui de l'utilisateur — en soirée à
+// Paris comme toute la journée à Honolulu, il désigne un autre jour que celui vécu.
+export function aujourdhuiEntreprise() {
+  return jourEntreprise(new Date()) || new Date().toISOString().slice(0, 10);
+}
+
 const isBlank = (v) => v == null || v === '' || Number.isNaN(Number(v));
 
 export function fmtNumber(n, opts) {

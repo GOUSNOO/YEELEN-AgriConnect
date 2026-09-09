@@ -2286,7 +2286,6 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       fournisseurId: form.fournisseurId === '__autre__' ? null : Number(form.fournisseurId),
       fournisseurNom: supplierName,
       notes: form.notes,
-      date: new Date().toISOString().slice(0, 10),
       lignes: form.lignes.map(l => ({
         produit: l.produit,
         quantite: Number(l.quantite),
@@ -2383,7 +2382,6 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       fournisseurId: editForm.fournisseurId === '__autre__' ? null : Number(editForm.fournisseurId),
       fournisseurNom: editSupplierName,
       notes: editForm.notes,
-      date: new Date().toISOString().slice(0, 10),
       lignes: editForm.lignes.map(l => ({
         produit: l.produit,
         quantite: Number(l.quantite),

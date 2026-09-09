@@ -6,10 +6,11 @@ import {
   getSalarieConges, createSalarieConge2, deleteSalarieConge,
   getSalarieCongesSolde, getSalarieAvances, getSalarieBulletin, getCongesTypes,
 } from '../lib/api.js';
-import { fmtMoney, fmtDate } from '../lib/locale.jsx';
+import { fmtMoney, fmtDate, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Jour de l'entreprise, pas le jour UTC (voir aujourdhuiEntreprise dans lib/locale.jsx).
+const today = () => aujourdhuiEntreprise();
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const fr = (d) => (d ? fmtDate(d) : '—');
 const fcfa = (n) => fmtMoney(Number(n || 0));
