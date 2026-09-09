@@ -29,3 +29,8 @@ backups/
 
 # Sauvegardes locales de CLAUDE.md (pré-condensation, non versionnées)
 CLAUDE.md.bak
+
+# Outillage de session Claude Code (launch.json de prévisualisation, réglages locaux).
+# Si des skills ou commandes projet devaient un jour être partagées, les ré-autoriser
+# explicitement ici (ex. !.claude/skills/).
+.claude/
