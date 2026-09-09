@@ -6,6 +6,7 @@ import {
   getProduitTemplates, getProduitTemplate, createProduitTemplate, regenererVariantesTemplate, deleteProduitTemplate,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 // Gabarits/variantes + attributs (product.template / product.attribute-like) — étape 2 de
 // l'alignement Odoo produit/stock. Panneau repliable dans StocksTab, sur le modèle de
@@ -167,7 +168,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: '#22271D', padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('gabarits.title')} {loaded ? `(${templates.length})` : ''}
       </button>
 
@@ -182,16 +183,16 @@ export default function ProduitTemplatesPanel({ module, categories }) {
             </form>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {attributs.map((a) => (
-                <div key={a.id} style={{ border: '1px solid #E4E8DE', borderRadius: 8, padding: 10 }}>
+                <div key={a.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong>{a.nom}</strong>
-                    <button type="button" onClick={() => supprimerAttribut(a.id, a.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => supprimerAttribut(a.id, a.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
                     {a.valeurs.map((v) => (
-                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#F0F2EB', borderRadius: 999, padding: '3px 8px', fontSize: 12.5 }}>
+                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: 12.5 }}>
                         {v.valeur}
-                        <button type="button" onClick={() => supprimerValeur(v.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex', padding: 0 }}><Trash2 size={11} /></button>
+                        <button type="button" onClick={() => supprimerValeur(v.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex', padding: 0 }}><Trash2 size={11} /></button>
                       </span>
                     ))}
                     <input
@@ -205,7 +206,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                   </div>
                 </div>
               ))}
-              {attributs.length === 0 && <div style={{ color: '#5B6357', fontSize: 13 }}>{t('gabarits.aucunAttribut')}</div>}
+              {attributs.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('gabarits.aucunAttribut')}</div>}
             </div>
           </div>
 
@@ -222,7 +223,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
               </div>
               {attributs.some((a) => a.valeurs.length > 0) && (
                 <div>
-                  <div style={{ fontSize: 12.5, color: '#5B6357', marginBottom: 6 }}>{t('gabarits.selectionnerValeurs')}</div>
+                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginBottom: 6 }}>{t('gabarits.selectionnerValeurs')}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {attributs.filter((a) => a.valeurs.length > 0).map((a) => (
                       <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -230,7 +231,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                         {a.valeurs.map((v) => {
                           const selected = (tplForm.selection[a.id] || new Set()).has(v.id);
                           return (
-                            <label key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12.5, background: selected ? '#DCE7CE' : '#F0F2EB', borderRadius: 999, padding: '3px 8px', cursor: 'pointer' }}>
+                            <label key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12.5, background: selected ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', cursor: 'pointer' }}>
                               <input type="checkbox" checked={selected} onChange={() => toggleValeurSelection(a.id, v.id)} style={{ margin: 0 }} />
                               {v.valeur}
                             </label>
@@ -245,7 +246,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
             </form>
 
             <DataTable>
-              <thead><tr style={{ color: '#5B6357' }}>
+              <thead><tr style={{ color: COLORS.inkSoft }}>
                 <th>{t('gabarits.templateNom')}</th>
                 <th>{t('stocks.categorie')}</th>
                 <th>{t('gabarits.variantes')}</th>
@@ -256,27 +257,27 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                   <React.Fragment key={tpl.id}>
                     <tr>
                       <td>
-                        <button type="button" onClick={() => toggleDetail(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: '#22271D' }}>
+                        <button type="button" onClick={() => toggleDetail(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: COLORS.ink }}>
                           {expandedTemplateId === tpl.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {tpl.nom}
                         </button>
                       </td>
-                      <td style={{ color: '#5B6357' }}>{tpl.categorie}</td>
+                      <td style={{ color: COLORS.inkSoft }}>{tpl.categorie}</td>
                       <td>{tpl.nbVariantes}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <button type="button" title={t('gabarits.regenerer')} onClick={() => regenerer(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex' }}><RefreshCw size={14} /></button>
-                          <button type="button" onClick={() => supprimerGabarit(tpl.id, tpl.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
+                          <button type="button" title={t('gabarits.regenerer')} onClick={() => regenerer(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><RefreshCw size={14} /></button>
+                          <button type="button" onClick={() => supprimerGabarit(tpl.id, tpl.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
                     {expandedTemplateId === tpl.id && templateDetail && (
                       <tr>
-                        <td colSpan={4} style={{ background: '#FAFBF7' }}>
+                        <td colSpan={4} style={{ background: COLORS.surfaceAlt }}>
                           {(templateDetail.variantes || []).length === 0 ? (
-                            <div style={{ color: '#5B6357', fontSize: 13, padding: 8 }}>{t('gabarits.aucuneVariante')}</div>
+                            <div style={{ color: COLORS.inkSoft, fontSize: 13, padding: 8 }}>{t('gabarits.aucuneVariante')}</div>
                           ) : (
                             <table className="data-table" style={{ margin: '4px 0' }}>
-                              <thead><tr style={{ color: '#5B6357' }}>
+                              <thead><tr style={{ color: COLORS.inkSoft }}>
                                 <th>{t('stocks.article')}</th>
                                 <th>{t('gabarits.combinaison')}</th>
                                 <th>{t('stocks.quantite')}</th>
@@ -286,7 +287,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                                 {templateDetail.variantes.map((v) => (
                                   <tr key={v.id}>
                                     <td>{v.nom}</td>
-                                    <td style={{ color: '#5B6357' }}>{v.attributsVariante || '—'}</td>
+                                    <td style={{ color: COLORS.inkSoft }}>{v.attributsVariante || '—'}</td>
                                     <td>{v.quantite} {v.unite || ''}</td>
                                     <td>{v.prixDefaut ?? '—'}</td>
                                   </tr>
@@ -301,7 +302,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                 ))}
               </tbody>
             </DataTable>
-            {templates.length === 0 && <div style={{ color: '#5B6357', fontSize: 13, marginTop: 8 }}>{t('gabarits.aucunGabarit')}</div>}
+            {templates.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13, marginTop: 8 }}>{t('gabarits.aucunGabarit')}</div>}
           </div>
         </div>
       )}

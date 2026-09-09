@@ -4,6 +4,7 @@ import { Plus, Trash2, RefreshCw, ExternalLink, Video, AlertTriangle, BellRing, 
 import { getCameras, createCamera, deleteCamera, getCameraAlertes, marquerAlerteVue, regenererTokenCamera } from '../lib/api.js';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import { fmtDate } from '../lib/locale.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 // Surveillance — l'application ne stocke ni ne relaie aucune vidéo. Elle référence les caméras
 // et affiche ce que chacune expose déjà ; c'est le navigateur de l'utilisateur qui va chercher
@@ -35,7 +36,7 @@ function VueSnapshot({ camera }) {
 
   if (erreur) {
     return (
-      <div style={{ padding: 16, fontSize: 12.5, color: '#B23B2E', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+      <div style={{ padding: 16, fontSize: 12.5, color: COLORS.red, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
         <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>{t('surveillance.injoignable')}</span>
       </div>
@@ -70,7 +71,7 @@ function VueCamera({ camera }) {
   // bibliothèque de lecture pour un cas peu fréquent.
   if (camera.typeFlux === 'hls') {
     return (
-      <div style={{ padding: 16, fontSize: 12.5, color: '#5B6357' }}>
+      <div style={{ padding: 16, fontSize: 12.5, color: COLORS.inkSoft }}>
         {t('surveillance.hlsNonLu')}{' '}
         <Button small variant="outline" onClick={() => window.open(camera.url, '_blank', 'noopener')}>
           <ExternalLink size={13} /> {t('surveillance.ouvrirFlux')}
@@ -105,14 +106,14 @@ function UrlWebhook({ camera, onRegenere, canManage }) {
   if (!camera.tokenAlerte) return null;
   return (
     <details style={{ padding: "8px 14px 12px" }}>
-      <summary style={{ cursor: "pointer", fontSize: 12, color: "#5B6357" }}>
+      <summary style={{ cursor: "pointer", fontSize: 12, color: COLORS.inkSoft }}>
         {t("surveillance.webhookTitre")}
       </summary>
-      <div style={{ fontSize: 11.5, color: "#5B6357", margin: "8px 0", lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11.5, color: COLORS.inkSoft, margin: "8px 0", lineHeight: 1.5 }}>
         {t("surveillance.webhookAide")}
       </div>
-      <code style={{ display: "block", fontSize: 11, background: "#F1F5F2", padding: "7px 9px",
-        borderRadius: 6, wordBreak: "break-all", marginBottom: 8 }}>{url}</code>
+      <code style={{ display: "block", fontSize: 11, background: COLORS.surfaceAlt, padding: "7px 9px",
+        borderRadius: RADIUS.control, wordBreak: "break-all", marginBottom: 8 }}>{url}</code>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <Button small variant="outline" onClick={copier}>
           {copie ? <Check size={13} /> : <Copy size={13} />} {t("surveillance.copier")}
@@ -133,7 +134,7 @@ function UrlWebhook({ camera, onRegenere, canManage }) {
 function JournalAlertes({ alertes, onVue }) {
   const { t } = useTranslation();
   if (alertes.length === 0) {
-    return <Card><div style={{ color: "#5B6357", fontSize: 13 }}>{t("surveillance.aucuneAlerte")}</div></Card>;
+    return <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("surveillance.aucuneAlerte")}</div></Card>;
   }
   const nonVues = alertes.filter((a) => !a.vue).length;
   return (
@@ -146,14 +147,14 @@ function JournalAlertes({ alertes, onVue }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {alertes.map((a) => (
           <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-            gap: 10, padding: "8px 10px", borderRadius: 8, border: "1px solid #E2E8F0",
-            background: a.vue ? "transparent" : "#FDF3F2" }}>
+            gap: 10, padding: "8px 10px", borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`,
+            background: a.vue ? "transparent" : COLORS.redSoft }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: a.vue ? 400 : 600 }}>
                 {a.cameraNom}
                 {a.emplacementType ? " — " + t("surveillance.emplacements." + a.emplacementType) : ""}
               </div>
-              <div style={{ fontSize: 11.5, color: "#5B6357" }}>
+              <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>
                 {t("surveillance.type." + a.type, { defaultValue: a.type })}
                 {a.occurrences > 1 ? " · " + t("surveillance.occurrences", { count: a.occurrences }) : ""}
                 {" · "}
@@ -251,7 +252,7 @@ export default function SurveillanceModule({ canManage = false }) {
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
           {t('surveillance.title')}
         </div>
-        <div style={{ fontSize: 13.5, color: '#5B6357', lineHeight: 1.6 }}>{t('surveillance.intro')}</div>
+        <div style={{ fontSize: 13.5, color: COLORS.inkSoft, lineHeight: 1.6 }}>{t('surveillance.intro')}</div>
       </Card>
 
       <JournalAlertes alertes={alertes} onVue={marquerVue} />
@@ -279,9 +280,9 @@ export default function SurveillanceModule({ canManage = false }) {
       )}
 
       {loading ? (
-        <div style={{ color: '#5B6357', padding: 20 }}>{t('surveillance.chargement')}</div>
+        <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('surveillance.chargement')}</div>
       ) : cameras.length === 0 ? (
-        <Card><div style={{ color: '#5B6357', fontSize: 13 }}>{t('surveillance.aucune')}</div></Card>
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('surveillance.aucune')}</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
           {cameras.map((c) => (
@@ -292,12 +293,12 @@ export default function SurveillanceModule({ canManage = false }) {
                     <Video size={14} /> {c.nom}
                   </div>
                   {(c.emplacement || c.emplacementType) && (
-                    <div style={{ fontSize: 11.5, color: '#5B6357' }}>{libelleEmplacement(c)}</div>
+                    <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{libelleEmplacement(c)}</div>
                   )}
                 </div>
                 {canManage && (
                   <button onClick={() => supprimer(c.id)} title={t('common.delete')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', padding: 4 }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, padding: 4 }}>
                     <Trash2 size={15} />
                   </button>
                 )}
@@ -305,7 +306,7 @@ export default function SurveillanceModule({ canManage = false }) {
               <VueCamera camera={c} />
               <UrlWebhook camera={c} onRegenere={regenerer} canManage={canManage} />
               {c.typeFlux === 'snapshot' && (
-                <div style={{ padding: '6px 14px 10px', fontSize: 11, color: '#5B6357', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ padding: '6px 14px 10px', fontSize: 11, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <RefreshCw size={11} /> {t('surveillance.rafraichi', { n: c.rafraichissement })}
                 </div>
               )}

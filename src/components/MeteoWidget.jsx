@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Thermometer, Droplet, ArrowRight } from 'lucide-react';
 import { getMeteo } from '../lib/api.js';
 import { Card, Badge } from './ui.jsx';
+import { COLORS } from '../lib/theme.js';
 
 const C = {
-  ink: '#22271D', inkSoft: '#5B6357',
-  green: '#3F6B3B', red: '#B23B2E', ochre: '#C1861F', blue: '#2E6E8E',
+  ink: COLORS.ink, inkSoft: COLORS.inkSoft,
+  green: COLORS.green, red: COLORS.red, ochre: COLORS.ochre, blue: COLORS.blue,
 };
 const GRAVITE_TONE = { haute: 'red', moyenne: 'ochre', basse: 'blue' };
 

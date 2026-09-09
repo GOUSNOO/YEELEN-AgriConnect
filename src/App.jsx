@@ -83,27 +83,10 @@ import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
 import { FinancesModule, BanquesModule } from './modules/finances.jsx';
 
-const COLORS = {
-  bg: '#F7FAFC', // Nouveau fond très clair et aéré
-  surface: '#FFFFFF',
-  surfaceAlt: '#FBFAF4',
-  ink: '#2D374A', // Bleu-gris profond pour le texte
-  inkSoft: '#5B6357',
-  border: '#E2E8F0', // Gris pâle doux pour les bordures
-  green: '#38A169', // Vert vif et moderne (Action principale)
-  greenSoft: '#D6EAD7', // Version claire du vert principal
-  ochre: '#D5974E', // Or terne moderne pour l'alerte/secondaire
-  ochreSoft: '#F2EECC', // Clair pour le complément de couleur ocre
-  blue: '#3B82F6', // Bleu standard plus éclatant (pour les badges, etc.)
-  blueSoft: '#E0F2FE',
-  red: '#E53E3E', // Rouge d'alerte plus vif et standard
-  redSoft: '#FED7D7',
-};
+// Palette et formes : voir src/lib/theme.js. Le nom COLORS est conservé pour que les usages
+// de ce fichier restent inchangés — seules les valeurs ont été unifiées (2026-09-09).
+import { COLORS, NAVBAR_BORDER, RADIUS } from './lib/theme.js';
 
-// Navbar : bordure basse = COLORS.green assombri de 10% (même logique que la bordure de
-// navbar d'un ERP de référence, calculée une fois plutôt qu'à la volée en l'absence d'un
-// darken() SCSS côté JS).
-const NAVBAR_BORDER = '#32915F';
 
 // Regroupement des menus de la navbar — même taxonomie que le champ `category` d'availableTabs.
 // labelKey résolu via i18n au rendu (TopNavbar), le module-level ne peut pas utiliser le hook.
@@ -112,7 +95,7 @@ const NAV_CATEGORIES = [
   { id: 'analyse', labelKey: 'navGroup.analyse', color: COLORS.blue },
   { id: 'commercial', labelKey: 'navGroup.commercial', color: COLORS.ochre },
   { id: 'finance', labelKey: 'navGroup.finance', color: COLORS.red },
-  { id: 'rh', labelKey: 'navGroup.rh', color: '#9B6BD6' },
+  { id: 'rh', labelKey: 'navGroup.rh', color: COLORS.violet },
 ];
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
@@ -138,7 +121,7 @@ function ParcelMapTab({ parcelles }) {
     <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
       <Card style={{ padding: 14 }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('cultures.map.title')}</div>
-        <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: 12, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
+        <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
           {parcelles.map(p => {
             const status = statusOf(p);
             const dotColor = status.tone === 'red' ? COLORS.red : status.tone === 'blue' ? COLORS.blue : COLORS.green;
@@ -340,7 +323,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
             onDragOver={(e) => { if (isValidTarget) e.preventDefault(); }}
             onDrop={(e) => { e.preventDefault(); handleDrop(col.key); setDraggedId(null); }}
             style={{
-              background: isValidTarget ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: 12, padding: 10,
+              background: isValidTarget ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.card, padding: 10,
               minHeight: 120, border: `1.5px dashed ${isValidTarget ? COLORS.green : 'transparent'}`,
               transition: 'background 0.15s ease, border-color 0.15s ease',
             }}
@@ -357,7 +340,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
                   onDragEnd={() => setDraggedId(null)}
                   onClick={() => onOpenDetail(d.id)}
                   style={{
-                    background: '#fff', borderRadius: 10, padding: 10, cursor: 'grab',
+                    background: '#fff', borderRadius: RADIUS.card, padding: 10, cursor: 'grab',
                     border: `1px solid ${COLORS.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     opacity: draggedId === d.id ? 0.4 : 1,
                   }}
@@ -761,7 +744,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
     ].filter(Boolean);
     const adresseLibre = lignesAdresse.length === 0 && client.adresse ? client.adresse : null;
     return (
-      <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
         <div style={{ fontWeight: 600, color: COLORS.ink, display: 'flex', alignItems: 'center', gap: 5 }}>
           {client.isCompany ? <Building2 size={13} /> : <UserIcon size={13} />}
           {clientLabel(client)}
@@ -1151,7 +1134,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         {(clientsListe || []).map(c => <option key={c.id} value={clientLabel(c)} />)}
       </datalist>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
@@ -1416,8 +1399,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
               project_erp_devis_visual_alignment : même structure (barre d'action + chevrons en
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
-            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
+            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: RADIUS.card, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
             <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22, boxSizing: 'border-box' }}>
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
@@ -1481,18 +1464,18 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   vrai renvoi vers un autre enregistrement possible ici, voir highlightFromUrl
                   dans App pour le mécanisme de navigation). */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                <div style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
+                <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
                   {t("devis.smartLignes", { count: nbLignesProduit })}
                 </div>
                 {nbEcheances > 0 && (
-                  <div style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
+                  <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
                     {t("devis.smartEcheances", { count: nbEcheances })}
                   </div>
                 )}
                 {detailData.clientId && (
                   <button
                     onClick={() => { navigate(`/app/clients?highlight=${detailData.clientId}`); closeDetailPopup(); }}
-                    style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
+                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
                   >
                     {t("devis.voirContact")}
                   </button>
@@ -1500,7 +1483,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 {detailData.move && (
                   <button
                     onClick={() => { navigate('/app/factures'); closeDetailPopup(); }}
-                    style={{ padding: '5px 10px', borderRadius: 8, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
+                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
                   >
                     {t("devis.voirFacture", { name: detailData.move.name })} · {t(`factures.pay.${detailData.move.paymentState}`)}
                   </button>
@@ -1722,7 +1705,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {detailData.echeances.map(ech => (
-                      <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
+                      <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{enDevise(ech.montant, detailData.devise)}</div>
                           <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{t("devis.echeanceDate", { date: fmtDate(ech.dateEcheance) })}</div>
@@ -1773,7 +1756,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {messages.map(m => (
-                      <div key={m.id} style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: `1px solid ${COLORS.border}` }}>
+                      <div key={m.id} style={{ padding: '6px 8px', borderRadius: RADIUS.control, background: '#fff', border: `1px solid ${COLORS.border}` }}>
                         <div style={{ fontSize: 12.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.contenu}</div>
                         <div style={{ fontSize: 10.5, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || t("devis.systeme")} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
                       </div>
@@ -1805,7 +1788,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Popup demandant le mode et la modalité de paiement avant de facturer */}
       {paiementPopupOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 22, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: 22, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{t("devis.paiementTitle")}</div>
 
             <Select label={t("devis.modePaiement")} value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
@@ -1821,7 +1804,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </Select>
 
             {paiementForm.paymentTermId && (
-              <div style={{ marginBottom: 14, padding: '10px 12px', background: COLORS.surfaceAlt, borderRadius: 10 }}>
+              <div style={{ marginBottom: 14, padding: '10px 12px', background: COLORS.surfaceAlt, borderRadius: RADIUS.card }}>
                 <div style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 8 }}>
                   {resumeTerme(paymentTerms.find(pt => String(pt.id) === String(paiementForm.paymentTermId)) || { lignes: [] })}
                 </div>
@@ -1845,7 +1828,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 type="button"
                 onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'complet' })}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
                   border: `1.5px solid ${paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.border}`,
                   background: paiementForm.modalitePaiement === 'complet' ? COLORS.greenSoft : '#fff',
                   color: paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.inkSoft,
@@ -1858,7 +1841,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 type="button"
                 onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'echelonne' })}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
                   border: `1.5px solid ${paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.border}`,
                   background: paiementForm.modalitePaiement === 'echelonne' ? COLORS.greenSoft : '#fff',
                   color: paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.inkSoft,
@@ -1899,13 +1882,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Fenêtre de modification d'un devis existant, séparée du formulaire de création */}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t("devis.editTitle")}</div>
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             {editForm.statut === 'Signé' && (
-              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: 10, padding: '8px 12px', fontSize: 12.5, marginBottom: 12 }}>
+              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: RADIUS.card, padding: '8px 12px', fontSize: 12.5, marginBottom: 12 }}>
                 {t("devis.editSigneNotice")}
               </div>
             )}
@@ -2520,6 +2503,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <td>${doc.lignes.map(l => `${l.produit} x${l.quantite} — ${fmtMoney(l.prixUnitaire)}`).join('<br />')}</td>
       </tr>
     `).join('');
+    // Les couleurs de cette feuille de style restent littérales, et c est voulu : ce document
+    // part à l imprimante, sur papier blanc — la palette de l application, pensée pour un fond
+    // beige à l écran, n a pas cours ici.
     const printWindow = window.open('', '_blank', 'width=900,height=1000');
     if (!printWindow) return;
     printWindow.document.write(`<!doctype html><html><head><title>${t('achats.pdfTitle')}</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1f2937}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left} th{background:#f7f7f7}</style></head><body><h2>${t('achats.pdfHeading')}</h2><table><thead><tr><th>${t('common.date')}</th><th>${t('achats.fournisseur')}</th><th>${t('common.total')}</th><th>${t('achats.detailLignes')}</th></tr></thead><tbody>${content}</tbody></table></body></html>`);
@@ -2641,7 +2627,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       </Card>
       {detailDoc && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
@@ -2683,7 +2669,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       {/* Fenêtre de modification d'un achat existant, séparée du formulaire d'ajout */}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('achats.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -3234,7 +3220,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 12px 0' }}>
           {['', ...TYPES_INTRANT].map(x => (
             <button key={x || 'all'} type="button" onClick={() => setFiltreType(x)}
-              style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: 999, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}>
+              style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}>
               {x ? t(`stocks.intrant.${x}`) : t('common.all')}
             </button>
           ))}
@@ -3291,7 +3277,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               </tr>
               {lotsFor === s.id && (
                 <tr>
-                  <td colSpan={7} style={{ background: '#FBFAF4', padding: '10px 14px' }}>
+                  <td colSpan={7} style={{ background: COLORS.bg, padding: '10px 14px' }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{t('stocks.lotsTitle')}</div>
                     {lots.length === 0 ? (
                       <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t('stocks.lotsEmpty')}</div>
@@ -3314,7 +3300,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                               <td>
                                 <input type="number" defaultValue={l.quantiteRestante}
                                   onBlur={e => { if (Number(e.target.value) !== l.quantiteRestante) saveLotQte(l, e.target.value); }}
-                                  style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: '2px 6px', fontSize: 12.5 }} />
+                                  style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, padding: '2px 6px', fontSize: 12.5 }} />
                                 <span style={{ color: COLORS.inkSoft, fontSize: 11 }}> / {l.quantiteInitiale}</span>
                               </td>
                               <td style={{ color: COLORS.inkSoft }}>{l.coutUnitaire != null ? fmtMoney(l.coutUnitaire) : '—'}</td>
@@ -3347,7 +3333,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('stocks.editArticle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -3381,7 +3367,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {historiqueArticle && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeHistorique}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{historiqueArticle.nom}</div>
@@ -3396,7 +3382,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {historiqueMouvements.map(m => (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{t(`stocks.raison.${m.raison}`, { defaultValue: m.raison })}</div>
                       <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{formatDateTimeFr(m.createdAt)}</div>
@@ -3602,7 +3588,7 @@ function LivraisonsTab({ farmId }) {
                 <td>{r.quantite}</td>
                 <td>
                   <select value={r.statut} onChange={e => setStatut(r.id, e.target.value)} style={{
-                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: 999,
+                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill,
                     padding: '4px 8px', background: COLORS.surfaceAlt, color: COLORS.ink
                   }}>
                     {STATUTS.map(s => <option key={s} value={s}>{t(`poulailler.statut.${s}`, { defaultValue: s })}</option>)}
@@ -3708,7 +3694,7 @@ function PiscicultureLivraisonsTab({ farmId }) {
                 <td>{r.quantite}</td>
                 <td>
                   <select value={r.statut} onChange={e => setStatut(r.id, e.target.value)} style={{
-                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: 999,
+                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill,
                     padding: '4px 8px', background: COLORS.surfaceAlt, color: COLORS.ink
                   }}>
                     {STATUTS.map(s => <option key={s} value={s}>{t(`pisciculture.statut.${s}`, { defaultValue: s })}</option>)}
@@ -3834,7 +3820,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       {/* Popup listant tout l'historique (modifications + suppressions) du module */}
       {historiqueOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: 20, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>{t('compta.historiqueBtn')}</div>
             {historiqueLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
@@ -4153,7 +4139,7 @@ function ModuleTabButton({ tab, active, onClick, accentColor }) {
   return (
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
-      padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+      padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
       background: active ? accentColor : 'transparent', color: active ? '#fff' : COLORS.inkSoft,
     }}>
       <Icon size={14} /> {tab.label}
@@ -4220,7 +4206,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
         <div style={{ position: 'relative' }}>
           <button onClick={() => setMoreOpen(o => !o)} style={{
             display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
-            padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+            padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
             background: activeHiddenInOverflow ? accentColor : 'transparent',
             color: activeHiddenInOverflow ? '#fff' : COLORS.inkSoft,
           }}>
@@ -4228,7 +4214,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
           </button>
           {moreOpen && (
             <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: 10,
+              position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: RADIUS.card,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`, zIndex: 30,
               display: 'flex', flexDirection: 'column', minWidth: 160, overflow: 'hidden',
             }}>
@@ -4324,7 +4310,7 @@ function ParcelleMeteoSection({ parcelle }) {
           onChange={(e) => setVilleQuery(e.target.value)}
         />
         {villeResultats.length > 0 && (
-          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, marginTop: 4, overflow: 'hidden' }}>
+          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: 4, overflow: 'hidden' }}>
             {villeResultats.map((v, i) => (
               <button
                 key={`${v.nom}-${i}`}
@@ -5000,12 +4986,12 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
             <form onSubmit={submitConfirmation} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Field label={t('auth.confirmationCode')} placeholder="123456" value={confirmationCode} onChange={e => setConfirmationCode(e.target.value)} required maxLength={6} />
               {error && (
-                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
               {resendMsg && (
-                <div style={{ background: COLORS.greenSoft, color: COLORS.green, borderRadius: 8, padding: '9px 12px', fontSize: 13 }}>
+                <div style={{ background: COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13 }}>
                   {resendMsg}
                 </div>
               )}
@@ -5043,7 +5029,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
             <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Field label={t('auth.mfaCode')} placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
               {error && (
-                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
@@ -5066,18 +5052,18 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
     <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', marginBottom: 26 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 11, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 40, height: 40, borderRadius: RADIUS.card, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={21} color="#fff" />
           </div>
           <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.ink }}>{t('auth.brand')}</span>
         </div>
         <Card>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: COLORS.surfaceAlt, borderRadius: 10, padding: 4 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: COLORS.surfaceAlt, borderRadius: RADIUS.card, padding: 4 }}>
             <button
               type="button"
               onClick={() => { setMode('login'); setError(''); }}
               style={{
-                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+                flex: 1, padding: '8px 0', borderRadius: RADIUS.control, border: 'none', cursor: 'pointer',
                 fontWeight: 600, fontSize: 13.5,
                 background: mode === 'login' ? COLORS.surface : 'transparent',
                 color: mode === 'login' ? COLORS.ink : COLORS.inkSoft,
@@ -5090,7 +5076,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               type="button"
               onClick={() => { setMode('register'); setError(''); }}
               style={{
-                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+                flex: 1, padding: '8px 0', borderRadius: RADIUS.control, border: 'none', cursor: 'pointer',
                 fontWeight: 600, fontSize: 13.5,
                 background: mode === 'register' ? COLORS.surface : 'transparent',
                 color: mode === 'register' ? COLORS.ink : COLORS.inkSoft,
@@ -5113,9 +5099,9 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                 type="button"
                 onClick={() => setTypeCompte('entreprise')}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
                   border: `1.5px solid ${typeCompte === 'entreprise' ? COLORS.green : COLORS.border}`,
-                  background: typeCompte === 'entreprise' ? COLORS.greenSoft || '#e6f4ea' : '#fff',
+                  background: typeCompte === 'entreprise' ? COLORS.greenSoft || COLORS.greenSoft : '#fff',
                   color: typeCompte === 'entreprise' ? COLORS.green : COLORS.inkSoft,
                   fontWeight: 600, fontSize: 13,
                 }}
@@ -5126,9 +5112,9 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                 type="button"
                 onClick={() => setTypeCompte('particulier')}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
                   border: `1.5px solid ${typeCompte === 'particulier' ? COLORS.green : COLORS.border}`,
-                  background: typeCompte === 'particulier' ? COLORS.greenSoft || '#e6f4ea' : '#fff',
+                  background: typeCompte === 'particulier' ? COLORS.greenSoft || COLORS.greenSoft : '#fff',
                   color: typeCompte === 'particulier' ? COLORS.green : COLORS.inkSoft,
                   fontWeight: 600, fontSize: 13,
                 }}
@@ -5179,7 +5165,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               </div>
             )}
             {error && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
                 <AlertTriangle size={14} /> {error}
               </div>
             )}
@@ -5213,7 +5199,7 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
       display: 'flex', flexDirection: 'column', gap: 14
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ width: 42, height: 42, borderRadius: 11, background: accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 42, height: 42, borderRadius: RADIUS.card, background: accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon size={21} color={accentColor} />
         </div>
         {active && <Badge tone={accent}>{t('optionCard.active')}</Badge>}
@@ -5419,7 +5405,7 @@ function AgriculturalCalendarModule({ farmId }) {
               <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
             ))}
             {Array.from({ length: firstDayOffset }).map((_, idx) => (
-              <div key={`empty-${idx}`} style={{ minHeight: 78, borderRadius: 10, border: `1px dashed ${COLORS.border}` }} />
+              <div key={`empty-${idx}`} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px dashed ${COLORS.border}` }} />
             ))}
             {Array.from({ length: daysInMonth }).map((_, idx) => {
               const dayNumber = idx + 1;
@@ -5428,12 +5414,12 @@ function AgriculturalCalendarModule({ farmId }) {
               const dayEvents = eventsByDay[cellIso] || [];
               const isToday = cellIso === today;
               return (
-                <div key={cellIso} style={{ minHeight: 78, borderRadius: 10, border: `1px solid ${COLORS.border}`, padding: 6, background: isToday ? COLORS.greenSoft : COLORS.surfaceAlt }}>
+                <div key={cellIso} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, padding: 6, background: isToday ? COLORS.greenSoft : COLORS.surfaceAlt }}>
                   <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5, color: isToday ? COLORS.green : COLORS.ink }}>{dayNumber}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {dayEvents.slice(0, 2).map(event => {
                       const meta = activityMeta[event.type] || { tone: 'green' };
-                      return <div key={event.id} style={{ fontSize: 10.5, padding: '3px 5px', borderRadius: 6, background: meta.tone === 'blue' ? COLORS.blueSoft : meta.tone === 'green' ? COLORS.greenSoft : meta.tone === 'red' ? COLORS.redSoft : COLORS.ochreSoft, color: meta.tone === 'blue' ? COLORS.blue : meta.tone === 'green' ? COLORS.green : meta.tone === 'red' ? COLORS.red : COLORS.ochre }}>
+                      return <div key={event.id} style={{ fontSize: 10.5, padding: '3px 5px', borderRadius: RADIUS.control, background: meta.tone === 'blue' ? COLORS.blueSoft : meta.tone === 'green' ? COLORS.greenSoft : meta.tone === 'red' ? COLORS.redSoft : COLORS.ochreSoft, color: meta.tone === 'blue' ? COLORS.blue : meta.tone === 'green' ? COLORS.green : meta.tone === 'red' ? COLORS.red : COLORS.ochre }}>
                         {typeLabel(event.type)}
                       </div>;
                     })}
@@ -5482,7 +5468,7 @@ function AgriculturalCalendarModule({ farmId }) {
       </div>
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEvent}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('calendar.editTitle')}</div>
               <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -5777,7 +5763,7 @@ function HarvestsModule({ farmId }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 560, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('harvests.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -6092,7 +6078,7 @@ function ForecastingModule({ farmId, activated }) {
             <Card key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600 }}>{item.label}</span>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 36, height: 36, borderRadius: RADIUS.card, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <TrendingUp size={18} color={accent} />
                 </div>
               </div>
@@ -6166,6 +6152,9 @@ function ReportsModule({ farmId, activated }) {
   const benefice = totalVentes - totalAchats;
 
   const generatePdf = () => {
+    // Les couleurs de cette feuille de style restent littérales, et c est voulu : ce document
+    // part à l imprimante, sur papier blanc — la palette de l application, pensée pour un fond
+    // beige à l écran, n a pas cours ici.
     const printWindow = window.open('', '_blank', 'width=900,height=1000');
     if (!printWindow) return;
     const row = (cols) => `<tr>${cols.map(c => `<td>${c}</td>`).join('')}</tr>`;
@@ -6225,7 +6214,7 @@ function ReportsModule({ farmId, activated }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {REPORT_PERIODS.map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{
-              padding: '8px 14px', borderRadius: 999, border: `1px solid ${period === p ? COLORS.green : COLORS.border}`,
+              padding: '8px 14px', borderRadius: RADIUS.pill, border: `1px solid ${period === p ? COLORS.green : COLORS.border}`,
               background: period === p ? COLORS.greenSoft : COLORS.surfaceAlt, color: period === p ? COLORS.green : COLORS.inkSoft,
               fontWeight: 600, cursor: 'pointer', fontSize: 13
             }}>
@@ -6287,16 +6276,16 @@ function HomeGridTile({ label, icon: Icon, inactive, onClick }) {
   return (
     <button onClick={onClick} style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
-      minHeight: 116, borderRadius: 14, border: `1px solid ${COLORS.border}`,
+      minHeight: 116, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`,
       background: inactive ? COLORS.surfaceAlt : COLORS.surface, cursor: 'pointer',
       opacity: inactive ? 0.6 : 1, position: 'relative', padding: 12,
     }}>
       {inactive && (
-        <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 999, background: COLORS.ochreSoft, color: COLORS.ochre }}>
+        <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: RADIUS.pill, background: COLORS.ochreSoft, color: COLORS.ochre }}>
           {t('home.activer')}
         </span>
       )}
-      <div style={{ width: 46, height: 46, borderRadius: 12, background: inactive ? COLORS.border : COLORS.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 46, height: 46, borderRadius: RADIUS.card, background: inactive ? COLORS.border : COLORS.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Icon size={22} color={inactive ? COLORS.inkSoft : COLORS.green} />
       </div>
       <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, textAlign: 'center', lineHeight: 1.25 }}>{label}</span>
@@ -6465,7 +6454,7 @@ function HomeOverview({ farmId, activated }) {
             <Card key={card.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600 }}>{card.label}</span>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 36, height: 36, borderRadius: RADIUS.card, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon size={18} color={accent} />
                 </div>
               </div>
@@ -6681,7 +6670,7 @@ function EmployeesModule({ farmId, role }) {
             return (
               <button key={j} type="button" onClick={() => toggleJour(setF, f, j)} style={{
                 background: on ? COLORS.green : 'transparent', color: on ? '#fff' : COLORS.inkSoft,
-                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: 8, padding: '4px 10px', fontSize: 12.5, cursor: 'pointer',
+                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: RADIUS.card, padding: '4px 10px', fontSize: 12.5, cursor: 'pointer',
               }}>{t(`rh.jours.${j}`, { defaultValue: j })}</button>
             );
           })}
@@ -6721,7 +6710,7 @@ function EmployeesModule({ farmId, role }) {
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('rh.addEmployeeTitle')}</div>
 
         {formError && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
             {formError}
           </div>
         )}
@@ -6743,7 +6732,7 @@ function EmployeesModule({ farmId, role }) {
           </label>
 
           {form.createAccount && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
               <Field label={t('rh.loginEmail')} type="email" placeholder="email@exemple.com" value={form.compteEmail} onChange={e => setForm({ ...form, compteEmail: e.target.value })} required={form.createAccount} />
               <Select label={t('rh.roleField')} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
                 <option value="admin">{t('role.admin')}</option>
@@ -6771,14 +6760,14 @@ function EmployeesModule({ farmId, role }) {
               <option value="">{t('rh.allDepartments')}</option>
               {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
             </select>
-            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '5px 10px', fontSize: 12.5, color: COLORS.inkSoft, cursor: 'pointer' }}>
+            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '5px 10px', fontSize: 12.5, color: COLORS.inkSoft, cursor: 'pointer' }}>
               {viewMode === 'list' ? t('rh.trombinoscope') : t('rh.list')}
             </button>
           </div>
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{error}</div>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{error}</div>
         )}
 
         {loading ? (
@@ -6790,10 +6779,10 @@ function EmployeesModule({ farmId, role }) {
         ) : viewMode === 'grid' ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
             {employees.map(emp => (
-              <div key={emp.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
+              <div key={emp.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
                 {emp.photo
-                  ? <img src={emp.photo} alt="" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
-                  : <div style={{ width: 64, height: 64, borderRadius: 12, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
+                  ? <img src={emp.photo} alt="" style={{ width: 64, height: 64, borderRadius: RADIUS.card, objectFit: 'cover' }} />
+                  : <div style={{ width: 64, height: 64, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.prenom} {emp.nom}</div>
                 <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{emp.posteNom || emp.poste || '—'}{emp.departementNom ? ` · ${emp.departementNom}` : ''}</div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
@@ -6807,11 +6796,11 @@ function EmployeesModule({ farmId, role }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {employees.map(emp => (
-              <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
+              <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   {emp.photo
-                    ? <img src={emp.photo} alt="" style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover' }} />
-                    : <div style={{ width: 38, height: 38, borderRadius: 9, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
+                    ? <img src={emp.photo} alt="" style={{ width: 38, height: 38, borderRadius: RADIUS.card, objectFit: 'cover' }} />
+                    : <div style={{ width: 38, height: 38, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
                     <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
@@ -6849,14 +6838,14 @@ function EmployeesModule({ farmId, role }) {
 
       {editingEmp && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEditEmployee}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('rh.editEmployeeTitle')}</div>
               <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
 
             {editError && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{editError}</div>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{editError}</div>
             )}
 
             <form onSubmit={saveEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -6883,7 +6872,7 @@ function EmployeesModule({ farmId, role }) {
                     {t('rh.createLogin')}
                   </label>
                   {editForm.linkAccount && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: 10, background: COLORS.surfaceSoft || '#f7f7f2' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
                       <Field label={t('rh.loginEmail')} type="email" value={editForm.compteEmail} onChange={e => setEditForm({ ...editForm, compteEmail: e.target.value })} required />
                       <Select label={t('rh.roleField')} value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
                         <option value="admin">{t('role.admin')}</option>
@@ -6975,7 +6964,7 @@ function NotificationsModule({ farmId, activated }) {
         <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('notifications.empty')}</div>
       ) : (
         notifications.map(item => (
-          <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <div style={{ fontSize: 18 }}>{item.icon}</div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 13 }}>{item.title}</div>
@@ -7173,7 +7162,7 @@ function ListesPrixManager() {
           ) : listes.length === 0 ? (
             <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("contacts.listes.empty")}</div>
           ) : listes.map(liste => (
-            <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 10 }}>
+            <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(liste.id)}>
                 <div>
                   <span style={{ fontWeight: 700 }}>{liste.nom}</span>
@@ -7185,7 +7174,7 @@ function ListesPrixManager() {
               </div>
               {expandedId === liste.id && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, background: COLORS.paper, borderRadius: 8 }}>
+                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, background: COLORS.paper, borderRadius: RADIUS.card }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, alignItems: 'end' }}>
                       <Select label={t("contacts.listes.appliedOn")} value={ligneForm.appliedOn} onChange={e => setLigneForm({ ...emptyLigneForm, appliedOn: e.target.value })}>
                         <option value="variante">{t('contacts.listes.appliedOnVariante')}</option>
@@ -7237,7 +7226,7 @@ function ListesPrixManager() {
                   {(lignesParListe[liste.id] || []).length === 0 ? (
                     <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t("contacts.listes.emptyLignes")}</div>
                   ) : (lignesParListe[liste.id] || []).map(l => (
-                    <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 13 }}>
+                    <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: 13 }}>
                       <span>
                         {l.quantiteMin > 0
                           ? t('contacts.listes.ligneResume', { cible: cibleDeLigne(l), mode: modeDeLigne(l), qte: l.quantiteMin })
@@ -7307,9 +7296,9 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       {photo ? (
-        <img src={photo} alt={t("contacts.avatarAlt")} style={{ width: size, height: size, borderRadius: 12, objectFit: 'cover', border: `1px solid ${COLORS.border}`, display: 'block' }} />
+        <img src={photo} alt={t("contacts.avatarAlt")} style={{ width: size, height: size, borderRadius: RADIUS.card, objectFit: 'cover', border: `1px solid ${COLORS.border}`, display: 'block' }} />
       ) : (
-        <div style={{ width: size, height: size, borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size / 3, fontWeight: 700, color: COLORS.inkSoft }}>
+        <div style={{ width: size, height: size, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size / 3, fontWeight: 700, color: COLORS.inkSoft }}>
           {initials}
         </div>
       )}
@@ -7319,7 +7308,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
             type="button"
             title={t("contacts.avatarChange")}
             onClick={() => inputRef.current?.click()}
-            style={{ position: 'absolute', bottom: -6, right: -6, width: 28, height: 28, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.inkSoft, padding: 0 }}
+            style={{ position: 'absolute', bottom: -6, right: -6, width: 28, height: 28, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.inkSoft, padding: 0 }}
           >
             <Camera size={14} />
           </button>
@@ -7353,7 +7342,7 @@ function ContactTagsManager({ tags, onChange }) {
   const { t: tr } = useTranslation();
   const [open, setOpen] = useState(false);
   const [nom, setNom] = useState('');
-  const [couleur, setCouleur] = useState('#C1861F');
+  const [couleur, setCouleur] = useState(COLORS.ochre);
   const [creating, setCreating] = useState(false);
 
   const create = async (e) => {
@@ -7389,10 +7378,10 @@ function ContactTagsManager({ tags, onChange }) {
         {tr('contacts.tags.toggle')} {open ? '▲' : '▼'}
       </button>
       {open && (
-        <div style={{ marginTop: 8, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ marginTop: 8, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {tags.map(t => (
-              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>
+              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: 12 }}>
                 {t.nom}
                 <button type="button" onClick={() => remove(t.id, t.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}>
                   <Trash2 size={11} />
@@ -7403,7 +7392,7 @@ function ContactTagsManager({ tags, onChange }) {
           </div>
           <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input className="flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder={tr("contacts.tags.placeholder")} style={{ flex: 1 }} />
-            <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: 6, cursor: 'pointer' }} />
+            <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, cursor: 'pointer' }} />
             <Button small type="submit" variant="outline" disabled={creating}>{creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}</Button>
           </form>
         </div>
@@ -7801,7 +7790,7 @@ function ContactsTab({ type, highlightId }) {
                   return (
                     <button key={t.id} type="button"
                       onClick={() => setF({ ...f, tagIds: active ? f.tagIds.filter(id => id !== t.id) : [...f.tagIds, t.id] })}
-                      style={{ background: active ? t.couleur : 'transparent', color: active ? '#fff' : t.couleur, border: `1px solid ${t.couleur}`, borderRadius: 999, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}
+                      style={{ background: active ? t.couleur : 'transparent', color: active ? '#fff' : t.couleur, border: `1px solid ${t.couleur}`, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}
                     >
                       {t.nom}
                     </button>
@@ -7830,7 +7819,7 @@ function ContactsTab({ type, highlightId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
@@ -7849,7 +7838,7 @@ function ContactsTab({ type, highlightId }) {
         </form>
       </Card>
       {type === 'client' && <ListesPrixManager />}
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
         <Search size={14} color={COLORS.inkSoft} />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("contacts.searchPlaceholder", { type: L.s })} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1, color: COLORS.ink }} />
       </label>
@@ -7890,7 +7879,7 @@ function ContactsTab({ type, highlightId }) {
                 {contact.tags && contact.tags.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                     {contact.tags.map(t => (
-                      <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: 999, padding: '2px 7px', fontSize: 11 }}>{t.nom}</span>
+                      <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 7px', fontSize: 11 }}>{t.nom}</span>
                     ))}
                   </div>
                 )}
@@ -7913,7 +7902,7 @@ function ContactsTab({ type, highlightId }) {
               {selectedContact.tags && selectedContact.tags.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {selectedContact.tags.map(t => (
-                    <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: 999, padding: '2px 8px', fontSize: 11.5 }}>{t.nom}</span>
+                    <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 8px', fontSize: 11.5 }}>{t.nom}</span>
                   ))}
                 </div>
               )}
@@ -7948,7 +7937,7 @@ function ContactsTab({ type, highlightId }) {
                   onClick={() => setRelatedOpen(o => !o)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, background: COLORS.ochreSoft, color: COLORS.ochre,
-                    border: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                    border: 'none', borderRadius: RADIUS.pill, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
                   {type === 'client' ? tr('contacts.relatedDevis') : tr('contacts.relatedAchats')} ({relatedLoading ? '…' : relatedList.length})
@@ -7960,13 +7949,13 @@ function ContactsTab({ type, highlightId }) {
                       <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{type === 'client' ? tr('contacts.noRelatedDevis') : tr('contacts.noRelatedAchats')}</div>
                     )}
                     {type === 'client' && relatedList.map(d => (
-                      <div key={d.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: 8 }}>
+                      <div key={d.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: RADIUS.card }}>
                         <span>{d.numero} — {tr(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtMoney(d.total)}</span>
                       </div>
                     ))}
                     {type === 'fournisseur' && relatedList.map(a => (
-                      <div key={a.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: 8 }}>
+                      <div key={a.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: RADIUS.card }}>
                         <span>{a.module} — {fmtDate(a.date)} ({tr(`achats.statut.${a.statut}`, { defaultValue: a.statut })})</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtMoney(a.total)}</span>
                       </div>
@@ -7983,7 +7972,7 @@ function ContactsTab({ type, highlightId }) {
       )}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{tr("contacts.editTitle", { type: L.s })}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
@@ -8031,7 +8020,7 @@ function ContactsTab({ type, highlightId }) {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {subContacts.map(sc => (
-                      <div key={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: 8 }}>
+                      <div key={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <ContactAvatar photo={sc.photo} nom={sc.nom} prenom={sc.prenom} isCompany={false} size={28} />
                           <div>
@@ -8167,7 +8156,7 @@ function TopNavbar({
     <>
       <div ref={navRef} style={{ display: 'flex', alignItems: 'center', height: 46, padding: '0 16px', background: COLORS.green, borderBottom: `1px solid ${NAVBAR_BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: 14, flexShrink: 0 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(255,255,255,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 26, height: 26, borderRadius: RADIUS.control, background: 'rgba(255,255,255,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={15} color="#fff" />
           </div>
           <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: '#fff', whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
@@ -8196,7 +8185,7 @@ function TopNavbar({
               </button>
               {openCategory === cat.id && (
                 <div style={{
-                  position: 'absolute', top: '100%', left: 0, background: COLORS.surface, borderRadius: 4,
+                  position: 'absolute', top: '100%', left: 0, background: COLORS.surface, borderRadius: RADIUS.control,
                   boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`,
                   zIndex: 30, minWidth: 200, overflow: 'hidden', padding: '4px 0',
                 }}>
@@ -8240,7 +8229,7 @@ function TopNavbar({
           </button>
           {avatarOpen && (
             <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: 6, background: COLORS.surface, borderRadius: 4,
+              position: 'absolute', top: '100%', right: 0, marginTop: 6, background: COLORS.surface, borderRadius: RADIUS.control,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`,
               zIndex: 30, minWidth: 220, overflow: 'hidden',
             }}>
@@ -8274,7 +8263,7 @@ function TopNavbar({
           <strong style={{ color: COLORS.ink }}>{activeTabObj?.label}</strong>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ padding: '6px 10px', borderRadius: 999, background: isOnline ? COLORS.greenSoft : COLORS.ochreSoft, color: isOnline ? COLORS.green : COLORS.ochre, fontWeight: 600 }}>
+          <span style={{ padding: '6px 10px', borderRadius: RADIUS.pill, background: isOnline ? COLORS.greenSoft : COLORS.ochreSoft, color: isOnline ? COLORS.green : COLORS.ochre, fontWeight: 600 }}>
             {isOnline ? t('shell.online') : t('shell.offline')}
           </span>
           <span style={{ color: COLORS.inkSoft }}>
@@ -8314,7 +8303,7 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
 
   const itemStyle = (active, indent) => ({
     display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-    padding: `7px 10px 7px ${indent}px`, borderRadius: 8,
+    padding: `7px 10px 7px ${indent}px`, borderRadius: RADIUS.card,
     fontSize: 13, fontWeight: active ? 700 : 500, textAlign: 'left',
     border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
     background: active ? COLORS.greenSoft : 'transparent',
@@ -8765,7 +8754,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: '100svh', borderRadius: 16, color: COLORS.ink }}>
+    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: '100svh', borderRadius: RADIUS.card, color: COLORS.ink }}>
       <ToastContainer />
       <style>{`
         ${FONT_IMPORT}
@@ -8812,13 +8801,13 @@ export default function App() {
             lastSync={lastSync}
           />
           {billing?.mode === 'trial' && !trialBannerDismissed && (
-            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: 8, background: COLORS.greenSoft, color: COLORS.green, fontSize: 12.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, fontSize: 12.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
               <span>{t('billing.trialBanner', { count: billing.daysLeft })}</span>
               <button onClick={() => setTrialBannerDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 700, fontSize: 13 }}>×</button>
             </div>
           )}
           {billing?.mode === 'readonly' && (
-            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: 8, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
               <AlertTriangle size={14} /> {t('billing.readonlyBanner', { count: billing.daysLeft })}
             </div>
           )}
@@ -9262,7 +9251,7 @@ function ProfilModule({ role }) {
               />
               {villeLoading && <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 4 }}>{t('common.loading')}</div>}
               {villeResultats.length > 0 && (
-                <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, marginTop: 4, overflow: 'hidden' }}>
+                <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: 4, overflow: 'hidden' }}>
                   {villeResultats.map((v, i) => (
                     <button
                       key={`${v.nom}-${i}`}
@@ -9297,12 +9286,12 @@ function ProfilModule({ role }) {
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
             {error}
           </div>
         )}
         {success && (
-          <div style={{ background: COLORS.greenSoft || '#e6f4ea', color: COLORS.green, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.greenSoft || COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
             {success}
           </div>
         )}
@@ -9318,7 +9307,7 @@ function ProfilModule({ role }) {
                   onClick={() => setChosenMethod(m)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                    padding: '10px 14px', borderRadius: RADIUS.card, cursor: 'pointer',
                     border: `1px solid ${chosenMethod === m ? COLORS.ink : COLORS.border}`,
                     background: chosenMethod === m ? COLORS.ink : '#fff',
                     color: chosenMethod === m ? '#fff' : COLORS.ink,
@@ -9341,7 +9330,7 @@ function ProfilModule({ role }) {
             <div style={{ fontSize: 13, marginBottom: 10 }}>
               {t('profil.mfaScanHint')}
             </div>
-            <img src={qrCode} alt={t("profil.mfaQrAlt")} style={{ width: 180, height: 180, marginBottom: 14, borderRadius: 8, border: `1px solid ${COLORS.border}` }} />
+            <img src={qrCode} alt={t("profil.mfaQrAlt")} style={{ width: 180, height: 180, marginBottom: 14, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }} />
             <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Field label={t("auth.mfaCode")} placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
               <Button type="submit" variant="green" disabled={busy}>

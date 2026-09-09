@@ -11,11 +11,12 @@ import { useLocale, fmtMoneyWith, aujourdhuiEntreprise } from '../lib/locale.jsx
 import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 const STATE_TONE = { draft: 'blue', posted: 'green', cancel: 'red' };
 const PAY_TONE = { not_paid: 'ochre', partial: 'ochre', paid: 'green', in_payment: 'ochre', reversed: 'red' };
-const INK_SOFT = '#5B6357';
-const BORDER = '#dee2e6';
+const INK_SOFT = COLORS.inkSoft;
+const BORDER = COLORS.border;
 
 // Statusbar en chevrons — CSS dans App.css .oe-statusbar* (géométrie/couleurs extraites du
 // SCSS d'Odoo : statusbar_field.scss). En état "cancel", Odoo n'allume aucun chevron.
@@ -214,7 +215,7 @@ export default function FacturesModule() {
     return [...m.entries()];
   };
 
-  const flatInput = { width: '100%', boxSizing: 'border-box', border: '1px solid transparent', background: 'transparent', borderRadius: 4, padding: '5px 6px', fontSize: 13.5 };
+  const flatInput = { width: '100%', boxSizing: 'border-box', border: '1px solid transparent', background: 'transparent', borderRadius: RADIUS.control, padding: '5px 6px', fontSize: 13.5 };
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -237,7 +238,7 @@ export default function FacturesModule() {
           </Select>
         </div>
 
-        {apiError && <div style={{ color: '#B23B2E', fontSize: 13, marginBottom: 8 }}>{apiError}</div>}
+        {apiError && <div style={{ color: COLORS.red, fontSize: 13, marginBottom: 8 }}>{apiError}</div>}
 
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
@@ -255,13 +256,13 @@ export default function FacturesModule() {
             </thead>
             <tbody>
               {loading && <tr><td colSpan={8}><Loader2 size={14} className="spin" /></td></tr>}
-              {!loading && factures.length === 0 && <tr><td colSpan={8} style={{ color: '#9AA093' }}>{t('factures.empty')}</td></tr>}
+              {!loading && factures.length === 0 && <tr><td colSpan={8} style={{ color: COLORS.inkFaint }}>{t('factures.empty')}</td></tr>}
               {factures.map((f) => (
                 <tr key={f.id} onClick={() => ouvrirDetail(f.id)} style={{ cursor: 'pointer' }}>
                   <td><strong>{f.name || t('factures.draftPlaceholder')}</strong></td>
                   <td>{f.partnerName || '—'}</td>
                   <td>{f.invoiceDate ? fmtDate(f.invoiceDate) : '—'}</td>
-                  <td style={{ color: f.invoiceDateDue && f.state === 'posted' && f.paymentState !== 'paid' && new Date(f.invoiceDateDue) < new Date() ? '#B23B2E' : INK_SOFT }}>
+                  <td style={{ color: f.invoiceDateDue && f.state === 'posted' && f.paymentState !== 'paid' && new Date(f.invoiceDateDue) < new Date() ? COLORS.red : INK_SOFT }}>
                     {f.invoiceDateDue ? `${fmtDate(f.invoiceDateDue)} · ${echeanceLabel(f.invoiceDateDue, t)}` : '—'}
                   </td>
                   <td style={{ textAlign: 'right' }}>{montantAffiche({ devise: f.devise, amountTotal: f.amountUntaxed })}</td>
@@ -321,7 +322,7 @@ export default function FacturesModule() {
                       <td><input type="number" value={l.discount} onChange={(e) => updateLigne(i, 'discount', e.target.value)} style={{ ...flatInput, textAlign: 'right' }} placeholder="0" /></td>
                       <td><TaxSelect value={l.taxIds} options={taxes} onChange={(ids) => updateLigne(i, 'taxIds', ids)} /></td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoney(base + taxe)}</td>
-                      <td><button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: 'pointer', color: form.lignes.length === 1 ? '#CCC' : '#B23B2E' }}><Trash2 size={14} /></button></td>
+                      <td><button type="button" onClick={() => removeLigne(i)} disabled={form.lignes.length === 1} style={{ background: 'none', border: 'none', cursor: 'pointer', color: form.lignes.length === 1 ? '#CCC' : COLORS.red }}><Trash2 size={14} /></button></td>
                     </tr>
                   );
                 })}
@@ -340,8 +341,8 @@ export default function FacturesModule() {
       {/* ─── Modal détail — fiche account.move d'Odoo (métriques SCSS réelles, App.css .oe-*) ─── */}
       {detail && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={() => setDetail(null)}>
-          <div className="oe-invoice" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 8, width: '100%', maxWidth: 1040, maxHeight: '92vh', overflow: 'auto' }}>
-            <button onClick={() => setDetail(null)} aria-label={t('common.close')} style={{ position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: 13, border: 0, background: '#e9ecef', cursor: 'pointer', zIndex: 3 }}><X size={14} /></button>
+          <div className="oe-invoice" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 1040, maxHeight: '92vh', overflow: 'auto' }}>
+            <button onClick={() => setDetail(null)} aria-label={t('common.close')} style={{ position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: RADIUS.card, border: 0, background: COLORS.border, cursor: 'pointer', zIndex: 3 }}><X size={14} /></button>
 
             <div className="oe-invoice__cp">
               {detail.state === 'draft' && <Button small disabled={detailBusy} onClick={() => action(() => postFacture(detail.id), t('factures.posted'))}>{t('factures.postBtn')}</Button>}
@@ -364,7 +365,7 @@ export default function FacturesModule() {
                 {detail.state === 'cancel' && <Badge tone="red">{t('factures.state.cancel')}</Badge>}
                 {detail.state === 'posted' && <Badge tone={PAY_TONE[detail.paymentState]}>{t(`factures.pay.${detail.paymentState}`)}</Badge>}
                 {detail.inalterableHash && (
-                  <span title={t('factures.hashTitle', { n: detail.secureSequenceNumber })} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#71639e', fontSize: 12, fontWeight: 600 }}>
+                  <span title={t('factures.hashTitle', { n: detail.secureSequenceNumber })} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: COLORS.violet, fontSize: 12, fontWeight: 600 }}>
                     <Lock size={12} /> {t('factures.secured')}
                   </span>
                 )}
@@ -386,7 +387,7 @@ export default function FacturesModule() {
               </div>
 
               {avoirForm && (
-                <form onSubmit={submitAvoir} style={{ border: `1px solid ${BORDER}`, borderRadius: 4, padding: 12, marginBottom: 16, display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 16px', alignItems: 'center' }}>
+                <form onSubmit={submitAvoir} style={{ border: `1px solid ${BORDER}`, borderRadius: RADIUS.control, padding: 12, marginBottom: 16, display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 16px', alignItems: 'center' }}>
                   <label style={{ fontSize: 14, opacity: 0.66 }}>{t('factures.avoirReason')}</label>
                   <input className="flat-input" value={avoirForm.reason} onChange={(e) => setAvoirForm({ ...avoirForm, reason: e.target.value })} />
                   <label style={{ fontSize: 14, opacity: 0.66 }}>{t('factures.avoirMethod')}</label>
@@ -475,7 +476,7 @@ export default function FacturesModule() {
                 {taxesRecap(detail).map(([nom, montant]) => (<React.Fragment key={nom}><dt>{nom}</dt><dd>{montantAffiche({ devise: detail.devise, amountTotal: montant })}</dd></React.Fragment>))}
                 <div className="sep"><span>{t('factures.amountTotal')}</span><span>{montantAffiche(detail)}</span></div>
                 {detail.devise && detail.devise !== deviseEntreprise && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#5B6357' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: COLORS.inkSoft }}>
                     <span>{t('devis.totalDeviseEntreprise')}</span><span>{fmtMoney(detail.amountTotalDeviseEntreprise)}</span>
                   </div>
                 )}
@@ -487,7 +488,7 @@ export default function FacturesModule() {
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{t('factures.echeances')}</div>
                   <table className="oe-list"><tbody>
                     {detail.echeances.map((e) => (
-                      <tr key={e.id}><td style={{ width: '40%' }}>{fmtDate(e.dateEcheance)}</td><td className="num" style={{ width: '40%' }}>{enDevise(e.montant, detail.devise)}</td><td style={{ width: '20%', color: e.statut === 'Payé' ? '#28a745' : 'inherit' }}>{e.statut}</td></tr>
+                      <tr key={e.id}><td style={{ width: '40%' }}>{fmtDate(e.dateEcheance)}</td><td className="num" style={{ width: '40%' }}>{enDevise(e.montant, detail.devise)}</td><td style={{ width: '20%', color: e.statut === 'Payé' ? COLORS.green : 'inherit' }}>{e.statut}</td></tr>
                     ))}
                   </tbody></table>
                 </div>

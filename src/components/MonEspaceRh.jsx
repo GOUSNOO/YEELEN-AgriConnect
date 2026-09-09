@@ -8,6 +8,7 @@ import {
 } from '../lib/api.js';
 import { fmtMoney, fmtDate, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 // Jour de l'entreprise, pas le jour UTC (voir aujourdhuiEntreprise dans lib/locale.jsx).
 const today = () => aujourdhuiEntreprise();
@@ -58,12 +59,12 @@ export default function MonEspaceRh() {
     getSalarieBulletin(fiche.id, mois).then(setBulletin).catch(() => {});
   }, [fiche, mois]);
 
-  if (fiche === undefined) return <Card><p style={{ color: '#5B6357' }}>{t('common.loading')}</p></Card>;
+  if (fiche === undefined) return <Card><p style={{ color: COLORS.inkSoft }}>{t('common.loading')}</p></Card>;
   if (fiche === null) {
     return (
       <Card>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>{t('rh.monEspaceTitle')}</div>
-        <p style={{ color: '#5B6357', fontSize: 13 }}>{t('rh.monEspaceNoFiche')}</p>
+        <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('rh.monEspaceNoFiche')}</p>
       </Card>
     );
   }
@@ -89,11 +90,11 @@ export default function MonEspaceRh() {
       <Card>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {fiche.photo
-            ? <img src={fiche.photo} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} />
-            : <div style={{ width: 56, height: 56, borderRadius: 12, background: '#E7EFDF', color: '#3F6B3B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(fiche.prenom?.[0] || '') + (fiche.nom?.[0] || '')}</div>}
+            ? <img src={fiche.photo} alt="" style={{ width: 56, height: 56, borderRadius: RADIUS.card, objectFit: 'cover' }} />
+            : <div style={{ width: 56, height: 56, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(fiche.prenom?.[0] || '') + (fiche.nom?.[0] || '')}</div>}
           <div>
             <div style={{ fontSize: 17, fontWeight: 700 }}>{fiche.prenom} {fiche.nom}</div>
-            <div style={{ fontSize: 13, color: '#5B6357' }}>
+            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
               {fiche.posteNom || fiche.poste || t('rh.posteNonRenseigne')}
               {fiche.departementNom ? ` · ${fiche.departementNom}` : ''}
               {fiche.managerNom ? ` · ${t('rh.managerPrefix', { name: fiche.managerNom })}` : ''}
@@ -106,13 +107,13 @@ export default function MonEspaceRh() {
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('rh.monSolde', { annee })}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
           {solde.map(x => (
-            <div key={x.typeId} style={{ border: '1px solid #DAD6C4', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: x.couleur || '#22271D' }}>{x.nom}</div>
+            <div key={x.typeId} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: x.couleur || COLORS.ink }}>{x.nom}</div>
               <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{t('rh.soldeRestant', { count: x.restant })}</div>
-              <div style={{ fontSize: 11.5, color: '#5B6357' }}>{t('rh.soldeDetail', { pris: x.pris, alloues: x.alloues })}</div>
+              <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{t('rh.soldeDetail', { pris: x.pris, alloues: x.alloues })}</div>
             </div>
           ))}
-          {solde.length === 0 && <p style={{ color: '#5B6357', fontSize: 13 }}>{t('rh.aucunTypeConge')}</p>}
+          {solde.length === 0 && <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('rh.aucunTypeConge')}</p>}
         </div>
       </Card>
 
@@ -138,18 +139,18 @@ export default function MonEspaceRh() {
 
       <Card>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('rh.mesDemandes')}</div>
-        {conges.length === 0 ? <p style={{ color: '#5B6357', fontSize: 13 }}>{t('rh.congesEmpty')}</p> : (
+        {conges.length === 0 ? <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('rh.congesEmpty')}</p> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {conges.map(c => (
-              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: '1px solid #DAD6C4', borderRadius: 10 }}>
+              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{fr(c.dateDebut)} → {fr(c.dateFin)} · {c.nbJours != null ? t('rh.nbJours', { count: c.nbJours }) : '—'}</div>
-                  <div style={{ fontSize: 12, color: '#5B6357' }}>{c.typeNom || t('rh.typeNonPrecise')}{c.motif ? ` · ${c.motif}` : ''}</div>
+                  <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{c.typeNom || t('rh.typeNonPrecise')}{c.motif ? ` · ${c.motif}` : ''}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Badge tone={CONGE_TONE[c.statut] || 'blue'}>{t(`rh.congeStatut.${c.statut}`, { defaultValue: c.statut })}</Badge>
                   {c.statut === 'Demandé' && (
-                    <button onClick={() => annuler(c.id)} title={t('rh.annulerTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><X size={16} /></button>
+                    <button onClick={() => annuler(c.id)} title={t('rh.annulerTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><X size={16} /></button>
                   )}
                 </div>
               </div>
@@ -161,7 +162,7 @@ export default function MonEspaceRh() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
         <Card>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('rh.mesPresences')}</div>
-          {presences.length === 0 ? <p style={{ color: '#5B6357', fontSize: 13 }}>{t('rh.aucune')}</p> : (
+          {presences.length === 0 ? <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('rh.aucune')}</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {presences.slice(0, 12).map(p => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
@@ -174,7 +175,7 @@ export default function MonEspaceRh() {
         <Card>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('rh.mesAvances')}</div>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('rh.totalLabel', { total: fcfa(avances.reduce((s, a) => s + Number(a.montant), 0)) })}</div>
-          {avances.length === 0 ? <p style={{ color: '#5B6357', fontSize: 13 }}>{t('rh.aucune')}</p> : (
+          {avances.length === 0 ? <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('rh.aucune')}</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {avances.slice(0, 12).map(a => (
                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
@@ -189,7 +190,7 @@ export default function MonEspaceRh() {
       <Card>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('rh.monBulletin')}</div>
         <Field label={t('rh.mois')} type="month" value={mois} onChange={e => setMois(e.target.value)} style={{ maxWidth: 180 }} />
-        {!bulletin ? <p style={{ color: '#5B6357', fontSize: 13 }}>{t('common.loading')}</p> : (
+        {!bulletin ? <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('common.loading')}</p> : (
           <div className="field-group" style={{ maxWidth: 420, marginTop: 12 }}>
             <div className="field-group-label">{t('rh.bulletinSalaireRef')}</div><div style={{ fontSize: 13 }}>{fcfa(bulletin.salaire)}</div>
             <div className="field-group-label">{t('rh.bulletinAvances')}</div><div style={{ fontSize: 13 }}>− {fcfa(bulletin.avances)}</div>
@@ -198,7 +199,7 @@ export default function MonEspaceRh() {
             <div className="field-group-label"><b>{t('rh.bulletinNet')}</b></div><div style={{ fontSize: 15, fontWeight: 700 }}>{fcfa(bulletin.netEstime)}</div>
           </div>
         )}
-        <p style={{ fontSize: 11.5, color: '#5B6357', marginTop: 12 }}>{t('rh.bulletinDisclaimer')}</p>
+        <p style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 12 }}>{t('rh.bulletinDisclaimer')}</p>
       </Card>
     </div>
   );

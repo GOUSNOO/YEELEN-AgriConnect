@@ -8,9 +8,10 @@ import {
 } from '../lib/api.js';
 import { useLocale, fmtMoneyWith } from '../lib/locale.jsx';
 import { Card, Button, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS } from '../lib/theme.js';
 
-const INK_SOFT = '#5B6357';
-const BORDER = '#E2E8F0';
+const INK_SOFT = COLORS.inkSoft;
+const BORDER = COLORS.border;
 
 // Étape 6 Comptabilité : balance âgée client (façon rapport Aged Receivable d'Odoo),
 // factures en retard (relances) et paiements autonomes (avances à affecter). Tableaux en
@@ -19,7 +20,7 @@ function Section({ titre, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: 10 }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: '#22271D', padding: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />} {titre}
       </button>
       {open && <div style={{ marginTop: 10 }}>{children}</div>}
@@ -152,7 +153,7 @@ export default function ComptaReportsPanel({ onChange }) {
 
       <Section titre={t('comptaReports.aged')} defaultOpen>
         {!aged ? <Loader2 size={14} className="spin" /> : aged.partners.length === 0 ? (
-          <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div>
+          <div style={{ color: COLORS.inkFaint, fontSize: 13 }}>{t('comptaReports.nothing')}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
@@ -193,7 +194,7 @@ export default function ComptaReportsPanel({ onChange }) {
       </Section>
 
       <Section titre={t('comptaReports.overdue', { count: overdue.length })}>
-        {overdue.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
+        {overdue.length === 0 ? <div style={{ color: COLORS.inkFaint, fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
               <thead><tr style={{ color: INK_SOFT }}>
@@ -211,7 +212,7 @@ export default function ComptaReportsPanel({ onChange }) {
                     <td><strong>{f.name}</strong></td>
                     <td>{f.partnerName || '—'}</td>
                     <td>{f.invoiceDateDue ? fmtDate(f.invoiceDateDue) : '—'}</td>
-                    <td style={{ color: '#B23B2E' }}>{t('comptaReports.daysLate', { n: f.daysOverdue })}</td>
+                    <td style={{ color: COLORS.red }}>{t('comptaReports.daysLate', { n: f.daysOverdue })}</td>
                     <td style={rAmt}>{enDevise(f.amountResidual, f.devise)}</td>
                     <td style={{ color: INK_SOFT }}>{f.relanceNiveau > 0 ? t('comptaReports.remindedShort', { n: f.relanceNiveau, date: fmtDate(f.derniereRelance) }) : '—'}</td>
                     <td><Button small variant="outline" disabled={busy} onClick={() => relancer(f.id)}>{t('comptaReports.markReminded')}</Button></td>
@@ -239,7 +240,7 @@ export default function ComptaReportsPanel({ onChange }) {
           <div style={{ gridColumn: '1 / -1', textAlign: 'right' }}><Button type="submit" variant="outline" disabled={busy}>{t('comptaReports.addPayment')}</Button></div>
         </form>
 
-        {paiements.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
+        {paiements.length === 0 ? <div style={{ color: COLORS.inkFaint, fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
               <thead><tr style={{ color: INK_SOFT }}>
@@ -261,7 +262,7 @@ export default function ComptaReportsPanel({ onChange }) {
                     </tr>
                     {allocFor === p.id && (
                       <tr>
-                        <td colSpan={5} style={{ background: '#FAFAF7' }}>
+                        <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
                             <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.invoice')}
                               <select className="flat-input" value={allocForm.moveId} onChange={(e) => setAllocForm({ ...allocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
@@ -286,7 +287,7 @@ export default function ComptaReportsPanel({ onChange }) {
       </Section>
 
       <Section titre={t('comptaReports.creditNotes', { count: creditNotes.length })}>
-        {creditNotes.length === 0 ? <div style={{ color: '#9AA093', fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
+        {creditNotes.length === 0 ? <div style={{ color: COLORS.inkFaint, fontSize: 13 }}>{t('comptaReports.nothing')}</div> : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
               <thead><tr style={{ color: INK_SOFT }}>
@@ -308,7 +309,7 @@ export default function ComptaReportsPanel({ onChange }) {
                     </tr>
                     {cnAllocFor === cn.id && (
                       <tr>
-                        <td colSpan={5} style={{ background: '#FAFAF7' }}>
+                        <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
                             <label style={{ fontSize: 12.5, color: INK_SOFT }}>{t('comptaReports.invoice')}
                               <select className="flat-input" value={cnAllocForm.moveId} onChange={(e) => setCnAllocForm({ ...cnAllocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>

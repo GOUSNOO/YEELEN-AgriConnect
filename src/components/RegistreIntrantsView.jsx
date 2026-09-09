@@ -7,12 +7,13 @@ import {
 } from '../lib/api.js';
 import { Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
+import { COLORS } from '../lib/theme.js';
 
-const INK_SOFT = '#5B6357';
-const BORDER = '#E2E8F0';
-const OCHRE = '#D5974E';
-const OCHRE_SOFT = '#F2EECC';
-const RED = '#E53E3E';
+const INK_SOFT = COLORS.inkSoft;
+const BORDER = COLORS.border;
+const OCHRE = COLORS.ochre;
+const OCHRE_SOFT = COLORS.ochreSoft;
+const RED = COLORS.red;
 
 const emptyForm = {
   parcelleId: '', produitId: '', dateApplication: aujourdhuiEntreprise(),

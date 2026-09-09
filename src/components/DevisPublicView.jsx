@@ -4,10 +4,11 @@ import { FileText, Eraser, CheckCircle2, Loader2 } from 'lucide-react';
 import { getDevisPublic, signerDevisPublic, devisPublicPdfUrl } from '../lib/api.js';
 import { fmtMoneyWith, fmtDateWith } from '../lib/locale.jsx';
 import { Card, Button, Field, Badge, DataTable } from './ui.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 const C = {
-  ink: '#22271D', inkSoft: '#5B6357', border: '#DAD6C4', bg: '#FBFAF6',
-  green: '#3F6B3B', red: '#B23B2E', ochre: '#C1861F',
+  ink: COLORS.ink, inkSoft: COLORS.inkSoft, border: COLORS.border, bg: COLORS.bg,
+  green: COLORS.green, red: COLORS.red, ochre: COLORS.ochre,
 };
 
 // Pad de signature au doigt/souris — canvas dimensionné en pixels physiques (devicePixelRatio)
@@ -29,7 +30,7 @@ function SignaturePad({ onChange }) {
     canvas.height = rect.height * dpr;
     const ctx = getCtx();
     ctx.scale(dpr, dpr);
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = COLORS.surface;
     ctx.fillRect(0, 0, rect.width, rect.height);
     ctx.lineWidth = 2.4;
     ctx.lineCap = 'round';
@@ -81,7 +82,7 @@ function SignaturePad({ onChange }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
-        style={{ width: '100%', height: 180, border: `1px solid ${C.border}`, borderRadius: 10, touchAction: 'none', cursor: 'crosshair', background: '#fff' }}
+        style={{ width: '100%', height: 180, border: `1px solid ${C.border}`, borderRadius: RADIUS.card, touchAction: 'none', cursor: 'crosshair', background: '#fff' }}
       />
       <div style={{ marginTop: 8 }}>
         <Button small variant="outline" onClick={effacer}><Eraser size={13} /> {'Effacer'}</Button>
@@ -213,7 +214,7 @@ export default function DevisPublicView({ token }) {
                   </div>
                 )}
                 {devis.signatureData && (
-                  <img src={devis.signatureData} alt={t('devisPublic.signeTitre')} style={{ maxWidth: 260, border: `1px solid ${C.border}`, borderRadius: 8 }} />
+                  <img src={devis.signatureData} alt={t('devisPublic.signeTitre')} style={{ maxWidth: 260, border: `1px solid ${C.border}`, borderRadius: RADIUS.card }} />
                 )}
                 <div style={{ marginTop: 12 }}>
                   <a href={devisPublicPdfUrl(token)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.ink, textDecoration: 'none', fontWeight: 600 }}>

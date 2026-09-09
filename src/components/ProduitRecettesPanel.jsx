@@ -6,6 +6,7 @@ import {
   getProduitRecetteLignes, createProduitRecetteLigne, deleteProduitRecetteLigne,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS } from '../lib/theme.js';
 
 // Transformation agroalimentaire, étape 1 : recettes (mrp.bom-like côté ERP de référence).
 // Panneau repliable dans StocksTab, sur le modèle de ProduitTemplatesPanel/PaymentTermsPanel.
@@ -117,7 +118,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: '#22271D', padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('recettes.title')} {loaded ? `(${recettes.length})` : ''}
       </button>
 
@@ -134,7 +135,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
           </form>
 
           <DataTable>
-            <thead><tr style={{ color: '#5B6357' }}>
+            <thead><tr style={{ color: COLORS.inkSoft }}>
               <th>{t('recettes.nom')}</th>
               <th>{t('recettes.produitSortie')}</th>
               <th>{t('recettes.quantiteProduite')}</th>
@@ -146,31 +147,31 @@ export default function ProduitRecettesPanel({ module, produits }) {
                 <React.Fragment key={r.id}>
                   <tr>
                     <td>
-                      <button type="button" onClick={() => toggleDetail(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: '#22271D' }}>
+                      <button type="button" onClick={() => toggleDetail(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: COLORS.ink }}>
                         {expandedId === r.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {r.nom}
                       </button>
                     </td>
-                    <td style={{ color: '#5B6357' }}>{r.produitSortieNom}</td>
+                    <td style={{ color: COLORS.inkSoft }}>{r.produitSortieNom}</td>
                     <td>{r.quantiteProduite}</td>
                     <td>{r.nombreLignes}</td>
                     <td>
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => supprimerRecette(r.id, r.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
+                        <button type="button" onClick={() => supprimerRecette(r.id, r.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
                   {expandedId === r.id && (
                     <tr>
-                      <td colSpan={5} style={{ background: '#FAFBF7' }}>
+                      <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
                         <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {(lignesParRecette[r.id] || []).map((l) => (
                             <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
                               <span>{l.produitNom} — {l.quantite}{l.notes ? ` (${l.notes})` : ''}</span>
-                              <button type="button" onClick={() => supprimerLigne(r.id, l.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex' }}><Trash2 size={12} /></button>
+                              <button type="button" onClick={() => supprimerLigne(r.id, l.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><Trash2 size={12} /></button>
                             </div>
                           ))}
                           {(lignesParRecette[r.id] || []).length === 0 && (
-                            <div style={{ color: '#5B6357', fontSize: 13 }}>{t('recettes.aucunIngredient')}</div>
+                            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('recettes.aucunIngredient')}</div>
                           )}
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginTop: 6 }}>
                             <select
@@ -198,7 +199,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
               ))}
             </tbody>
           </DataTable>
-          {recettes.length === 0 && <div style={{ color: '#5B6357', fontSize: 13 }}>{t('recettes.aucuneRecette')}</div>}
+          {recettes.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('recettes.aucuneRecette')}</div>}
         </div>
       )}
     </Card>

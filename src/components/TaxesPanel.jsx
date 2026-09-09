@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { createTax, deleteTax } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS } from '../lib/theme.js';
 
 // Référentiel compact des taxes réutilisables (account.tax-like), rendu dans DevisModule.
 // Étape 1 : on expose amount_type 'percent' et 'fixed' (à l'unité) + price_include. Les
@@ -48,7 +49,7 @@ export default function TaxesPanel({ taxes, onChange }) {
 
   return (
     <Card>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: '#22271D', padding: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('taxes.title')} ({(taxes || []).length})
       </button>
 
@@ -61,7 +62,7 @@ export default function TaxesPanel({ taxes, onChange }) {
               <option value="fixed">{t('taxes.amountTypeFixed')}</option>
             </Select>
             <Field label={t('taxes.amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#5B6357' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
               <input type="checkbox" checked={form.priceInclude} onChange={(e) => setForm({ ...form, priceInclude: e.target.checked })} />
               {t('taxes.priceInclude')}
             </label>
@@ -70,7 +71,7 @@ export default function TaxesPanel({ taxes, onChange }) {
 
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
-              <thead><tr style={{ color: '#5B6357' }}>
+              <thead><tr style={{ color: COLORS.inkSoft }}>
                 <th style={{ width: '42%' }}>{t('taxes.name')}</th>
                 <th style={{ width: '20%' }}>{t('taxes.amountType')}</th>
                 <th style={{ width: '18%', textAlign: 'right' }}>{t('taxes.amount')}</th>
@@ -81,10 +82,10 @@ export default function TaxesPanel({ taxes, onChange }) {
                 {(taxes || []).map((tax) => (
                   <tr key={tax.id}>
                     <td><strong>{tax.name}</strong></td>
-                    <td style={{ color: '#5B6357' }}>{tax.amountType === 'fixed' ? t('taxes.amountTypeFixed') : t('taxes.amountTypePercent')}</td>
+                    <td style={{ color: COLORS.inkSoft }}>{tax.amountType === 'fixed' ? t('taxes.amountTypeFixed') : t('taxes.amountTypePercent')}</td>
                     <td style={{ textAlign: 'right' }}>{tax.amountType === 'fixed' ? tax.amount : `${tax.amount} %`}</td>
                     <td>{tax.priceInclude ? '✓' : ''}</td>
-                    <td><button onClick={() => supprimer(tax.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button></td>
+                    <td><button onClick={() => supprimer(tax.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button></td>
                   </tr>
                 ))}
               </tbody>

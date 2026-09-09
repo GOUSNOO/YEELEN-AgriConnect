@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, Check, HelpCircle } from 'lucide-react';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 let toastListeners = [];
 function notify(message, type = 'error') {
@@ -40,9 +41,9 @@ export function ToastContainer() {
     }}>
       {toasts.map(t => (
         <div key={t.id} style={{
-          background: t.type === 'error' ? '#F6E2DE' : '#E6F4EA',
-          color: t.type === 'error' ? '#B23B2E' : '#3F6B3B',
-          borderRadius: 10, padding: '11px 14px',
+          background: t.type === 'error' ? COLORS.redSoft : COLORS.greenSoft,
+          color: t.type === 'error' ? COLORS.red : COLORS.green,
+          borderRadius: RADIUS.card, padding: '11px 14px',
           fontSize: 13.5, fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: 8,
           boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
         }}>
@@ -58,8 +59,8 @@ export function ToastContainer() {
 export function Card({ children, style, ...rest }) {
   return (
     <div style={{
-      background: '#FFFFFF', border: '1px solid #DAD6C4',
-      borderRadius: 14, padding: '18px 20px', ...style
+      background: COLORS.surface, border: `1px solid ${COLORS.border}`,
+      borderRadius: RADIUS.card, padding: '18px 20px', ...style
     }} {...rest}>
       {children}
     </div>
@@ -84,17 +85,17 @@ export function DataTable({ children, style, wrapperStyle, ...rest }) {
 export function Button({ children, onClick, variant = 'default', small, style, type = 'button', disabled, ...rest }) {
   const base = {
     fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: small ? 13 : 14,
-    padding: small ? '6px 12px' : '8px 16px', borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer',
+    padding: small ? '6px 12px' : '8px 16px', borderRadius: RADIUS.card, cursor: disabled ? 'not-allowed' : 'pointer',
     border: '1px solid transparent', display: 'inline-flex', alignItems: 'center', gap: 6,
     transition: 'transform 0.1s ease, opacity 0.15s ease', opacity: disabled ? 0.5 : 1,
   };
   const variants = {
-    default: { background: '#22271D', color: '#fff' },
-    outline: { background: 'transparent', color: '#22271D', borderColor: '#DAD6C4' },
-    green: { background: '#3F6B3B', color: '#fff' },
-    ochre: { background: '#C1861F', color: '#fff' },
-    danger: { background: 'transparent', color: '#B23B2E', borderColor: '#F6E2DE' },
-    ghost: { background: 'transparent', color: '#5B6357' },
+    default: { background: COLORS.ink, color: '#fff' },
+    outline: { background: 'transparent', color: COLORS.ink, borderColor: COLORS.border },
+    green: { background: COLORS.green, color: '#fff' },
+    ochre: { background: COLORS.ochre, color: '#fff' },
+    danger: { background: 'transparent', color: COLORS.red, borderColor: COLORS.redSoft },
+    ghost: { background: 'transparent', color: COLORS.inkSoft },
   };
   return (
     <button type={type} disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant], ...style }} {...rest}>
@@ -147,7 +148,7 @@ export function AideChamp({ texte }) {
         type="button" onClick={toggle} aria-label="Aide sur ce champ"
         style={{
           background: 'transparent', border: 'none', padding: 0, marginLeft: 4,
-          cursor: 'pointer', color: open ? '#3F6B3B' : '#9AA093', display: 'inline-flex',
+          cursor: 'pointer', color: open ? COLORS.green : COLORS.inkFaint, display: 'inline-flex',
         }}
       >
         <HelpCircle size={14} />
@@ -159,15 +160,15 @@ export function AideChamp({ texte }) {
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'absolute', top: 'calc(100% + 8px)', left: -4, zIndex: 60,
-            width: 'min(250px, 72vw)', background: '#FFFFFF', color: '#4A5247',
-            border: '1px solid #DAD6C4', borderRadius: 10, padding: '10px 12px',
+            width: 'min(250px, 72vw)', background: COLORS.surface, color: COLORS.ink,
+            border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px',
             fontSize: 12, fontWeight: 400, lineHeight: 1.45, textAlign: 'left',
             boxShadow: '0 8px 24px rgba(0,0,0,0.16)', whiteSpace: 'normal',
           }}
         >
           <span style={{
             position: 'absolute', top: -5, left: 10, width: 9, height: 9,
-            background: '#FFFFFF', borderLeft: '1px solid #DAD6C4', borderTop: '1px solid #DAD6C4',
+            background: COLORS.surface, borderLeft: `1px solid ${COLORS.border}`, borderTop: `1px solid ${COLORS.border}`,
             transform: 'rotate(45deg)',
           }} />
           {texte}
@@ -186,7 +187,7 @@ export function AideChamp({ texte }) {
 // déjà utilisés (une centaine d'endroits dans l'app).
 export function Field({ label, aide, className, style, ...props }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
       {(label || aide) && (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>{label}{aide ? <AideChamp texte={aide} /> : null}</span>
       )}
@@ -201,7 +202,7 @@ export function Field({ label, aide, className, style, ...props }) {
 
 export function Select({ label, aide, children, className, style, ...props }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
       {(label || aide) && (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>{label}{aide ? <AideChamp texte={aide} /> : null}</span>
       )}
@@ -218,16 +219,16 @@ export function Select({ label, aide, children, className, style, ...props }) {
 
 export function Badge({ children, tone = 'green' }) {
   const map = {
-    green: { bg: '#E7EFDF', fg: '#3F6B3B' },
-    ochre: { bg: '#F7EAD2', fg: '#C1861F' },
-    blue: { bg: '#E1EDF2', fg: '#2E6E8E' },
-    red: { bg: '#F6E2DE', fg: '#B23B2E' },
+    green: { bg: COLORS.greenSoft, fg: COLORS.green },
+    ochre: { bg: COLORS.ochreSoft, fg: COLORS.ochre },
+    blue: { bg: COLORS.blueSoft, fg: COLORS.blue },
+    red: { bg: COLORS.redSoft, fg: COLORS.red },
   };
   const t = map[tone] || map.green;
   return (
     <span style={{
       background: t.bg, color: t.fg, fontSize: 11.5, fontWeight: 600,
-      padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap'
+      padding: '3px 9px', borderRadius: RADIUS.pill, whiteSpace: 'nowrap'
     }}>
       {children}
     </span>
@@ -259,19 +260,19 @@ export function GaugeDial({ value, max = 100, label, unit, colorMain, colorTrack
           alignItems: 'center', justifyContent: 'center'
         }}>
           {icon}
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 17, color: '#22271D', marginTop: 2 }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 17, color: COLORS.ink, marginTop: 2 }}>
             {Math.round(value)}{unit}
           </span>
         </div>
       </div>
-      <span style={{ fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>{label}</span>
     </div>
   );
 }
 
 export function MiniChart({ data, color, height = 110 }) {
   if (!data || data.length === 0) {
-    return <div style={{ color: '#5B6357', fontSize: 13 }}>Aucune donnée</div>;
+    return <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>Aucune donnée</div>;
   }
   const max = Math.max(...data.map(d => d.value), 1);
   return (
@@ -279,7 +280,7 @@ export function MiniChart({ data, color, height = 110 }) {
       {data.map((item, i) => (
         <div key={item.id != null ? item.id : `${item.label}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           <div style={{ width: '100%', maxWidth: 24, height: `${Math.max(8, (item.value / max) * 100)}%`, minHeight: 8, background: color, borderRadius: '6px 6px 0 0' }} />
-          <span style={{ fontSize: 10, color: '#5B6357', textAlign: 'center' }}>{item.label}</span>
+          <span style={{ fontSize: 10, color: COLORS.inkSoft, textAlign: 'center' }}>{item.label}</span>
         </div>
       ))}
     </div>

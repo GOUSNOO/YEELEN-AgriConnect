@@ -14,23 +14,11 @@ import {
   createBanque,
   deleteBanque,
 } from '../lib/api';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
-const COLORS = {
-  bg: '#F1F0E4',
-  surface: '#FFFFFF',
-  surfaceAlt: '#FBFAF4',
-  ink: '#22271D',
-  inkSoft: '#5B6357',
-  border: '#DAD6C4',
-  green: '#3F6B3B',
-  greenSoft: '#E7EFDF',
-  ochre: '#C1861F',
-  ochreSoft: '#F7EAD2',
-  blue: '#2E6E8E',
-  blueSoft: '#E1EDF2',
-  red: '#B23B2E',
-  redSoft: '#F6E2DE',
-};
+// Ce module portait sa propre copie de COLORS (une troisième palette, avec les mêmes noms
+// de jetons et un fond beige légèrement différent). Elle est remplacée par la palette
+// partagée : voir src/lib/theme.js.
 
 export function FinancesModule({ role }) {
   const { t } = useTranslation();
@@ -171,7 +159,7 @@ export function FinancesModule({ role }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 10, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
@@ -203,7 +191,7 @@ export function FinancesModule({ role }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
             {soldesParBanque.map(b => (
-              <div key={b.id} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
+              <div key={b.id} style={{ padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600 }}>{b.nomBanque}</div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700 }}>{fmtMoney(b.soldeActuel)}</div>
               </div>
@@ -388,7 +376,7 @@ export function BanquesModule({ onCountChange }) {
         </div>
 
         {formError && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
             {formError}
           </div>
         )}
@@ -410,7 +398,7 @@ export function BanquesModule({ onCountChange }) {
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: 8, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
             {error}
           </div>
         )}
@@ -426,7 +414,7 @@ export function BanquesModule({ onCountChange }) {
             {banques.map(b => (
               <div key={b.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 12px', borderRadius: 10, border: `1px solid ${COLORS.border}`,
+                padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`,
               }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 13.5 }}>{b.nomBanque}</div>

@@ -3768,3 +3768,58 @@ cascade, isolation) → **386/386**. Frontend 119/119, build vert.
 donnent bien « Portail nord — Poulailler · Mouvement détecté · 7 détections » et « Intrusion
 signalée · Portail ouvert la nuit », le badge passe de « 2 non lue(s) » à « 1 » après un clic
 sur « Vu », et l'URL de webhook affichée est bien celle qui répond.
+
+### 2026-09-09 — Palette et formes unifiées (direction terreuse)
+
+Point de départ : une discussion design, pas une demande de correctif. L'audit a montré que
+**deux palettes coexistaient**, et que c'était structurel : `COLORS` déclaré dans `App.jsx`
+(bleu-gris, vert émeraude) contre une seconde palette **jamais déclarée**, écrite en dur dans
+les composants (noir-vert, vert forêt, terre cuite, beige). C'est la seconde qui l'emportait
+en pratique, puisque `ui.jsx` — d'où viennent boutons, cartes et champs — la portait. Et elle
+ne pouvait pas importer `COLORS`, `App.jsx` important `ui.jsx` : le cycle d'import est la
+cause réelle du problème. Une **troisième** palette locale a même été trouvée en cours de
+route dans `modules/finances.jsx`, avec les mêmes noms de jetons et un fond beige différent.
+
+Chiffres du constat : 133 occurrences du même gris en dur, 12 valeurs d'arrondi, 28 fichiers.
+Un aperçu comparatif a été publié en artifact pour trancher (les deux nuanciers, le même écran
+décliné, l'échelle des arrondis).
+
+**La direction a été choisie sur un critère mesuré, pas au goût.** Contrastes calculés sur les
+deux palettes : la palette *déclarée* échouait sur ses trois couleurs sémantiques — son vert
+d'action avec du texte blanc tombait à **3,25:1**, son rouge à 3,94:1, son ocre à 2,39:1. La
+terreuse tient 6,22:1 sur le même bouton et 5,64:1 sur l'alerte. Pour une application
+consultée dehors sur des écrans bon marché, cela tranche. Elle est en outre déjà ce que voient
+les utilisateurs, donc l'unification ne déplace presque rien — sauf la navbar, qui passe de
+l'émeraude au vert forêt **et y gagne son contraste** (3,25:1 → 6,22:1).
+
+**Corrections de contraste au passage** : l'ambre `#C1861F` (3,00:1, et 3,14:1 en fond de
+bouton) devient `#8A5C0C` (5,81:1) ; le bleu `#3B82F6` et le violet `#9B6BD6` des catégories de
+navigation, qui échouaient aussi (3,52:1 et 3,67:1) et n'appartenaient à aucune des deux
+palettes, deviennent `#2E6E8E` et `#6B5B8E`.
+
+**Mise en œuvre** : `src/lib/theme.js` (palette + `RADIUS`), importé par `App.jsx` **et** par
+les composants — le nom `COLORS` est conservé pour que les ~1000 usages d'`App.jsx` restent
+inchangés, seules les valeurs bougent. 275 littéraux remplacés par leur jeton dans 27 fichiers,
+puis 48 couleurs enfermées dans des chaînes composées (`'1px solid #DAD6C4'`) converties en
+template literals, puis 6 reliquats traités à la main. **Vérification finale par grep : il ne
+reste que 5 couleurs littérales**, toutes dans les feuilles de style des documents imprimés —
+laissées volontairement et désormais commentées, un PDF s'imprimant sur blanc et non sur le
+fond beige de l'écran.
+
+**Trois bugs de mes propres scripts, trouvés par le build** : l'import inséré au milieu d'un
+`import { … }` multi-ligne (11 fichiers) ; des attributs JSX écrits sans accolades
+(`color="#B23B2E"` devenu `color=COLORS.red`, invalide — 4 cas) ; et la palette locale de
+`finances.jsx` devenue auto-référente puis en conflit avec l'import.
+
+**Limite assumée** : les arrondis ont été **consolidés** (12 valeurs → 3, 154 occurrences) mais
+pas **réassignés par rôle** — un bouton qui portait 8 px reçoit `RADIUS.card` plutôt que
+`RADIUS.control`, faute de pouvoir distinguer automatiquement un bouton d'une carte. L'écran
+est donc inchangé (le rayon des boutons passe de 9 à 8 px), mais le nom du jeton ne dit pas
+encore le rôle partout. Un second passage, à la main dans `ui.jsx` et les primitives, reste à
+faire si l'on veut que chaque jeton porte vraiment son sens — c'est un choix d'apparence, donc
+à valider par l'utilisateur avant.
+
+**Vérifié** : build, `oxlint` (0 erreur), 119/119 tests frontend, et rendu réel sur une
+entreprise jetable (navbar vert forêt, bouton d'ajout, jauges bleu-vert et ambre assorties,
+badges et bordures beiges) — supprimée ensuite. Les trois variantes de bouton passent
+désormais le seuil AA avec leur texte blanc (15,3:1 / 6,2:1 / 5,8:1).

@@ -9,6 +9,7 @@ import {
 } from '../lib/api.js';
 import { fmtDate } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 const fr = (d) => (d ? fmtDate(d) : '—');
 
@@ -52,17 +53,17 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
 
   return (
     <Card>
-      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: '#22271D', padding: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('rh.referentielsTitle')}
       </button>
 
       {open && (
         <div style={{ marginTop: 14 }}>
-          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #DAD6C4', marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 14, flexWrap: 'wrap' }}>
             {SUBS.map(s => (
               <button key={s.id} onClick={() => setSub(s.id)} style={{
-                background: 'transparent', color: sub === s.id ? '#22271D' : '#5B6357',
-                border: 'none', borderBottom: sub === s.id ? '2px solid #3F6B3B' : '2px solid transparent',
+                background: 'transparent', color: sub === s.id ? COLORS.ink : COLORS.inkSoft,
+                border: 'none', borderBottom: sub === s.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
                 padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
               }}>{s.label}</button>
             ))}
@@ -106,7 +107,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
                 <Field label={t('rh.ferieLibelle')} placeholder={t('common.optionalPlaceholder')} value={ferieForm.nom} onChange={e => setFerieForm({ ...ferieForm, nom: e.target.value })} />
                 <Button type="submit" variant="outline"><Plus size={14} /> {t('common.add')}</Button>
               </form>
-              <p style={{ fontSize: 12, color: '#5B6357', marginBottom: 10 }}>{t('rh.ferieHint')}</p>
+              <p style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 10 }}>{t('rh.ferieHint')}</p>
               {feries.map(f => (
                 <Row key={f.id} label={`${fr(f.date)}${f.nom ? ` — ${f.nom}` : ''}`} onDelete={async () => { await deleteJourFerie(f.id); after(); }} />
               ))}
@@ -139,9 +140,9 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
 
 function Row({ label, onDelete }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: '1px solid #DAD6C4', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginBottom: 6, fontSize: 13 }}>
       <span>{label}</span>
-      <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
+      <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
     </div>
   );
 }

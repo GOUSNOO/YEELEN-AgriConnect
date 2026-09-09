@@ -4,6 +4,7 @@ import { Send } from 'lucide-react';
 import { createFeedback, getAllFeedback, updateFeedbackStatus } from '../lib/api.js';
 import { Badge, Button, Card, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 const TYPES = ['Suggestion', 'Frustration', 'Bug', 'Autre'];
 const STATUTS = ['Nouveau', 'Lu', 'Traité'];
@@ -74,14 +75,14 @@ export function FeedbackModule({ isPlatformAdmin }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <h2 style={{ marginTop: 0 }}>{t('feedback.formTitle')}</h2>
-        <p style={{ marginTop: 0, color: '#5B6357', fontSize: 13.5 }}>
+        <p style={{ marginTop: 0, color: COLORS.inkSoft, fontSize: 13.5 }}>
           {t('feedback.formHint')}
         </p>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Select label={t('feedback.typeLabel')} value={form.type} onChange={e => setForm(prev => ({ ...prev, type: e.target.value }))}>
             {TYPES.map(ty => <option key={ty} value={ty}>{t(`feedback.typeLabels.${ty}`, { defaultValue: ty })}</option>)}
           </Select>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: '#5B6357', fontWeight: 500 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
             {t('feedback.messageLabel')}
             <textarea
               className="flat-input"
@@ -102,22 +103,22 @@ export function FeedbackModule({ isPlatformAdmin }) {
         <Card>
           <h2 style={{ marginTop: 0 }}>{t('feedback.adminTitle')}</h2>
           {isLoading ? (
-            <p style={{ margin: 0, color: '#5B6357' }}>{t('common.loading')}</p>
+            <p style={{ margin: 0, color: COLORS.inkSoft }}>{t('common.loading')}</p>
           ) : error ? (
-            <p style={{ margin: 0, color: '#B23B2E' }}>{error}</p>
+            <p style={{ margin: 0, color: COLORS.red }}>{error}</p>
           ) : allFeedback.length === 0 ? (
-            <p style={{ margin: 0, color: '#5B6357' }}>{t('feedback.adminEmpty')}</p>
+            <p style={{ margin: 0, color: COLORS.inkSoft }}>{t('feedback.adminEmpty')}</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {allFeedback.map(f => (
-                <div key={f.id} style={{ border: '1px solid #DAD6C4', borderRadius: 10, padding: '10px 12px' }}>
+                <div key={f.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <Badge tone={TYPE_TONE[f.type] || 'green'}>{t(`feedback.typeLabels.${f.type}`, { defaultValue: f.type })}</Badge>
-                      <span style={{ fontSize: 12.5, color: '#5B6357' }}>
+                      <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
                         {f.entrepriseNom}{f.userEmail ? ` — ${f.userEmail}` : ''}
                       </span>
-                      <span style={{ fontSize: 12, color: '#8B9184' }}>
+                      <span style={{ fontSize: 12, color: COLORS.inkFaint }}>
                         {f.createdAt ? fmtDate(f.createdAt) : ''}
                       </span>
                     </div>
@@ -126,13 +127,13 @@ export function FeedbackModule({ isPlatformAdmin }) {
                       onChange={e => handleStatutChange(f.id, e.target.value)}
                       style={{
                         fontFamily: "'Inter', sans-serif", fontSize: 12.5, padding: '4px 8px',
-                        borderRadius: 6, border: '1px solid #DAD6C4', background: '#FBFAF4', color: '#22271D',
+                        borderRadius: RADIUS.control, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.ink,
                       }}
                     >
                       {STATUTS.map(s => <option key={s} value={s}>{t(`feedback.statutLabels.${s}`, { defaultValue: s })}</option>)}
                     </select>
                   </div>
-                  <p style={{ margin: '8px 0 0', fontSize: 14, color: '#22271D' }}>{f.message}</p>
+                  <p style={{ margin: '8px 0 0', fontSize: 14, color: COLORS.ink }}>{f.message}</p>
                 </div>
               ))}
             </div>

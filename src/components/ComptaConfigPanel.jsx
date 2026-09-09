@@ -6,6 +6,7 @@ import {
   getAccounts, createAccount, deleteAccount,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS } from '../lib/theme.js';
 
 // Référentiel compact « Comptabilité — Configuration » : journaux (account.journal-like) +
 // plan de comptes (account.account-like). Étape 2 — rien ne les consomme encore
@@ -77,13 +78,13 @@ export default function ComptaConfigPanel() {
     catch (err) { notifyError(err, t('comptaConfig.hashError')); }
   };
 
-  const INK_SOFT = '#5B6357';
-  const btnSuppr = { background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' };
+  const INK_SOFT = COLORS.inkSoft;
+  const btnSuppr = { background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' };
   const gridForm = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 10 };
 
   return (
     <Card>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: '#22271D', padding: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('comptaConfig.title')}
       </button>
 
@@ -118,7 +119,7 @@ export default function ComptaConfigPanel() {
                         <button
                           onClick={() => activerHash(j)}
                           title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
-                          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? '#3F6B3B' : '#9AA093', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? COLORS.green : COLORS.inkFaint, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
                         >
                           <Lock size={13} /> {j.restrictModeHashTable ? t('comptaConfig.hashActive') : t('comptaConfig.hashInactive')}
                         </button>

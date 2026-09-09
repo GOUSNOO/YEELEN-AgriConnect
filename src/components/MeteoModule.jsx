@@ -4,23 +4,24 @@ import { Sun, CloudRain, Wind, Droplet, Thermometer, Sunrise, Sunset } from 'luc
 import { getMeteo, getParcellesLocalisees } from '../lib/api.js';
 import { Card, Badge, Select } from './ui.jsx';
 import { fmtDate } from '../lib/locale.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 // Palette locale (App.jsx:COLORS n'est pas exporté — même convention que FeedbackModule/
 // PaymentTermsPanel : valeurs hexadécimales dupliquées, pas une nouvelle dépendance partagée).
 const C = {
-  ink: '#22271D', inkSoft: '#5B6357', border: '#DAD6C4',
-  green: '#3F6B3B', greenSoft: '#E7EFDF',
-  red: '#B23B2E', redSoft: '#F6E2DE',
-  ochre: '#C1861F', ochreSoft: '#F7EAD2',
-  blue: '#2E6E8E', blueSoft: '#E1EDF2',
+  ink: COLORS.ink, inkSoft: COLORS.inkSoft, border: COLORS.border,
+  green: COLORS.green, greenSoft: COLORS.greenSoft,
+  red: COLORS.red, redSoft: COLORS.redSoft,
+  ochre: COLORS.ochre, ochreSoft: COLORS.ochreSoft,
+  blue: COLORS.blue, blueSoft: COLORS.blueSoft,
 };
 
 const GRAVITE_TONE = { haute: 'red', moyenne: 'ochre', basse: 'blue' };
 
 function StatTile({ icon: Icon, label, value, accent }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <div style={{ width: 34, height: 34, borderRadius: 9, background: accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: `1px solid ${C.border}`, borderRadius: RADIUS.card }}>
+      <div style={{ width: 34, height: 34, borderRadius: RADIUS.card, background: accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon size={16} color={accent} />
       </div>
       <div>

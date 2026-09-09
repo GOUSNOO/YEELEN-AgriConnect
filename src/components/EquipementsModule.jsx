@@ -7,6 +7,7 @@ import {
 } from '../lib/api.js';
 import { Badge, Button, Card, DataTable, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
+import { COLORS, RADIUS } from '../lib/theme.js';
 
 const CATEGORIES = ['Tracteur/Machine', 'Véhicule', 'Outil manuel', 'Irrigation', 'Autre'];
 const ETATS = ['Fonctionnel', 'En panne', 'En maintenance', 'Hors service'];
@@ -161,13 +162,13 @@ export function EquipementsModule({ canManage = false }) {
   };
 
   if (isLoading) {
-    return <Card><p style={{ margin: 0, color: '#5B6357' }}>{t('equipements.loading')}</p></Card>;
+    return <Card><p style={{ margin: 0, color: COLORS.inkSoft }}>{t('equipements.loading')}</p></Card>;
   }
   if (error) {
     return (
       <Card>
-        <p style={{ margin: 0, color: '#B23B2E', fontWeight: 600 }}>{t('equipements.errorTitle')}</p>
-        <p style={{ margin: '4px 0 0', color: '#5B6357', fontSize: 13 }}>{error}</p>
+        <p style={{ margin: 0, color: COLORS.red, fontWeight: 600 }}>{t('equipements.errorTitle')}</p>
+        <p style={{ margin: '4px 0 0', color: COLORS.inkSoft, fontSize: 13 }}>{error}</p>
       </Card>
     );
   }
@@ -196,7 +197,7 @@ export function EquipementsModule({ canManage = false }) {
       <Card style={{ padding: 0 }}>
         <DataTable>
           <thead>
-            <tr style={{ textAlign: 'left', color: '#5B6357' }}>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
               <th>{t('equipements.colEquipement')}</th>
               <th>{t('equipements.categorie')}</th>
               <th>{t('equipements.etat')}</th>
@@ -206,7 +207,7 @@ export function EquipementsModule({ canManage = false }) {
           </thead>
           <tbody>
             {equipements.length === 0 ? (
-              <tr><td colSpan={5} style={{ color: '#5B6357' }}>{t('equipements.emptyTable')}</td></tr>
+              <tr><td colSpan={5} style={{ color: COLORS.inkSoft }}>{t('equipements.emptyTable')}</td></tr>
             ) : equipements.map(eq => (
               <tr key={eq.id}>
                 <td style={{ fontWeight: 500 }}>{eq.nom}</td>
@@ -215,15 +216,15 @@ export function EquipementsModule({ canManage = false }) {
                 <td>{eq.valeur != null ? fmtMoney(eq.valeur) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                    <button onClick={() => openDetail(eq)} title={t("equipements.maintenanceTitle")} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', display: 'flex' }}>
+                    <button onClick={() => openDetail(eq)} title={t("equipements.maintenanceTitle")} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                       <Wrench size={15} />
                     </button>
                     {canManage && (
                       <>
-                        <button onClick={() => startEdit(eq)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2E6E8E', display: 'flex' }}>
+                        <button onClick={() => startEdit(eq)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
                           <Settings2 size={15} />
                         </button>
-                        <button onClick={() => remove(eq.id, eq.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}>
+                        <button onClick={() => remove(eq.id, eq.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
                           <Trash2 size={15} />
                         </button>
                       </>
@@ -238,10 +239,10 @@ export function EquipementsModule({ canManage = false }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 500, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('equipements.editTitle')}</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', fontSize: 18 }}>×</button>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
             <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
@@ -267,17 +268,17 @@ export function EquipementsModule({ canManage = false }) {
 
       {detailEquipement && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{detailEquipement.nom}</div>
-                <div style={{ fontSize: 13, color: '#5B6357' }}>{t('equipements.maintenanceTitle')}</div>
+                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('equipements.maintenanceTitle')}</div>
               </div>
-              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5B6357', fontSize: 18 }}>×</button>
+              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
             </div>
 
             {canManage && (
-              <form onSubmit={addMaintenance} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #DAD6C4' }}>
+              <form onSubmit={addMaintenance} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
                 <Field label={t("equipements.maintDate")} type="date" value={maintenanceForm.date} onChange={e => setMaintenanceForm({ ...maintenanceForm, date: e.target.value })} />
                 <Field label={t("equipements.maintDescription")} placeholder={t("equipements.maintDescriptionPlaceholder")} value={maintenanceForm.description} onChange={e => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} />
                 <Field label={t("equipements.maintCout", { devise })} type="number" placeholder={t("equipements.notesPlaceholder")} value={maintenanceForm.cout} onChange={e => setMaintenanceForm({ ...maintenanceForm, cout: e.target.value })} />
@@ -286,22 +287,22 @@ export function EquipementsModule({ canManage = false }) {
             )}
 
             {maintenanceLoading ? (
-              <p style={{ color: '#5B6357' }}>{t('common.loading')}</p>
+              <p style={{ color: COLORS.inkSoft }}>{t('common.loading')}</p>
             ) : maintenance.length === 0 ? (
-              <p style={{ color: '#5B6357' }}>{t('equipements.maintEmpty')}</p>
+              <p style={{ color: COLORS.inkSoft }}>{t('equipements.maintEmpty')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {maintenance.map(m => (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid #DAD6C4', borderRadius: 10 }}>
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{m.description}</div>
-                      <div style={{ fontSize: 12, color: '#5B6357' }}>
+                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
                         {m.date ? fmtDate(m.date) : '—'}
                         {m.cout != null ? ` · ${fmtMoney(m.cout)}` : ''}
                       </div>
                     </div>
                     {canManage && (
-                      <button onClick={() => removeMaintenance(m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}>
+                      <button onClick={() => removeMaintenance(m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
                         <Trash2 size={15} />
                       </button>
                     )}

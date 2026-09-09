@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight, Download, AlertTriangle } from 'lucide-react';
 import { getOrdresTransformation, getHaccpControles, createHaccpControle, deleteHaccpControle } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
+import { COLORS } from '../lib/theme.js';
 
 const TYPES_CONTROLE = ['temperature', 'hygiene', 'tracabilite', 'autre'];
 
@@ -118,10 +119,10 @@ export default function HaccpPanel({ module }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: '#22271D', padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('haccp.title')} {loaded ? `(${controles.length})` : ''}
         {nonConformes > 0 && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#B23B2E', fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
             <AlertTriangle size={13} /> {t('haccp.nonConformes', { count: nonConformes })}
           </span>
         )}
@@ -130,7 +131,7 @@ export default function HaccpPanel({ module }) {
       {open && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {ordres.length === 0 ? (
-            <div style={{ color: '#5B6357', fontSize: 13 }}>{t('haccp.aucunOrdreDisponible')}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('haccp.aucunOrdreDisponible')}</div>
           ) : (
             <form onSubmit={ajouterControle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
               <Select label={t('haccp.ordre')} value={form.ordreTransformationId} onChange={(e) => setForm({ ...form, ordreTransformationId: e.target.value })}>
@@ -144,7 +145,7 @@ export default function HaccpPanel({ module }) {
               <Field label={t('haccp.unite')} placeholder="°C" value={form.unite} onChange={(e) => setForm({ ...form, unite: e.target.value })} />
               <Field label={t('haccp.seuilMin')} type="number" step="0.01" value={form.seuilMin} onChange={(e) => setForm({ ...form, seuilMin: e.target.value })} />
               <Field label={t('haccp.seuilMax')} type="number" step="0.01" value={form.seuilMax} onChange={(e) => setForm({ ...form, seuilMax: e.target.value })} />
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#5B6357' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
                 <input type="checkbox" checked={form.conforme} onChange={(e) => setForm({ ...form, conforme: e.target.checked })} />
                 {t('haccp.conforme')}
               </label>
@@ -157,7 +158,7 @@ export default function HaccpPanel({ module }) {
           )}
 
           <DataTable>
-            <thead><tr style={{ color: '#5B6357' }}>
+            <thead><tr style={{ color: COLORS.inkSoft }}>
               <th>{t('haccp.date')}</th>
               <th>{t('haccp.ordre')}</th>
               <th>{t('haccp.typeLabel')}</th>
@@ -167,17 +168,17 @@ export default function HaccpPanel({ module }) {
             </tr></thead>
             <tbody>
               {controles.map((c) => (
-                <tr key={c.id} style={!c.conforme ? { background: '#FBEAEA' } : undefined}>
+                <tr key={c.id} style={!c.conforme ? { background: COLORS.redSoft } : undefined}>
                   <td>{c.dateControle}</td>
-                  <td style={{ color: '#5B6357' }}>{c.ordreTransformationNom || '—'}</td>
+                  <td style={{ color: COLORS.inkSoft }}>{c.ordreTransformationNom || '—'}</td>
                   <td>{t(`haccp.type.${c.typeControle}`)}</td>
                   <td>{c.valeurMesuree != null ? `${c.valeurMesuree} ${c.unite || ''}` : '—'}</td>
-                  <td style={{ color: c.conforme ? '#2F7D4F' : '#B23B2E', fontWeight: 600 }}>
+                  <td style={{ color: c.conforme ? COLORS.green : COLORS.red, fontWeight: 600 }}>
                     {c.conforme ? t('haccp.oui') : t('haccp.non')}
                   </td>
                   <td>
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button type="button" onClick={() => supprimerControle(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#B23B2E', display: 'flex' }}><Trash2 size={14} /></button>
+                      <button type="button" onClick={() => supprimerControle(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -185,7 +186,7 @@ export default function HaccpPanel({ module }) {
             </tbody>
           </DataTable>
           {controles.length === 0 ? (
-            <div style={{ color: '#5B6357', fontSize: 13 }}>{t('haccp.aucunControle')}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('haccp.aucunControle')}</div>
           ) : (
             <Button variant="outline" onClick={exporterCsv} style={{ alignSelf: 'flex-start' }}><Download size={14} /> {t('haccp.exportCsv')}</Button>
           )}
