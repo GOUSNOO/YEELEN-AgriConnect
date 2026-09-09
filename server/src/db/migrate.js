@@ -2027,6 +2027,37 @@ ALTER TABLE produits            ADD CONSTRAINT produits_module_check CHECK (modu
 ALTER TABLE produit_templates   DROP CONSTRAINT IF EXISTS produit_templates_module_check;
 ALTER TABLE produit_templates   ADD CONSTRAINT produit_templates_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
 
+-- ═══════════════ Surveillance : registre de caméras (2026-09-09) ═══════════════
+-- L'application ne stocke AUCUNE vidéo et n'en relaie aucune : elle référence les caméras de
+-- l'exploitation et affiche, quand le format le permet, ce que la caméra expose déjà. Le
+-- stockage et l'enregistrement restent du ressort du matériel ou du NVR de l'entreprise.
+--
+-- "type_flux" dit comment afficher : "snapshot" (image HTTP rafraîchie — le plus léger, et le
+-- seul qui tienne sur une connexion lente), "mjpeg" (flux d’images dans une balise img),
+-- "hls" (.m3u8), "lien" (on ouvre simplement l'interface de la caméra). Le RTSP n'est pas
+-- proposé : aucun navigateur ne le lit sans passerelle de transcodage, que ce module ne fait
+-- volontairement pas.
+--
+-- "emplacement_type"/"emplacement_id" rattachent librement une caméra à un module ou à une
+-- parcelle, sans FK : une caméra doit survivre à la suppression de la parcelle qu'elle
+-- observait, comme les snapshots texte de applications_intrants.
+CREATE TABLE IF NOT EXISTS cameras (
+  id                SERIAL PRIMARY KEY,
+  entreprise_id     INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  nom               TEXT NOT NULL,
+  emplacement       TEXT,
+  emplacement_type  TEXT CHECK (emplacement_type IN ('cultures', 'poulailler', 'pisciculture', 'parcelle', 'autre')),
+  emplacement_id    INTEGER,
+  type_flux         TEXT NOT NULL DEFAULT 'snapshot' CHECK (type_flux IN ('snapshot', 'mjpeg', 'hls', 'lien')),
+  url               TEXT NOT NULL,
+  rafraichissement  INTEGER NOT NULL DEFAULT 10,
+  actif             BOOLEAN NOT NULL DEFAULT TRUE,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_cameras_entreprise_id ON cameras(entreprise_id);
+
 -- ═══════════════ Fuseau horaire par entreprise (2026-09-09) ═══════════════
 -- Le serveur tourne en UTC : CURRENT_DATE y renvoie donc la date civile UTC, pas celle
 -- vécue par l'utilisateur. Une vente saisie à 00h30 à Paris (22h30 UTC la veille) était

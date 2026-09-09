@@ -598,6 +598,45 @@
       "dense": "Végétation dense et saine"
     }
   },
+  "surveillance": {
+    "title": "Surveillance des caméras",
+    "intro": "L'application ne stocke et ne relaie aucune vidéo : elle référence vos caméras et affiche ce qu'elles diffusent déjà. L'enregistrement reste géré par votre matériel. Une caméra sur votre réseau local n'est visible que depuis ce réseau.",
+    "ajouterTitre": "Ajouter une caméra",
+    "nom": "Nom",
+    "nomPlaceholder": "Ex : Entrée du poulailler",
+    "emplacement": "Précision",
+    "emplacementPlaceholder": "Ex : portail nord",
+    "emplacementType": "Rattachée à",
+    "typeFlux": "Type de flux",
+    "typeFluxAide": "Le RTSP ne s'affiche dans aucun navigateur. Utilisez l'adresse d'image (snapshot) de votre caméra : c'est le format le plus léger et le mieux supporté.",
+    "url": "Adresse (URL)",
+    "rafraichissement": "Rafraîchir (secondes)",
+    "rafraichi": "Image rafraîchie toutes les {{n}} s",
+    "chargement": "Chargement des caméras…",
+    "aucune": "Aucune caméra enregistrée pour l'instant.",
+    "ajoutee": "Caméra ajoutée.",
+    "ajoutErreur": "Impossible d'ajouter la caméra.",
+    "supprimee": "Caméra supprimée.",
+    "suppressionErreur": "Impossible de supprimer la caméra.",
+    "confirmSuppression": "Supprimer cette caméra de la liste ?",
+    "injoignable": "Image indisponible. Vérifiez que la caméra est allumée et joignable depuis cet appareil (une caméra du réseau local n'est pas visible à distance).",
+    "ouvrirInterface": "Ouvrir l'interface de la caméra",
+    "ouvrirFlux": "Ouvrir le flux",
+    "hlsNonLu": "Ce flux HLS ne peut pas être lu directement ici.",
+    "flux": {
+      "snapshot": "Image rafraîchie (recommandé)",
+      "mjpeg": "Flux MJPEG",
+      "hls": "Flux HLS (.m3u8)",
+      "lien": "Lien vers l'interface"
+    },
+    "emplacements": {
+      "cultures": "Cultures",
+      "poulailler": "Poulailler",
+      "pisciculture": "Pisciculture",
+      "parcelle": "Parcelle",
+      "autre": "Autre"
+    }
+  },
   "meteo": {
     "title": "Météo",
     "selectorLabel": "Localisation",
@@ -1876,6 +1915,7 @@
     "notifications": "Notifications",
     "observations": "Observations",
     "meteo": "Météo",
+    "surveillance": "Surveillance",
     "equipements": "Équipements",
     "feedback": "Feedback",
     "aide": "Aide",

@@ -25,6 +25,7 @@ import mfaRoutes from "./routes/mfa.js";
 import devisRoutes from "./routes/devis.js";
 import achatsRoutes from "./routes/achats.js";
 import observationsRoutes from "./routes/observations.js";
+import camerasRoutes from "./routes/cameras.js";
 import planningRoutes from "./routes/planning.js";
 import calendarRoutes from "./routes/calendar.js";
 import recoltesRoutes from "./routes/recoltes.js";
@@ -97,6 +98,9 @@ app.use("/api/mfa", mfaRoutes);
 app.use("/api/devis", devisRoutes);
 app.use("/api/achats", achatsRoutes);
 app.use("/api/observations", observationsRoutes);
+// Surveillance : registre de caméras. Hors périmètre des modules payants — comme météo et
+// observations, ce n’est pas une brique du système de tarification.
+app.use("/api/cameras", camerasRoutes);
 app.use("/api/planning", planningRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/recoltes", recoltesRoutes);

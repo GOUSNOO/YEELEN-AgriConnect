@@ -12,7 +12,7 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3, MessageCircle
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3, MessageCircle, Video
 } from 'lucide-react';
 import {
   clearToken,
@@ -57,6 +57,7 @@ import { getRecaptchaToken } from './lib/recaptcha.js';
 const BillingAdminPanel = lazy(() => import('./components/BillingAdminPanel'));
 import AbonnementBloque from './components/AbonnementBloque';
 const MeteoModule = lazy(() => import('./components/MeteoModule'));
+const SurveillanceModule = lazy(() => import('./components/SurveillanceModule'));
 import MeteoWidget from './components/MeteoWidget';
 import { Badge, Button, Card, DataTable, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
 const ObservationListView = lazy(() => import('./components/ObservationListView').then((m) => ({ default: m.ObservationListView })));
@@ -8706,6 +8707,7 @@ export default function App() {
     activated.notifications && roleConfig.permissions.includes('notifications') && { id: 'notifications', label: t('nav.notifications'), icon: Bell, category: 'operations' },
     { id: 'observations', label: t('nav.observations'), icon: ClipboardList, category: 'operations' },
     { id: 'meteo', label: t('nav.meteo'), icon: Cloud, category: 'operations' },
+    { id: 'surveillance', label: t('nav.surveillance'), icon: Video, category: 'operations' },
     roleConfig.permissions.includes('equipements') && { id: 'equipements', label: t('nav.equipements'), icon: Wrench, category: 'operations' },
     { id: 'feedback', label: t('nav.feedback'), icon: MessageSquare, category: null },
     { id: 'aide', label: t('nav.aide'), icon: HelpCircle, category: null },
@@ -8946,6 +8948,7 @@ export default function App() {
             {tab === 'notifications' && <NotificationsModule farmId={user} activated={activated} />}
             {tab === 'observations' && <ObservationListView />}
             {tab === 'meteo' && <MeteoModule />}
+            {tab === 'surveillance' && <SurveillanceModule canManage={['admin', 'directeur'].includes(role)} />}
             {tab === 'equipements' && <EquipementsModule canManage={['admin', 'directeur', 'gestionnaire'].includes(role)} />}
             {tab === 'feedback' && <FeedbackModule isPlatformAdmin={isPlatformAdmin} />}
             {tab === 'billing' && isPlatformAdmin && <BillingAdminPanel />}

@@ -598,6 +598,45 @@
       "dense": "Dense, healthy vegetation"
     }
   },
+  "surveillance": {
+    "title": "Camera surveillance",
+    "intro": "The app neither stores nor relays any video: it lists your cameras and displays what they already broadcast. Recording stays with your own hardware. A camera on your local network is only reachable from that network.",
+    "ajouterTitre": "Add a camera",
+    "nom": "Name",
+    "nomPlaceholder": "e.g. Henhouse entrance",
+    "emplacement": "Details",
+    "emplacementPlaceholder": "e.g. north gate",
+    "emplacementType": "Attached to",
+    "typeFlux": "Stream type",
+    "typeFluxAide": "RTSP cannot be displayed in any browser. Use your camera's snapshot URL: it is the lightest and best-supported format.",
+    "url": "Address (URL)",
+    "rafraichissement": "Refresh (seconds)",
+    "rafraichi": "Image refreshed every {{n}}s",
+    "chargement": "Loading cameras…",
+    "aucune": "No camera registered yet.",
+    "ajoutee": "Camera added.",
+    "ajoutErreur": "Could not add the camera.",
+    "supprimee": "Camera removed.",
+    "suppressionErreur": "Could not remove the camera.",
+    "confirmSuppression": "Remove this camera from the list?",
+    "injoignable": "Image unavailable. Check that the camera is on and reachable from this device (a local-network camera is not visible remotely).",
+    "ouvrirInterface": "Open the camera interface",
+    "ouvrirFlux": "Open the stream",
+    "hlsNonLu": "This HLS stream cannot be played directly here.",
+    "flux": {
+      "snapshot": "Refreshed image (recommended)",
+      "mjpeg": "MJPEG stream",
+      "hls": "HLS stream (.m3u8)",
+      "lien": "Link to the interface"
+    },
+    "emplacements": {
+      "cultures": "Crops",
+      "poulailler": "Henhouse",
+      "pisciculture": "Fish farming",
+      "parcelle": "Plot",
+      "autre": "Other"
+    }
+  },
   "meteo": {
     "title": "Weather",
     "selectorLabel": "Location",
@@ -1876,6 +1915,7 @@
     "notifications": "Notifications",
     "observations": "Observations",
     "meteo": "Weather",
+    "surveillance": "Surveillance",
     "equipements": "Equipment",
     "feedback": "Feedback",
     "aide": "Help",

@@ -3667,3 +3667,61 @@ sur la normalisation et l'encodage → **119 tests frontend**.
 ensuite) : le bouton produit
 `https://wa.me/22376123456?text=Bonjour%20Aminata%20Diallo…` — numéro correctement normalisé —
 et le lien contenu dans le message ouvre bien le devis avec son bouton « Approuver et signer ».
+
+### 2026-09-09 — Module Surveillance : registre de caméras, sans stockage vidéo
+
+Seconde option demandée par l'utilisateur. Le cadrage a beaucoup changé en cours de route et
+c'est ce qui rend ce chantier petit : l'utilisateur visait d'abord l'anti-intrusion (le cas le
+plus lourd — enregistrement continu, rétention, alertes), puis a précisé que **l'application ne
+servira jamais à stocker des enregistrements** : elle sert à *se connecter aux caméras pour
+surveiller*, le stockage restant à la charge de l'entreprise. Sans enregistrement ni relais, il
+ne reste qu'un registre et de l'affichage.
+
+**Réserve exprimée avant de coder**, et maintenue : reconstruire un NVR dans YEELEN aurait été
+un mauvais emploi du temps disponible (serveur média, stockage vidéo, bande passante permanente
+— sur un hébergement pas encore financé, pour des exploitations en connexion mobile), face à
+des produits matures à quelques dizaines d'euros. La valeur propre de l'app est le
+**rattachement à l'exploitation** : une caméra reliée à un module ou une parcelle.
+
+**Deux contraintes techniques, dites d'emblée à l'utilisateur** :
+- **Le RTSP ne s'affiche dans aucun navigateur** sans passerelle de transcodage — or c'est le
+  protocole de la plupart des caméras IP. Le module gère donc `snapshot` (image HTTP
+  rafraîchie), `mjpeg`, `hls` et `lien`, et **refuse explicitement une URL `rtsp://` à la
+  saisie**, avec un message qui dit quoi utiliser à la place. Mieux vaut un refus clair qu'un
+  cadre noir inexpliqué.
+- **L'accès réseau** : une caméra du réseau local n'est joignable que depuis ce réseau. L'app
+  n'y peut rien ; c'est écrit dans l'intro de l'écran et dans le message d'erreur.
+
+**Conception.** Table `cameras` (`type_flux` en CHECK, `emplacement_type`/`emplacement_id` sans
+FK — une caméra doit survivre à la suppression de la parcelle qu'elle observait, même patron
+que les snapshots texte de `applications_intrants`). `routes/cameras.js`, écritures gated
+`requireRole('admin','directeur')`, lecture ouverte. Le serveur **ne relaie aucune image** :
+c'est le navigateur qui va la chercher auprès de la caméra. `verifierUrl` n'accepte que
+http(s) — une URL saisie librement finit dans un `<img src>`, où `javascript:` ou `data:`
+seraient une injection. Onglet `surveillance` monté en `React.lazy` comme les autres modules
+d'onglets, hors périmètre des modules payants (même posture que météo et observations).
+
+**Deux défauts trouvés par les tests, pas par la relecture :**
+1. `Number(rafraichissement) || 10` renvoyait 10 pour une valeur 0 — le piège classique du
+   `||` avec une valeur falsy légitime : la borne basse ne s'appliquait jamais. Remplacé par
+   `normaliserRafraichissement`, qui distingue « champ absent » (→ défaut) de « valeur hors
+   bornes » (→ ramenée dans les bornes).
+2. **Le piège des backticks, retombé dedans le jour même où je l'ai documenté** : des
+   backticks dans les commentaires SQL du bloc `cameras` de `migrate.js` ont fermé le template
+   literal ; l'erreur remontait comme `Unexpected identifier 'type_flux'`, pointant le SQL
+   plutôt que la vraie cause. Consigné cette fois en mémoire, pas seulement au journal.
+
+**Tests** : 7 d'intégration (CRUD, refus du RTSP avec message utile, refus des schémas non
+http(s) dont `javascript:`, validations, bornes de rafraîchissement, gate de rôle, isolation)
+→ **375/375**. Frontend 119/119, build vert.
+
+**Vérifié en conditions réelles** avec une **fausse caméra** (petit serveur HTTP servant un
+JPEG) : l'image s'affiche avec son paramètre anti-cache, et la caméra a reçu **27 appels
+espacés de 2 s** — le rafraîchissement fonctionne réellement, ce qu'un simple affichage n'aurait
+pas prouvé. Serveur ensuite coupé pour vérifier le cas le plus fréquent en production : le
+message « Image indisponible… une caméra du réseau local n'est pas visible à distance »
+s'affiche à la place du cadre vide. Entreprise de test supprimée.
+
+**Suite possible, non construite** : réception d'alertes de mouvement (les caméras et NVR grand
+public savent appeler un webhook), pour un journal horodaté rattaché au module concerné — c'est
+là que l'app apporterait ce qu'un Reolink ne fait pas. Rien n'est commencé.

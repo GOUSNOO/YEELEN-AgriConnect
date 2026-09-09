@@ -1145,6 +1145,24 @@ export async function validerDevisManuel(id, confirmePar) {
 
 // Prépare un envoi WhatsApp : le serveur renvoie le lien public et un message tout prêt,
 // c'est le frontend qui ouvre WhatsApp (lien click-to-chat). Rien n'est expédié côté serveur.
+// Surveillance : registre des caméras. Le serveur ne relaie aucune image — il ne stocke que
+// la liste et la façon dont chaque caméra s’affiche.
+export async function getCameras() {
+  return request('/cameras', { method: 'GET' });
+}
+
+export async function createCamera(payload) {
+  return request('/cameras', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateCamera(id, payload) {
+  return request(`/cameras/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function deleteCamera(id) {
+  return request(`/cameras/${id}`, { method: 'DELETE' });
+}
+
 export async function preparerLienWhatsapp(id) {
   return request(`/devis/${id}/lien-whatsapp`, { method: 'POST' });
 }
