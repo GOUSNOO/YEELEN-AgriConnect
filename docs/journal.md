@@ -3725,3 +3725,46 @@ s'affiche à la place du cadre vide. Entreprise de test supprimée.
 **Suite possible, non construite** : réception d'alertes de mouvement (les caméras et NVR grand
 public savent appeler un webhook), pour un journal horodaté rattaché au module concerné — c'est
 là que l'app apporterait ce qu'un Reolink ne fait pas. Rien n'est commencé.
+
+### 2026-09-09 — Alertes de mouvement : le journal rattaché à l'exploitation
+
+Suite du module Surveillance, et la partie qui justifie que l'app s'en mêle : un enregistreur
+du commerce sait dire « mouvement caméra 2 », il ne sait pas dire « mouvement au poulailler,
+portail nord ». Ici l'alerte est rattachée à la caméra, donc au module ou à la parcelle.
+
+**Le point de conception central : une caméra ne peut pas s'authentifier.** Elle ne porte pas
+de JWT, et beaucoup de modèles grand public ne savent qu'appeler une URL — sans choisir la
+méthode ni envoyer de corps. Le secret est donc le **token de l'URL** : 24 octets aléatoires,
+un par caméra, généré à la création et **régénérable** (seul recours si l'adresse a fuité, et
+révocation immédiate de l'ancienne). La route accepte GET autant que POST pour cette raison.
+
+Vérifié au préalable que `subscriptionGuard` et `moduleGuard` laissent passer une requête non
+authentifiée (`if (!req.user?.entrepriseId) return next()`) — sans quoi le webhook aurait été
+bloqué par un 402 qu'une caméra n'aurait pas su interpréter.
+
+**Regroupement plutôt qu'empilement.** Une caméra en détection continue émet des dizaines
+d'appels par minute : une nuit de vent aurait noyé le journal. Tant qu'une alerte de la même
+caméra et du même type date de moins de 120 s, on incrémente `occurrences` et on repousse
+`derniere_occurrence` au lieu de créer une ligne. L'écran affiche « Mouvement détecté ·
+7 détections », ce qui est à la fois plus lisible et plus informatif qu'une ligne par appel.
+
+**Ce qui n'est délibérément pas fait**, conformément au principe posé pour la surveillance :
+aucune image n'est reçue, transmise ni stockée — seulement l'événement. Une caméra désactivée
+cesse d'alimenter le journal sans qu'il faille toucher à sa configuration. Purge à
+l'insertion au-delà de 90 jours, bornée à la caméra concernée et indexée, plutôt qu'une tâche
+planifiée qui n'existe pas dans ce projet.
+
+**Frontend** : journal en tête de l'écran Surveillance (badge de non-lues, bouton « Vu »), et
+sur chaque carte un bloc pliable donnant **l'URL à coller dans la caméra**, avec bouton de
+copie et de régénération. Le texte d'aide dit où la coller (« notification HTTP » / « webhook »)
+et rappelle qu'aucune image ne transite.
+
+**Tests** : 11 d'intégration (token généré à la création, alerte rattachée au module,
+regroupement, GET accepté, types distincts = lignes distinctes, token inconnu/trop court → 404,
+caméra désactivée muette, marquage vu, rotation de token invalidant l'ancien, suppression en
+cascade, isolation) → **386/386**. Frontend 119/119, build vert.
+
+**Vérifié en navigateur réel** (entreprise jetable, supprimée ensuite) : deux épisodes simulés
+donnent bien « Portail nord — Poulailler · Mouvement détecté · 7 détections » et « Intrusion
+signalée · Portail ouvert la nuit », le badge passe de « 2 non lue(s) » à « 1 » après un clic
+sur « Vu », et l'URL de webhook affichée est bien celle qui répond.

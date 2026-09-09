@@ -7,6 +7,7 @@
 //
 // Conséquence à connaître : une caméra sur le réseau local n'est joignable que depuis ce
 // réseau. L'application n'y peut rien, c'est une question d'accès réseau, pas de code.
+import crypto from 'crypto';
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
@@ -17,7 +18,8 @@ const router = express.Router();
 const CAMERA_COLUMNS = `
   id, entreprise_id AS "entrepriseId", nom, emplacement,
   emplacement_type AS "emplacementType", emplacement_id AS "emplacementId",
-  type_flux AS "typeFlux", url, rafraichissement, actif, notes, created_at AS "createdAt"
+  type_flux AS "typeFlux", url, rafraichissement, actif, notes,
+  token_alerte AS "tokenAlerte", created_at AS "createdAt"
 `;
 
 const TYPES_FLUX = ['snapshot', 'mjpeg', 'hls', 'lien'];
@@ -79,11 +81,11 @@ router.post('/', authRequired, requireRole('admin', 'directeur'), async (req, re
   try {
     const { rows } = await pool.query(
       `INSERT INTO cameras (entreprise_id, user_id, nom, emplacement, emplacement_type, emplacement_id,
-                            type_flux, url, rafraichissement, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${CAMERA_COLUMNS}`,
+                            type_flux, url, rafraichissement, notes, token_alerte)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING ${CAMERA_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, String(nom).trim(), emplacement || null,
        emplacementType || null, emplacementId || null, typeFlux || 'snapshot', String(url).trim(),
-       normaliserRafraichissement(rafraichissement), notes || null]
+       normaliserRafraichissement(rafraichissement), notes || null, crypto.randomBytes(24).toString('hex')]
     );
     return res.status(201).json({ camera: rows[0] });
   } catch (err) {
@@ -132,6 +134,127 @@ router.delete('/:id', authRequired, requireRole('admin', 'directeur'), async (re
   } catch (err) {
     console.error('[DELETE /cameras/:id]', err);
     return res.status(500).json({ error: 'Erreur lors de la suppression de la caméra.' });
+  }
+});
+
+// ─── Alertes de mouvement ──────────────────────────────────────────────────
+//
+// POST /api/cameras/alertes/:token — appelé par la CAMÉRA, pas par un utilisateur. Aucune
+// authentification classique n'est possible ici : une caméra ne porte pas de JWT. Le secret
+// est donc le token de l'URL — 24 octets aléatoires, propre à chaque caméra et régénérable,
+// pour pouvoir en révoquer une seule sans toucher aux autres.
+//
+// GET est accepté autant que POST : beaucoup de caméras grand public ne savent appeler
+// qu'une URL, sans choisir la méthode ni envoyer de corps.
+//
+// Regroupement : une caméra en détection continue peut émettre des dizaines d'appels par
+// minute. Plutôt qu'une ligne par appel, on incrémente la dernière alerte de la même caméra
+// tant qu'elle est récente — une nuit de vent ne noie pas le journal, et le nombre réel de
+// détections reste visible.
+const FENETRE_REGROUPEMENT_SECONDES = 120;
+
+async function enregistrerAlerte(req, res) {
+  const { token } = req.params;
+  if (!token || token.length < 20) return res.status(404).json({ error: 'Caméra inconnue.' });
+  try {
+    const cam = await pool.query(
+      'SELECT id, entreprise_id AS \"entrepriseId\", actif FROM cameras WHERE token_alerte = $1',
+      [token]
+    );
+    if (cam.rows.length === 0) return res.status(404).json({ error: 'Caméra inconnue.' });
+    const camera = cam.rows[0];
+    // Une caméra désactivée cesse d'alimenter le journal sans qu'il faille toucher à sa
+    // configuration ni révoquer son token.
+    if (!camera.actif) return res.json({ ignoree: true });
+
+    const type = String(req.query.type || req.body?.type || 'mouvement').slice(0, 40);
+    const message = req.query.message || req.body?.message || null;
+
+    const recente = await pool.query(
+      `SELECT id FROM camera_alertes
+        WHERE camera_id = $1 AND type = $2
+          AND derniere_occurrence > now() - make_interval(secs => $3)
+        ORDER BY derniere_occurrence DESC LIMIT 1`,
+      [camera.id, type, FENETRE_REGROUPEMENT_SECONDES]
+    );
+    if (recente.rows.length > 0) {
+      await pool.query(
+        `UPDATE camera_alertes SET occurrences = occurrences + 1,
+                derniere_occurrence = now(), vue = FALSE WHERE id = $1`,
+        [recente.rows[0].id]
+      );
+      return res.json({ regroupee: true });
+    }
+
+    await pool.query(
+      `INSERT INTO camera_alertes (entreprise_id, camera_id, type, message)
+       VALUES ($1,$2,$3,$4)`,
+      [camera.entrepriseId, camera.id, type, message ? String(message).slice(0, 500) : null]
+    );
+    // Purge à l'insertion plutôt que par une tâche planifiée : le journal ne doit pas croître
+    // indéfiniment, et la requête est indexée et bornée à cette seule caméra.
+    await pool.query(
+      `DELETE FROM camera_alertes WHERE camera_id = $1
+        AND created_at < now() - interval '90 days'`,
+      [camera.id]
+    );
+    return res.status(201).json({ enregistree: true });
+  } catch (err) {
+    console.error('[alerte caméra]', err);
+    return res.status(500).json({ error: 'Erreur lors de l’enregistrement de l’alerte.' });
+  }
+}
+
+router.post('/alertes/:token', enregistrerAlerte);
+router.get('/alertes/:token', enregistrerAlerte);
+
+// Journal côté utilisateur. Déclaré APRÈS /alertes/:token, qui est plus spécifique.
+router.get('/alertes', authRequired, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.id, a.camera_id AS \"cameraId\", c.nom AS \"cameraNom\",
+              c.emplacement, c.emplacement_type AS \"emplacementType\",
+              a.type, a.message, a.occurrences, a.vue,
+              a.created_at AS \"createdAt\", a.derniere_occurrence AS \"derniereOccurrence\"
+       FROM camera_alertes a JOIN cameras c ON c.id = a.camera_id
+       WHERE a.entreprise_id = $1
+       ORDER BY a.derniere_occurrence DESC LIMIT 200`,
+      [req.user.entrepriseId]
+    );
+    return res.json({ alertes: rows });
+  } catch (err) {
+    console.error('[GET /cameras/alertes]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des alertes.' });
+  }
+});
+
+router.post('/alertes/:id/vue', authRequired, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE camera_alertes SET vue = TRUE WHERE id = $1 AND entreprise_id = $2',
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Alerte introuvable.' });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[POST /cameras/alertes/:id/vue]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour de l’alerte.' });
+  }
+});
+
+// Régénérer le token révoque immédiatement l’ancienne URL : à utiliser si elle a fuité.
+router.post('/:id/regenerer-token', authRequired, requireRole('admin', 'directeur'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE cameras SET token_alerte = $1 WHERE id = $2 AND entreprise_id = $3
+       RETURNING ${CAMERA_COLUMNS}`,
+      [crypto.randomBytes(24).toString('hex'), req.params.id, req.user.entrepriseId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Caméra introuvable.' });
+    return res.json({ camera: rows[0] });
+  } catch (err) {
+    console.error('[POST /cameras/:id/regenerer-token]', err);
+    return res.status(500).json({ error: 'Erreur lors de la régénération du token.' });
   }
 });
 

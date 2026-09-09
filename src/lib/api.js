@@ -1159,6 +1159,20 @@ export async function updateCamera(id, payload) {
   return request(`/cameras/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 }
 
+// Journal des alertes de mouvement. Les alertes elles-mêmes arrivent par un webhook appelé
+// par la caméra (route publique protégée par un token), pas par le client.
+export async function getCameraAlertes() {
+  return request('/cameras/alertes', { method: 'GET' });
+}
+
+export async function marquerAlerteVue(id) {
+  return request(`/cameras/alertes/${id}/vue`, { method: 'POST' });
+}
+
+export async function regenererTokenCamera(id) {
+  return request(`/cameras/${id}/regenerer-token`, { method: 'POST' });
+}
+
 export async function deleteCamera(id) {
   return request(`/cameras/${id}`, { method: 'DELETE' });
 }

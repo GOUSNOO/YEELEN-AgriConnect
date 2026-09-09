@@ -2058,6 +2058,33 @@ CREATE TABLE IF NOT EXISTS cameras (
 );
 CREATE INDEX IF NOT EXISTS idx_cameras_entreprise_id ON cameras(entreprise_id);
 
+-- Alertes de mouvement. Une caméra ne peut pas porter de JWT : elle appelle un webhook dont
+-- le secret EST le token. Un token par caméra, régénérable, pour pouvoir en révoquer une
+-- seule sans toucher aux autres.
+ALTER TABLE cameras ADD COLUMN IF NOT EXISTS token_alerte TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cameras_token_alerte ON cameras(token_alerte) WHERE token_alerte IS NOT NULL;
+
+-- Journal des alertes. Aucune image n est stockée — le module ne conserve que l événement,
+-- conformément au principe posé pour la surveillance.
+--
+-- "occurrences" sert au regroupement : une caméra en détection continue peut émettre des
+-- dizaines d alertes par minute. Plutôt que de créer une ligne par appel, on incrémente la
+-- dernière alerte de la même caméra tant qu elle est récente, et "derniere_occurrence" suit
+-- la fin de l épisode. Une nuit de vent ne noie donc pas le journal.
+CREATE TABLE IF NOT EXISTS camera_alertes (
+  id                  SERIAL PRIMARY KEY,
+  entreprise_id       INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  camera_id           INTEGER NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  type                TEXT NOT NULL DEFAULT 'mouvement',
+  message             TEXT,
+  occurrences         INTEGER NOT NULL DEFAULT 1,
+  derniere_occurrence TIMESTAMPTZ NOT NULL DEFAULT now(),
+  vue                 BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_camera_alertes_entreprise ON camera_alertes(entreprise_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_camera_alertes_camera ON camera_alertes(camera_id, derniere_occurrence DESC);
+
 -- ═══════════════ Fuseau horaire par entreprise (2026-09-09) ═══════════════
 -- Le serveur tourne en UTC : CURRENT_DATE y renvoie donc la date civile UTC, pas celle
 -- vécue par l'utilisateur. Une vente saisie à 00h30 à Paris (22h30 UTC la veille) était

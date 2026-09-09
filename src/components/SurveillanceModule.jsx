@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, RefreshCw, ExternalLink, Video, AlertTriangle } from 'lucide-react';
-import { getCameras, createCamera, deleteCamera } from '../lib/api.js';
-import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { Plus, Trash2, RefreshCw, ExternalLink, Video, AlertTriangle, BellRing, Copy, KeyRound, Check } from 'lucide-react';
+import { getCameras, createCamera, deleteCamera, getCameraAlertes, marquerAlerteVue, regenererTokenCamera } from '../lib/api.js';
+import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
+import { fmtDate } from '../lib/locale.jsx';
 
 // Surveillance — l'application ne stocke ni ne relaie aucune vidéo. Elle référence les caméras
 // et affiche ce que chacune expose déjà ; c'est le navigateur de l'utilisateur qui va chercher
@@ -80,6 +81,96 @@ function VueCamera({ camera }) {
   return <VueSnapshot camera={camera} />;
 }
 
+// L’URL que la caméra doit appeler sur détection. On la construit côté client à partir de
+// l’adresse du backend : c’est elle que l’utilisateur colle dans la configuration de sa
+// caméra ou de son NVR. Le token EST le secret — d’où le bouton de régénération, seul
+// recours si l’URL a fuité.
+function UrlWebhook({ camera, onRegenere, canManage }) {
+  const { t } = useTranslation();
+  const [copie, setCopie] = useState(false);
+  const base = (import.meta.env?.VITE_API_URL) || "http://localhost:4000/api";
+  const url = base + "/cameras/alertes/" + camera.tokenAlerte;
+
+  const copier = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopie(true);
+      setTimeout(() => setCopie(false), 2000);
+    } catch {
+      // Presse-papiers refusé (contexte non sécurisé) : l’URL reste sélectionnable à la main.
+      notifyError(new Error(t("surveillance.copieImpossible")), t("surveillance.copieImpossible"));
+    }
+  };
+
+  if (!camera.tokenAlerte) return null;
+  return (
+    <details style={{ padding: "8px 14px 12px" }}>
+      <summary style={{ cursor: "pointer", fontSize: 12, color: "#5B6357" }}>
+        {t("surveillance.webhookTitre")}
+      </summary>
+      <div style={{ fontSize: 11.5, color: "#5B6357", margin: "8px 0", lineHeight: 1.5 }}>
+        {t("surveillance.webhookAide")}
+      </div>
+      <code style={{ display: "block", fontSize: 11, background: "#F1F5F2", padding: "7px 9px",
+        borderRadius: 6, wordBreak: "break-all", marginBottom: 8 }}>{url}</code>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Button small variant="outline" onClick={copier}>
+          {copie ? <Check size={13} /> : <Copy size={13} />} {t("surveillance.copier")}
+        </Button>
+        {canManage && (
+          <Button small variant="outline" onClick={() => onRegenere(camera.id)}>
+            <KeyRound size={13} /> {t("surveillance.regenerer")}
+          </Button>
+        )}
+      </div>
+    </details>
+  );
+}
+
+// Journal des alertes. C’est ce que l’application apporte qu’un enregistreur du commerce ne
+// fait pas : l’événement est rattaché à un module ou une parcelle de l’exploitation, pas à
+// un simple numéro de caméra.
+function JournalAlertes({ alertes, onVue }) {
+  const { t } = useTranslation();
+  if (alertes.length === 0) {
+    return <Card><div style={{ color: "#5B6357", fontSize: 13 }}>{t("surveillance.aucuneAlerte")}</div></Card>;
+  }
+  const nonVues = alertes.filter((a) => !a.vue).length;
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <BellRing size={15} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{t("surveillance.alertesTitre")}</span>
+        {nonVues > 0 && <Badge tone="red">{t("surveillance.nonVues", { count: nonVues })}</Badge>}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {alertes.map((a) => (
+          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+            gap: 10, padding: "8px 10px", borderRadius: 8, border: "1px solid #E2E8F0",
+            background: a.vue ? "transparent" : "#FDF3F2" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: a.vue ? 400 : 600 }}>
+                {a.cameraNom}
+                {a.emplacementType ? " — " + t("surveillance.emplacements." + a.emplacementType) : ""}
+              </div>
+              <div style={{ fontSize: 11.5, color: "#5B6357" }}>
+                {t("surveillance.type." + a.type, { defaultValue: a.type })}
+                {a.occurrences > 1 ? " · " + t("surveillance.occurrences", { count: a.occurrences }) : ""}
+                {" · "}
+                {fmtDate(a.derniereOccurrence, { dateStyle: "short", timeStyle: "short" })}
+                {a.message ? " · " + a.message : ""}
+              </div>
+            </div>
+            {!a.vue && (
+              <Button small variant="outline" onClick={() => onVue(a.id)}>{t("surveillance.marquerVue")}</Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function SurveillanceModule({ canManage = false }) {
   const { t } = useTranslation();
   const [cameras, setCameras] = useState([]);
@@ -87,11 +178,13 @@ export default function SurveillanceModule({ canManage = false }) {
   const [busy, setBusy] = useState(false);
   const emptyForm = { nom: '', emplacement: '', emplacementType: '', typeFlux: 'snapshot', url: '', rafraichissement: 10 };
   const [form, setForm] = useState(emptyForm);
+  const [alertes, setAlertes] = useState([]);
 
   const charger = async () => {
     try {
-      const { cameras: liste } = await getCameras();
+      const [{ cameras: liste }, { alertes: journal }] = await Promise.all([getCameras(), getCameraAlertes()]);
       setCameras(liste || []);
+      setAlertes(journal || []);
     } catch (err) {
       console.error('[SurveillanceModule]', err);
     } finally {
@@ -113,6 +206,26 @@ export default function SurveillanceModule({ canManage = false }) {
       notifyError(err, t('surveillance.ajoutErreur'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const marquerVue = async (id) => {
+    try {
+      await marquerAlerteVue(id);
+      await charger();
+    } catch (err) {
+      notifyError(err, t("surveillance.alerteErreur"));
+    }
+  };
+
+  const regenerer = async (id) => {
+    if (!window.confirm(t("surveillance.confirmRegenerer"))) return;
+    try {
+      await regenererTokenCamera(id);
+      notifySuccess(t("surveillance.tokenRegenere"));
+      await charger();
+    } catch (err) {
+      notifyError(err, t("surveillance.tokenErreur"));
     }
   };
 
@@ -140,6 +253,8 @@ export default function SurveillanceModule({ canManage = false }) {
         </div>
         <div style={{ fontSize: 13.5, color: '#5B6357', lineHeight: 1.6 }}>{t('surveillance.intro')}</div>
       </Card>
+
+      <JournalAlertes alertes={alertes} onVue={marquerVue} />
 
       {canManage && (
         <Card>
@@ -188,6 +303,7 @@ export default function SurveillanceModule({ canManage = false }) {
                 )}
               </div>
               <VueCamera camera={c} />
+              <UrlWebhook camera={c} onRegenere={regenerer} canManage={canManage} />
               {c.typeFlux === 'snapshot' && (
                 <div style={{ padding: '6px 14px 10px', fontSize: 11, color: '#5B6357', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <RefreshCw size={11} /> {t('surveillance.rafraichi', { n: c.rafraichissement })}
