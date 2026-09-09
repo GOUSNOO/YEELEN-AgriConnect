@@ -552,6 +552,62 @@ router.delete('/:id', authRequired, async (req, res) => {
 //  ENVOI AU CLIENT (génère le lien public + envoie l'email)
 // ═══════════════════════════════════════════════════════════
 
+// ─── POST /api/devis/:id/lien-whatsapp ───
+// Prépare un envoi par WhatsApp. Contrairement à /envoyer, le serveur n'expédie rien : il
+// renvoie le lien public et un message tout prêt, que le frontend ouvre dans WhatsApp via un
+// lien click-to-chat. C'est l'utilisateur qui appuie sur « envoyer » — pas d'API WhatsApp
+// Business, donc pas de compte Meta ni de coût par message.
+//
+// Le token public est RÉUTILISÉ s'il existe déjà : en régénérer un invaliderait le lien
+// qu'un client aurait déjà reçu par email.
+router.post('/:id/lien-whatsapp', authRequired, async (req, res) => {
+  try {
+    const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);
+    if (!devis) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (!devis.clientTelephone || !devis.clientTelephone.trim()) {
+      return res.status(400).json({ error: "Le client n'a pas de numéro de téléphone renseigné." });
+    }
+
+    const entrepriseResult = await pool.query('SELECT nom, devise FROM entreprises WHERE id = $1', [req.user.entrepriseId]);
+    const entrepriseNom = entrepriseResult.rows[0]?.nom || 'Votre exploitant';
+
+    const tokenExistant = await pool.query(
+      'SELECT token_public FROM devis WHERE id = $1 AND entreprise_id = $2',
+      [req.params.id, req.user.entrepriseId]
+    );
+    const token = tokenExistant.rows[0]?.token_public || crypto.randomBytes(24).toString('hex');
+    const lienConsultation = `${process.env.FRONTEND_URL || 'http://localhost:8090'}/devis/${token}`;
+
+    // Même règle que /envoyer : le taux est refigé au moment où le devis part réellement.
+    let tauxChangeEnvoi = null;
+    if (devis.devise !== entrepriseResult.rows[0].devise) {
+      const { taux } = await convertir(1, devis.devise, entrepriseResult.rows[0].devise);
+      tauxChangeEnvoi = taux;
+    }
+
+    const etaitBrouillon = devis.statut === 'Brouillon';
+    await pool.query(
+      `UPDATE devis SET statut = CASE WHEN statut = 'Brouillon' THEN 'Envoyé' ELSE statut END,
+              token_public = $1, taux_change = COALESCE($2, taux_change)
+       WHERE id = $3 AND entreprise_id = $4`,
+      [token, tauxChangeEnvoi, req.params.id, req.user.entrepriseId]
+    );
+    if (etaitBrouillon) {
+      await logFieldChanges(req.user.entrepriseId, 'devis', Number(req.params.id), req.user.sub,
+        { statut: devis.statut }, { statut: 'Envoyé' }, ['statut']);
+    }
+
+    return res.json({
+      lienConsultation,
+      telephone: devis.clientTelephone,
+      message: `Bonjour ${`${devis.clientPrenom || ''} ${devis.clientNom}`.trim()}, voici votre devis ${devis.numero} de ${entrepriseNom} : ${lienConsultation}`,
+    });
+  } catch (err) {
+    console.error('[POST /devis/:id/lien-whatsapp]', err);
+    return res.status(500).json({ error: "Erreur lors de la préparation du message WhatsApp." });
+  }
+});
+
 router.post('/:id/envoyer', authRequired, async (req, res) => {
   try {
     const devis = await getDevisComplet(req.params.id, req.user.entrepriseId);

@@ -735,6 +735,14 @@
     "deleted": "Quote deleted.",
     "deleteError": "Could not delete.",
     "envoyerClient": "Send to customer",
+    "envoyerWhatsapp": "Send via WhatsApp",
+    "whatsappOuvert": "WhatsApp is opening with the message ready — just press send.",
+    "whatsappErreur": "Could not prepare the WhatsApp message.",
+    "whatsappNumero": {
+      "absent": "This client has no phone number on file.",
+      "national": "The number must be in international format (e.g. +223 76 12 34 56): the country code is missing.",
+      "invalide": "This client's phone number cannot be used for WhatsApp."
+    },
     "validerManuel": "Validate manually",
     "validerFacturer": "Validate and invoice",
     "modifierLignes": "Edit lines",

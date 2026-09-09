@@ -3624,3 +3624,46 @@ déclencher le `onChange` de React ; l'état du composant reste vide et le formu
 connexion, qui refuse silencieusement une saisie vide, ne se soumettait pas — symptôme
 trompeur, sans rapport avec l'application (l'API répondait 200). Contourné en posant le token
 en `localStorage` puis en rechargeant, ce que fait déjà la restauration de session.
+
+### 2026-09-09 — Envoi d'un devis par WhatsApp (lien click-to-chat)
+
+Première des deux options demandées par l'utilisateur. Trois voies étaient possibles, comparées
+avant de coder (recherche réelle sur la tarification Meta, pas de mémoire) :
+
+1. **Lien « click-to-chat » (`wa.me`)** — gratuit, sans compte Meta, sans API. Ouvre WhatsApp
+   avec le numéro et le message pré-remplis ; c'est l'utilisateur qui appuie sur envoyer.
+2. **WhatsApp Business Cloud API** — envoi automatique côté serveur, mais compte Meta Business
+   vérifié, numéro dédié, modèles de messages pré-approuvés, et facturation **par message**
+   depuis le 1er juillet 2025 (catégorie « utility » : 0,004 à 0,046 $ selon le pays). À noter,
+   Meta étend la facturation aux réponses de service **au 1er octobre 2026**.
+3. Intermédiaires (Twilio, 360dialog) : mêmes contraintes plus leur marge.
+
+**Option 1 retenue** (choix de l'utilisateur), parce qu'elle s'appuie sur deux briques déjà
+construites : le **lien public de devis** (`/devis/:token` + `DevisPublicView`, livrés le
+2026-09-05) et le **téléphone du contact**, déjà en base. WhatsApp n'accepte pas de pièce
+jointe par ce mécanisme, mais le lien vaut mieux qu'un PDF : le client consulte **et signe** en
+ligne.
+
+**Backend** — `POST /api/devis/:id/lien-whatsapp` : n'expédie rien, prépare le lien public et
+un message tout prêt. Deux points de conception qui auraient pu mordre :
+- **Le token public est réutilisé s'il existe déjà.** En régénérer un aurait invalidé le lien
+  qu'un client aurait reçu par email quelques jours plus tôt — le devis serait devenu
+  inaccessible sans que personne ne le sache.
+- Le statut passe à « Envoyé » (et le taux de change est refigé, comme `/envoyer`) : sans cela
+  le lien public ne serait pas exploitable. Limite assumée : si l'utilisateur ferme WhatsApp
+  sans envoyer, le devis est marqué envoyé — il reste remettable en brouillon, action existante.
+
+**Frontend** — `src/lib/whatsapp.js` : normalisation du numéro et construction du lien. Le
+point délicat est la normalisation : le téléphone est saisi en texte libre, et on **ne devine
+jamais l'indicatif pays**. Un numéro national (commençant par 0) est refusé avec un message
+explicite plutôt que transformé en lien mort — ou pire, en conversation avec un inconnu.
+
+**Tests** : 4 d'intégration (lien + message + passage à « Envoyé » + lien public réellement
+consultable ; réutilisation du token vérifiée en confirmant que le premier lien reste valide ;
+client sans téléphone → 400 sans changer le statut ; isolation) → **368/368**. 4 tests frontend
+sur la normalisation et l'encodage → **119 tests frontend**.
+
+**Vérifié en navigateur réel** (entreprise jetable, client au +223 76 12 34 56, supprimée
+ensuite) : le bouton produit
+`https://wa.me/22376123456?text=Bonjour%20Aminata%20Diallo…` — numéro correctement normalisé —
+et le lien contenu dans le message ouvre bien le devis avec son bouton « Approuver et signer ».

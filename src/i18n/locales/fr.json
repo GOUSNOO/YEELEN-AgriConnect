@@ -735,6 +735,14 @@
     "deleted": "Devis supprimé.",
     "deleteError": "Impossible de supprimer.",
     "envoyerClient": "Envoyer au client",
+    "envoyerWhatsapp": "Envoyer par WhatsApp",
+    "whatsappOuvert": "WhatsApp s'ouvre avec le message prêt — il reste à appuyer sur envoyer.",
+    "whatsappErreur": "Impossible de préparer le message WhatsApp.",
+    "whatsappNumero": {
+      "absent": "Ce client n'a pas de numéro de téléphone renseigné.",
+      "national": "Le numéro doit être au format international (ex. +223 76 12 34 56) : l'indicatif du pays manque.",
+      "invalide": "Le numéro de téléphone de ce client n'est pas exploitable pour WhatsApp."
+    },
     "validerManuel": "Valider manuellement",
     "validerFacturer": "Valider et facturer",
     "modifierLignes": "Modifier les lignes",

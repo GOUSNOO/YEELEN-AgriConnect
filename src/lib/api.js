@@ -1143,6 +1143,12 @@ export async function validerDevisManuel(id, confirmePar) {
   return request(`/devis/${id}/valider-manuel`, { method: 'POST', body: JSON.stringify({ confirmePar }) });
 }
 
+// Prépare un envoi WhatsApp : le serveur renvoie le lien public et un message tout prêt,
+// c'est le frontend qui ouvre WhatsApp (lien click-to-chat). Rien n'est expédié côté serveur.
+export async function preparerLienWhatsapp(id) {
+  return request(`/devis/${id}/lien-whatsapp`, { method: 'POST' });
+}
+
 export async function facturerDevis(id, payload) {
   return request(`/devis/${id}/facturer`, { method: 'POST', body: JSON.stringify(payload) });
 }

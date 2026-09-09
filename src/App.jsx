@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
 import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES, PAYS, FUSEAUX, getLocaleConfig, jourEntreprise } from './lib/locale.jsx';
+import { normaliserNumeroWhatsapp, lienWhatsapp } from './lib/whatsapp.js';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -11,7 +12,7 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3, MessageCircle
 } from 'lucide-react';
 import {
   clearToken,
@@ -40,6 +41,7 @@ import {
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getPrixEffectif,
   getProduitTemplates,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
+  preparerLienWhatsapp,
   getPaymentTerms, createPaymentTerm, deletePaymentTerm,
   getTaxes,
   getActivites, createActivite, updateActivite, deleteActivite,
@@ -998,6 +1000,30 @@ function DevisModule({ clientsListe, filtreStatut }) {
     }
   };
 
+  // Envoi par WhatsApp : le serveur ne fait que préparer le lien public et le message ; on
+  // ouvre ensuite WhatsApp côté client (lien click-to-chat), c'est l'utilisateur qui envoie.
+  // Le numéro doit être au format international — on ne devine pas l indicatif, un mauvais
+  // numéro ouvrirait une conversation avec un inconnu.
+  const handleEnvoyerWhatsapp = async (id) => {
+    setActionBusy(true);
+    try {
+      const { telephone, message } = await preparerLienWhatsapp(id);
+      const num = normaliserNumeroWhatsapp(telephone);
+      if (!num.ok) {
+        notifyError(new Error(t(`devis.whatsappNumero.${num.raison}`)), t('devis.whatsappErreur'));
+        return;
+      }
+      window.open(lienWhatsapp(num.numero, message), '_blank', 'noopener');
+      notifySuccess(t('devis.whatsappOuvert'));
+      await load();
+      if (detailId === id) await openDetail(id);
+    } catch (err) {
+      notifyError(err, t('devis.whatsappErreur'));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const handleValiderManuel = async (id) => {
     const confirmePar = window.prompt(t('devis.promptSignataire'));
     if (!confirmePar || !confirmePar.trim()) return;
@@ -1404,6 +1430,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     {detailData.statut === 'Brouillon' && detailData.clientEmail && (
                       <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
                         {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.envoyerClient")}
+                      </Button>
+                    )}
+                    {['Brouillon', 'Envoyé'].includes(detailData.statut) && detailData.clientTelephone && (
+                      <Button variant="outline" onClick={() => handleEnvoyerWhatsapp(detailData.id)} disabled={actionBusy}>
+                        {actionBusy ? <Loader2 size={14} className="spin" /> : <MessageCircle size={14} />} {t("devis.envoyerWhatsapp")}
                       </Button>
                     )}
                     {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (
