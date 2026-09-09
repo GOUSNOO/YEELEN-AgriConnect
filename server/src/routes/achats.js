@@ -10,11 +10,38 @@ const router = express.Router();
 // (POST) et un SELECT ... FROM achats_documents sans alias (GET liste), en plus
 // des requêtes aliasées "ad" de getDocumentComplete — un préfixe "ad." cassait
 // les deux premières (colonne introuvable, "ad" hors de portée).
+// `date` est une colonne DATE : renvoyée brute, node-postgres la transforme en Date JS
+// interprétée dans le fuseau du serveur, ce qui décale l'affichage d'un jour côté client.
+// to_char la fige en jour civil, même correctif que validity_date/date_echeance ailleurs.
 const DOCUMENT_COLUMNS = `
-  id, module, date, fournisseur_id AS "fournisseurId",
+  id, numero, module, to_char(date, 'YYYY-MM-DD') AS date, fournisseur_id AS "fournisseurId",
   fournisseur_nom AS "fournisseurNom", notes, total::float8 AS total, statut,
   date_reception AS "dateReception", created_at AS "createdAt"
 `;
+
+// Référence lisible d'un achat (ACH-2026-0007). Contrairement à genererNumero() dans
+// routes/devis.js, le numéro ne se déduit pas des lignes existantes : ni un COUNT ni un MAX ne
+// conviennent, tous deux réattribuent au suivant la référence d'un achat supprimé — deux pièces
+// distinctes portant alors le même numéro dans l'historique d'un fournisseur. Le compteur
+// achats_numero_sequence n'est jamais décrémenté : une suppression laisse un trou, ce qui est
+// le comportement attendu d'une numérotation de pièces.
+//
+// L'UPSERT est atomique — pas de verrou explicite, pas de fenêtre de course entre deux
+// créations simultanées. L'année vient de date_entreprise() et non de l'horloge serveur, pour
+// rester cohérente avec le fuseau de l'entreprise.
+async function genererNumeroAchat(client, entrepriseId) {
+  const { rows } = await client.query(
+    `WITH annee_courante AS (SELECT EXTRACT(YEAR FROM date_entreprise($1))::INT AS annee)
+     INSERT INTO achats_numero_sequence (entreprise_id, annee, dernier)
+     SELECT $1, annee, 1 FROM annee_courante
+     ON CONFLICT (entreprise_id, annee)
+     DO UPDATE SET dernier = achats_numero_sequence.dernier + 1
+     RETURNING annee, dernier`,
+    [entrepriseId]
+  );
+  const { annee, dernier } = rows[0];
+  return `ACH-${annee}-${String(Number(dernier)).padStart(4, '0')}`;
+}
 
 const LIGNE_COLUMNS = `
   al.id, al.produit, al.quantite::float8 AS quantite, al.prix_unitaire::float8 AS "prixUnitaire", al.ordre,
@@ -161,11 +188,13 @@ router.post('/', authRequired, async (req, res) => {
 
     const total = lignes.reduce((sum, ligne) => sum + (Number(ligne.quantite) || 0) * (Number(ligne.prixUnitaire) || 0), 0);
 
+    const numero = await genererNumeroAchat(client, req.user.entrepriseId);
+
     const documentResult = await client.query(
-      `INSERT INTO achats_documents (entreprise_id, user_id, module, date, fournisseur_id, fournisseur_nom, notes, total, statut)
-       VALUES ($1, $2, $3, COALESCE($4, date_entreprise($1)), $5, $6, $7, $8, 'Brouillon')
+      `INSERT INTO achats_documents (entreprise_id, user_id, module, date, fournisseur_id, fournisseur_nom, notes, total, statut, numero)
+       VALUES ($1, $2, $3, COALESCE($4, date_entreprise($1)), $5, $6, $7, $8, 'Brouillon', $9)
        RETURNING ${DOCUMENT_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, module, date || null, fournisseurId || null, fournisseurNom || null, notes || null, total]
+      [req.user.entrepriseId, req.user.sub, module, date || null, fournisseurId || null, fournisseurNom || null, notes || null, total, numero]
     );
 
     const documentId = documentResult.rows[0].id;

@@ -416,21 +416,20 @@ const DEVIS_STATUT_STEPS = [
 ];
 const CHEVRON_NOTCH = 12;
 
-function DevisStatusBar({ statut }) {
+// Rendu générique des chevrons : la géométrie ne dépend d'aucun métier, seules la liste des
+// étapes et la clé de traduction changent. Partagé entre devis et achats plutôt que recopié —
+// c'était déjà la troisième copie de cette forme dans le projet (voir aussi MoveStatusBar dans
+// FacturesModule, qui garde la sienne parce qu'elle est en CSS et calée au pixel sur l'ERP
+// de référence).
+function StatusBarChevrons({ steps, statut, cleTraduction }) {
   const { t } = useTranslation();
-  // "Annulé" est un statut terminal hors chaîne (voir routes/devis.js:POST /:id/annuler) —
-  // aucune étape des chevrons ne doit s'y allumer, un badge rouge à part le montre clairement
-  // plutôt qu'une barre à chevrons sans étape active (ambigu, pourrait passer pour une erreur).
-  if (statut === 'Annulé') {
-    return <Badge tone="red">{t('devis.statut.Annulé')}</Badge>;
-  }
-  const activeIndex = DEVIS_STATUT_STEPS.findIndex(s => s.matches.includes(statut));
+  const activeIndex = steps.findIndex(s => s.matches.includes(statut));
   return (
     <div style={{ display: 'flex' }}>
-      {DEVIS_STATUT_STEPS.map((step, i) => {
+      {steps.map((step, i) => {
         const isActive = i === activeIndex;
         const isFirst = i === 0;
-        const isLast = i === DEVIS_STATUT_STEPS.length - 1;
+        const isLast = i === steps.length - 1;
         let clipPath;
         if (isFirst && isLast) clipPath = 'none';
         else if (isFirst) clipPath = `polygon(0 0, calc(100% - ${CHEVRON_NOTCH}px) 0, 100% 50%, calc(100% - ${CHEVRON_NOTCH}px) 100%, 0 100%)`;
@@ -444,12 +443,36 @@ function DevisStatusBar({ statut }) {
             color: isActive ? '#fff' : COLORS.inkSoft,
             position: 'relative', zIndex: isActive ? 2 : 1,
           }}>
-            {t(`devis.statut.${step.key}`)}
+            {t(`${cleTraduction}.${step.key}`)}
           </div>
         );
       })}
     </div>
   );
+}
+
+function DevisStatusBar({ statut }) {
+  const { t } = useTranslation();
+  // "Annulé" est un statut terminal hors chaîne (voir routes/devis.js:POST /:id/annuler) —
+  // aucune étape des chevrons ne doit s'y allumer, un badge rouge à part le montre clairement
+  // plutôt qu'une barre à chevrons sans étape active (ambigu, pourrait passer pour une erreur).
+  if (statut === 'Annulé') {
+    return <Badge tone="red">{t('devis.statut.Annulé')}</Badge>;
+  }
+  return <StatusBarChevrons steps={DEVIS_STATUT_STEPS} statut={statut} cleTraduction="devis.statut" />;
+}
+
+// Cycle de vie d'un achat, côté route : Brouillon → Commandé → Reçu (routes/achats.js,
+// POST /:id/commander, /recevoir, /annuler-reception). Trois étapes, pas de statut terminal
+// hors chaîne — l'annulation de réception ramène simplement à "Commandé".
+const ACHAT_STATUT_STEPS = [
+  { key: 'Brouillon', matches: ['Brouillon'] },
+  { key: 'Commandé', matches: ['Commandé'] },
+  { key: 'Reçu', matches: ['Reçu'] },
+];
+
+function AchatStatusBar({ statut }) {
+  return <StatusBarChevrons steps={ACHAT_STATUT_STEPS} statut={statut} cleTraduction="achats.statut" />;
 }
 
 function ActivitesSection({ ressourceType, ressourceId }) {
@@ -1138,18 +1161,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
         </div>
       )}
 
-      {!filtreStatut && (
-        <PaymentTermsPanel
-          terms={paymentTerms}
-          onChange={() => getPaymentTerms().then(d => setPaymentTerms(d.paymentTerms || [])).catch(() => {})}
-        />
-      )}
-
-      {!filtreStatut && (
-        <TaxesPanel taxes={taxes} onChange={rechargerTaxes} />
-      )}
-
-      {!filtreStatut && <ComptaConfigPanel />}
+      {/* Les référentiels (conditions de paiement, taxes, plan comptable) vivaient ici, empilés
+          au-dessus du formulaire de création. Ils sont passés dans le sous-onglet
+          « Configuration » de VentesWithDevis : dans l'ERP de référence, la configuration n'est
+          jamais posée sur l'écran d'un document, et ce sous-onglet existait déjà — il ne
+          contenait que les listes de prix, alors que trois référentiels sur quatre étaient
+          restés ici. DevisModule continue de charger `taxes` et `paymentTerms`, dont son
+          formulaire a besoin ; il est démonté/remonté au changement de sous-onglet, donc il
+          relit ces données après une modification faite depuis Configuration. */}
 
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
@@ -1337,10 +1356,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
           <DataTable>
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                {/* Ordre repris de la liste des devis de l'ERP de référence : numéro, date,
+                    client, total, état. La date manquait complètement — une liste de devis
+                    sans date ne se lit pas et ne se recoupe avec rien. */}
                 <th>{t("devis.colNumero")}</th>
+                <th>{t("common.date")}</th>
                 <th>{t("devis.client")}</th>
-                <th>{t("common.status")}</th>
                 <th>{t("common.total")}</th>
+                <th>{t("common.status")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -1348,12 +1371,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
               {devisAffiches.map(d => (
                 <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
                   <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{d.numero}</td>
+                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(d.date)}</td>
                   <td>{d.clientPrenom} {d.clientNom}</td>
+                  <td style={{ fontWeight: 600 }}>{enDevise(d.total, d.devise)}</td>
                   <td>
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
                     {d.expired && <span style={{ marginLeft: SPACE.sm }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{enDevise(d.total, d.devise)}</td>
                   <td style={{ textAlign: 'right', paddingRight: SPACE.lg }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
                       {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
@@ -2043,6 +2067,42 @@ const VENTES_SOUS_NAV = [
   { id: 'configuration', labelKey: 'ventes.navConfiguration' },
 ];
 
+// Achats et Ventes sont deux objets symétriques, présentés jusqu'ici de deux manières
+// différentes : Ventes avec cinq sous-onglets, Achats sans aucun. Même barre, mêmes rôles —
+// « À recevoir » est à l'achat ce que « À facturer » est à la vente, une liste filtrée sur
+// l'étape en cours et non un second point de création. Pas d'onglet Configuration ici : les
+// achats n'ont aucun référentiel qui leur soit propre.
+const ACHATS_SOUS_NAV = [
+  { id: 'commandes', labelKey: 'achats.navCommandes' },
+  { id: 'a_recevoir', labelKey: 'achats.navARecevoir' },
+  { id: 'produits', labelKey: 'achats.navProduits' },
+];
+
+// Barre de sous-onglets partagée par Ventes et Achats — un seul rendu, pour que les deux
+// écrans ne puissent pas diverger visuellement au fil des retouches.
+function SousNavOnglets({ items, actif, onSelect }) {
+  const { t } = useTranslation();
+  return (
+    <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}` }}>
+      {items.map(item => (
+        <button
+          key={item.id}
+          onClick={() => onSelect(item.id)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '10px 14px', fontSize: TEXT.base, fontWeight: 600,
+            color: actif === item.id ? COLORS.green : COLORS.inkSoft,
+            borderBottom: actif === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
+            marginBottom: -1,
+          }}
+        >
+          {t(item.labelKey)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Grand livre des ventes (devis signés/facturés), en lecture seule — équivalent
 // minimal d'un menu "Analyse" de référence. Réutilise getVentesLedger, déjà la source de
 // vérité de ComptabiliteTab pour les mêmes données.
@@ -2113,6 +2173,18 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
   const { t } = useTranslation();
   const [clientsListe, setClientsListe] = useState([]);
   const [sousNav, setSousNav] = useState('commandes');
+  // Référentiels du sous-onglet Configuration. Chargés paresseusement : inutile d'aller les
+  // chercher tant que l'utilisateur reste sur Commandes, qui est l'écran d'entrée.
+  const [paymentTerms, setPaymentTerms] = useState([]);
+  const [taxes, setTaxes] = useState([]);
+  const rechargerPaymentTerms = () => getPaymentTerms().then(d => setPaymentTerms(d.paymentTerms || [])).catch(() => {});
+  const rechargerTaxes = () => getTaxes().then(d => setTaxes(d.taxes || [])).catch(() => {});
+  useEffect(() => {
+    if (sousNav !== 'configuration') return;
+    rechargerPaymentTerms();
+    rechargerTaxes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sousNav]);
 
   // Charge la liste des clients une seule fois, nécessaire au formulaire de devis
   useEffect(() => {
@@ -2128,23 +2200,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
-      <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}` }}>
-        {VENTES_SOUS_NAV.map(item => (
-          <button
-            key={item.id}
-            onClick={() => setSousNav(item.id)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '10px 14px', fontSize: TEXT.base, fontWeight: 600,
-              color: sousNav === item.id ? COLORS.green : COLORS.inkSoft,
-              borderBottom: sousNav === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
-              marginBottom: -1,
-            }}
-          >
-            {t(item.labelKey)}
-          </button>
-        ))}
-      </div>
+      <SousNavOnglets items={VENTES_SOUS_NAV} actif={sousNav} onSelect={setSousNav} />
 
       {sousNav === 'commandes' && (
         <>
@@ -2175,18 +2231,57 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'produits' && <StocksTab farmId={farmId} moduleType={moduleType} />}
       {sousNav === 'analyse' && <VentesAnalyseTab />}
       {sousNav === 'configuration' && (
-        <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.md }}>
-            {t('ventes.configTitle')}
-          </div>
-          <ListesPrixManager />
-        </Card>
+        <>
+          <Card>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.md }}>
+              {t('ventes.configTitle')}
+            </div>
+            <ListesPrixManager />
+          </Card>
+          <PaymentTermsPanel terms={paymentTerms} onChange={rechargerPaymentTerms} />
+          <TaxesPanel taxes={taxes} onChange={rechargerTaxes} />
+          <ComptaConfigPanel />
+        </>
       )}
     </div>
   );
 }
 
-function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures' }) {
+// Pendant d'AchatModule ce que VentesWithDevis est à DevisModule : la sous-navigation qui
+// manquait à l'onglet Achats. Les deux écrans se lisent désormais de la même façon.
+function AchatsAvecSousNav({ farmId, storageKey, moduleType }) {
+  const { t } = useTranslation();
+  const [sousNav, setSousNav] = useState('commandes');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+      <SousNavOnglets items={ACHATS_SOUS_NAV} actif={sousNav} onSelect={setSousNav} />
+
+      {sousNav === 'commandes' && (
+        <AchatModule farmId={farmId} storageKey={storageKey} moduleType={moduleType} />
+      )}
+      {sousNav === 'a_recevoir' && (
+        <>
+          <Card>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.xs }}>
+              {t('achats.aRecevoirTitle')}
+            </div>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
+              {t('achats.aRecevoirSubtitle')}
+            </div>
+          </Card>
+          <AchatModule farmId={farmId} storageKey={storageKey} moduleType={moduleType} filtreStatut="Commandé" />
+        </>
+      )}
+      {sousNav === 'produits' && <StocksTab farmId={farmId} moduleType={moduleType} />}
+    </div>
+  );
+}
+
+// `filtreStatut` reproduit le fonctionnement de DevisModule en vue « À facturer » : une liste
+// restreinte à une étape du cycle, sans formulaire de création — dans l'ERP de référence, ces
+// entrées de menu sont des listes filtrées, pas des seconds points de saisie.
+function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures', filtreStatut }) {
   const { t } = useTranslation();
   const { fmtMoney, fmtDate } = useLocale();
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -2207,6 +2302,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   // du texte libre reste possible pour un article non suivi en stock.
   const [catalogItems, setCatalogItems] = useState([]);
   const catalogDatalistId = `achat-catalog-${moduleType}`;
+  // Filtrage côté client, comme DevisModule pour sa vue « À facturer » : la liste complète est
+  // déjà chargée, un second appel réseau n'apporterait rien. 'Reçu' par défaut pour les lignes
+  // historiques créées avant l'introduction de la colonne statut.
+  const docsAffiches = filtreStatut ? docs.filter(d => (d.statut || 'Reçu') === filtreStatut) : docs;
   useEffect(() => {
     (async () => {
       try {
@@ -2516,6 +2615,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       <datalist id={catalogDatalistId}>
         {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
       </datalist>
+      {/* Formulaire de création — masqué en vue « À recevoir », comme DevisModule masque le
+          sien en vue « À facturer ». */}
+      {!filtreStatut && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t('achats.newTitle')}
@@ -2564,6 +2666,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           </div>
         </form>
       </Card>
+      )}
 
       <Card>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.md }}>
@@ -2577,38 +2680,39 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       <Card style={{ padding: 0 }}>
         <DataTable>
           <thead>
+            {/* Ordre repris de la liste des bons de commande de l'ERP de référence :
+                référence, date, fournisseur, total, état. La référence manquait — un achat
+                n'avait aucun identifiant lisible, impossible à citer face à un fournisseur. */}
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              <th>{t('achats.colNumero')}</th>
               <th>{t('common.date')}</th>
               <th>{t('achats.fournisseur')}</th>
-              <th>{t('common.status')}</th>
               <th>{t('common.total')}</th>
+              <th>{t('common.status')}</th>
               <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
-            {docs.length === 0 ? (
-              <tr><td colSpan={5} style={{ color: COLORS.inkSoft }}>{t('achats.emptyTable')}</td></tr>
-            ) : docs.map(doc => {
+            {docsAffiches.length === 0 ? (
+              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>{filtreStatut ? t('achats.emptyARecevoir') : t('achats.emptyTable')}</td></tr>
+            ) : docsAffiches.map(doc => {
               const statut = doc.statut || 'Reçu';
               const modifiable = ['Brouillon', 'Commandé'].includes(statut);
               return (
-              <tr key={doc.id}>
+              <tr key={doc.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(doc)}>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{doc.numero || '—'}</td>
                 <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(doc.date)}</td>
                 <td>{doc.fournisseurNom}</td>
-                <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
                 <td style={{ fontWeight: 600 }}>{fmtMoney(doc.total)}</td>
-                <td style={{ textAlign: 'right' }}>
+                <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
+                {/* Les transitions d'état (commander, marquer reçu, annuler la réception) sont
+                    passées dans l'en-tête de la fiche, avec la barre de chevrons — comme pour un
+                    devis, et comme dans l'ERP de référence, où l'action vit sur le document et non
+                    dans la liste. Il ne reste ici que modifier et supprimer, soit exactement les
+                    deux icônes de la liste des devis. Le chevron d'ouverture disparaît : la ligne
+                    entière est cliquable. */}
+                <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.sm }}>
-                    {statut === 'Brouillon' && (
-                      <Button small variant="outline" onClick={() => changerStatutDoc(doc.id, 'commander')}>{t('achats.commander')}</Button>
-                    )}
-                    {statut === 'Commandé' && (
-                      <Button small variant="green" onClick={() => changerStatutDoc(doc.id, 'recevoir')}>{t('achats.marquerRecu')}</Button>
-                    )}
-                    {statut === 'Reçu' && (
-                      <Button small variant="ghost" onClick={() => changerStatutDoc(doc.id, 'annulerReception', t('achats.confirmAnnulerReception'))}>{t('achats.annulerReception')}</Button>
-                    )}
-                    <button onClick={() => openDetail(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><ChevronRight size={15} /></button>
                     {modifiable && (
                       <>
                         <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
@@ -2626,12 +2730,30 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       {detailDoc && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: SPACE.xl }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
+            {/* En-tête aligné sur la fiche d'un devis : la référence en titre, la barre d'état en
+                chevrons, puis les actions de transition — dans l'ERP de référence, ces boutons
+                vivent dans l'en-tête du document, pas dans la liste. */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.md }}>
               <div>
-                <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
-                <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{fmtDate(detailDoc.date)}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.md, fontWeight: 700 }}>{detailDoc.numero || '—'}</div>
+                <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{detailDoc.fournisseurNom} · {fmtDate(detailDoc.date)}</div>
               </div>
               <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.lg }}>
+              <AchatStatusBar statut={detailDoc.statut || 'Reçu'} />
+              <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
+                {(detailDoc.statut || 'Reçu') === 'Brouillon' && (
+                  <Button small variant="outline" onClick={() => { changerStatutDoc(detailDoc.id, 'commander'); closeDetail(); }}>{t('achats.commander')}</Button>
+                )}
+                {detailDoc.statut === 'Commandé' && (
+                  <Button small variant="green" onClick={() => { changerStatutDoc(detailDoc.id, 'recevoir'); closeDetail(); }}>{t('achats.marquerRecu')}</Button>
+                )}
+                {(detailDoc.statut || 'Reçu') === 'Reçu' && (
+                  <Button small variant="ghost" onClick={() => { changerStatutDoc(detailDoc.id, 'annulerReception', t('achats.confirmAnnulerReception')); closeDetail(); }}>{t('achats.annulerReception')}</Button>
+                )}
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.md, marginBottom: SPACE.md }}>
               <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: SPACE.sm }}>{fmtMoney(detailDoc.total)}</div></div>
@@ -4780,7 +4902,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
       {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Cultures" />}
-      {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
+      {tab === 'achats' && <AchatsAvecSousNav farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
       {tab === 'registre' && <RegistreIntrantsView farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
         remoteVentes={async () => (await getVentesLedger()).mouvements}
@@ -4815,7 +4937,7 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Poulailler" />}
-      {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats" moduleType="Poulailler" />}
+      {tab === 'achats' && <AchatsAvecSousNav farmId={farmId} storageKey="achats" moduleType="Poulailler" />}
       {tab === 'livraisons' && <LivraisonsTab farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
         remoteVentes={async () => (await getVentesLedger()).mouvements}
@@ -4854,7 +4976,7 @@ function PiscicultureModule({ farmId, highlightProduitId }) {
       {tab === 'suivi' && <PiscicultureMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Pisciculture" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Pisciculture" />}
-      {tab === 'achats' && <AchatModule farmId={farmId} storageKey="achats-pisciculture" moduleType="Pisciculture" />}
+      {tab === 'achats' && <AchatsAvecSousNav farmId={farmId} storageKey="achats-pisciculture" moduleType="Pisciculture" />}
       {tab === 'livraisons' && <PiscicultureLivraisonsTab farmId={farmId} />}
       {tab === 'comptabilite' && <ComptabiliteTab farmId={farmId}
         remoteVentes={async () => (await getVentesLedger()).mouvements}

@@ -3967,3 +3967,74 @@ de navigation mobile ouvert et vérifié. Entreprise jetable supprimée après c
 
 Le chantier design est terminé : palette, base typographique, échelle de texte, échelle
 d'espacement, arrondis. Tout passe désormais par `src/lib/theme.js`.
+
+### 2026-09-10 — Devis et Achats : rapprochement de la vue de l'ERP de référence
+
+Écart signalé par l'utilisateur sur les onglets Ventes et Achats. Comparaison faite sur le clone
+local (`sale/views/sale_order_views.xml`, `purchase/views/purchase_views.xml`), pas sur
+l'instance hébergée.
+
+**Le constat**
+
+L'écart de fond n'a pas été traité ici : dans l'ERP de référence, la liste et le formulaire sont
+deux écrans, et créer un document passe par un bouton « Nouveau ». Chez nous le formulaire de
+création est ouvert en permanence au-dessus de la liste. Le corriger changerait le modèle
+d'interaction ; c'est l'option C proposée à l'utilisateur, qui a retenu A et B.
+
+**A — corrections ciblées**
+
+- **Les référentiels ne sont plus sur l'écran des documents.** Conditions de paiement, Taxes et
+  Comptabilité — Configuration étaient empilés en haut de l'onglet « Commandes », alors qu'un
+  sous-onglet « Configuration » existait et ne contenait que les listes de prix. Les trois y sont
+  passés. `DevisModule` continue de charger `taxes`/`paymentTerms` pour son formulaire ; il est
+  démonté au changement de sous-onglet, donc il relit ces données au retour.
+- **La liste des devis n'avait aucune colonne date.** Ajoutée, et l'ordre des colonnes aligné sur
+  la référence (numéro, date, client, total, état — le total avant l'état, l'inverse d'avant).
+- **Défaut latent trouvé en chemin** : `DEVIS_COLUMNS` renvoyait `d.date` brute. C'est une
+  colonne `DATE` ; node-postgres en fait une `Date` JS lue dans le fuseau du serveur, ce qui
+  décale l'affichage d'un jour. La date était déjà affichée dans la fiche d'un devis, donc le
+  décalage était déjà visible ; l'ajouter à la liste l'aurait simplement rendu plus fréquent.
+  `to_char` appliqué, même correctif que `validity_date`/`date_echeance` avant elle. Idem pour
+  `achats_documents.date`.
+- **Les achats n'avaient aucune référence.** `achats_documents.numero` (`ACH-2026-0007`), affiché
+  en première colonne et en titre de la fiche. Les achats déjà en base sont numérotés par le
+  backfill, par entreprise et par année, dans l'ordre chronologique.
+
+**Le test a corrigé ma propre conception.** La première version dérivait le numéro du `MAX`
+existant, avec un commentaire affirmant que cela évitait la réutilisation d'un numéro — ce que
+fait `genererNumero()` de `routes/devis.js`, qui compte les lignes. Le test écrit pour épingler
+cette différence a échoué : `MAX` ne réutilise pas un numéro du milieu, mais réutilise bien celui
+du dernier achat supprimé. Remplacé par un vrai compteur, `achats_numero_sequence` (entreprise,
+année, dernier), incrémenté par un UPSERT atomique et jamais décrémenté — une suppression laisse
+un trou, ce qui est le comportement attendu d'une numérotation de pièces. Le compteur est amorcé
+par la migration au plus haut numéro du backfill, sans quoi la première création après migration
+heurtait l'index unique. `routes/devis.js` garde son `COUNT`, non touché ici : le corriger
+demande la même table de compteurs et une reprise des devis existants, à faire séparément.
+
+**B — Achats aligné sur Ventes**
+
+Les deux objets sont symétriques et étaient présentés de deux façons différentes : Ventes avec
+cinq sous-onglets, Achats sans aucun.
+
+- Nouveau `AchatsAvecSousNav` (pendant de `VentesWithDevis`) : **Commandes | À recevoir |
+  Produits**. « À recevoir » est à l'achat ce que « À facturer » est à la vente — une liste
+  filtrée sur l'étape en cours, sans formulaire de création, exactement le comportement de
+  `DevisModule` sous `filtreStatut`. Pas d'onglet Configuration : les achats n'ont aucun
+  référentiel propre.
+- La barre de sous-onglets, jusqu'ici écrite en dur dans `VentesWithDevis`, devient
+  `SousNavOnglets`, partagée — pour que les deux écrans ne puissent plus diverger au fil des
+  retouches.
+- La fiche d'un achat reçoit une **barre d'état en chevrons** (Brouillon → Commandé → Reçu) et
+  les boutons de transition, jusque-là dans la colonne Actions de chaque ligne. La liste ne garde
+  que modifier et supprimer, soit exactement les deux icônes de la liste des devis, et la ligne
+  entière devient cliquable. `DevisStatusBar` est généralisée en `StatusBarChevrons` plutôt que
+  recopiée une troisième fois — `MoveStatusBar` de `FacturesModule` garde la sienne, en CSS et
+  calée au pixel sur la référence.
+
+**Vérification** — build et `oxlint` verts, 119/119 tests frontend, **389/389 tests
+d'intégration** (+3 sur la numérotation, dont celui qui a trouvé le défaut ci-dessus). Migration
+rejouée deux fois, compteur inchangé au second passage. Vérifié en navigateur sur une entreprise
+jetable : références `ACH-2026-0001`/`0002` affichées, sous-onglets et « À recevoir » filtré
+correctement, fiche d'achat avec chevrons et action « Marquer reçu » dans l'en-tête, référentiels
+présents et fonctionnels sous Configuration, colonne date sur la liste des devis. Entreprise
+nettoyée après coup.

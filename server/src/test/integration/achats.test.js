@@ -114,3 +114,49 @@ describe('Achats — isolation multi-tenant', () => {
     expect(listB.body.documents.map((d) => d.id)).not.toContain(docId);
   });
 });
+
+describe('Achats — référence lisible (numero)', () => {
+  let admin;
+  const creer = (token, produit) => request(app)
+    .post('/api/achats')
+    .set(bearer(token))
+    .send({ module: 'Cultures', fournisseurNom: 'Fournisseur Réf', lignes: [{ produit, quantite: 1, prixUnitaire: 100 }] });
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+  });
+
+  test('un achat reçoit une référence ACH-<année>-NNNN, incrémentée à chaque création', async () => {
+    const annee = new Date().getFullYear();
+    const premier = await creer(admin.token, 'Article 1');
+    expect(premier.status).toBe(201);
+    expect(premier.body.document.numero).toBe(`ACH-${annee}-0001`);
+
+    const second = await creer(admin.token, 'Article 2');
+    expect(second.body.document.numero).toBe(`ACH-${annee}-0002`);
+  });
+
+  // La raison d'être de genererNumeroAchat : routes/devis.js compte les lignes existantes, ce
+  // qui réattribue le numéro d'une pièce supprimée à la suivante. Deux achats différents
+  // porteraient alors la même référence dans l'historique du fournisseur.
+  test('la suppression du dernier achat ne libère pas son numéro', async () => {
+    const annee = new Date().getFullYear();
+    const aSupprimer = await creer(admin.token, 'Article 3');
+    expect(aSupprimer.body.document.numero).toBe(`ACH-${annee}-0003`);
+
+    const suppression = await request(app)
+      .delete(`/api/achats/${aSupprimer.body.document.id}`)
+      .set(bearer(admin.token));
+    expect(suppression.status).toBe(200);
+
+    const suivant = await creer(admin.token, 'Article 4');
+    expect(suivant.body.document.numero).toBe(`ACH-${annee}-0004`);
+  });
+
+  test('la numérotation est propre à chaque entreprise', async () => {
+    const annee = new Date().getFullYear();
+    const autre = await registerEntreprise();
+    const sien = await creer(autre.token, 'Article A');
+    expect(sien.body.document.numero).toBe(`ACH-${annee}-0001`);
+  });
+});

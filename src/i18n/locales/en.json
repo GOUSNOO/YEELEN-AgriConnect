@@ -25,9 +25,38 @@
     "actions": "Actions",
     "send": "Send",
     "noData": "No data",
-    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    "daysShort": ["M", "T", "W", "T", "F", "S", "S"],
+    "months": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ],
+    "days": [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat",
+      "Sun"
+    ],
+    "daysShort": [
+      "M",
+      "T",
+      "W",
+      "T",
+      "F",
+      "S",
+      "S"
+    ],
     "type": "Type"
   },
   "role": {
@@ -134,42 +163,85 @@
     "cultures": {
       "title": "Crop & irrigation monitoring",
       "desc": "Monitor soil moisture and temperature, get watering recommendations and control your valves remotely.",
-      "features": ["Per-plot soil sensors", "Automatic watering recommendation", "Valve control (auto or manual)", "Watering history"]
+      "features": [
+        "Per-plot soil sensors",
+        "Automatic watering recommendation",
+        "Valve control (auto or manual)",
+        "Watering history"
+      ]
     },
     "poulailler": {
       "title": "Poultry management",
       "desc": "Track the poultry house environment and manage your whole poultry operation day to day.",
-      "features": ["Poultry house temperature and humidity", "Stock (feed, eggs, birds)", "Sales, purchases and deliveries", "Automatic accounting"]
+      "features": [
+        "Poultry house temperature and humidity",
+        "Stock (feed, eggs, birds)",
+        "Sales, purchases and deliveries",
+        "Automatic accounting"
+      ]
     },
     "pisciculture": {
       "title": "Fish farming management",
       "desc": "Track pond water quality and manage your whole fish farming operation day to day.",
-      "features": ["Water pH, dissolved oxygen and temperature", "Stock (feed, fry, fish)", "Sales, purchases and deliveries", "Automatic accounting"]
+      "features": [
+        "Water pH, dissolved oxygen and temperature",
+        "Stock (feed, fry, fish)",
+        "Sales, purchases and deliveries",
+        "Automatic accounting"
+      ]
     },
     "clients": {
       "title": "Customer management",
       "desc": "Record your customers, track their purchases, payments and outstanding balance.",
-      "features": ["Full customer record", "Purchase history", "Payment tracking", "Outstanding balance in real time"]
+      "features": [
+        "Full customer record",
+        "Purchase history",
+        "Payment tracking",
+        "Outstanding balance in real time"
+      ]
     },
     "employees": {
       "title": "Employee management",
       "desc": "Track employees, their position, salary, attendance, advances and leave.",
-      "features": ["Full employee record", "Salary and position", "Attendance", "Advances and leave"]
+      "features": [
+        "Full employee record",
+        "Salary and position",
+        "Attendance",
+        "Advances and leave"
+      ]
     },
     "fournisseurs": {
       "title": "Supplier management",
       "desc": "Record your suppliers and find them easily when purchasing.",
-      "features": ["Full supplier record", "Purchase history", "Contact details and reg. number"]
+      "features": [
+        "Full supplier record",
+        "Purchase history",
+        "Contact details and reg. number"
+      ]
     },
     "finances": {
       "title": "Financial management",
       "desc": "Track cash, bank, expenses and compute your farm's net profit.",
-      "features": ["Cash", "Bank", "Miscellaneous expenses", "Fuel", "Salary", "Maintenance", "Net profit"]
+      "features": [
+        "Cash",
+        "Bank",
+        "Miscellaneous expenses",
+        "Fuel",
+        "Salary",
+        "Maintenance",
+        "Net profit"
+      ]
     },
     "notifications": {
       "title": "Notifications",
       "desc": "Get a summary view of the farm's important alerts.",
-      "features": ["Low stock", "Temperature too high", "Dry soil", "Upcoming delivery", "Customer overdue on payment"]
+      "features": [
+        "Low stock",
+        "Temperature too high",
+        "Dry soil",
+        "Upcoming delivery",
+        "Customer overdue on payment"
+      ]
     }
   },
   "notifications": {
@@ -427,7 +499,14 @@
       "Brouillon": "Draft",
       "Commandé": "Ordered",
       "Reçu": "Received"
-    }
+    },
+    "navCommandes": "Orders",
+    "navARecevoir": "To receive",
+    "navProduits": "Products",
+    "colNumero": "Reference",
+    "emptyARecevoir": "No ordered purchase awaiting delivery.",
+    "aRecevoirTitle": "Purchases to receive",
+    "aRecevoirSubtitle": "Orders placed whose goods have not arrived yet. Mark them received to update stock."
   },
   "compta": {
     "totalVentes": "Total sales",
@@ -947,7 +1026,12 @@
     "date": "Date",
     "ordre": "Processing order",
     "typeLabel": "Control type",
-    "type": { "temperature": "Temperature", "hygiene": "Hygiene", "tracabilite": "Traceability", "autre": "Other" },
+    "type": {
+      "temperature": "Temperature",
+      "hygiene": "Hygiene",
+      "tracabilite": "Traceability",
+      "autre": "Other"
+    },
     "valeur": "Measured value",
     "unite": "Unit",
     "seuilMin": "Min threshold",
@@ -1074,7 +1158,10 @@
     "dueLate": "{{n}} days overdue",
     "dueToday": "today",
     "dueIn": "in {{n}} d",
-    "tab": { "lignes": "Invoice lines", "ecritures": "Journal items" },
+    "tab": {
+      "lignes": "Invoice lines",
+      "ecritures": "Journal items"
+    },
     "hashTitle": "Inalterable entry #{{n}} — hash-chained",
     "verifyHash": "Verify integrity",
     "hashOk": "Integrity chain verified ({{count}} entries).",
@@ -1254,11 +1341,26 @@
     }
   },
   "contacts": {
-    "type": { "client": "customer", "fournisseur": "supplier" },
-    "typeCap": { "client": "Customer", "fournisseur": "Supplier" },
-    "typePlural": { "client": "customers", "fournisseur": "suppliers" },
-    "nomPlaceholder": { "client": "e.g. Diallo", "fournisseur": "e.g. Traoré" },
-    "prenomPlaceholder": { "client": "e.g. Amadou", "fournisseur": "e.g. Ibrahim" },
+    "type": {
+      "client": "customer",
+      "fournisseur": "supplier"
+    },
+    "typeCap": {
+      "client": "Customer",
+      "fournisseur": "Supplier"
+    },
+    "typePlural": {
+      "client": "customers",
+      "fournisseur": "suppliers"
+    },
+    "nomPlaceholder": {
+      "client": "e.g. Diallo",
+      "fournisseur": "e.g. Traoré"
+    },
+    "prenomPlaceholder": {
+      "client": "e.g. Amadou",
+      "fournisseur": "e.g. Ibrahim"
+    },
     "addTitle": "Add a {{type}}",
     "editTitle": "Edit {{type}}",
     "searchPlaceholder": "Search a {{type}}…",
@@ -1669,7 +1771,12 @@
     "cardRecoltes": "Harvests",
     "downloadPdf": "Download the {{period}} report (PDF)",
     "exportCsv": "Export as CSV",
-    "period": { "jour": "Daily", "semaine": "Weekly", "mois": "Monthly", "annee": "Yearly" },
+    "period": {
+      "jour": "Daily",
+      "semaine": "Weekly",
+      "mois": "Monthly",
+      "annee": "Yearly"
+    },
     "pdfTitle": "{{period}} report",
     "pdfHeading": "{{period}} report — YEELEN AgriConnect",
     "pdfGeneratedAt": "Generated on {{date}}",
@@ -1745,7 +1852,11 @@
     "deleteConfirm": "Delete this harvest? This cannot be undone.",
     "deleted": "Harvest deleted.",
     "deleteError": "Could not delete the harvest.",
-    "qualiteLabels": { "Bonne": "Good", "Moyenne": "Average", "Faible": "Low" }
+    "qualiteLabels": {
+      "Bonne": "Good",
+      "Moyenne": "Average",
+      "Faible": "Low"
+    }
   },
   "rh": {
     "addEmployeeTitle": "Add an employee",
@@ -1790,22 +1901,56 @@
     "statutInactif": "Inactive (also disables login)",
     "fieldDateDepart": "Departure date",
     "fieldMotifDepart": "Departure reason",
-    "jours": { "Lun": "Mon", "Mar": "Tue", "Mer": "Wed", "Jeu": "Thu", "Ven": "Fri", "Sam": "Sat", "Dim": "Sun" },
+    "jours": {
+      "Lun": "Mon",
+      "Mar": "Tue",
+      "Mer": "Wed",
+      "Jeu": "Thu",
+      "Ven": "Fri",
+      "Sam": "Sat",
+      "Dim": "Sun"
+    },
     "sections": {
-      "infos": "Info", "presences": "Attendance", "conges": "Leave", "avances": "Advances",
-      "contrats": "Contracts", "temps": "Time", "bulletin": "Payslip", "historique": "History",
-      "activites": "Activities", "messages": "Messages"
+      "infos": "Info",
+      "presences": "Attendance",
+      "conges": "Leave",
+      "avances": "Advances",
+      "contrats": "Contracts",
+      "temps": "Time",
+      "bulletin": "Payslip",
+      "historique": "History",
+      "activites": "Activities",
+      "messages": "Messages"
     },
     "infoLabels": {
-      "poste": "Position", "departement": "Department", "manager": "Manager",
-      "dateEmbauche": "Hire date", "salaireRef": "Reference salary",
-      "coutHoraire": "Hourly cost", "heuresHebdo": "Hours/week", "joursTravailles": "Working days",
-      "dateNaissance": "Date of birth", "contactUrgence": "Emergency contact",
-      "numPiece": "ID document number", "emailPerso": "Personal email", "telephone": "Phone",
-      "adresse": "Address", "compteConnexion": "Login account", "depart": "Departure"
+      "poste": "Position",
+      "departement": "Department",
+      "manager": "Manager",
+      "dateEmbauche": "Hire date",
+      "salaireRef": "Reference salary",
+      "coutHoraire": "Hourly cost",
+      "heuresHebdo": "Hours/week",
+      "joursTravailles": "Working days",
+      "dateNaissance": "Date of birth",
+      "contactUrgence": "Emergency contact",
+      "numPiece": "ID document number",
+      "emailPerso": "Personal email",
+      "telephone": "Phone",
+      "adresse": "Address",
+      "compteConnexion": "Login account",
+      "depart": "Departure"
     },
-    "presenceStatut": { "Présent": "Present", "Absent": "Absent", "Retard": "Late", "Congé": "Leave" },
-    "congeStatut": { "Demandé": "Requested", "Approuvé": "Approved", "Refusé": "Rejected" },
+    "presenceStatut": {
+      "Présent": "Present",
+      "Absent": "Absent",
+      "Retard": "Late",
+      "Congé": "Leave"
+    },
+    "congeStatut": {
+      "Demandé": "Requested",
+      "Approuvé": "Approved",
+      "Refusé": "Rejected"
+    },
     "presenceSaved": "Attendance saved.",
     "presenceEmpty": "No attendance recorded.",
     "notes": "Notes",

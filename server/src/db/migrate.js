@@ -1306,6 +1306,57 @@ CREATE INDEX IF NOT EXISTS idx_stock_mouvements_stock ON stock_mouvements(stock_
 ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS statut TEXT NOT NULL DEFAULT 'Reçu';
 ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS date_reception TIMESTAMPTZ;
 
+-- Référence lisible d'un achat (ACH-2026-0007), sur le modèle de devis.numero. Un achat
+-- n'en avait aucune : la liste commençait par la date, et rien ne permettait de désigner
+-- un achat précis — ni dans une conversation avec un fournisseur, ni dans un litige.
+-- Nullable pour les lignes historiques, que le backfill juste en dessous renseigne.
+ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS numero TEXT;
+
+-- Numérote les achats déjà en base, par entreprise et par année de création, dans l'ordre
+-- chronologique — sans quoi ils resteraient sans référence alors que les nouveaux en ont une.
+UPDATE achats_documents ad
+   SET numero = num.attendu
+  FROM (
+    SELECT id,
+           'ACH-' || EXTRACT(YEAR FROM created_at)::INT || '-' ||
+           LPAD(ROW_NUMBER() OVER (
+             PARTITION BY entreprise_id, EXTRACT(YEAR FROM created_at)
+             ORDER BY created_at, id
+           )::TEXT, 4, '0') AS attendu
+      FROM achats_documents
+     WHERE numero IS NULL
+  ) num
+ WHERE ad.id = num.id AND ad.numero IS NULL;
+
+-- Index partiel plutôt qu'une contrainte : les lignes sans numéro (aucune après le backfill,
+-- mais la colonne reste nullable) ne doivent pas entrer en collision entre elles.
+CREATE UNIQUE INDEX IF NOT EXISTS achats_documents_numero_unique
+  ON achats_documents (entreprise_id, numero) WHERE numero IS NOT NULL;
+
+-- Compteur dédié, par entreprise et par année. Déduire le numéro suivant des lignes existantes
+-- — que ce soit par COUNT (ce que fait routes/devis.js) ou par MAX — réattribue la référence
+-- d'un achat supprimé au suivant : deux pièces différentes finissent par porter le même numéro
+-- dans l'historique d'un fournisseur. Un compteur qui n'est jamais décrémenté laisse un trou à
+-- la place, ce qui est le comportement attendu d'une numérotation de pièces.
+CREATE TABLE IF NOT EXISTS achats_numero_sequence (
+  entreprise_id INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  annee INTEGER NOT NULL,
+  dernier INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (entreprise_id, annee)
+);
+
+-- Amorce le compteur au plus haut numéro déjà attribué par le backfill ci-dessus — sans quoi
+-- la première création après migration repartirait de 0001 et heurterait l'index unique.
+INSERT INTO achats_numero_sequence (entreprise_id, annee, dernier)
+SELECT entreprise_id,
+       EXTRACT(YEAR FROM created_at)::INT AS annee,
+       MAX(NULLIF(regexp_replace(numero, '^.*-', ''), '')::INT) AS dernier
+  FROM achats_documents
+ WHERE numero IS NOT NULL
+ GROUP BY entreprise_id, EXTRACT(YEAR FROM created_at)
+ON CONFLICT (entreprise_id, annee)
+DO UPDATE SET dernier = GREATEST(achats_numero_sequence.dernier, EXCLUDED.dernier);
+
 -- ═══════════════ Produits unifiés (fusion cultures_stocks / poulailler_stocks) ═══════════════
 -- Remplace les deux tables stocks séparées par une seule table produits + une vraie ressource
 -- de catégories par entreprise (au lieu du texte libre non validé qu'était categorie). Voir

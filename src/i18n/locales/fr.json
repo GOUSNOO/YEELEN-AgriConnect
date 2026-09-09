@@ -25,9 +25,38 @@
     "actions": "Actions",
     "send": "Envoyer",
     "noData": "Aucune donnée",
-    "months": ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"],
-    "days": ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
-    "daysShort": ["L", "M", "M", "J", "V", "S", "D"],
+    "months": [
+      "Jan",
+      "Fév",
+      "Mar",
+      "Avr",
+      "Mai",
+      "Juin",
+      "Juil",
+      "Août",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Déc"
+    ],
+    "days": [
+      "Lun",
+      "Mar",
+      "Mer",
+      "Jeu",
+      "Ven",
+      "Sam",
+      "Dim"
+    ],
+    "daysShort": [
+      "L",
+      "M",
+      "M",
+      "J",
+      "V",
+      "S",
+      "D"
+    ],
     "type": "Type"
   },
   "role": {
@@ -134,42 +163,85 @@
     "cultures": {
       "title": "Suivi cultures et irrigation",
       "desc": "Surveillez l'humidité et la température du sol, recevez des recommandations d'arrosage et pilotez vos vannes à distance.",
-      "features": ["Capteurs sol par parcelle", "Recommandation d'arrosage automatique", "Pilotage des vannes (auto ou manuel)", "Historique des arrosages"]
+      "features": [
+        "Capteurs sol par parcelle",
+        "Recommandation d'arrosage automatique",
+        "Pilotage des vannes (auto ou manuel)",
+        "Historique des arrosages"
+      ]
     },
     "poulailler": {
       "title": "Gestion du poulailler",
       "desc": "Suivez l'ambiance du poulailler et gérez l'ensemble de votre activité avicole au quotidien.",
-      "features": ["Température et humidité du poulailler", "Stocks (aliments, œufs, volailles)", "Ventes, achats et livraisons", "Comptabilité automatique"]
+      "features": [
+        "Température et humidité du poulailler",
+        "Stocks (aliments, œufs, volailles)",
+        "Ventes, achats et livraisons",
+        "Comptabilité automatique"
+      ]
     },
     "pisciculture": {
       "title": "Gestion piscicole",
       "desc": "Suivez la qualité de l'eau des bassins et gérez l'ensemble de votre activité piscicole au quotidien.",
-      "features": ["pH, oxygène dissous et température de l'eau", "Stocks (aliments, alevins, poissons)", "Ventes, achats et livraisons", "Comptabilité automatique"]
+      "features": [
+        "pH, oxygène dissous et température de l'eau",
+        "Stocks (aliments, alevins, poissons)",
+        "Ventes, achats et livraisons",
+        "Comptabilité automatique"
+      ]
     },
     "clients": {
       "title": "Gestion des clients",
       "desc": "Enregistrez vos clients, suivez leurs achats, leurs paiements et leur dette restante.",
-      "features": ["Fiche client complète", "Historique des achats", "Suivi des paiements", "Dette restante en temps réel"]
+      "features": [
+        "Fiche client complète",
+        "Historique des achats",
+        "Suivi des paiements",
+        "Dette restante en temps réel"
+      ]
     },
     "employees": {
       "title": "Gestion des employés",
       "desc": "Suivez les employés, leur poste, leur salaire, leur présence, leurs avances et leurs congés.",
-      "features": ["Fiche employé complète", "Salaire et poste", "Présence", "Avances et congés"]
+      "features": [
+        "Fiche employé complète",
+        "Salaire et poste",
+        "Présence",
+        "Avances et congés"
+      ]
     },
     "fournisseurs": {
       "title": "Gestion des fournisseurs",
       "desc": "Enregistrez vos fournisseurs et retrouvez-les facilement lors de vos achats.",
-      "features": ["Fiche fournisseur complète", "Historique des achats", "Coordonnées et SIRET"]
+      "features": [
+        "Fiche fournisseur complète",
+        "Historique des achats",
+        "Coordonnées et SIRET"
+      ]
     },
     "finances": {
       "title": "Gestion financière",
       "desc": "Suivez la caisse, la banque, les dépenses et calculez le bénéfice net de votre exploitation.",
-      "features": ["Caisse", "Banque", "Dépenses diverses", "Carburant", "Salaire", "Entretien", "Bénéfice net"]
+      "features": [
+        "Caisse",
+        "Banque",
+        "Dépenses diverses",
+        "Carburant",
+        "Salaire",
+        "Entretien",
+        "Bénéfice net"
+      ]
     },
     "notifications": {
       "title": "Notifications",
       "desc": "Recevez une vue synthétique des alertes importantes de l'exploitation.",
-      "features": ["Stock faible", "Température trop élevée", "Sol sec", "Livraison prévue", "Client en retard de paiement"]
+      "features": [
+        "Stock faible",
+        "Température trop élevée",
+        "Sol sec",
+        "Livraison prévue",
+        "Client en retard de paiement"
+      ]
     }
   },
   "notifications": {
@@ -427,7 +499,14 @@
       "Brouillon": "Brouillon",
       "Commandé": "Commandé",
       "Reçu": "Reçu"
-    }
+    },
+    "navCommandes": "Commandes",
+    "navARecevoir": "À recevoir",
+    "navProduits": "Produits",
+    "colNumero": "Référence",
+    "emptyARecevoir": "Aucun achat commandé en attente de réception.",
+    "aRecevoirTitle": "Achats à recevoir",
+    "aRecevoirSubtitle": "Les commandes passées dont la marchandise n'est pas encore arrivée. Marquez-les reçues pour mettre le stock à jour."
   },
   "compta": {
     "totalVentes": "Total ventes",
@@ -947,7 +1026,12 @@
     "date": "Date",
     "ordre": "Ordre de transformation",
     "typeLabel": "Type de contrôle",
-    "type": { "temperature": "Température", "hygiene": "Hygiène", "tracabilite": "Traçabilité", "autre": "Autre" },
+    "type": {
+      "temperature": "Température",
+      "hygiene": "Hygiène",
+      "tracabilite": "Traçabilité",
+      "autre": "Autre"
+    },
     "valeur": "Valeur mesurée",
     "unite": "Unité",
     "seuilMin": "Seuil min",
@@ -1074,7 +1158,10 @@
     "dueLate": "{{n}} j de retard",
     "dueToday": "aujourd'hui",
     "dueIn": "J+{{n}}",
-    "tab": { "lignes": "Lignes de facture", "ecritures": "Écritures comptables" },
+    "tab": {
+      "lignes": "Lignes de facture",
+      "ecritures": "Écritures comptables"
+    },
     "hashTitle": "Écriture inaltérable n°{{n}} — chaînée par hash",
     "verifyHash": "Vérifier l'intégrité",
     "hashOk": "Chaîne d'intégrité vérifiée ({{count}} écritures).",
@@ -1254,11 +1341,26 @@
     }
   },
   "contacts": {
-    "type": { "client": "client", "fournisseur": "fournisseur" },
-    "typeCap": { "client": "Client", "fournisseur": "Fournisseur" },
-    "typePlural": { "client": "clients", "fournisseur": "fournisseurs" },
-    "nomPlaceholder": { "client": "Ex: Diallo", "fournisseur": "Ex: Traoré" },
-    "prenomPlaceholder": { "client": "Ex: Amadou", "fournisseur": "Ex: Ibrahim" },
+    "type": {
+      "client": "client",
+      "fournisseur": "fournisseur"
+    },
+    "typeCap": {
+      "client": "Client",
+      "fournisseur": "Fournisseur"
+    },
+    "typePlural": {
+      "client": "clients",
+      "fournisseur": "fournisseurs"
+    },
+    "nomPlaceholder": {
+      "client": "Ex: Diallo",
+      "fournisseur": "Ex: Traoré"
+    },
+    "prenomPlaceholder": {
+      "client": "Ex: Amadou",
+      "fournisseur": "Ex: Ibrahim"
+    },
     "addTitle": "Ajouter un {{type}}",
     "editTitle": "Modifier le {{type}}",
     "searchPlaceholder": "Rechercher un {{type}}…",
@@ -1669,7 +1771,12 @@
     "cardRecoltes": "Récoltes",
     "downloadPdf": "Télécharger le rapport {{period}} (PDF)",
     "exportCsv": "Exporter en CSV",
-    "period": { "jour": "Journalier", "semaine": "Hebdomadaire", "mois": "Mensuel", "annee": "Annuel" },
+    "period": {
+      "jour": "Journalier",
+      "semaine": "Hebdomadaire",
+      "mois": "Mensuel",
+      "annee": "Annuel"
+    },
     "pdfTitle": "Rapport {{period}}",
     "pdfHeading": "Rapport {{period}} — YEELEN AgriConnect",
     "pdfGeneratedAt": "Généré le {{date}}",
@@ -1745,7 +1852,11 @@
     "deleteConfirm": "Supprimer cette récolte ? Cette action est irréversible.",
     "deleted": "Récolte supprimée.",
     "deleteError": "Impossible de supprimer la récolte.",
-    "qualiteLabels": { "Bonne": "Bonne", "Moyenne": "Moyenne", "Faible": "Faible" }
+    "qualiteLabels": {
+      "Bonne": "Bonne",
+      "Moyenne": "Moyenne",
+      "Faible": "Faible"
+    }
   },
   "rh": {
     "addEmployeeTitle": "Ajouter un employé",
@@ -1790,22 +1901,56 @@
     "statutInactif": "Inactif (désactive aussi la connexion)",
     "fieldDateDepart": "Date de départ",
     "fieldMotifDepart": "Motif de départ",
-    "jours": { "Lun": "Lun", "Mar": "Mar", "Mer": "Mer", "Jeu": "Jeu", "Ven": "Ven", "Sam": "Sam", "Dim": "Dim" },
+    "jours": {
+      "Lun": "Lun",
+      "Mar": "Mar",
+      "Mer": "Mer",
+      "Jeu": "Jeu",
+      "Ven": "Ven",
+      "Sam": "Sam",
+      "Dim": "Dim"
+    },
     "sections": {
-      "infos": "Infos", "presences": "Présences", "conges": "Congés", "avances": "Avances",
-      "contrats": "Contrats", "temps": "Temps", "bulletin": "Bulletin", "historique": "Historique",
-      "activites": "Activités", "messages": "Messages"
+      "infos": "Infos",
+      "presences": "Présences",
+      "conges": "Congés",
+      "avances": "Avances",
+      "contrats": "Contrats",
+      "temps": "Temps",
+      "bulletin": "Bulletin",
+      "historique": "Historique",
+      "activites": "Activités",
+      "messages": "Messages"
     },
     "infoLabels": {
-      "poste": "Poste", "departement": "Département", "manager": "Manager",
-      "dateEmbauche": "Date d'embauche", "salaireRef": "Salaire de référence",
-      "coutHoraire": "Coût horaire", "heuresHebdo": "Heures/semaine", "joursTravailles": "Jours travaillés",
-      "dateNaissance": "Date de naissance", "contactUrgence": "Contact d'urgence",
-      "numPiece": "N° pièce d'identité", "emailPerso": "Email personnel", "telephone": "Téléphone",
-      "adresse": "Adresse", "compteConnexion": "Compte de connexion", "depart": "Départ"
+      "poste": "Poste",
+      "departement": "Département",
+      "manager": "Manager",
+      "dateEmbauche": "Date d'embauche",
+      "salaireRef": "Salaire de référence",
+      "coutHoraire": "Coût horaire",
+      "heuresHebdo": "Heures/semaine",
+      "joursTravailles": "Jours travaillés",
+      "dateNaissance": "Date de naissance",
+      "contactUrgence": "Contact d'urgence",
+      "numPiece": "N° pièce d'identité",
+      "emailPerso": "Email personnel",
+      "telephone": "Téléphone",
+      "adresse": "Adresse",
+      "compteConnexion": "Compte de connexion",
+      "depart": "Départ"
     },
-    "presenceStatut": { "Présent": "Présent", "Absent": "Absent", "Retard": "Retard", "Congé": "Congé" },
-    "congeStatut": { "Demandé": "Demandé", "Approuvé": "Approuvé", "Refusé": "Refusé" },
+    "presenceStatut": {
+      "Présent": "Présent",
+      "Absent": "Absent",
+      "Retard": "Retard",
+      "Congé": "Congé"
+    },
+    "congeStatut": {
+      "Demandé": "Demandé",
+      "Approuvé": "Approuvé",
+      "Refusé": "Refusé"
+    },
     "presenceSaved": "Présence enregistrée.",
     "presenceEmpty": "Aucune présence enregistrée.",
     "notes": "Notes",

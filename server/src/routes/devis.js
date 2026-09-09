@@ -25,7 +25,7 @@ function validiteParDefaut() {
 const router = express.Router();
 
 const DEVIS_COLUMNS = `
-  d.id, d.numero, d.statut, d.date, d.date_signature AS "dateSignature",
+  d.id, d.numero, d.statut, to_char(d.date, 'YYYY-MM-DD') AS date, d.date_signature AS "dateSignature",
   d.signataire_nom AS "signataireNom", d.total::float8 AS total, d.notes,
   d.remise_globale::float8 AS "remiseGlobale",
   COALESCE(d.devise, e.devise) AS devise, COALESCE(d.taux_change, 1)::float8 AS "tauxChange",
