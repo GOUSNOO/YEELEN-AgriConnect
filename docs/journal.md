@@ -3471,3 +3471,51 @@ génération a donc été relue dans le code (colonnes, échappement des guillem
 
 Note : un « — » affiché en valeur mesurée pendant la mise en place venait du script de
 préparation (champ `valeur` au lieu de `valeurMesuree`), pas de l'application.
+
+### 2026-09-09 — Allègement du chargement initial (code splitting)
+
+Dernier chantier de performance non bloqué : le bundle faisait **906 kB en un seul fichier**
+(231,4 kB gzippés), sans aucun `React.lazy` dans le projet — tout partait au premier
+chargement, y compris la pisciculture pour qui n'a que des cultures, et les deux catalogues de
+traduction pour qui n'en lit qu'un. Pour une application visant des connexions mobiles lentes,
+c'était le point de friction le plus tangible qui restait.
+
+**Trois étapes, mesurées à chaque fois.**
+
+1. **Chunks tiers séparés** (`manualChunks` dans `vite.config.js`) : `vendor-react` (171,9 kB),
+   `vendor-i18n` (56,9 kB), `vendor-icons` (27,7 kB). Le gain n'est pas sur le poids total mais
+   sur le cache : les dépendances changent bien moins souvent que le code applicatif, un
+   déploiement ne réinvalide donc plus que le chunk de l'app. Au passage, mesure rassurante :
+   `lucide-react` pèse 29 Mo sur disque mais seulement 27,7 kB une fois secoué.
+
+2. **Catalogues i18n à la demande.** Les deux JSON pesaient **167 kB** (fr 86,8 + en 79,9) dans
+   le bundle initial alors qu'un utilisateur n'en lit jamais qu'un. `fr` reste importé
+   statiquement — c'est le `fallbackLng`, il doit toujours être là pour combler une clé
+   manquante — et les autres langues passent par `import()`, avec mémorisation de la promesse
+   et repli silencieux sur le fallback si le chargement échoue. `setLanguage` devient async et
+   attend le catalogue avant de basculer. Le commentaire d'en-tête du fichier prévoyait
+   exactement ce changement « quand la liste s'allongera » ; à 167 kB, ce n'était plus
+   négligeable. −61 kB sur le chunk principal.
+
+3. **Modules d'onglets en `React.lazy`** (9 : Factures, Équipements, Billing admin, Météo,
+   Mon espace RH, Feedback, Aide, Registre des intrants, Observations), avec **un seul
+   `<Suspense>`** autour de la zone de contenu — chaque onglet n'en rend qu'un à la fois, un
+   Suspense par module aurait été du bruit. Volontairement **non** lazy : `HaccpPanel`, dont le
+   badge de non-conformité doit justement charger ses données dès le montage (voir l'entrée
+   précédente) — le rendre paresseux aurait réintroduit le défaut corrigé le matin même.
+
+**Résultat mesuré** : chargement initial **231,4 → 193,3 kB gzippés (−16 %)**, plus 44,7 kB
+désormais différés (chargés seulement si l'utilisateur ouvre l'onglet concerné ou passe en
+anglais). Chunk applicatif brut : 906 → 494,5 kB.
+
+**Vérifié en navigateur réel** (entreprise jetable, supprimée ensuite) — et pas seulement par
+la taille des fichiers : le journal réseau confirme que `HelpModule`, `MeteoModule`,
+`FeedbackModule`, `ObservationListView` ne sont récupérés qu'en ouvrant leur onglet, et
+`en-*.js` uniquement au changement de langue, qui bascule bien toute l'interface en anglais.
+108 tests frontend, `oxlint` (0 erreur) et build verts.
+
+**Limite honnête** : le chunk applicatif reste à 494,5 kB parce qu'`App.jsx` (9 200 lignes)
+contient encore la majorité des modules — Cultures, Poulailler, Pisciculture, Devis, Employés,
+Contacts, Finances… On ne peut pas charger paresseusement ce qui vit dans le même fichier.
+Descendre nettement plus bas suppose l'extraction d'`App.jsx` en modules séparés, chantier
+explicitement différé à l'avant-production (mémoire `project_appjsx_extraction_deferred`).

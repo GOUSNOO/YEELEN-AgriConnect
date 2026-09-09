@@ -3,14 +3,14 @@
 // repli sur la langue du navigateur puis 'fr'. Distinct de la devise/locale d'affichage
 // des montants et dates, qui sont PAR ENTREPRISE (voir src/lib/locale.jsx).
 //
-// Pour l'instant les catalogues fr/en sont importés directement (2 langues, coût bundle
-// négligeable). Quand la liste s'allongera, passer à i18next-http-backend + import() par
-// langue pour ne charger que la langue active.
+// Chargement des catalogues : `fr` est importé statiquement — c'est le fallbackLng, il doit
+// donc toujours être présent, y compris pour combler une clé absente ailleurs. Les autres
+// langues sont chargées à la demande par import() : les deux catalogues pesaient 167 kB dans
+// le bundle initial alors qu'un utilisateur n'en lit jamais qu'un.
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import fr from './locales/fr.json';
-import en from './locales/en.json';
 
 export const SUPPORTED_LANGS = [
   { code: 'fr', label: 'Français' },
@@ -28,8 +28,10 @@ i18n
   .init({
     resources: {
       fr: { translation: fr },
-      en: { translation: en },
     },
+    // La langue détectée est chargée juste après l init (voir chargerCatalogue plus bas) ;
+    // en attendant, fallbackLng affiche le français plutôt que des clés brutes.
+    partialBundledLanguages: true,
     fallbackLng: 'fr',
     supportedLngs: SUPPORTED_LANGS.map((l) => l.code),
     nonExplicitSupportedLngs: true, // 'fr-FR' -> 'fr'
@@ -41,7 +43,33 @@ i18n
     },
   });
 
-export function setLanguage(code, explicit = true) {
+// Catalogues chargés à la demande. `fr` est déjà là ; toute autre langue arrive par un
+// import() que Vite isole dans son propre chunk. Une langue déjà chargée (ou en cours de
+// chargement) ne repasse jamais par le réseau : la promesse est mémorisée.
+const catalogues = {
+  en: () => import('./locales/en.json'),
+};
+const enCours = {};
+
+export async function chargerCatalogue(code) {
+  if (!catalogues[code] || i18n.hasResourceBundle(code, "translation")) return;
+  if (!enCours[code]) {
+    enCours[code] = catalogues[code]()
+      .then((mod) => { i18n.addResourceBundle(code, "translation", mod.default, true, true); })
+      .catch((err) => {
+        // Un catalogue manquant ne doit pas casser l app : fallbackLng prend le relais.
+        console.error('[i18n] catalogue indisponible', code, err);
+        delete enCours[code];
+      });
+  }
+  return enCours[code];
+}
+
+// La langue détectée au démarrage peut ne pas être le français : on la charge aussitôt.
+chargerCatalogue(i18n.language);
+
+export async function setLanguage(code, explicit = true) {
+  await chargerCatalogue(code);
   i18n.changeLanguage(code);
   if (explicit) {
     try { localStorage.setItem(LANG_EXPLICIT_KEY, '1'); } catch { /* localStorage indispo */ }

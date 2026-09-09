@@ -1,5 +1,5 @@
 ﻿import './App.css';
-﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
@@ -52,16 +52,16 @@ import {
   rechercherVilleMeteo, getMeteo, getParcellesLocalisees, getAnalyseSol, getNdvi,
 } from './lib/api';
 import { getRecaptchaToken } from './lib/recaptcha.js';
-import BillingAdminPanel from './components/BillingAdminPanel';
+const BillingAdminPanel = lazy(() => import('./components/BillingAdminPanel'));
 import AbonnementBloque from './components/AbonnementBloque';
-import MeteoModule from './components/MeteoModule';
+const MeteoModule = lazy(() => import('./components/MeteoModule'));
 import MeteoWidget from './components/MeteoWidget';
 import { Badge, Button, Card, DataTable, Field, GaugeDial, MiniChart, Select, ToastContainer, notifyError, notifySuccess } from './components/ui.jsx';
-import { ObservationListView } from './components/ObservationListView'; // Import the new component
-import { RegistreIntrantsView } from './components/RegistreIntrantsView';
-import { FeedbackModule } from './components/FeedbackModule';
-import { HelpModule } from './components/HelpModule';
-import { EquipementsModule } from './components/EquipementsModule';
+const ObservationListView = lazy(() => import('./components/ObservationListView').then((m) => ({ default: m.ObservationListView })));
+const RegistreIntrantsView = lazy(() => import('./components/RegistreIntrantsView').then((m) => ({ default: m.RegistreIntrantsView })));
+const FeedbackModule = lazy(() => import('./components/FeedbackModule').then((m) => ({ default: m.FeedbackModule })));
+const HelpModule = lazy(() => import('./components/HelpModule').then((m) => ({ default: m.HelpModule })));
+const EquipementsModule = lazy(() => import('./components/EquipementsModule').then((m) => ({ default: m.EquipementsModule })));
 import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
 import RhReferentiels from './components/RhReferentiels';
@@ -69,13 +69,13 @@ import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
-import FacturesModule from './components/FacturesModule';
+const FacturesModule = lazy(() => import('./components/FacturesModule'));
 import ProduitTemplatesPanel from './components/ProduitTemplatesPanel';
 import ProduitRecettesPanel from './components/ProduitRecettesPanel';
 import OrdresTransformationPanel from './components/OrdresTransformationPanel';
 import HaccpPanel from './components/HaccpPanel';
 import { taxesLigneCalc as taxesLigneCalcPure } from './lib/taxes.js';
-import MonEspaceRh from './components/MonEspaceRh';
+const MonEspaceRh = lazy(() => import('./components/MonEspaceRh'));
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
 import { storageGet, storageSet, syncPendingChanges } from './utils/storage.js';
 import { FinancesModule, BanquesModule } from './modules/finances.jsx';
@@ -8839,6 +8839,9 @@ export default function App() {
 
       {screen === 'dashboard' && (
         <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
+          {/* Les modules d onglets sont chargés à la demande : un seul Suspense ici suffit,
+              chaque onglet n en rend qu un à la fois. */}
+          <Suspense fallback={<div style={{ color: COLORS.inkSoft, padding: 20 }}><Loader2 size={16} className="spin" /></div>}>
             {tab === 'accueil' && (
               <HomeGrid
                 tabs={availableTabs} activated={activated} permissions={roleConfig.permissions}
@@ -8883,6 +8886,7 @@ export default function App() {
             {tab === 'billing' && isPlatformAdmin && <BillingAdminPanel />}
             {tab === 'aide' && <HelpModule />}
             {tab === 'profil' && <ProfilModule farmId={user} role={role} />}
+          </Suspense>
         </div>
       )}
 

@@ -27,4 +27,18 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Les dépendances tierces changent bien moins souvent que le code de l app :
+        // les isoler leur donne une empreinte de cache stable, si bien qu un déploiement
+        // ne réinvalide que le chunk applicatif au lieu de tout le bundle.
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+          'vendor-icons': ['lucide-react'],
+        },
+      },
+    },
+  },
 })
