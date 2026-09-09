@@ -15,7 +15,7 @@ import {
 } from '../lib/api.js';
 import { fmtMoney, fmtDate, useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Badge, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Jour de l'entreprise, pas le jour UTC : un champ pré-rempli doit proposer la même date
 // que celle que le serveur retiendrait si on le laissait vide.
@@ -47,14 +47,14 @@ export function EmployeeRhModal({ employee, canManage = false, onClose }) {
               ? <img src={employee.photo} alt="" style={{ width: 52, height: 52, borderRadius: RADIUS.card, objectFit: 'cover' }} />
               : <div style={{ width: 52, height: 52, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(employee.prenom?.[0] || '') + (employee.nom?.[0] || '')}</div>}
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{employee.prenom} {employee.nom}</div>
-              <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
+              <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{employee.prenom} {employee.nom}</div>
+              <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                 {employee.posteNom || employee.poste || t('rh.posteNonRenseigne')}
                 {employee.departementNom ? ` · ${employee.departementNom}` : ''}
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
         </div>
 
         <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: `1px solid ${COLORS.border}`, flexWrap: 'wrap' }}>
@@ -62,7 +62,7 @@ export function EmployeeRhModal({ employee, canManage = false, onClose }) {
             <button key={id} onClick={() => setSection(id)} style={{
               background: 'transparent', color: section === id ? COLORS.ink : COLORS.inkSoft,
               border: 'none', borderBottom: section === id ? `2px solid ${COLORS.green}` : '2px solid transparent',
-              padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              padding: '7px 12px', fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer',
             }}>{t(`rh.sections.${id}`)}</button>
           ))}
         </div>
@@ -108,7 +108,7 @@ function InfosTab({ employee }) {
       {rows.map(([k, v]) => (
         <React.Fragment key={k}>
           <div className="field-group-label">{k}</div>
-          <div style={{ fontSize: 13 }}>{v}</div>
+          <div style={{ fontSize: TEXT.base }}>{v}</div>
         </React.Fragment>
       ))}
     </div>
@@ -117,9 +117,9 @@ function InfosTab({ employee }) {
 
 function Loading() {
   const { t } = useTranslation();
-  return <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('common.loading')}</p>;
+  return <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('common.loading')}</p>;
 }
-function Empty({ children }) { return <p style={{ color: COLORS.inkSoft, fontSize: 13 }}>{children}</p>; }
+function Empty({ children }) { return <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{children}</p>; }
 
 // ── Présences ──
 function PresencesTab({ sid, canManage }) {
@@ -152,7 +152,7 @@ function PresencesTab({ sid, canManage }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map(p => (
             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
-              <div><div style={{ fontSize: 13, fontWeight: 600 }}>{fr(p.date)}</div>{p.notes && <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{p.notes}</div>}</div>
+              <div><div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fr(p.date)}</div>{p.notes && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{p.notes}</div>}</div>
               <Badge tone={PRESENCE_TONE[p.statut] || 'blue'}>{t(`rh.presenceStatut.${p.statut}`, { defaultValue: p.statut })}</Badge>
             </div>
           ))}
@@ -206,14 +206,14 @@ function CongesTab({ sid, canManage }) {
 
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('rh.soldeAnnee', { annee })}</div>
+      <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.soldeAnnee', { annee })}</div>
       {solde === null ? <Loading /> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 18 }}>
           {solde.map(x => (
             <div key={x.typeId} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: x.couleur || COLORS.ink }}>{x.nom}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{t('rh.soldeRestant', { count: x.restant })}</div>
-              <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{t('rh.soldeDetail', { pris: x.pris, alloues: x.alloues })}</div>
+              <div style={{ fontSize: TEXT.sm, fontWeight: 600, color: x.couleur || COLORS.ink }}>{x.nom}</div>
+              <div style={{ fontSize: TEXT.lg, fontWeight: 700, marginTop: 2 }}>{t('rh.soldeRestant', { count: x.restant })}</div>
+              <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>{t('rh.soldeDetail', { pris: x.pris, alloues: x.alloues })}</div>
             </div>
           ))}
         </div>
@@ -221,7 +221,7 @@ function CongesTab({ sid, canManage }) {
 
       {canManage && (
         <>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('rh.droitsAnnuels')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.droitsAnnuels')}</div>
           <form onSubmit={submitDroit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10, alignItems: 'end', marginBottom: 10 }}>
             <Select label={t('rh.typeField')} value={droitForm.typeId} onChange={e => setDroitForm({ ...droitForm, typeId: e.target.value })}>
               <option value="">—</option>
@@ -233,7 +233,7 @@ function CongesTab({ sid, canManage }) {
           </form>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
             {droits.map(d => (
-              <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: 13 }}>
+              <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.base }}>
                 <span>{d.typeNom} · {d.annee} · <b>{t('rh.nbJours', { count: d.joursAlloues })}</b></span>
                 <button onClick={async () => { await deleteSalarieCongeDroit(d.id); load(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
               </div>
@@ -242,7 +242,7 @@ function CongesTab({ sid, canManage }) {
         </>
       )}
 
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('rh.demandes')}</div>
+      <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.demandes')}</div>
       <form onSubmit={submitConge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, alignItems: 'end', marginBottom: 12 }}>
         <Select label={t('rh.typeField')} value={form.typeId} onChange={e => setForm({ ...form, typeId: e.target.value })}>
           <option value="">—</option>
@@ -251,10 +251,10 @@ function CongesTab({ sid, canManage }) {
         <Field label={t('rh.du')} type="date" value={form.dateDebut} onChange={e => setForm({ ...form, dateDebut: e.target.value })} />
         <Field label={t('rh.au')} type="date" value={form.dateFin} onChange={e => setForm({ ...form, dateFin: e.target.value })} />
         <Field label={t('rh.motif')} placeholder={t('common.optionalPlaceholder')} value={form.motif} onChange={e => setForm({ ...form, motif: e.target.value })} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
           <input type="checkbox" checked={form.demiJourDebut} onChange={e => setForm({ ...form, demiJourDebut: e.target.checked })} /> {t('rh.demiPremier')}
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
           <input type="checkbox" checked={form.demiJourFin} onChange={e => setForm({ ...form, demiJourFin: e.target.checked })} /> {t('rh.demiDernier')}
         </label>
         <Button type="submit" variant="ochre"><Plus size={14} /> {t('rh.demander')}</Button>
@@ -264,8 +264,8 @@ function CongesTab({ sid, canManage }) {
           {conges.map(c => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{fr(c.dateDebut)} → {fr(c.dateFin)} · {c.nbJours != null ? t('rh.nbJours', { count: c.nbJours }) : '—'}</div>
-                <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{c.typeNom || t('rh.typeNonPrecise')}{c.motif ? ` · ${c.motif}` : ''}</div>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fr(c.dateDebut)} → {fr(c.dateFin)} · {c.nbJours != null ? t('rh.nbJours', { count: c.nbJours }) : '—'}</div>
+                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{c.typeNom || t('rh.typeNonPrecise')}{c.motif ? ` · ${c.motif}` : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Badge tone={CONGE_TONE[c.statut] || 'blue'}>{t(`rh.congeStatut.${c.statut}`, { defaultValue: c.statut })}</Badge>
@@ -312,12 +312,12 @@ function AvancesTab({ sid, canManage }) {
       )}
       {rows === null ? <Loading /> : (
         <>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t('rh.totalLabel', { total: fcfa(total) })}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 10 }}>{t('rh.totalLabel', { total: fcfa(total) })}</div>
           {rows.length === 0 ? <Empty>{t('rh.avancesEmpty')}</Empty> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {rows.map(a => (
                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
-                  <div><div style={{ fontSize: 13, fontWeight: 600 }}>{fcfa(a.montant)}</div><div style={{ fontSize: 12, color: COLORS.inkSoft }}>{fr(a.date)}{a.motif ? ` · ${a.motif}` : ''}</div></div>
+                  <div><div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fcfa(a.montant)}</div><div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{fr(a.date)}{a.motif ? ` · ${a.motif}` : ''}</div></div>
                   {canManage && <button onClick={async () => { await deleteSalarieAvance(a.id); load(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={15} /></button>}
                 </div>
               ))}
@@ -414,7 +414,7 @@ function TempsTab({ sid, employee, canManage }) {
       )}
       {rows === null ? <Loading /> : (
         <>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 10 }}>
             {cout != null ? t('rh.totalHeuresCout', { count: total, cout: fcfa(Math.round(cout)) }) : t('rh.totalHeures', { count: total })}
           </div>
           {rows.length === 0 ? <Empty>{t('rh.tempsEmpty')}</Empty> : (
@@ -450,14 +450,14 @@ function BulletinTab({ sid }) {
       <Field label={t('rh.mois')} type="month" value={mois} onChange={e => setMois(e.target.value)} style={{ maxWidth: 180 }} />
       {!data ? <Loading /> : (
         <div className="field-group" style={{ maxWidth: 420, marginTop: 14 }}>
-          <div className="field-group-label">{t('rh.bulletinSalaireRef')}</div><div style={{ fontSize: 13 }}>{fcfa(data.salaire)} {data.contratType ? `(${data.contratType})` : ''}</div>
-          <div className="field-group-label">{t('rh.bulletinAvances')}</div><div style={{ fontSize: 13 }}>− {fcfa(data.avances)}</div>
-          <div className="field-group-label">{t('rh.bulletinJoursAbsence')}</div><div style={{ fontSize: 13 }}>{t('rh.bulletinJoursAbsenceVal', { jours: data.joursAbsenceNonPayee, ouvres: data.joursOuvresMois })}</div>
-          <div className="field-group-label">{t('rh.bulletinRetenue')}</div><div style={{ fontSize: 13 }}>− {fcfa(data.retenueAbsences)}</div>
-          <div className="field-group-label"><b>{t('rh.bulletinNet')}</b></div><div style={{ fontSize: 15, fontWeight: 700 }}>{fcfa(data.netEstime)}</div>
+          <div className="field-group-label">{t('rh.bulletinSalaireRef')}</div><div style={{ fontSize: TEXT.base }}>{fcfa(data.salaire)} {data.contratType ? `(${data.contratType})` : ''}</div>
+          <div className="field-group-label">{t('rh.bulletinAvances')}</div><div style={{ fontSize: TEXT.base }}>− {fcfa(data.avances)}</div>
+          <div className="field-group-label">{t('rh.bulletinJoursAbsence')}</div><div style={{ fontSize: TEXT.base }}>{t('rh.bulletinJoursAbsenceVal', { jours: data.joursAbsenceNonPayee, ouvres: data.joursOuvresMois })}</div>
+          <div className="field-group-label">{t('rh.bulletinRetenue')}</div><div style={{ fontSize: TEXT.base }}>− {fcfa(data.retenueAbsences)}</div>
+          <div className="field-group-label"><b>{t('rh.bulletinNet')}</b></div><div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{fcfa(data.netEstime)}</div>
         </div>
       )}
-      <p style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 12 }}>{t('rh.bulletinDisclaimer')}</p>
+      <p style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 12 }}>{t('rh.bulletinDisclaimer')}</p>
     </div>
   );
 }
@@ -472,7 +472,7 @@ function HistoriqueTab({ sid }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {rows.map(m => (
-        <div key={m.id} style={{ padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: 12.5 }}>
+        <div key={m.id} style={{ padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.sm }}>
           <div style={{ color: COLORS.inkSoft }}>{fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}{m.userEmail ? ` · ${m.userEmail}` : ''}</div>
           {(m.changements || []).map((c, i) => (
             <div key={i}><b>{c.champ}</b> : {String(c.ancienne ?? '—')} → {String(c.nouvelle ?? '—')}</div>
@@ -507,7 +507,7 @@ function ActivitesTab({ sid }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map(a => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, textDecoration: a.termine ? 'line-through' : 'none', color: a.termine ? COLORS.inkSoft : COLORS.ink }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, textDecoration: a.termine ? 'line-through' : 'none', color: a.termine ? COLORS.inkSoft : COLORS.ink }}>
                 <input type="checkbox" checked={a.termine} onChange={() => updateActivite(a.id, !a.termine).then(load)} />
                 {a.titre}{a.dateEcheance ? ` · ${fr(a.dateEcheance)}` : ''}
               </label>
@@ -542,8 +542,8 @@ function MessagesTab({ sid }) {
       {rows === null ? <Loading /> : rows.length === 0 ? <Empty>{t('rh.messagesEmpty')}</Empty> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map(m => (
-            <div key={m.id} style={{ padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: 13 }}>
-              <div style={{ color: COLORS.inkSoft, fontSize: 11.5 }}>{m.userEmail || t('rh.utilisateur')} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
+            <div key={m.id} style={{ padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.base }}>
+              <div style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}>{m.userEmail || t('rh.utilisateur')} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
               {m.contenu}
             </div>
           ))}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight, Download, AlertTriangle } from 'lucide-react';
 import { getOrdresTransformation, getHaccpControles, createHaccpControle, deleteHaccpControle } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 const TYPES_CONTROLE = ['temperature', 'hygiene', 'tracabilite', 'autre'];
 
@@ -119,10 +119,10 @@ export default function HaccpPanel({ module }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('haccp.title')} {loaded ? `(${controles.length})` : ''}
         {nonConformes > 0 && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginLeft: 6 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: COLORS.red, fontSize: TEXT.sm, fontWeight: 600, marginLeft: 6 }}>
             <AlertTriangle size={13} /> {t('haccp.nonConformes', { count: nonConformes })}
           </span>
         )}
@@ -131,7 +131,7 @@ export default function HaccpPanel({ module }) {
       {open && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {ordres.length === 0 ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('haccp.aucunOrdreDisponible')}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('haccp.aucunOrdreDisponible')}</div>
           ) : (
             <form onSubmit={ajouterControle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
               <Select label={t('haccp.ordre')} value={form.ordreTransformationId} onChange={(e) => setForm({ ...form, ordreTransformationId: e.target.value })}>
@@ -145,7 +145,7 @@ export default function HaccpPanel({ module }) {
               <Field label={t('haccp.unite')} placeholder="°C" value={form.unite} onChange={(e) => setForm({ ...form, unite: e.target.value })} />
               <Field label={t('haccp.seuilMin')} type="number" step="0.01" value={form.seuilMin} onChange={(e) => setForm({ ...form, seuilMin: e.target.value })} />
               <Field label={t('haccp.seuilMax')} type="number" step="0.01" value={form.seuilMax} onChange={(e) => setForm({ ...form, seuilMax: e.target.value })} />
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, color: COLORS.inkSoft }}>
                 <input type="checkbox" checked={form.conforme} onChange={(e) => setForm({ ...form, conforme: e.target.checked })} />
                 {t('haccp.conforme')}
               </label>
@@ -186,7 +186,7 @@ export default function HaccpPanel({ module }) {
             </tbody>
           </DataTable>
           {controles.length === 0 ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('haccp.aucunControle')}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('haccp.aucunControle')}</div>
           ) : (
             <Button variant="outline" onClick={exporterCsv} style={{ alignSelf: 'flex-start' }}><Download size={14} /> {t('haccp.exportCsv')}</Button>
           )}

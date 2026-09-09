@@ -85,7 +85,7 @@ import { FinancesModule, BanquesModule } from './modules/finances.jsx';
 
 // Palette et formes : voir src/lib/theme.js. Le nom COLORS est conservé pour que les usages
 // de ce fichier restent inchangés — seules les valeurs ont été unifiées (2026-09-09).
-import { COLORS, NAVBAR_BORDER, RADIUS } from './lib/theme.js';
+import { COLORS, NAVBAR_BORDER, RADIUS, TEXT } from './lib/theme.js';
 
 
 // Regroupement des menus de la navbar — même taxonomie que le champ `category` d'availableTabs.
@@ -97,8 +97,6 @@ const NAV_CATEGORIES = [
   { id: 'finance', labelKey: 'navGroup.finance', color: COLORS.red },
   { id: 'rh', labelKey: 'navGroup.rh', color: COLORS.violet },
 ];
-
-const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');`;
 
 const DEFAULT_PARCELLES = [
   { id: 1, nom: 'Parcelle A', culture: 'Maïs', humidite: 46, temperature: 27, mode: 'auto', vanneOuverte: false, seuil: 35, x: 20, y: 25 },
@@ -120,7 +118,7 @@ function ParcelMapTab({ parcelles }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
       <Card style={{ padding: 14 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('cultures.map.title')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('cultures.map.title')}</div>
         <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
           {parcelles.map(p => {
             const status = statusOf(p);
@@ -136,7 +134,7 @@ function ParcelMapTab({ parcelles }) {
                   width: isSelected ? 34 : 26, height: isSelected ? 34 : 26, borderRadius: '50%',
                   background: dotColor, border: `3px solid ${isSelected ? COLORS.ink : '#fff'}`,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: 11, fontWeight: 700, transition: 'all 0.15s ease'
+                  color: '#fff', fontSize: TEXT.xs, fontWeight: 700, transition: 'all 0.15s ease'
                 }}
               >
                 {p.nom.replace('Parcelle ', '')}
@@ -144,7 +142,7 @@ function ParcelMapTab({ parcelles }) {
             );
           })}
         </div>
-        <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 12, color: COLORS.inkSoft }}>
+        <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> {t('cultures.map.statusNormal')}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> {t('cultures.map.statusToWater')}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> {t('cultures.map.statusHighTemp')}</span>
@@ -155,8 +153,8 @@ function ParcelMapTab({ parcelles }) {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{selected.nom}</div>
-              <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{selected.culture}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{selected.nom}</div>
+              <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{selected.culture}</div>
             </div>
             <Badge tone={statusOf(selected).tone}>{statusOf(selected).label}</Badge>
           </div>
@@ -187,7 +185,7 @@ function EnvironnementTab({ farmId }) {
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('poulailler.ambianceTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('poulailler.ambianceTitle')}</div>
         <Badge tone={alerte ? 'red' : 'green'}>{alerte ? t('poulailler.conditionsWatch') : t('poulailler.conditionsNormal')}</Badge>
       </div>
       <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0' }}>
@@ -196,7 +194,7 @@ function EnvironnementTab({ farmId }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.tempEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.tempEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 27 },
             { label: days[1], value: 29 },
@@ -205,7 +203,7 @@ function EnvironnementTab({ farmId }) {
           ]} color={COLORS.ochre} />
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.humidityEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.humidityEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 62 },
             { label: days[1], value: 58 },
@@ -239,7 +237,7 @@ function BassinsEnvironnementTab({ farmId }) {
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('pisciculture.bassinsTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('pisciculture.bassinsTitle')}</div>
         <Badge tone={alerte ? 'red' : 'green'}>{alerte ? t('pisciculture.conditionsWatch') : t('pisciculture.conditionsNormal')}</Badge>
       </div>
       <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0', flexWrap: 'wrap' }}>
@@ -249,7 +247,7 @@ function BassinsEnvironnementTab({ farmId }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.phEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.phEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 7.1 },
             { label: days[1], value: 7.3 },
@@ -258,7 +256,7 @@ function BassinsEnvironnementTab({ farmId }) {
           ]} color={COLORS.blue} />
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.oxygeneEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.oxygeneEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 6.8 },
             { label: days[1], value: 6.2 },
@@ -328,7 +326,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
               transition: 'background 0.15s ease, border-color 0.15s ease',
             }}
           >
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
               <span>{t(`devis.statut.${col.key}`)}</span><span>{items.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -345,11 +343,11 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
                     opacity: draggedId === d.id ? 0.4 : 1,
                   }}
                 >
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: COLORS.inkSoft }}>{d.numero}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0' }}>{d.clientPrenom} {d.clientNom}</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs, color: COLORS.inkSoft }}>{d.numero}</div>
+                  <div style={{ fontSize: TEXT.base, fontWeight: 600, margin: '4px 0' }}>{d.clientPrenom} {d.clientNom}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{d.devise && d.devise !== deviseEntreprise ? previewMoney(locale, d.devise, d.total) : fmtMoney(d.total)}</span>
+                    <span style={{ fontSize: TEXT.sm, fontWeight: 700 }}>{d.devise && d.devise !== deviseEntreprise ? previewMoney(locale, d.devise, d.total) : fmtMoney(d.total)}</span>
                   </div>
                 </div>
               ))}
@@ -441,7 +439,7 @@ function DevisStatusBar({ statut }) {
         return (
           <div key={step.key} style={{
             clipPath, marginLeft: isFirst ? 0 : -CHEVRON_NOTCH,
-            padding: `6px ${CHEVRON_NOTCH + 6}px`, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+            padding: `6px ${CHEVRON_NOTCH + 6}px`, fontSize: TEXT.sm, fontWeight: 600, whiteSpace: 'nowrap',
             background: isActive ? COLORS.green : COLORS.surfaceAlt,
             color: isActive ? '#fff' : COLORS.inkSoft,
             position: 'relative', zIndex: isActive ? 2 : 1,
@@ -516,7 +514,7 @@ function ActivitesSection({ ressourceType, ressourceId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>{t('activites.title')}</div>
+      <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft }}>{t('activites.title')}</div>
       <form onSubmit={submit} style={{ display: 'flex', gap: 6 }}>
         <input
           className="flat-input"
@@ -537,16 +535,16 @@ function ActivitesSection({ ressourceType, ressourceId }) {
         </Button>
       </form>
       {loading ? (
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('common.loading')}</div>
       ) : activites.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('activites.empty')}</div>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('activites.empty')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {activites.map(a => (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, opacity: a.termine ? 0.5 : 1 }}>
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.sm, opacity: a.termine ? 0.5 : 1 }}>
               <input type="checkbox" checked={a.termine} onChange={() => toggle(a)} style={{ cursor: 'pointer' }} />
               <span style={{ flex: 1, textDecoration: a.termine ? 'line-through' : 'none' }}>{a.titre}</span>
-              {a.dateEcheance && <span style={{ color: COLORS.inkSoft, fontSize: 11.5 }}>{fmtDate(a.dateEcheance)}</span>}
+              {a.dateEcheance && <span style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}>{fmtDate(a.dateEcheance)}</span>}
               <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                 <Trash2 size={12} />
               </button>
@@ -730,7 +728,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // Style commun des cellules éditables du tableau de lignes (add-form + edit-modal) —
   // volontairement sans bordure/boîte individuelle par champ (contrairement à l'ancien
   // rendu en grille de <Field>), pour une seule ligne de tableau continue façon ERP.
-  const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: COLORS.ink, padding: 0 };
+  const ligneCellInputStyle = { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, color: COLORS.ink, padding: 0 };
 
   // Carte de coordonnées affichée dès qu'un client est sélectionné (formulaire de
   // création + modale de modification) — bâtie sur les données déjà chargées par
@@ -744,7 +742,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
     ].filter(Boolean);
     const adresseLibre = lignesAdresse.length === 0 && client.adresse ? client.adresse : null;
     return (
-      <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: TEXT.sm, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
         <div style={{ fontWeight: 600, color: COLORS.ink, display: 'flex', alignItems: 'center', gap: 5 }}>
           {client.isCompany ? <Building2 size={13} /> : <UserIcon size={13} />}
           {clientLabel(client)}
@@ -1134,7 +1132,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         {(clientsListe || []).map(c => <option key={c.id} value={clientLabel(c)} />)}
       </datalist>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
@@ -1157,7 +1155,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           équivalent : une liste filtrée, pas un point de création) */}
       {!filtreStatut && (
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
           {t("devis.newTitle")}
         </div>
         <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1179,7 +1177,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
             {/* Tableau continu façon ERP (une seule ligne par article, sans boîte séparée par
                 champ) plutôt que la grille de <Field> encadrés d'avant — voir la demande
                 explicite de l'utilisateur à ce sujet. "Livré"/"Facturé" apparaissent en lecture
@@ -1292,7 +1290,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalForm) })}</div>
+            <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalForm) })}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="green" disabled={saving}>
                 {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {t("devis.create")}
@@ -1332,7 +1330,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             <Loader2 size={16} className="spin" /> {t("common.loading")}
           </div>
         ) : devisAffiches.length === 0 ? (
-          <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: 13 }}>
+          <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: TEXT.base }}>
             {filtreStatut ? t('devis.emptyAFacturer') : t('devis.emptyList')}
           </div>
         ) : (
@@ -1349,7 +1347,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             <tbody>
               {devisAffiches.map(d => (
                 <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
-                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{d.numero}</td>
+                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{d.numero}</td>
                   <td>{d.clientPrenom} {d.clientNom}</td>
                   <td>
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
@@ -1400,7 +1398,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
           <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
-            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: RADIUS.card, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: 15, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
+            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: RADIUS.card, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: TEXT.md, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
             <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22, boxSizing: 'border-box' }}>
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
@@ -1457,25 +1455,25 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 <DevisStatusBar statut={detailData.statut} />
               </div>
 
-              <div style={{ fontWeight: 700, fontSize: 22, marginBottom: 8 }}>{detailData.numero}</div>
+              <div style={{ fontWeight: 700, fontSize: TEXT.title, marginBottom: 8 }}>{detailData.numero}</div>
 
               {/* "Boutons intelligents" façon ERP — dérivés de données déjà chargées, sans
                   nouvel appel réseau, plus un lien direct vers la fiche du client (seul
                   vrai renvoi vers un autre enregistrement possible ici, voir highlightFromUrl
                   dans App pour le mécanisme de navigation). */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
+                <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                   {t("devis.smartLignes", { count: nbLignesProduit })}
                 </div>
                 {nbEcheances > 0 && (
-                  <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: 12, color: COLORS.inkSoft }}>
+                  <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                     {t("devis.smartEcheances", { count: nbEcheances })}
                   </div>
                 )}
                 {detailData.clientId && (
                   <button
                     onClick={() => { navigate(`/app/clients?highlight=${detailData.clientId}`); closeDetailPopup(); }}
-                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
+                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}
                   >
                     {t("devis.voirContact")}
                   </button>
@@ -1483,7 +1481,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 {detailData.move && (
                   <button
                     onClick={() => { navigate('/app/factures'); closeDetailPopup(); }}
-                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: 12, color: COLORS.green, fontWeight: 600 }}
+                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}
                   >
                     {t("devis.voirFacture", { name: detailData.move.name })} · {t(`factures.pay.${detailData.move.paymentState}`)}
                   </button>
@@ -1499,7 +1497,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     key={tab.id}
                     onClick={() => setDetailTab(tab.id)}
                     style={{
-                      background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                      background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', fontSize: TEXT.base, fontWeight: 600,
                       color: detailTab === tab.id ? COLORS.green : COLORS.inkSoft,
                       borderBottom: detailTab === tab.id ? `2px solid ${COLORS.green}` : '2px solid transparent', marginBottom: -1,
                     }}
@@ -1509,9 +1507,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20, fontSize: 13 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20, fontSize: TEXT.base }}>
                 <div>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.client")}</div>
+                  <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.client")}</div>
                   <div style={{ fontWeight: 600 }}>{detailData.clientPrenom} {detailData.clientNom}</div>
                   {detailData.clientEmail ? (
                     <div style={{ color: COLORS.inkSoft }}>{detailData.clientEmail}</div>
@@ -1531,7 +1529,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   ) : detailData.clientAdresse && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresse}</div>}
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.details")}</div>
+                  <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.details")}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                     <span style={{ color: COLORS.inkSoft }}>{t("common.date")}</span>
                     <span>{fmtDate(detailData.date || detailData.createdAt)}</span>
@@ -1591,7 +1589,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </div>
 
               {detailTab === 'notes' ? (
-                <div style={{ minHeight: 80, padding: '10px 0', fontSize: 13.5, color: detailData.notes ? COLORS.ink : COLORS.inkSoft, fontStyle: detailData.notes ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
+                <div style={{ minHeight: 80, padding: '10px 0', fontSize: TEXT.base, color: detailData.notes ? COLORS.ink : COLORS.inkSoft, fontStyle: detailData.notes ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
                   {detailData.notes || t("devis.notesEmpty")}
                 </div>
               ) : (
@@ -1623,7 +1621,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         <td>
                           {l.produit}
                           {recolteLiee && (
-                            <div style={{ fontSize: 11, color: COLORS.inkSoft, marginTop: 2 }}>
+                            <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 2 }}>
                               🌾 {recolteLiee.parcelle} — {formatDateFr(recolteLiee.date)}
                             </div>
                           )}
@@ -1659,10 +1657,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
                 <div style={{ minWidth: 240 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft, padding: '2px 0' }}>
                     <span>{t("devis.montantHT")}</span><span>{enDevise(montantHT, detailData.devise)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: TEXT.sm, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
                     <span>{t("devis.remiseGlobale")}</span>
                     {modifiable ? (
                       <input className="flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
@@ -1671,7 +1669,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   {/* Étape 1 Comptabilité : chaque ligne référence des taxes réutilisables
                       (account.tax-like) via la colonne "Taxes" ci-dessus — ce total n'est
                       qu'un récapitulatif de ce que l'ensemble des lignes applique. */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, padding: '2px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft, padding: '2px 0' }}>
                     <span>{t("devis.montantTaxes")}</span><span>{enDevise(montantTaxe, detailData.devise)}</span>
                   </div>
                   {modifiable && (
@@ -1681,17 +1679,17 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       </Button>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: TEXT.md, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
                     <span>{t("common.total")}</span>
                     <span>{enDevise(detailData.total, detailData.devise)}</span>
                   </div>
                   {detailData.devise && detailData.devise !== deviseEntreprise && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: COLORS.inkSoft }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                       <span>{t("devis.totalDeviseEntreprise")}</span><span>{fmtMoney(detailData.totalDeviseEntreprise)}</span>
                     </div>
                   )}
                   {margeInfo && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: COLORS.inkSoft, marginTop: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 4 }}>
                       <span>{t("devis.marge")}</span><span>{t("devis.margeValeur", { montant: fmtMoney(margeInfo.marge), pct: margeInfo.pourcentage.toFixed(1) })}</span>
                     </div>
                   )}
@@ -1700,15 +1698,15 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               {detailData.echeances && detailData.echeances.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                  <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 8 }}>
                     {t("devis.echeances")} {detailData.modePaiement && `· ${detailData.modePaiement}`}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {detailData.echeances.map(ech => (
                       <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{enDevise(ech.montant, detailData.devise)}</div>
-                          <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{t("devis.echeanceDate", { date: fmtDate(ech.dateEcheance) })}</div>
+                          <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{enDevise(ech.montant, detailData.devise)}</div>
+                          <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>{t("devis.echeanceDate", { date: fmtDate(ech.dateEcheance) })}</div>
                         </div>
                         {ech.statut === 'Payé' ? (
                           <Badge tone="green">{t("devis.payeLe", { date: fmtDate(ech.datePaiement) })}</Badge>
@@ -1734,7 +1732,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             {/* Panneau latéral façon chatter d'un ERP de référence : messages, activités planifiées, journal des modifications */}
             <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft }}>{t("devis.messages")}</div>
+                <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft }}>{t("devis.messages")}</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                   <textarea
                     className="flat-input"
@@ -1752,13 +1750,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   </Button>
                 </div>
                 {messages.length === 0 ? (
-                  <div style={{ fontSize: 12, color: COLORS.inkSoft, fontStyle: 'italic' }}>{t("devis.noMessage")}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontStyle: 'italic' }}>{t("devis.noMessage")}</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {messages.map(m => (
                       <div key={m.id} style={{ padding: '6px 8px', borderRadius: RADIUS.control, background: '#fff', border: `1px solid ${COLORS.border}` }}>
-                        <div style={{ fontSize: 12.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.contenu}</div>
-                        <div style={{ fontSize: 10.5, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || t("devis.systeme")} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
+                        <div style={{ fontSize: TEXT.sm, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.contenu}</div>
+                        <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 2 }}>{m.userEmail || t("devis.systeme")} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>
                       </div>
                     ))}
                   </div>
@@ -1767,10 +1765,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
               {journal.length > 0 && (
                 <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginTop: 16, textAlign: 'left' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>{t("devis.historique")}</div>
+                  <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>{t("devis.historique")}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {journal.map(j => (
-                      <div key={j.id} style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                      <div key={j.id} style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                         {fmtDate(j.createdAt, { dateStyle: 'short', timeStyle: 'short' })} — {j.userEmail || t('devis.systeme')} :{' '}
                         {j.changements.map((c, i) => (
                           <span key={i}>{i > 0 && ', '}<strong>{c.champ}</strong> {c.ancienne ?? '—'} → {c.nouvelle ?? '—'}</span>
@@ -1789,7 +1787,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {paiementPopupOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: 22, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{t("devis.paiementTitle")}</div>
+            <div style={{ fontWeight: 700, fontSize: TEXT.md, marginBottom: 14 }}>{t("devis.paiementTitle")}</div>
 
             <Select label={t("devis.modePaiement")} value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
               <option value="Espèces">{t("devis.modePaiementEspeces")}</option>
@@ -1805,10 +1803,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
             {paiementForm.paymentTermId && (
               <div style={{ marginBottom: 14, padding: '10px 12px', background: COLORS.surfaceAlt, borderRadius: RADIUS.card }}>
-                <div style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 8 }}>
+                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 8 }}>
                   {resumeTerme(paymentTerms.find(pt => String(pt.id) === String(paiementForm.paymentTermId)) || { lignes: [] })}
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t("devis.acompte")}</div>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 6 }}>{t("devis.acompte")}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <Select value={paiementForm.acompteMethod} onChange={e => setPaiementForm({ ...paiementForm, acompteMethod: e.target.value })}>
                     <option value="">{t("devis.acompteAucun")}</option>
@@ -1832,7 +1830,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   border: `1.5px solid ${paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.border}`,
                   background: paiementForm.modalitePaiement === 'complet' ? COLORS.greenSoft : '#fff',
                   color: paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.inkSoft,
-                  fontWeight: 600, fontSize: 13,
+                  fontWeight: 600, fontSize: TEXT.base,
                 }}
               >
                 {t("devis.paiementComplet")}
@@ -1845,7 +1843,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   border: `1.5px solid ${paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.border}`,
                   background: paiementForm.modalitePaiement === 'echelonne' ? COLORS.greenSoft : '#fff',
                   color: paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.inkSoft,
-                  fontWeight: 600, fontSize: 13,
+                  fontWeight: 600, fontSize: TEXT.base,
                 }}
               >
                 {t("devis.paiementEchelonne")}
@@ -1854,7 +1852,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
             {!paiementForm.paymentTermId && paiementForm.modalitePaiement === 'echelonne' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.echeances")}</div>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.echeances")}</div>
                 {paiementForm.echeances.map((e, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
                     <Field label={i === 0 ? t('devis.montant') : ''} type="text" inputMode="decimal" placeholder="0" value={e.montant} onChange={ev => updateEcheance(i, 'montant', ev.target.value.replace(/[^\d]/g, ''))} />
@@ -1884,11 +1882,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t("devis.editTitle")}</div>
-              <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t("devis.editTitle")}</div>
+              <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             {editForm.statut === 'Signé' && (
-              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: RADIUS.card, padding: '8px 12px', fontSize: 12.5, marginBottom: 12 }}>
+              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: RADIUS.card, padding: '8px 12px', fontSize: TEXT.sm, marginBottom: 12 }}>
                 {t("devis.editSigneNotice")}
               </div>
             )}
@@ -1911,7 +1909,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
                 <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">
                   <thead>
@@ -2016,7 +2014,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalEditForm) })}</div>
+                <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalEditForm) })}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Button type="button" variant="ghost" onClick={cancelEditDevis}>{t("common.cancel")}</Button>
                   <Button type="submit" variant="green" disabled={editSaving}>
@@ -2071,18 +2069,18 @@ function VentesAnalyseTab() {
 
   return (
     <Card>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
         {t('ventes.analyseTitle')}
       </div>
       {loading ? (
-        <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Loader2 size={15} className="spin" /> {t('common.loading')}
         </div>
       ) : mouvements.length === 0 ? (
-        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('ventes.analyseEmpty')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('ventes.analyseEmpty')}</div>
       ) : (
         <>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 12 }}>
             {t('ventes.analyseResume', { count: mouvements.length, total: fmtMoney(total) })}
           </div>
           <DataTable>
@@ -2137,7 +2135,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
             onClick={() => setSousNav(item.id)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              padding: '10px 14px', fontSize: 13.5, fontWeight: 600,
+              padding: '10px 14px', fontSize: TEXT.base, fontWeight: 600,
               color: sousNav === item.id ? COLORS.green : COLORS.inkSoft,
               borderBottom: sousNav === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
               marginBottom: -1,
@@ -2151,10 +2149,10 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'commandes' && (
         <>
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 4 }}>
               {t('ventes.devisTitle')}
             </div>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
               {t('ventes.devisSubtitle')}
             </div>
           </Card>
@@ -2164,10 +2162,10 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'a_facturer' && (
         <>
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 4 }}>
               {t('ventes.aFacturerTitle')}
             </div>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
               {t('ventes.aFacturerSubtitle')}
             </div>
           </Card>
@@ -2178,7 +2176,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'analyse' && <VentesAnalyseTab />}
       {sousNav === 'configuration' && (
         <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 12 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 12 }}>
             {t('ventes.configTitle')}
           </div>
           <ListesPrixManager />
@@ -2519,7 +2517,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
       </datalist>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
           {t('achats.newTitle')}
         </div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
@@ -2536,7 +2534,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           )}
           <Field label={t('achats.notes')} placeholder={t('common.optionalPlaceholder')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
             {form.lignes.map((ligne, index) => (
               <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
                 <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
@@ -2559,7 +2557,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('achats.addLigne')}</Button>
           </div>
           <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalForm) })}</div>
+            <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalForm) })}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="ochre">{t('achats.submit')}</Button>
             </div>
@@ -2569,7 +2567,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
       <Card>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{t('achats.historique')}</div>
+          <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{t('achats.historique')}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button small variant="outline" onClick={exportCsv}><Download size={14} /> {t('achats.exportCsv')}</Button>
             <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> {t('achats.exportPdf')}</Button>
@@ -2595,7 +2593,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               const modifiable = ['Brouillon', 'Commandé'].includes(statut);
               return (
               <tr key={doc.id}>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(doc.date)}</td>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(doc.date)}</td>
                 <td>{doc.fournisseurNom}</td>
                 <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
                 <td style={{ fontWeight: 600 }}>{fmtMoney(doc.total)}</td>
@@ -2630,17 +2628,17 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
-                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{fmtDate(detailDoc.date)}</div>
+                <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
+                <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{fmtDate(detailDoc.date)}</div>
               </div>
-              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: 6 }}>{fmtMoney(detailDoc.total)}</div></div>
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}><strong>{t('achats.notes')}</strong><div style={{ marginTop: 6 }}>{detailDoc.notes || t('achats.detailNoNote')}</div></div>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: 6 }}>{fmtMoney(detailDoc.total)}</div></div>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('achats.notes')}</strong><div style={{ marginTop: 6 }}>{detailDoc.notes || t('achats.detailNoNote')}</div></div>
             </div>
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t('achats.detailLignes')}</div>
+              <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 8 }}>{t('achats.detailLignes')}</div>
               <DataTable>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
@@ -2671,8 +2669,8 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('achats.editTitle')}</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('achats.editTitle')}</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
             <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
@@ -2688,7 +2686,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               )}
               <Field label={t('achats.notes')} placeholder={t('common.optionalPlaceholder')} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
               <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
                 {editForm.lignes.map((ligne, index) => (
                   <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
                     <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
@@ -2711,7 +2709,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('achats.addLigne')}</Button>
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalEditForm) })}</div>
+                <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalEditForm) })}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Button type="button" variant="ghost" onClick={cancelEdit}>{t('common.cancel')}</Button>
                   <Button type="submit" variant="green" disabled={editSubmitting}>
@@ -2825,7 +2823,7 @@ function IntrantChamps({ v, patch, t }) {
         </>
       )}
       {['semence', 'engrais', 'phytosanitaire'].includes(type) && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, alignSelf: 'center' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, alignSelf: 'center' }}>
           <input type="checkbox" checked={v.bioAutorise} onChange={e => patch({ bioAutorise: e.target.checked })} />
           {t('stocks.bioAutorise')}
         </label>
@@ -3159,13 +3157,13 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           <IntrantChamps v={form} patch={p => setForm(f => ({ ...f, ...p }))} t={t} />
           <Button variant="ochre" type="submit"><Plus size={15} /> {t('common.add')}</Button>
         </form>
-        <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12.5, padding: 0, marginTop: 10 }}>
+        <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: TEXT.sm, padding: 0, marginTop: 10 }}>
           {catManagerOpen ? t('stocks.hideCategories') : t('stocks.manageCategories')}
         </button>
         {catManagerOpen && (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {categories.map(c => (
-              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: TEXT.base }}>
                 <span>{c.completeName || c.nom}</span>
                 <button type="button" onClick={() => removeCategorie(c.id, c.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                   <Trash2 size={14} />
@@ -3190,15 +3188,15 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       <OrdresTransformationPanel module={moduleType} />
       <HaccpPanel module={moduleType} />
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
-        <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginBottom: 6 }}>{t('stocks.stockEvolutionAide')}</div>
+        <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
+        <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: 6 }}>{t('stocks.stockEvolutionAide')}</div>
         {stockEvolution.length === 0 ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('stocks.stockEvolutionVide')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('stocks.stockEvolutionVide')}</div>
         ) : (
           <>
             <MiniChart data={stockEvolution} color={COLORS.blue} />
             {evolution && evolution.sansCout > 0 && (
-              <div style={{ fontSize: 11.5, color: COLORS.ochre, marginTop: 6 }}>
+              <div style={{ fontSize: TEXT.xs, color: COLORS.ochre, marginTop: 6 }}>
                 {t('stocks.stockEvolutionSansCout', { count: evolution.sansCout })}
               </div>
             )}
@@ -3206,7 +3204,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         )}
       </Card>
       {lotsPerimes.length > 0 && (
-        <Card style={{ background: COLORS.ochreSoft, border: `1px solid ${COLORS.ochre}`, fontSize: 13 }}>
+        <Card style={{ background: COLORS.ochreSoft, border: `1px solid ${COLORS.ochre}`, fontSize: TEXT.base }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 4 }}>
             <AlertTriangle size={15} /> {t('stocks.lotsPerimesTitle', { n: lotsPerimes.length, jours: LOT_PEREMPTION_SEUIL_JOURS })}
           </div>
@@ -3220,7 +3218,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 12px 0' }}>
           {['', ...TYPES_INTRANT].map(x => (
             <button key={x || 'all'} type="button" onClick={() => setFiltreType(x)}
-              style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}>
+              style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: TEXT.sm, cursor: 'pointer' }}>
               {x ? t(`stocks.intrant.${x}`) : t('common.all')}
             </button>
           ))}
@@ -3245,9 +3243,9 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             ) : rows.map(s => (
               <React.Fragment key={s.id}>
               <tr>
-                <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: 6, color: COLORS.green, fontSize: 11 }}>bio</span> : null}</td>
+                <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: 6, color: COLORS.green, fontSize: TEXT.xs }}>bio</span> : null}</td>
                 <td><Badge tone="ochre">{s.categorie}</Badge></td>
-                <td style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>
+                <td style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>
                   {s.typeIntrant ? t(`stocks.intrant.${s.typeIntrant}`) : '—'}
                   {s.typeIntrant === 'phytosanitaire' && s.darJours != null ? <span style={{ color: COLORS.ochre }}> · {t('stocks.darShort', { n: s.darJours })}</span> : null}
                 </td>
@@ -3278,9 +3276,9 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               {lotsFor === s.id && (
                 <tr>
                   <td colSpan={7} style={{ background: COLORS.bg, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{t('stocks.lotsTitle')}</div>
+                    <div style={{ fontSize: TEXT.sm, fontWeight: 600, marginBottom: 6 }}>{t('stocks.lotsTitle')}</div>
                     {lots.length === 0 ? (
-                      <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t('stocks.lotsEmpty')}</div>
+                      <div style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>{t('stocks.lotsEmpty')}</div>
                     ) : (
                       <DataTable style={{ marginBottom: 8 }}>
                         <thead><tr style={{ color: COLORS.inkSoft }}>
@@ -3300,8 +3298,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                               <td>
                                 <input type="number" defaultValue={l.quantiteRestante}
                                   onBlur={e => { if (Number(e.target.value) !== l.quantiteRestante) saveLotQte(l, e.target.value); }}
-                                  style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, padding: '2px 6px', fontSize: 12.5 }} />
-                                <span style={{ color: COLORS.inkSoft, fontSize: 11 }}> / {l.quantiteInitiale}</span>
+                                  style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, padding: '2px 6px', fontSize: TEXT.sm }} />
+                                <span style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}> / {l.quantiteInitiale}</span>
                               </td>
                               <td style={{ color: COLORS.inkSoft }}>{l.coutUnitaire != null ? fmtMoney(l.coutUnitaire) : '—'}</td>
                               <td style={{ textAlign: 'right' }}>
@@ -3335,8 +3333,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('stocks.editArticle')}</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('stocks.editArticle')}</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
@@ -3370,10 +3368,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{historiqueArticle.nom}</div>
-                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('stocks.historiqueTitle')}</div>
+                <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{historiqueArticle.nom}</div>
+                <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('stocks.historiqueTitle')}</div>
               </div>
-              <button onClick={closeHistorique} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <button onClick={closeHistorique} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             {historiqueLoading ? (
               <div style={{ color: COLORS.inkSoft }}>{t('common.loading')}</div>
@@ -3384,8 +3382,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 {historiqueMouvements.map(m => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{t(`stocks.raison.${m.raison}`, { defaultValue: m.raison })}</div>
-                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{formatDateTimeFr(m.createdAt)}</div>
+                      <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t(`stocks.raison.${m.raison}`, { defaultValue: m.raison })}</div>
+                      <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{formatDateTimeFr(m.createdAt)}</div>
                     </div>
                     <div style={{ fontWeight: 700, color: m.delta >= 0 ? COLORS.green : COLORS.red }}>
                       {m.delta >= 0 ? '+' : ''}{m.delta}
@@ -3582,13 +3580,13 @@ function LivraisonsTab({ farmId }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id}>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(r.date)}</td>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(r.date)}</td>
                 <td>{r.client}</td>
                 <td>{r.produit}</td>
                 <td>{r.quantite}</td>
                 <td>
                   <select value={r.statut} onChange={e => setStatut(r.id, e.target.value)} style={{
-                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill,
+                    fontSize: TEXT.sm, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill,
                     padding: '4px 8px', background: COLORS.surfaceAlt, color: COLORS.ink
                   }}>
                     {STATUTS.map(s => <option key={s} value={s}>{t(`poulailler.statut.${s}`, { defaultValue: s })}</option>)}
@@ -3688,13 +3686,13 @@ function PiscicultureLivraisonsTab({ farmId }) {
           <tbody>
             {rows.map(r => (
               <tr key={r.id}>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{formatDateFr(r.date)}</td>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(r.date)}</td>
                 <td>{r.client}</td>
                 <td>{r.produit}</td>
                 <td>{r.quantite}</td>
                 <td>
                   <select value={r.statut} onChange={e => setStatut(r.id, e.target.value)} style={{
-                    fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill,
+                    fontSize: TEXT.sm, fontWeight: 600, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill,
                     padding: '4px 8px', background: COLORS.surfaceAlt, color: COLORS.ink
                   }}>
                     {STATUTS.map(s => <option key={s} value={s}>{t(`pisciculture.statut.${s}`, { defaultValue: s })}</option>)}
@@ -3768,16 +3766,16 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalVentes')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalVentes')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalAchats')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalAchats')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
         </Card>
         <Card style={{ background: solde >= 0 ? COLORS.blueSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: solde >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.solde')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: solde >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(solde)}</div>
+          <div style={{ fontSize: TEXT.sm, color: solde >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.solde')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: solde >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(solde)}</div>
         </Card>
       </div>
 
@@ -3801,7 +3799,7 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
             )}
             {ledger.map(l => (
               <tr key={l.type + l.id}>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{fmtDate(l.date)}</td>
+                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{fmtDate(l.date)}</td>
                 <td>
                   {l.type === 'Vente'
                     ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowUpCircle size={13} /> {t('compta.vente')}</span>
@@ -3821,30 +3819,30 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       {historiqueOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: 20, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>{t('compta.historiqueBtn')}</div>
+            <div style={{ fontWeight: 700, fontSize: TEXT.md, marginBottom: 12 }}>{t('compta.historiqueBtn')}</div>
             {historiqueLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, color: COLORS.inkSoft }}>
                 <Loader2 size={15} className="spin" /> {t('common.loading')}
               </div>
             ) : historiqueData.length === 0 ? (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('compta.historiqueEmpty')}</div>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('compta.historiqueEmpty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {historiqueData.map(h => {
                   const values = h.action === 'suppression' ? h.anciennesValeurs : h.nouvellesValeurs;
                   return (
                     <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>
                         <Badge tone={h.action === 'suppression' ? 'red' : 'blue'}>{h.action === 'suppression' ? t('compta.supprime') : t('compta.modifie')}</Badge>
                         {' '}{t('compta.parUtilisateur', { email: h.utilisateurEmail || t('compta.utilisateurInconnu') })}
                       </div>
                       {values && (
-                        <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 3 }}>
+                        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 3 }}>
                           {values.produit} — {values.partenaire} ({values.quantite} × {fmtMoney(values.prixUnitaire)})
                         </div>
                       )}
-                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>{fmtDate(h.date, { dateStyle: 'short', timeStyle: 'short' })}</div>
-                      <div style={{ fontSize: 13, marginTop: 4 }}>{t('compta.raison', { raison: h.raison })}</div>
+                      <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{fmtDate(h.date, { dateStyle: 'short', timeStyle: 'short' })}</div>
+                      <div style={{ fontSize: TEXT.base, marginTop: 4 }}>{t('compta.raison', { raison: h.raison })}</div>
                     </div>
                   );
                 })}
@@ -3931,7 +3929,7 @@ function PoultryMonitoringTab({ farmId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('poulailler.suiviTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('poulailler.suiviTitle')}</div>
         <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label={t('common.date')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t('compta.type')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
@@ -3949,24 +3947,24 @@ function PoultryMonitoringTab({ farmId }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryMortalite')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryMortalite')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryNaissances')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{summary.naissance}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryNaissances')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{summary.naissance}</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryVaccinations')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{summary.vaccination}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryVaccinations')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{summary.vaccination}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryAliments')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('poulailler.unit.kg')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryAliments')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('poulailler.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryOeufs')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{summary.oeufs}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryOeufs')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{summary.oeufs}</div>
         </Card>
       </div>
 
@@ -4070,7 +4068,7 @@ function PiscicultureMonitoringTab({ farmId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('pisciculture.suiviTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('pisciculture.suiviTitle')}</div>
         <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label={t('common.date')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t('compta.type')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
@@ -4087,20 +4085,20 @@ function PiscicultureMonitoringTab({ farmId }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryMortalite')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryMortalite')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryCroissance')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{summary.croissance} {t('pisciculture.unit.kg')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryCroissance')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{summary.croissance} {t('pisciculture.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryAliments')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('pisciculture.unit.kg')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryAliments')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('pisciculture.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryTraitements')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{summary.traitement}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryTraitements')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{summary.traitement}</div>
         </Card>
       </div>
 
@@ -4138,7 +4136,7 @@ function ModuleTabButton({ tab, active, onClick, accentColor }) {
   const Icon = tab.icon;
   return (
     <button onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+      display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
       padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
       background: active ? accentColor : 'transparent', color: active ? '#fff' : COLORS.inkSoft,
     }}>
@@ -4205,7 +4203,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
       {overflowTabs.length > 0 && (
         <div style={{ position: 'relative' }}>
           <button onClick={() => setMoreOpen(o => !o)} style={{
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
             padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
             background: activeHiddenInOverflow ? accentColor : 'transparent',
             color: activeHiddenInOverflow ? '#fff' : COLORS.inkSoft,
@@ -4223,7 +4221,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
                 const active = activeTab === t.id;
                 return (
                   <button key={t.id} onClick={() => { onSelect(t.id); setMoreOpen(false); }} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, fontWeight: 600, textAlign: 'left',
                     padding: '10px 14px', border: 'none', cursor: 'pointer',
                     background: active ? COLORS.surfaceAlt : 'transparent', color: COLORS.ink,
                   }}>
@@ -4317,7 +4315,7 @@ function ParcelleMeteoSection({ parcelle }) {
                 type="button"
                 disabled={villeBusy}
                 onClick={() => choisirVille(v)}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: COLORS.ink, borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none' }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.base, color: COLORS.ink, borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none' }}
               >
                 {v.nom}{v.region ? `, ${v.region}` : ''}{v.pays ? ` — ${v.pays}` : ''}
               </button>
@@ -4326,11 +4324,11 @@ function ParcelleMeteoSection({ parcelle }) {
         )}
       </div>
       {loading ? (
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('common.loading')}</div>
       ) : error ? (
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{error}</div>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{error}</div>
       ) : data ? (
-        <div style={{ fontSize: 12.5, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div>
             <b>{data.ville}</b> ({data.source === 'parcelle' ? t('cultures.meteoParcelleSourcePropre') : t('cultures.meteoParcelleSourceEntreprise')})
           </div>
@@ -4377,15 +4375,15 @@ function ParcellePrecisionSection({ parcelle }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+        <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
           {t('precisionAgricole.solTitle')}
         </div>
         {solLoading ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('common.loading')}</div>
         ) : solError ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{solError}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{solError}</div>
         ) : sol ? (
-          <div style={{ fontSize: 12.5, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div>
               {t('precisionAgricole.texture')} : <b>{sol.texture.classe ? t(`precisionAgricole.textureClasse.${sol.texture.classe}`) : '—'}</b>
               {' '}({t('precisionAgricole.argile')} {sol.texture.argile}% · {t('precisionAgricole.sable')} {sol.texture.sable}% · {t('precisionAgricole.limon')} {sol.texture.limon}%)
@@ -4402,19 +4400,19 @@ function ParcellePrecisionSection({ parcelle }) {
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+        <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
           {t('precisionAgricole.ndviTitle')}
         </div>
         {ndviLoading ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('common.loading')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('common.loading')}</div>
         ) : ndviError ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{ndviError}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{ndviError}</div>
         ) : ndvi && ndvi.configured === false ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviNonConfigure')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviNonConfigure')}</div>
         ) : ndvi && ndvi.historique.length === 0 ? (
-          <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviAucuneImage')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviAucuneImage')}</div>
         ) : ndvi ? (
-          <div style={{ fontSize: 12.5, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div>
               NDVI : <b>{ndvi.ndviActuel}</b> ({ndvi.dateActuelle}) —{' '}
               <Badge tone={BANDE_NDVI_TONE[ndvi.bande] || 'blue'}>{t(`precisionAgricole.bande.${ndvi.bande}`)}</Badge>
@@ -4641,7 +4639,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
       {tab === 'parcelles' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('cultures.addParcelleTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('cultures.addParcelleTitle')}</div>
         <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label={t('cultures.fieldNom')} placeholder={t('cultures.fieldNomPlaceholder')} value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
           <Field label={t('cultures.fieldCulture')} placeholder={t('cultures.fieldCulturePlaceholder')} value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
@@ -4658,8 +4656,8 @@ function CulturesModule({ farmId, highlightProduitId }) {
             <Card key={p.id}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, color: COLORS.ink }}>{p.nom}</div>
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{p.culture}</div>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink }}>{p.nom}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{p.culture}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? t('cultures.wateringRecommended') : t('cultures.soilMoistEnough')}</Badge>
@@ -4683,7 +4681,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
               <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button
                   onClick={() => toggleMode(p.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}
                 >
                   {p.mode === 'auto' ? <ToggleRight size={22} color={COLORS.green} /> : <ToggleLeft size={22} color={COLORS.inkSoft} />}
                   {p.mode === 'auto' ? t('cultures.modeAuto') : t('cultures.modeManuel')}
@@ -4700,7 +4698,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
               <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
                 <button
                   onClick={() => setPlanningOpenId(id => (id === p.id ? null : p.id))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
                 >
                   <ChevronRight size={14} style={{ transform: planningOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                   {t('cultures.planningTitle')}
@@ -4729,7 +4727,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
               <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
                 <button
                   onClick={() => setMeteoOpenId(id => (id === p.id ? null : p.id))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
                 >
                   <ChevronRight size={14} style={{ transform: meteoOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                   {t('cultures.meteoParcelleTitle')}
@@ -4743,7 +4741,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
               <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
                 <button
                   onClick={() => setPrecisionOpenId(id => (id === p.id ? null : p.id))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
                 >
                   <ChevronRight size={14} style={{ transform: precisionOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                   {t('cultures.precisionTitle')}
@@ -4760,17 +4758,17 @@ function CulturesModule({ farmId, highlightProduitId }) {
       </div>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
           <ClipboardList size={16} color={COLORS.green} /> {t('cultures.valveHistory')}
         </div>
         {historique.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('cultures.noEvent')}</div>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('cultures.noEvent')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
             {historique.map(h => (
-              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
+              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
                 <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {renderAction(h.action)}</span>
-                <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5 }}>{formatDateTimeFr(h.date)}</span>
+                <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs }}>{formatDateTimeFr(h.date)}</span>
               </div>
             ))}
           </div>
@@ -4977,21 +4975,21 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
       <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
               {t('auth.confirmationTitle')}
             </div>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 18 }}>
               {t('auth.confirmationHint', { email: confirmationEmail })}
             </div>
             <form onSubmit={submitConfirmation} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Field label={t('auth.confirmationCode')} placeholder="123456" value={confirmationCode} onChange={e => setConfirmationCode(e.target.value)} required maxLength={6} />
               {error && (
-                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
               {resendMsg && (
-                <div style={{ background: COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13 }}>
+                <div style={{ background: COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base }}>
                   {resendMsg}
                 </div>
               )}
@@ -4999,13 +4997,13 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                 {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('auth.confirmationSubmit')}
               </Button>
             </form>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
-              <button type="button" onClick={resendConfirmationCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+              <button type="button" onClick={resendConfirmationCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>
                 {t('auth.resendCode')}
               </button>
             </div>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 8, textAlign: 'center' }}>
-              <button type="button" onClick={() => { setConfirmationStep(false); setConfirmationCode(''); setError(''); setResendMsg(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 8, textAlign: 'center' }}>
+              <button type="button" onClick={() => { setConfirmationStep(false); setConfirmationCode(''); setError(''); setResendMsg(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>
                 {t('common.back')}
               </button>
             </div>
@@ -5020,16 +5018,16 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
       <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
               {t('auth.mfaTitle')}
             </div>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 18 }}>
               {mfaMethod === 'email' ? t('auth.mfaHintEmail') : t('auth.mfaHint')}
             </div>
             <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Field label={t('auth.mfaCode')} placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
               {error && (
-                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
@@ -5037,8 +5035,8 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                 {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('auth.mfaSubmit')}
               </Button>
             </form>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
-              <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+              <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>
                 {t('common.back')}
               </button>
             </div>
@@ -5055,7 +5053,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
           <div style={{ width: 40, height: 40, borderRadius: RADIUS.card, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={21} color="#fff" />
           </div>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.ink }}>{t('auth.brand')}</span>
+          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.xl, color: COLORS.ink }}>{t('auth.brand')}</span>
         </div>
         <Card>
           <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: COLORS.surfaceAlt, borderRadius: RADIUS.card, padding: 4 }}>
@@ -5064,7 +5062,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               onClick={() => { setMode('login'); setError(''); }}
               style={{
                 flex: 1, padding: '8px 0', borderRadius: RADIUS.control, border: 'none', cursor: 'pointer',
-                fontWeight: 600, fontSize: 13.5,
+                fontWeight: 600, fontSize: TEXT.base,
                 background: mode === 'login' ? COLORS.surface : 'transparent',
                 color: mode === 'login' ? COLORS.ink : COLORS.inkSoft,
                 boxShadow: mode === 'login' ? `0 1px 2px rgba(0,0,0,0.06)` : 'none',
@@ -5077,7 +5075,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               onClick={() => { setMode('register'); setError(''); }}
               style={{
                 flex: 1, padding: '8px 0', borderRadius: RADIUS.control, border: 'none', cursor: 'pointer',
-                fontWeight: 600, fontSize: 13.5,
+                fontWeight: 600, fontSize: TEXT.base,
                 background: mode === 'register' ? COLORS.surface : 'transparent',
                 color: mode === 'register' ? COLORS.ink : COLORS.inkSoft,
                 boxShadow: mode === 'register' ? `0 1px 2px rgba(0,0,0,0.06)` : 'none',
@@ -5086,10 +5084,10 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               {t('auth.tabRegister')}
             </button>
           </div>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
             {mode === 'login' ? t('auth.titleLogin') : t('auth.titleRegister')}
           </div>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 18 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 18 }}>
             {mode === 'login' ? t('auth.subtitleLogin') : t('auth.subtitleRegister')}
           </div>
 
@@ -5103,7 +5101,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                   border: `1.5px solid ${typeCompte === 'entreprise' ? COLORS.green : COLORS.border}`,
                   background: typeCompte === 'entreprise' ? COLORS.greenSoft || COLORS.greenSoft : '#fff',
                   color: typeCompte === 'entreprise' ? COLORS.green : COLORS.inkSoft,
-                  fontWeight: 600, fontSize: 13,
+                  fontWeight: 600, fontSize: TEXT.base,
                 }}
               >
                 {t('auth.accountTypeCompany')}
@@ -5116,7 +5114,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                   border: `1.5px solid ${typeCompte === 'particulier' ? COLORS.green : COLORS.border}`,
                   background: typeCompte === 'particulier' ? COLORS.greenSoft || COLORS.greenSoft : '#fff',
                   color: typeCompte === 'particulier' ? COLORS.green : COLORS.inkSoft,
-                  fontWeight: 600, fontSize: 13,
+                  fontWeight: 600, fontSize: TEXT.base,
                 }}
               >
                 {t('auth.accountTypeIndividual')}
@@ -5165,7 +5163,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               </div>
             )}
             {error && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 7 }}>
                 <AlertTriangle size={14} /> {error}
               </div>
             )}
@@ -5173,14 +5171,14 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {mode === 'login' ? t('auth.submitLogin') : t('auth.submitRegister')}
             </Button>
           </form>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
             {mode === 'login' ? (
-              <>{t('auth.noAccount')} <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>{t('auth.submitRegister')}</button></>
+              <>{t('auth.noAccount')} <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>{t('auth.submitRegister')}</button></>
             ) : (
-              <>{t('auth.hasAccount')} <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13 }}>{t('auth.submitLogin')}</button></>
+              <>{t('auth.hasAccount')} <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>{t('auth.submitLogin')}</button></>
             )}
           </div>
-          <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' }}>
+          <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' }}>
             {t('auth.footer')}
           </div>
         </Card>
@@ -5205,18 +5203,18 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
         {active && <Badge tone={accent}>{t('optionCard.active')}</Badge>}
       </div>
       <div>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, marginBottom: 3 }}>{title}</div>
-        <div style={{ fontSize: 13, color: COLORS.inkSoft, lineHeight: 1.5 }}>{description}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>{title}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, lineHeight: 1.5 }}>{description}</div>
       </div>
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {features.map((f, i) => (
-          <li key={i} style={{ display: 'flex', gap: 7, fontSize: 13, color: COLORS.ink }}>
+          <li key={i} style={{ display: 'flex', gap: 7, fontSize: TEXT.base, color: COLORS.ink }}>
             <Check size={15} color={accentColor} style={{ flexShrink: 0, marginTop: 1 }} /> {f}
           </li>
         ))}
       </ul>
       <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, color: COLORS.inkSoft }}>{price}</span>
+        <span style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{price}</span>
         <Button variant={active ? 'outline' : accent} onClick={onToggle}>
           {active ? t('optionCard.deactivate') : t('optionCard.activate')}
         </Button>
@@ -5371,7 +5369,7 @@ function AgriculturalCalendarModule({ farmId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('calendar.planTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('calendar.planTitle')}</div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={addEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label={t("common.date")} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
@@ -5391,18 +5389,18 @@ function AgriculturalCalendarModule({ farmId }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 16, alignItems: 'start' }}>
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>{t('calendar.calendarTitle')}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('calendar.calendarTitle')}</div>
             <div style={{ display: 'flex', gap: 6 }}>
               <Button small variant="outline" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}>←</Button>
               <Button small variant="outline" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}>→</Button>
             </div>
           </div>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 8 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 8 }}>
             {fmtDate(viewMonth, { month: 'long', year: 'numeric' })}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
             {t('common.daysShort', { returnObjects: true }).map((day, idx) => (
-              <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
+              <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: TEXT.xs, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
             ))}
             {Array.from({ length: firstDayOffset }).map((_, idx) => (
               <div key={`empty-${idx}`} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px dashed ${COLORS.border}` }} />
@@ -5415,15 +5413,15 @@ function AgriculturalCalendarModule({ farmId }) {
               const isToday = cellIso === today;
               return (
                 <div key={cellIso} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, padding: 6, background: isToday ? COLORS.greenSoft : COLORS.surfaceAlt }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5, color: isToday ? COLORS.green : COLORS.ink }}>{dayNumber}</div>
+                  <div style={{ fontSize: TEXT.sm, fontWeight: 700, marginBottom: 5, color: isToday ? COLORS.green : COLORS.ink }}>{dayNumber}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {dayEvents.slice(0, 2).map(event => {
                       const meta = activityMeta[event.type] || { tone: 'green' };
-                      return <div key={event.id} style={{ fontSize: 10.5, padding: '3px 5px', borderRadius: RADIUS.control, background: meta.tone === 'blue' ? COLORS.blueSoft : meta.tone === 'green' ? COLORS.greenSoft : meta.tone === 'red' ? COLORS.redSoft : COLORS.ochreSoft, color: meta.tone === 'blue' ? COLORS.blue : meta.tone === 'green' ? COLORS.green : meta.tone === 'red' ? COLORS.red : COLORS.ochre }}>
+                      return <div key={event.id} style={{ fontSize: TEXT.xs, padding: '3px 5px', borderRadius: RADIUS.control, background: meta.tone === 'blue' ? COLORS.blueSoft : meta.tone === 'green' ? COLORS.greenSoft : meta.tone === 'red' ? COLORS.redSoft : COLORS.ochreSoft, color: meta.tone === 'blue' ? COLORS.blue : meta.tone === 'green' ? COLORS.green : meta.tone === 'red' ? COLORS.red : COLORS.ochre }}>
                         {typeLabel(event.type)}
                       </div>;
                     })}
-                    {dayEvents.length > 2 && <div style={{ fontSize: 10, color: COLORS.inkSoft }}>+{dayEvents.length - 2}</div>}
+                    {dayEvents.length > 2 && <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>+{dayEvents.length - 2}</div>}
                   </div>
                 </div>
               );
@@ -5436,7 +5434,7 @@ function AgriculturalCalendarModule({ farmId }) {
             <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('calendar.typesTitle')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {Object.entries(activityMeta).map(([key, meta]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: COLORS.inkSoft }}>
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base, color: COLORS.inkSoft }}>
                   <span>{typeLabel(key)}</span>
                   <Badge tone={meta.tone}>{typeLabel(key)}</Badge>
                 </div>
@@ -5445,16 +5443,16 @@ function AgriculturalCalendarModule({ farmId }) {
           </Card>
           <Card>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('calendar.allEvents')}</div>
-            <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginBottom: 8 }}>{t('calendar.allEventsHint')}</div>
+            <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: 8 }}>{t('calendar.allEventsHint')}</div>
             {allEventsSorted.length === 0 ? (
-              <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('calendar.empty')}</div>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('calendar.empty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
                 {allEventsSorted.map(event => (
                   <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{event.title}</div>
-                      <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 3 }}>{fmtDate(event.date)} • {typeLabel(event.type)}</div>
+                      <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{event.title}</div>
+                      <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 3 }}>{fmtDate(event.date)} • {typeLabel(event.type)}</div>
                     </div>
                     <button onClick={() => startEditEvent(event)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex', flexShrink: 0 }}>
                       <Settings2 size={14} />
@@ -5470,8 +5468,8 @@ function AgriculturalCalendarModule({ farmId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEvent}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('calendar.editTitle')}</div>
-              <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('calendar.editTitle')}</div>
+              <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             <form onSubmit={saveEditEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
               <Field label={t("common.date")} type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} required />
@@ -5688,7 +5686,7 @@ function HarvestsModule({ farmId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('harvests.recordTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('harvests.recordTitle')}</div>
         {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
         <form onSubmit={addHarvest} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Field label={t("common.date")} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
@@ -5716,12 +5714,12 @@ function HarvestsModule({ farmId }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('harvests.totalQuantite')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtNumber(totalQuantite)} kg</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('harvests.totalQuantite')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtNumber(totalQuantite)} kg</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('harvests.nbEnregistrements')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{harvests.length}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('harvests.nbEnregistrements')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{harvests.length}</div>
         </Card>
       </div>
 
@@ -5765,8 +5763,8 @@ function HarvestsModule({ farmId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 560, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('harvests.editTitle')}</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('harvests.editTitle')}</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             <form onSubmit={saveEdit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
               <Field label={t("common.date")} type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
@@ -5914,8 +5912,8 @@ function AIAssistantModule({ farmId, activated }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>{t('assistant.title')}</div>
-        <div style={{ fontSize: 13.5, color: COLORS.inkSoft, marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 8 }}>{t('assistant.title')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 12 }}>
           {t('assistant.hint')}
         </div>
         <form onSubmit={askAssistant} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -5925,11 +5923,11 @@ function AIAssistantModule({ farmId, activated }) {
       </Card>
       <Card>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('assistant.answerTitle')}</div>
-        <div style={{ fontSize: 14, color: COLORS.ink, lineHeight: 1.6 }}>{answer}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.ink, lineHeight: 1.6 }}>{answer}</div>
       </Card>
       <Card>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('assistant.examplesTitle')}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: TEXT.base, color: COLORS.inkSoft }}>
           <div>• {t('assistant.example1')}</div>
           <div>• {t('assistant.example2')}</div>
           <div>• {t('assistant.example3')}</div>
@@ -6062,8 +6060,8 @@ function ForecastingModule({ farmId, activated }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>{t('forecast.title')}</div>
-        <div style={{ fontSize: 13.5, color: COLORS.inkSoft }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 8 }}>{t('forecast.title')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
           {assezDeDonnees
             ? t('forecast.subtitle', { count: forecast.moisFinance })
             : t('forecast.pasAssezDeDonnees')}
@@ -6077,12 +6075,12 @@ function ForecastingModule({ farmId, activated }) {
           return (
             <Card key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600 }}>{item.label}</span>
+                <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600 }}>{item.label}</span>
                 <div style={{ width: 36, height: 36, borderRadius: RADIUS.card, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <TrendingUp size={18} color={accent} />
                 </div>
               </div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 19, fontWeight: 700, color: COLORS.ink }}>{item.value}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.lg, fontWeight: 700, color: COLORS.ink }}>{item.value}</div>
             </Card>
           );
         })}
@@ -6090,7 +6088,7 @@ function ForecastingModule({ farmId, activated }) {
       )}
       <Card>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('forecast.noteTitle')}</div>
-        <div style={{ fontSize: 13.5, color: COLORS.inkSoft, lineHeight: 1.6 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, lineHeight: 1.6 }}>
           {forecast.aDesParcelles
             ? t('forecast.note', { humidity: forecast.avgParcelleHumidity.toFixed(0), clientSpend: fmtMoney(forecast.clientSpend) })
             : t('forecast.noteSansParcelle', { clientSpend: fmtMoney(forecast.clientSpend) })}
@@ -6210,13 +6208,13 @@ function ReportsModule({ farmId, activated }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('reports.title')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('reports.title')}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {REPORT_PERIODS.map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{
               padding: '8px 14px', borderRadius: RADIUS.pill, border: `1px solid ${period === p ? COLORS.green : COLORS.border}`,
               background: period === p ? COLORS.greenSoft : COLORS.surfaceAlt, color: period === p ? COLORS.green : COLORS.inkSoft,
-              fontWeight: 600, cursor: 'pointer', fontSize: 13
+              fontWeight: 600, cursor: 'pointer', fontSize: TEXT.base
             }}>
               {periodLabel(p)}
             </button>
@@ -6226,20 +6224,20 @@ function ReportsModule({ farmId, activated }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardVentes')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardVentes')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardAchats')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardAchats')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
         </Card>
         <Card style={{ background: benefice >= 0 ? COLORS.blueSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: benefice >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardBenefice')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: benefice >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(benefice)}</div>
+          <div style={{ fontSize: TEXT.sm, color: benefice >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardBenefice')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: benefice >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(benefice)}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardRecoltes')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.ochre }}>{fmtNumber(totalRecoltes)} kg</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardRecoltes')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.ochre }}>{fmtNumber(totalRecoltes)} kg</div>
         </Card>
       </div>
 
@@ -6281,14 +6279,14 @@ function HomeGridTile({ label, icon: Icon, inactive, onClick }) {
       opacity: inactive ? 0.6 : 1, position: 'relative', padding: 12,
     }}>
       {inactive && (
-        <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: RADIUS.pill, background: COLORS.ochreSoft, color: COLORS.ochre }}>
+        <span style={{ position: 'absolute', top: 8, right: 8, fontSize: TEXT.xs, fontWeight: 700, padding: '2px 6px', borderRadius: RADIUS.pill, background: COLORS.ochreSoft, color: COLORS.ochre }}>
           {t('home.activer')}
         </span>
       )}
       <div style={{ width: 46, height: 46, borderRadius: RADIUS.card, background: inactive ? COLORS.border : COLORS.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Icon size={22} color={inactive ? COLORS.inkSoft : COLORS.green} />
       </div>
-      <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, textAlign: 'center', lineHeight: 1.25 }}>{label}</span>
+      <span style={{ fontSize: TEXT.base, fontWeight: 600, color: COLORS.ink, textAlign: 'center', lineHeight: 1.25 }}>{label}</span>
     </button>
   );
 }
@@ -6313,7 +6311,7 @@ function HomeGrid({ tabs, activated, permissions, onToggle, onSelect }) {
     .filter(cat => cat.modules.length > 0 || cat.items.length > 0);
 
   const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 14 };
-  const sectionLabelStyle = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft };
+  const sectionLabelStyle = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
@@ -6453,23 +6451,23 @@ function HomeOverview({ farmId, activated }) {
           return (
             <Card key={card.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600 }}>{card.label}</span>
+                <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600 }}>{card.label}</span>
                 <div style={{ width: 36, height: 36, borderRadius: RADIUS.card, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon size={18} color={accent} />
                 </div>
               </div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 19, fontWeight: 700, color: COLORS.ink }}>{card.value}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.lg, fontWeight: 700, color: COLORS.ink }}>{card.value}</div>
             </Card>
           );
         })}
       </div>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('home.alertsTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('home.alertsTitle')}</div>
         {stats.alertes.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('home.noAlerts')}</div>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('home.noAlerts')}</div>
         ) : (
           <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7, color: COLORS.ink }}>
-            {stats.alertes.map(alert => <li key={alert} style={{ fontSize: 13 }}>{alert}</li>)}
+            {stats.alertes.map(alert => <li key={alert} style={{ fontSize: TEXT.base }}>{alert}</li>)}
           </ul>
         )}
       </Card>
@@ -6663,14 +6661,14 @@ function EmployeesModule({ farmId, role }) {
       <Field label={t('rh.fieldCoutHoraire', { devise })} type="number" value={f.coutHoraire} onChange={e => setF({ ...f, coutHoraire: e.target.value })} />
       <Field label={t('rh.fieldHeuresHebdo')} type="number" value={f.heuresHebdo} onChange={e => setF({ ...f, heuresHebdo: e.target.value })} />
       <div style={{ gridColumn: '1 / -1' }}>
-        <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>{t('rh.joursTravailles')}</div>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>{t('rh.joursTravailles')}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {JOURS_SEMAINE.map(j => {
             const on = (f.joursTravailles || '').split(',').map(s => s.trim()).includes(j);
             return (
               <button key={j} type="button" onClick={() => toggleJour(setF, f, j)} style={{
                 background: on ? COLORS.green : 'transparent', color: on ? '#fff' : COLORS.inkSoft,
-                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: RADIUS.card, padding: '4px 10px', fontSize: 12.5, cursor: 'pointer',
+                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: RADIUS.card, padding: '4px 10px', fontSize: TEXT.sm, cursor: 'pointer',
               }}>{t(`rh.jours.${j}`, { defaultValue: j })}</button>
             );
           })}
@@ -6707,10 +6705,10 @@ function EmployeesModule({ farmId, role }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('rh.addEmployeeTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.addEmployeeTitle')}</div>
 
         {formError && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
             {formError}
           </div>
         )}
@@ -6721,12 +6719,12 @@ function EmployeesModule({ farmId, role }) {
             <div style={{ flex: 1, minWidth: 260 }}>{renderIdentite(form, setForm)}</div>
           </div>
 
-          <button type="button" onClick={() => setShowMoreAdd(v => !v)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: 13, alignSelf: 'flex-start', padding: 0 }}>
+          <button type="button" onClick={() => setShowMoreAdd(v => !v)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: TEXT.base, alignSelf: 'flex-start', padding: 0 }}>
             {showMoreAdd ? t('rh.hideMore') : t('rh.showMore')}
           </button>
           {showMoreAdd && renderInfosPlus(form, setForm)}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer' }}>
             <input type="checkbox" checked={form.createAccount} onChange={e => setForm({ ...form, createAccount: e.target.checked })} />
             {t('rh.createLogin')}
           </label>
@@ -6754,28 +6752,28 @@ function EmployeesModule({ farmId, role }) {
 
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('rh.employeesTitle')}</div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('rh.employeesTitle')}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select className="flat-input" value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ background: '#fff', color: COLORS.ink, fontSize: 12.5 }}>
+            <select className="flat-input" value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ background: '#fff', color: COLORS.ink, fontSize: TEXT.sm }}>
               <option value="">{t('rh.allDepartments')}</option>
               {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
             </select>
-            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '5px 10px', fontSize: 12.5, color: COLORS.inkSoft, cursor: 'pointer' }}>
+            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '5px 10px', fontSize: TEXT.sm, color: COLORS.inkSoft, cursor: 'pointer' }}>
               {viewMode === 'list' ? t('rh.trombinoscope') : t('rh.list')}
             </button>
           </div>
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{error}</div>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>{error}</div>
         )}
 
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, color: COLORS.inkSoft }}>
             <Loader2 size={15} className="spin" /> {t('common.loading')}
           </div>
         ) : employees.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{filterDept ? t('rh.noEmployeeInDept') : t('rh.noEmployee')}</div>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{filterDept ? t('rh.noEmployeeInDept') : t('rh.noEmployee')}</div>
         ) : viewMode === 'grid' ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
             {employees.map(emp => (
@@ -6783,8 +6781,8 @@ function EmployeesModule({ farmId, role }) {
                 {emp.photo
                   ? <img src={emp.photo} alt="" style={{ width: 64, height: 64, borderRadius: RADIUS.card, objectFit: 'cover' }} />
                   : <div style={{ width: 64, height: 64, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.prenom} {emp.nom}</div>
-                <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{emp.posteNom || emp.poste || '—'}{emp.departementNom ? ` · ${emp.departementNom}` : ''}</div>
+                <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{emp.prenom} {emp.nom}</div>
+                <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>{emp.posteNom || emp.poste || '—'}{emp.departementNom ? ` · ${emp.departementNom}` : ''}</div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                   <button onClick={() => setRhEmployee(emp)} title={t('rh.ficheRh')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><ClipboardList size={15} /></button>
                   {canManageRh && <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}><Settings2 size={15} /></button>}
@@ -6800,10 +6798,10 @@ function EmployeesModule({ farmId, role }) {
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   {emp.photo
                     ? <img src={emp.photo} alt="" style={{ width: 38, height: 38, borderRadius: RADIUS.card, objectFit: 'cover' }} />
-                    : <div style={{ width: 38, height: 38, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
+                    : <div style={{ width: 38, height: 38, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: TEXT.base }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{emp.prenom} {emp.nom}</div>
-                    <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                    <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{emp.prenom} {emp.nom}</div>
+                    <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                       {emp.posteNom || emp.poste || t('rh.posteNonRenseigne')}
                       {emp.departementNom && ` · ${emp.departementNom}`}
                       {emp.managerNom && ` · ${t('rh.managerPrefix', { name: emp.managerNom })}`}
@@ -6840,12 +6838,12 @@ function EmployeesModule({ farmId, role }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEditEmployee}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('rh.editEmployeeTitle')}</div>
-              <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('rh.editEmployeeTitle')}</div>
+              <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
 
             {editError && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>{editError}</div>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>{editError}</div>
             )}
 
             <form onSubmit={saveEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -6867,7 +6865,7 @@ function EmployeesModule({ farmId, role }) {
 
               {!editingEmp.compteEmail && (
                 <>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer' }}>
                     <input type="checkbox" checked={editForm.linkAccount} onChange={e => setEditForm({ ...editForm, linkAccount: e.target.checked })} />
                     {t('rh.createLogin')}
                   </label>
@@ -6959,16 +6957,16 @@ function NotificationsModule({ farmId, activated }) {
 
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('notifications.title')}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('notifications.title')}</div>
       {notifications.length === 0 ? (
-        <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('notifications.empty')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('notifications.empty')}</div>
       ) : (
         notifications.map(item => (
           <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <div style={{ fontSize: 18 }}>{item.icon}</div>
+            <div style={{ fontSize: TEXT.lg }}>{item.icon}</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{item.title}</div>
-              <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 3 }}>{item.message}</div>
+              <div style={{ fontWeight: 700, fontSize: TEXT.base }}>{item.title}</div>
+              <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 3 }}>{item.message}</div>
             </div>
           </div>
         ))
@@ -7146,7 +7144,7 @@ function ListesPrixManager() {
       <datalist id={datalistId}>
         {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
-      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 13, padding: 0, fontWeight: 600 }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: TEXT.base, padding: 0, fontWeight: 600 }}>
         {open ? t('contacts.listes.toggleHide') : t('contacts.listes.toggleShow')}
       </button>
       {open && (
@@ -7158,15 +7156,15 @@ function ListesPrixManager() {
             </Button>
           </form>
           {loading ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("common.loading")}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t("common.loading")}</div>
           ) : listes.length === 0 ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("contacts.listes.empty")}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t("contacts.listes.empty")}</div>
           ) : listes.map(liste => (
             <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(liste.id)}>
                 <div>
                   <span style={{ fontWeight: 700 }}>{liste.nom}</span>
-                  <span style={{ color: COLORS.inkSoft, fontSize: 12, marginLeft: 8 }}>{t('contacts.listes.articleCount', { count: liste.nombreLignes })}</span>
+                  <span style={{ color: COLORS.inkSoft, fontSize: TEXT.sm, marginLeft: 8 }}>{t('contacts.listes.articleCount', { count: liste.nombreLignes })}</span>
                 </div>
                 <button onClick={(ev) => { ev.stopPropagation(); removeListe(liste.id, liste.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                   <Trash2 size={14} />
@@ -7212,7 +7210,7 @@ function ListesPrixManager() {
                       )}
                       <Button type="submit" small><Plus size={14} /> {t("common.add")}</Button>
                     </div>
-                    <button type="button" onClick={() => setAdvancedOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: 12, padding: 0, textAlign: 'left', width: 'fit-content' }}>
+                    <button type="button" onClick={() => setAdvancedOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: TEXT.sm, padding: 0, textAlign: 'left', width: 'fit-content' }}>
                       {t('contacts.listes.advanced')}
                     </button>
                     {advancedOpen && (
@@ -7224,9 +7222,9 @@ function ListesPrixManager() {
                     )}
                   </form>
                   {(lignesParListe[liste.id] || []).length === 0 ? (
-                    <div style={{ color: COLORS.inkSoft, fontSize: 12.5 }}>{t("contacts.listes.emptyLignes")}</div>
+                    <div style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>{t("contacts.listes.emptyLignes")}</div>
                   ) : (lignesParListe[liste.id] || []).map(l => (
-                    <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: 13 }}>
+                    <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.base }}>
                       <span>
                         {l.quantiteMin > 0
                           ? t('contacts.listes.ligneResume', { cible: cibleDeLigne(l), mode: modeDeLigne(l), qte: l.quantiteMin })
@@ -7374,21 +7372,21 @@ function ContactTagsManager({ tags, onChange }) {
 
   return (
     <div>
-      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, padding: 0 }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: COLORS.blue, cursor: 'pointer', fontSize: TEXT.sm, fontWeight: 600, padding: 0 }}>
         {tr('contacts.tags.toggle')} {open ? '▲' : '▼'}
       </button>
       {open && (
         <div style={{ marginTop: 8, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {tags.map(t => (
-              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: 12 }}>
+              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: TEXT.sm }}>
                 {t.nom}
                 <button type="button" onClick={() => remove(t.id, t.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}>
                   <Trash2 size={11} />
                 </button>
               </span>
             ))}
-            {tags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.tags.empty")}</span>}
+            {tags.length === 0 && <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.tags.empty")}</span>}
           </div>
           <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input className="flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder={tr("contacts.tags.placeholder")} style={{ flex: 1 }} />
@@ -7697,10 +7695,10 @@ function ContactsTab({ type, highlightId }) {
           <ContactAvatar photo={f.photo} nom={f.nom} prenom={f.prenom} isCompany={f.isCompany} onChange={photo => setF({ ...f, photo })} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', gap: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: COLORS.inkSoft, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: TEXT.base, color: COLORS.inkSoft, cursor: 'pointer' }}>
                 <input type="radio" checked={!f.isCompany} onChange={() => setF({ ...f, isCompany: false })} /> <UserIcon size={13} /> {tr("contacts.particulier")}
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: COLORS.inkSoft, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: TEXT.base, color: COLORS.inkSoft, cursor: 'pointer' }}>
                 <input type="radio" checked={f.isCompany} onChange={() => setF({ ...f, isCompany: true })} /> <Building2 size={13} /> {tr("contacts.societe")}
               </label>
             </div>
@@ -7708,24 +7706,24 @@ function ContactsTab({ type, highlightId }) {
               <input
                 placeholder={f.isCompany ? tr("contacts.companyNamePlaceholder") : L.nomPh}
                 value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required
-                style={{ fontSize: 21, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
+                style={{ fontSize: TEXT.xl, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
               />
               {!f.isCompany && (
                 <input
                   placeholder={L.prenomPh} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })}
-                  style={{ fontSize: 21, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
+                  style={{ fontSize: TEXT.xl, fontWeight: 700, border: 'none', borderBottom: `1px solid ${COLORS.border}`, outline: 'none', background: 'transparent', color: COLORS.ink, padding: '4px 2px', flex: 1, minWidth: 0 }}
                 />
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Mail size={14} color={COLORS.blue} />
               <input type="email" placeholder={tr("contacts.emailPlaceholder")} value={f.email} onChange={e => setF({ ...f, email: e.target.value })}
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <PhoneIcon size={14} color={COLORS.blue} />
               <input placeholder={tr("contacts.telephonePlaceholder")} value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })}
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
             </div>
           </div>
         </div>
@@ -7790,18 +7788,18 @@ function ContactsTab({ type, highlightId }) {
                   return (
                     <button key={t.id} type="button"
                       onClick={() => setF({ ...f, tagIds: active ? f.tagIds.filter(id => id !== t.id) : [...f.tagIds, t.id] })}
-                      style={{ background: active ? t.couleur : 'transparent', color: active ? '#fff' : t.couleur, border: `1px solid ${t.couleur}`, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: 12, cursor: 'pointer' }}
+                      style={{ background: active ? t.couleur : 'transparent', color: active ? '#fff' : t.couleur, border: `1px solid ${t.couleur}`, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: TEXT.sm, cursor: 'pointer' }}
                     >
                       {t.nom}
                     </button>
                   );
                 })}
-                {contactTags.length === 0 && <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.noTagAvailable")}</span>}
+                {contactTags.length === 0 && <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.noTagAvailable")}</span>}
               </div>
               <ContactTagsManager tags={contactTags} onChange={loadTags} />
             </div>
             <div />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: COLORS.inkSoft }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, color: COLORS.inkSoft }}>
               <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
               {tr("contacts.estAussi", { autre: L.autre })}
             </label>
@@ -7819,13 +7817,13 @@ function ContactsTab({ type, highlightId }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
       )}
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
           {tr("contacts.addTitle", { type: L.s })}
         </div>
         <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -7838,12 +7836,12 @@ function ContactsTab({ type, highlightId }) {
         </form>
       </Card>
       {type === 'client' && <ListesPrixManager />}
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: 13 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: TEXT.base }}>
         <Search size={14} color={COLORS.inkSoft} />
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("contacts.searchPlaceholder", { type: L.s })} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, flex: 1, color: COLORS.ink }} />
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("contacts.searchPlaceholder", { type: L.s })} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, flex: 1, color: COLORS.ink }} />
       </label>
       {filtered.length === 0 ? (
-        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{tr("contacts.noneFound", { type: L.s })}</div></Card>
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{tr("contacts.noneFound", { type: L.s })}</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -7861,7 +7859,7 @@ function ContactsTab({ type, highlightId }) {
                         {contact.isCompany ? contact.nom : `${contact.prenom || ''} ${contact.nom}`}
                         {contact.isCompany && <Building2 size={12} color={COLORS.inkSoft} />}
                       </div>
-                      <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>
+                      <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                         {contact.fonction ? `${contact.fonction} · ` : ''}{contact.telephone || tr('contacts.noTelephone')}
                       </div>
                     </div>
@@ -7875,11 +7873,11 @@ function ContactsTab({ type, highlightId }) {
                     </button>
                   </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || tr("contacts.noAdresse")}</div>
+                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || tr("contacts.noAdresse")}</div>
                 {contact.tags && contact.tags.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                     {contact.tags.map(t => (
-                      <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 7px', fontSize: 11 }}>{t.nom}</span>
+                      <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 7px', fontSize: TEXT.xs }}>{t.nom}</span>
                     ))}
                   </div>
                 )}
@@ -7891,22 +7889,22 @@ function ContactsTab({ type, highlightId }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <ContactAvatar photo={selectedContact.photo} nom={selectedContact.nom} prenom={selectedContact.prenom} isCompany={selectedContact.isCompany} size={56} />
                 <div>
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 17, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {selectedContact.isCompany ? selectedContact.nom : `${selectedContact.prenom || ''} ${selectedContact.nom}`}
                     {selectedContact.isCompany && <Building2 size={14} color={COLORS.inkSoft} />}
                   </div>
-                  {selectedContact.fonction && <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{selectedContact.fonction}{selectedContact.parentNom ? ` · ${selectedContact.parentNom}` : ''}</div>}
-                  {!selectedContact.fonction && selectedContact.parentNom && <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{selectedContact.parentNom}</div>}
+                  {selectedContact.fonction && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{selectedContact.fonction}{selectedContact.parentNom ? ` · ${selectedContact.parentNom}` : ''}</div>}
+                  {!selectedContact.fonction && selectedContact.parentNom && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{selectedContact.parentNom}</div>}
                 </div>
               </div>
               {selectedContact.tags && selectedContact.tags.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {selectedContact.tags.map(t => (
-                    <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 8px', fontSize: 11.5 }}>{t.nom}</span>
+                    <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 8px', fontSize: TEXT.xs }}>{t.nom}</span>
                   ))}
                 </div>
               )}
-              <div style={{ fontSize: 13, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span>{tr("contacts.detailTel", { value: selectedContact.telephone || tr("contacts.nonRenseigne") })}</span>
                 <span>{tr("contacts.detailEmail", { value: selectedContact.email || tr("contacts.nonRenseigne") })}</span>
                 <span>{tr("contacts.detailAdresse", { value: selectedContact.adresse || tr("contacts.nonRenseignee") })}</span>
@@ -7918,18 +7916,18 @@ function ContactsTab({ type, highlightId }) {
                 {type === 'client' && selectedContact.deviseFacturation && (
                   <span>{tr("contacts.detailDeviseFacturation", { value: selectedContact.deviseFacturation })}</span>
                 )}
-                <span style={{ fontSize: 11.5, color: COLORS.border }}>{tr("contacts.detailId", { value: selectedContact.id })}</span>
+                <span style={{ fontSize: TEXT.xs, color: COLORS.border }}>{tr("contacts.detailId", { value: selectedContact.id })}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                 <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>{tr("contacts.enregistreLe")}</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: COLORS.green }}>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}>{tr("contacts.enregistreLe")}</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base, fontWeight: 700, color: COLORS.green }}>
                     {selectedContact.createdAt ? fmtDate(selectedContact.createdAt) : '-'}
                   </div>
                 </Card>
                 <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-                  <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600 }}>{tr("contacts.totalLabel", { typePlural: L.pl })}</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: COLORS.blue }}>{contacts.length}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600 }}>{tr("contacts.totalLabel", { typePlural: L.pl })}</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.lg, fontWeight: 700, color: COLORS.blue }}>{contacts.length}</div>
                 </Card>
               </div>
               <div>
@@ -7937,7 +7935,7 @@ function ContactsTab({ type, highlightId }) {
                   onClick={() => setRelatedOpen(o => !o)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, background: COLORS.ochreSoft, color: COLORS.ochre,
-                    border: 'none', borderRadius: RADIUS.pill, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                    border: 'none', borderRadius: RADIUS.pill, padding: '6px 12px', fontSize: TEXT.sm, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
                   {type === 'client' ? tr('contacts.relatedDevis') : tr('contacts.relatedAchats')} ({relatedLoading ? '…' : relatedList.length})
@@ -7946,16 +7944,16 @@ function ContactsTab({ type, highlightId }) {
                 {relatedOpen && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
                     {relatedList.length === 0 && !relatedLoading && (
-                      <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{type === 'client' ? tr('contacts.noRelatedDevis') : tr('contacts.noRelatedAchats')}</div>
+                      <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{type === 'client' ? tr('contacts.noRelatedDevis') : tr('contacts.noRelatedAchats')}</div>
                     )}
                     {type === 'client' && relatedList.map(d => (
-                      <div key={d.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: RADIUS.card }}>
+                      <div key={d.id} style={{ fontSize: TEXT.sm, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: RADIUS.card }}>
                         <span>{d.numero} — {tr(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtMoney(d.total)}</span>
                       </div>
                     ))}
                     {type === 'fournisseur' && relatedList.map(a => (
-                      <div key={a.id} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: RADIUS.card }}>
+                      <div key={a.id} style={{ fontSize: TEXT.sm, display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: COLORS.bg, borderRadius: RADIUS.card }}>
                         <span>{a.module} — {fmtDate(a.date)} ({tr(`achats.statut.${a.statut}`, { defaultValue: a.statut })})</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtMoney(a.total)}</span>
                       </div>
@@ -7974,8 +7972,8 @@ function ContactsTab({ type, highlightId }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{tr("contacts.editTitle", { type: L.s })}</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{tr("contacts.editTitle", { type: L.s })}</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {renderFields(editForm, setEditForm, editingId)}
@@ -7992,21 +7990,21 @@ function ContactsTab({ type, highlightId }) {
                 rattacher qui que ce soit. */}
             {editForm.isCompany && (
               <div style={{ marginTop: 18, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{tr("contacts.subContactsTitle")}</div>
+                <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 10 }}>{tr("contacts.subContactsTitle")}</div>
                 <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 4, alignItems: 'end', marginBottom: 12 }}>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subNom")}
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.subNom")}
                     <input className="flat-input" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subPrenom")}
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.subPrenom")}
                     <input className="flat-input" value={subForm.prenom} onChange={e => setSubForm({ ...subForm, prenom: e.target.value })} />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subFonction")}
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.subFonction")}
                     <input className="flat-input" value={subForm.fonction} onChange={e => setSubForm({ ...subForm, fonction: e.target.value })} />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subTelephone")}
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.subTelephone")}
                     <input className="flat-input" value={subForm.telephone} onChange={e => setSubForm({ ...subForm, telephone: e.target.value })} />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: COLORS.inkSoft }}>{tr("contacts.subEmail")}
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.subEmail")}
                     <input className="flat-input" type="email" value={subForm.email} onChange={e => setSubForm({ ...subForm, email: e.target.value })} />
                   </label>
                   <Button small type="submit" variant="outline" disabled={subSaving}>
@@ -8014,9 +8012,9 @@ function ContactsTab({ type, highlightId }) {
                   </Button>
                 </form>
                 {subContactsLoading ? (
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="spin" /> {tr("common.loading")}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="spin" /> {tr("common.loading")}</div>
                 ) : subContacts.length === 0 ? (
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{tr("contacts.noSubContact")}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.noSubContact")}</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {subContacts.map(sc => (
@@ -8024,8 +8022,8 @@ function ContactsTab({ type, highlightId }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <ContactAvatar photo={sc.photo} nom={sc.nom} prenom={sc.prenom} isCompany={false} size={28} />
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>{sc.prenom} {sc.nom}</div>
-                            <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{sc.fonction || ''}{sc.fonction && (sc.telephone || sc.email) ? ' · ' : ''}{sc.telephone || sc.email || ''}</div>
+                            <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{sc.prenom} {sc.nom}</div>
+                            <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>{sc.fonction || ''}{sc.fonction && (sc.telephone || sc.email) ? ' · ' : ''}{sc.telephone || sc.email || ''}</div>
                           </div>
                         </div>
                         <button onClick={() => removeSubContact(sc.id, sc.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
@@ -8076,10 +8074,10 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 24, marginBottom: 6 }}>{t('modulesScreen.title')}</div>
-        <div style={{ fontSize: 14, color: COLORS.inkSoft }}>{t('modulesScreen.subtitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 6 }}>{t('modulesScreen.title')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('modulesScreen.subtitle')}</div>
         {tarifs && (
-          <div style={{ fontSize: 13, color: COLORS.green, marginTop: 8, fontWeight: 600 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.green, marginTop: 8, fontWeight: 600 }}>
             {t('modulesScreen.bundleHint', { amount: fmtMoney(tarifs.prixBundle.montant) })}
           </div>
         )}
@@ -8144,12 +8142,12 @@ function TopNavbar({
   const navBtnStyle = (active) => ({
     display: 'flex', alignItems: 'center', gap: 6, height: 46, padding: '0 .63em',
     background: active ? 'rgba(255,255,255,.18)' : 'transparent', border: 'none', borderRadius: 0,
-    color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+    color: '#fff', fontSize: TEXT.base, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
   });
 
   const navUserMenuItemStyle = {
     display: 'block', width: '100%', textAlign: 'left', padding: '7px 16px', border: 'none',
-    background: 'transparent', cursor: 'pointer', fontSize: 13, color: COLORS.ink, whiteSpace: 'nowrap',
+    background: 'transparent', cursor: 'pointer', fontSize: TEXT.base, color: COLORS.ink, whiteSpace: 'nowrap',
   };
 
   return (
@@ -8159,7 +8157,7 @@ function TopNavbar({
           <div style={{ width: 26, height: 26, borderRadius: RADIUS.control, background: 'rgba(255,255,255,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={15} color="#fff" />
           </div>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: '#fff', whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
+          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.md, color: '#fff', whiteSpace: 'nowrap' }}>{t('auth.brand')}</span>
         </div>
 
         {screen === 'dashboard' && (
@@ -8200,7 +8198,7 @@ function TopNavbar({
                         onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                          padding: '3px 20px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: 14,
+                          padding: '3px 20px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: TEXT.base,
                           background: active ? `${cat.color}22` : 'transparent',
                           color: active ? cat.color : COLORS.ink, fontWeight: active ? 700 : 500,
                         }}
@@ -8221,7 +8219,7 @@ function TopNavbar({
             title={t('shell.userMenu')}
             style={{
               width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,.22)',
-              border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700,
+              border: 'none', cursor: 'pointer', color: '#fff', fontSize: TEXT.base, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -8234,8 +8232,8 @@ function TopNavbar({
               zIndex: 30, minWidth: 220, overflow: 'hidden',
             }}>
               <div style={{ padding: '10px 16px', borderBottom: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user}</div>
-                <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 2 }}>{roleLabel}</div>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600, color: COLORS.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user}</div>
+                <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 2 }}>{roleLabel}</div>
               </div>
               <div style={{ padding: '4px 0' }}>
                 {screen === 'dashboard' && showManageOptions && (
@@ -8257,7 +8255,7 @@ function TopNavbar({
         </div>
       </div>
 
-      <div style={{ padding: '8px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, fontSize: 12.5 }}>
+      <div style={{ padding: '8px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, fontSize: TEXT.sm }}>
         <span style={{ color: COLORS.inkSoft }}>
           {activeCategory && <>{t(activeCategory.labelKey)}<span style={{ padding: '0 8px' }}>/</span></>}
           <strong style={{ color: COLORS.ink }}>{activeTabObj?.label}</strong>
@@ -8304,7 +8302,7 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
   const itemStyle = (active, indent) => ({
     display: 'flex', alignItems: 'center', gap: 9, width: '100%',
     padding: `7px 10px 7px ${indent}px`, borderRadius: RADIUS.card,
-    fontSize: 13, fontWeight: active ? 700 : 500, textAlign: 'left',
+    fontSize: TEXT.base, fontWeight: active ? 700 : 500, textAlign: 'left',
     border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
     background: active ? COLORS.greenSoft : 'transparent',
     color: active ? COLORS.green : COLORS.inkSoft,
@@ -8340,7 +8338,7 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
                 padding: '6px 10px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color, flexShrink: 0 }} />
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft, flex: 1 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft, flex: 1 }}>
                   {t(cat.labelKey)}
                 </span>
                 <ChevronRight size={12} style={{ color: COLORS.inkSoft, transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease' }} />
@@ -8358,8 +8356,8 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
           );
         })}
         <div style={{ marginTop: 'auto', paddingTop: 14, borderTop: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{user} — {roleLabel}</span>
-          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 13, padding: '7px 10px' }}>
+          <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{user} — {roleLabel}</span>
+          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.base, padding: '7px 10px' }}>
             <LogOut size={15} /> {t('shell.logout')}
           </button>
         </div>
@@ -8757,7 +8755,6 @@ export default function App() {
     <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: '100svh', borderRadius: RADIUS.card, color: COLORS.ink }}>
       <ToastContainer />
       <style>{`
-        ${FONT_IMPORT}
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         /* Beaucoup de tableaux (.data-table) sont rendus sans conteneur de défilement propre
@@ -8801,13 +8798,13 @@ export default function App() {
             lastSync={lastSync}
           />
           {billing?.mode === 'trial' && !trialBannerDismissed && (
-            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, fontSize: 12.5, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, fontSize: TEXT.sm, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
               <span>{t('billing.trialBanner', { count: billing.daysLeft })}</span>
-              <button onClick={() => setTrialBannerDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 700, fontSize: 13 }}>×</button>
+              <button onClick={() => setTrialBannerDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 700, fontSize: TEXT.base }}>×</button>
             </div>
           )}
           {billing?.mode === 'readonly' && (
-            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: TEXT.sm, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
               <AlertTriangle size={14} /> {t('billing.readonlyBanner', { count: billing.daysLeft })}
             </div>
           )}
@@ -8830,10 +8827,10 @@ export default function App() {
       {/* Écran de transition : propose de configurer l'entreprise maintenant ou plus tard */}
 {screen === 'onboarding-choice' && (
   <div style={{ maxWidth: 480, margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
-    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 10 }}>
+    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 10 }}>
       {t('onboarding.configTitle')}
     </div>
-    <div style={{ fontSize: 14, color: COLORS.inkSoft, marginBottom: 26 }}>
+    <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 26 }}>
       {t('onboarding.configDesc')}
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -8851,10 +8848,10 @@ export default function App() {
 {screen === 'onboarding-banques' && (
   <div style={{ maxWidth: 700, margin: '0 auto', padding: '36px 16px' }}>
     <div style={{ textAlign: 'center', marginBottom: 22 }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 6 }}>
         {t('onboarding.banquesTitle')}
       </div>
-      <div style={{ fontSize: 14, color: COLORS.inkSoft }}>
+      <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
         {t('onboarding.banquesDesc')}
       </div>
     </div>
@@ -8874,10 +8871,10 @@ export default function App() {
 {screen === 'onboarding-salaries' && (
   <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
     <div style={{ textAlign: 'center', marginBottom: 22 }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 6 }}>
         {t('onboarding.salariesTitle')}
       </div>
-      <div style={{ fontSize: 14, color: COLORS.inkSoft }}>
+      <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
         {t('onboarding.salariesDesc')}
       </div>
     </div>
@@ -9162,10 +9159,10 @@ function ProfilModule({ role }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'start' }}>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 3 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
           {t('profil.companyInfoTitle')}
         </div>
-        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
           {t('profil.companyInfoHint')}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -9187,15 +9184,15 @@ function ProfilModule({ role }) {
               {infoBusy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('profil.saveCompanyInfo')}
             </Button>
           )}
-          {infoMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{infoMsg}</div>}
+          {infoMsg && <div style={{ fontSize: TEXT.base, color: COLORS.green }}>{infoMsg}</div>}
         </div>
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>
           {t('profil.sectionPreferences')}
         </div>
-        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
           {t('profil.sectionPreferencesHint')}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -9215,7 +9212,7 @@ function ProfilModule({ role }) {
           <Select label={t('profil.fuseau')} value={prefFuseau} onChange={e => setPrefFuseau(e.target.value)} disabled={!isAdmin} aide={t('profil.fuseauAide')}>
             {FUSEAUX.map(f => <option key={f} value={f}>{f}</option>)}
           </Select>
-          <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: COLORS.inkSoft }}>
+          <div style={{ display: 'flex', gap: 16, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
             <span>{t('profil.previewMoney')} : <b style={{ color: COLORS.ink }}>{previewMoney(prefLocale, prefDevise, 1234567.5)}</b></span>
             <span>{t('profil.previewDate')} : <b style={{ color: COLORS.ink }}>{previewDate(prefLocale, new Date())}</b></span>
           </div>
@@ -9224,19 +9221,19 @@ function ProfilModule({ role }) {
               {prefBusy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('profil.savePreferences')}
             </Button>
           )}
-          {prefMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{prefMsg}</div>}
+          {prefMsg && <div style={{ fontSize: TEXT.base, color: COLORS.green }}>{prefMsg}</div>}
         </div>
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 3 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
           {t('profil.locationTitle')}
         </div>
-        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
           {t('profil.locationHint')}
         </div>
         {villeActuelle && (
-          <div style={{ fontSize: 13, color: COLORS.ink, marginBottom: 12 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.ink, marginBottom: 12 }}>
             {t('profil.locationCurrent')} : <b>{villeActuelle.ville}</b>
           </div>
         )}
@@ -9249,7 +9246,7 @@ function ProfilModule({ role }) {
                 value={villeQuery}
                 onChange={(e) => { setVilleQuery(e.target.value); setVilleSelection(null); }}
               />
-              {villeLoading && <div style={{ fontSize: 12, color: COLORS.inkSoft, marginTop: 4 }}>{t('common.loading')}</div>}
+              {villeLoading && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 4 }}>{t('common.loading')}</div>}
               {villeResultats.length > 0 && (
                 <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: 4, overflow: 'hidden' }}>
                   {villeResultats.map((v, i) => (
@@ -9259,7 +9256,7 @@ function ProfilModule({ role }) {
                       onClick={() => choisirVille(v)}
                       style={{
                         display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
-                        background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: COLORS.ink,
+                        background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.base, color: COLORS.ink,
                         borderBottom: i < villeResultats.length - 1 ? `1px solid ${COLORS.border}` : 'none',
                       }}
                     >
@@ -9272,33 +9269,33 @@ function ProfilModule({ role }) {
             <Button variant="green" onClick={enregistrerVille} disabled={!villeSelection || villeBusy} style={{ alignSelf: 'flex-start' }}>
               {villeBusy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('profil.locationSave')}
             </Button>
-            {villeMsg && <div style={{ fontSize: 13, color: COLORS.green }}>{villeMsg}</div>}
+            {villeMsg && <div style={{ fontSize: TEXT.base, color: COLORS.green }}>{villeMsg}</div>}
           </div>
         )}
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>
           {t('profil.securityTitle')}
         </div>
-        <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
           {t('profil.securityHint')}
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
             {error}
           </div>
         )}
         {success && (
-          <div style={{ background: COLORS.greenSoft || COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.greenSoft || COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
             {success}
           </div>
         )}
 
         {!mfaMode && !mfaEnabled && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('profil.mfaChooseMethod')}</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('profil.mfaChooseMethod')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {['totp', 'email'].map(m => (
                 <button
@@ -9311,7 +9308,7 @@ function ProfilModule({ role }) {
                     border: `1px solid ${chosenMethod === m ? COLORS.ink : COLORS.border}`,
                     background: chosenMethod === m ? COLORS.ink : '#fff',
                     color: chosenMethod === m ? '#fff' : COLORS.ink,
-                    fontSize: 13.5, fontWeight: 600,
+                    fontSize: TEXT.base, fontWeight: 600,
                   }}
                 >
                   {methodLabels[m]}
@@ -9327,7 +9324,7 @@ function ProfilModule({ role }) {
 
         {mfaMode === 'totp' && qrCode && (
           <div>
-            <div style={{ fontSize: 13, marginBottom: 10 }}>
+            <div style={{ fontSize: TEXT.base, marginBottom: 10 }}>
               {t('profil.mfaScanHint')}
             </div>
             <img src={qrCode} alt={t("profil.mfaQrAlt")} style={{ width: 180, height: 180, marginBottom: 14, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }} />
@@ -9342,7 +9339,7 @@ function ProfilModule({ role }) {
 
         {mfaMode === 'email' && (
           <div>
-            <div style={{ fontSize: 13, marginBottom: 10 }}>
+            <div style={{ fontSize: TEXT.base, marginBottom: 10 }}>
               {t('profil.mfaCodeSent', { sentTo })}
             </div>
             <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -9351,7 +9348,7 @@ function ProfilModule({ role }) {
                 {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaConfirm')}
               </Button>
             </form>
-            <button type="button" onClick={resendEmailCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13, marginTop: 8, padding: 0 }}>
+            <button type="button" onClick={resendEmailCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base, marginTop: 8, padding: 0 }}>
               {t('profil.mfaResend')}
             </button>
           </div>
@@ -9359,7 +9356,7 @@ function ProfilModule({ role }) {
 
         {mfaEnabled && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 13, color: COLORS.inkSoft }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
               {t('profil.mfaMethodActive', { method: methodLabels[mfaMethod] || mfaMethod })}
             </div>
             <Button variant="ghost" onClick={handleDisable} disabled={busy} style={{ alignSelf: 'flex-start' }}>

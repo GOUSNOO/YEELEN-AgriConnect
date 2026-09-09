@@ -4,7 +4,7 @@ import { Plus, Trash2, PencilLine } from 'lucide-react';
 import { getObservations, createObservation, updateObservation, deleteObservation } from '../lib/api.js';
 import { Badge, Button, Card, Field, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 const emptyForm = { notes: '', localisation: '' };
 
@@ -91,7 +91,7 @@ export function ObservationListView() {
     return (
       <Card>
         <p style={{ margin: 0, color: COLORS.red, fontWeight: 600 }}>{t('observations.errorTitle')}</p>
-        <p style={{ margin: '4px 0 0', color: COLORS.inkSoft, fontSize: 13 }}>{error}</p>
+        <p style={{ margin: '4px 0 0', color: COLORS.inkSoft, fontSize: TEXT.base }}>{error}</p>
       </Card>
     );
   }
@@ -117,9 +117,9 @@ export function ObservationListView() {
                     <Badge tone="green">
                       {obs.dateObservation ? fmtDate(obs.dateObservation) : '—'}
                     </Badge>
-                    {obs.localisation && <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{obs.localisation}</span>}
+                    {obs.localisation && <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{obs.localisation}</span>}
                   </div>
-                  <p style={{ margin: 0, fontSize: 14, color: COLORS.ink }}>{obs.notes}</p>
+                  <p style={{ margin: 0, fontSize: TEXT.base, color: COLORS.ink }}>{obs.notes}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <Button variant="ghost" small onClick={() => openEditModal(obs)} aria-label={t('common.edit')}>
@@ -143,7 +143,7 @@ export function ObservationListView() {
           <Card style={{ width: '100%', maxWidth: 420 }}>
             <h3 style={{ marginTop: 0 }}>{editingId ? t('observations.editTitle') : t('observations.createTitle')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 500 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
                 {t('observations.description')}
                 <textarea
                   className="flat-input"

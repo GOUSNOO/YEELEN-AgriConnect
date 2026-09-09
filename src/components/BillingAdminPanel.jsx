@@ -7,7 +7,7 @@ import {
 } from '../lib/api.js';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import { fmtDate, fmtMoneyWith } from '../lib/locale.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Console d'administration de l'abonnement (Phase 1) — réservée aux platform-admins, rendue
 // uniquement dans le tab 'billing' lui-même filtré par isPlatformAdmin (voir App.jsx). Chaque
@@ -86,7 +86,7 @@ export default function BillingAdminPanel() {
                     <td style={{ color: COLORS.inkSoft }}>{e.activatedUntil ? fmtDate(e.activatedUntil) : e.trialEndsAt ? fmtDate(e.trialEndsAt) : '—'}</td>
                     <td style={{ color: COLORS.inkSoft }}>{e.nbUsers}</td>
                     <td style={{ color: COLORS.inkSoft }}>{e.dernierPaiement ? fmtDate(e.dernierPaiement) : '—'}</td>
-                    <td><button onClick={() => setSelectedId(e.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontWeight: 600, fontSize: 12.5 }}>{t('billing.admin.manage')}</button></td>
+                    <td><button onClick={() => setSelectedId(e.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontWeight: 600, fontSize: TEXT.sm }}>{t('billing.admin.manage')}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -97,7 +97,7 @@ export default function BillingAdminPanel() {
         {nbPages > 1 && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, justifyContent: 'flex-end' }}>
             <Button variant="ghost" small disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('common.previous')}</Button>
-            <span style={{ fontSize: 12.5, color: COLORS.inkSoft }}>{t('billing.admin.pageOf', { page, total: nbPages })}</span>
+            <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('billing.admin.pageOf', { page, total: nbPages })}</span>
             <Button variant="ghost" small disabled={page >= nbPages} onClick={() => setPage((p) => p + 1)}>{t('common.next')}</Button>
           </div>
         )}
@@ -197,7 +197,7 @@ function EntrepriseDetailModal({ id, onClose, onChanged }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 620, maxHeight: '88vh', overflowY: 'auto', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{ent?.nom || '…'}</div>
+            <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{ent?.nom || '…'}</div>
             {ent && <Badge tone={STATUS_TONE[ent.subscriptionStatus] || 'green'}>{t(`billing.status.${ent.subscriptionStatus}`, { defaultValue: ent.subscriptionStatus })}</Badge>}
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><X size={18} /></button>
@@ -207,7 +207,7 @@ function EntrepriseDetailModal({ id, onClose, onChanged }) {
           <p style={{ color: COLORS.inkSoft }}>{t('common.loading')}</p>
         ) : (
           <>
-            <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
               {ent.trialEndsAt && <div>{t('billing.admin.trialUntil')} : {fmtDate(ent.trialEndsAt)}</div>}
               {ent.activatedUntil && <div>{t('billing.admin.activeUntil')} : {fmtDate(ent.activatedUntil)}</div>}
               {ent.graceUntil && <div>{t('billing.admin.graceUntil')} : {fmtDate(ent.graceUntil)}</div>}
@@ -227,9 +227,9 @@ function EntrepriseDetailModal({ id, onClose, onChanged }) {
             </div>
 
             <form onSubmit={activer} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 14, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
-              <div style={{ gridColumn: '1 / -1', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><CreditCard size={14} /> {t('billing.admin.activateTitle')}</div>
+              <div style={{ gridColumn: '1 / -1', fontSize: TEXT.base, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><CreditCard size={14} /> {t('billing.admin.activateTitle')}</div>
               {detail.prixSuggere && (
-                <div style={{ gridColumn: '1 / -1', fontSize: 12.5, color: COLORS.inkSoft }}>
+                <div style={{ gridColumn: '1 / -1', fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                   {t('billing.admin.suggestedPrice', {
                     modules: detail.prixSuggere.modulesFactures.length,
                     palier: detail.prixSuggere.palier,
@@ -246,15 +246,15 @@ function EntrepriseDetailModal({ id, onClose, onChanged }) {
             </form>
 
             <form onSubmit={prolonger} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 18, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
-              <div style={{ gridColumn: '1 / -1', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} /> {t('billing.admin.extendTitle')}</div>
+              <div style={{ gridColumn: '1 / -1', fontSize: TEXT.base, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} /> {t('billing.admin.extendTitle')}</div>
               <Field label={t('billing.admin.days')} type="number" value={prolongerForm.jours} onChange={(e) => setProlongerForm({ ...prolongerForm, jours: e.target.value })} />
               <Field label={t('billing.admin.reason')} value={prolongerForm.raison} onChange={(e) => setProlongerForm({ ...prolongerForm, raison: e.target.value })} />
               <Button type="submit" variant="outline" disabled={busy}>{t('billing.admin.extend')}</Button>
             </form>
 
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t('billing.admin.paymentsHistory')}</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 8 }}>{t('billing.admin.paymentsHistory')}</div>
             {(detail.paiements || []).length === 0 ? (
-              <p style={{ margin: 0, color: COLORS.inkSoft, fontSize: 12.5 }}>{t('billing.admin.noPayments')}</p>
+              <p style={{ margin: 0, color: COLORS.inkSoft, fontSize: TEXT.sm }}>{t('billing.admin.noPayments')}</p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">

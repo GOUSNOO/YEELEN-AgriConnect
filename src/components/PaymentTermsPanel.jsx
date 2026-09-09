@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { createPaymentTerm, deletePaymentTerm } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 // Référentiel compact des conditions de paiement (account.payment.term-like), rendu dans
 // DevisModule. Écritures gérées côté API par requireRole('admin','directeur') — un rôle
@@ -57,7 +57,7 @@ export default function PaymentTermsPanel({ terms, onChange }) {
 
   return (
     <Card>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('paymentTerms.title')} ({(terms || []).length})
       </button>
 

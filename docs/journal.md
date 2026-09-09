@@ -3823,3 +3823,77 @@ faire si l'on veut que chaque jeton porte vraiment son sens — c'est un choix d
 entreprise jetable (navbar vert forêt, bouton d'ajout, jauges bleu-vert et ambre assorties,
 badges et bordures beiges) — supprimée ensuite. Les trois variantes de bouton passent
 désormais le seuil AA avec leur texte blanc (15,3:1 / 6,2:1 / 5,8:1).
+
+### 2026-09-10 — Base typographique : sortir du gabarit Vite, poser une échelle
+
+Suite du chantier design de la veille (palette unifiée). Le point de départ était de ramener
+les tailles de police à une échelle ; la mesure préalable a montré que le problème principal
+était ailleurs — **`src/index.css` et les 185 premières lignes de `src/App.css` étaient le
+gabarit de départ de Vite, jamais retiré et toujours actif**.
+
+**Ce que le gabarit imposait, et qui n'avait jamais été décidé pour cette application**
+
+- `#root { text-align: center }` — tout le contenu héritait du texte centré. Les 37
+  `textAlign: 'left'` posés en style inline dans le JSX ne sont pas des choix de mise en page :
+  ce sont des réparations locales de ce défaut, là où quelqu'un s'en est aperçu. Ailleurs, le
+  centrage restait. Le cas le plus net, vérifié en avant/après sur le tableau de bord : la liste
+  « Alertes importantes » affichait sa puce collée au bord gauche de la carte et son texte au
+  milieu — un `<ul>` sous `text-align: center` met le marqueur à gauche et le texte au centre.
+  Sur l'écran d'accueil de l'application.
+- `:root { font: 18px/145%; letter-spacing: .18px; color: #6b6375 }` — une base de 18 px et un
+  texte gris-violet, contredits partout en style inline.
+- `color-scheme: light dark` + un bloc `prefers-color-scheme: dark` — chez un utilisateur dont
+  le système est en thème sombre, les contrôles natifs se rendaient en sombre par-dessus une
+  palette claire. **Trois contournements locaux distincts existaient déjà dans le dépôt pour ce
+  seul bug** (bordures de `.data-table` figées en littéral plutôt qu'en `var(--border)` ;
+  couleurs de `.flat-input` idem ; `.global-search-input { color-scheme: light }`), chacun
+  documenté par un commentaire renvoyant au symptôme. Aucun n'était allé à la cause.
+- `--accent: #aa3bff`, `.counter`, `.hero`, `#center`, `#next-steps`, `#docs`, `#spacer`,
+  `.ticks`, `h1 { 56px }`, `code {}` — sélecteurs du gabarit, aucun usage dans le JSX.
+
+`index.css` est réécrit : une base explicite (Inter, 13 px, interligne 1.5, `COLORS.ink` sur
+`COLORS.bg`, `color-scheme: light`), les seules remises à zéro utiles, et des tailles de
+l'échelle pour `h1`/`h2`/`h3` (le JSX les emploie 12 fois). `App.css` perd ses 185 lignes de
+gabarit et ne garde que ce qu'un style inline ne peut pas exprimer.
+
+**Deux défauts trouvés en passant, corrigés ici**
+
+- `App.css` gardait encore l'**ancienne palette** (`#E2E8F0` en bordure, `#2D374A` en texte,
+  `#9AA5B1` en placeholder) : le script d'unification de la veille ne traitait que les `.jsx`.
+  Les 20 tableaux et 52 champs plats étaient donc restés en gris-bleu pendant que le reste
+  passait au beige.
+- L'`@import` des polices vivait dans le bloc `<style>` d'`App.jsx`, rendu par le seul shell de
+  l'application — si bien que **la page publique de devis** (`DevisPublicView`, montée hors de
+  `<App/>`) demandait Inter sans jamais la charger, et retombait sur la police système. C'est la
+  page que voit le client d'un utilisateur. L'import vit maintenant dans `index.css`.
+
+**L'échelle typographique**
+
+Vingt tailles distinctes sur 648 usages : 12 et 12,5 px pour le même rôle (186 usages à eux
+deux), 13 / 13,5 / 14 / 14,5 pour du texte courant, 15 / 16 / 17 pour la même mise en avant.
+Des écarts d'un demi-pixel, invisibles isolément, qui empêchent deux libellés de même nature de
+s'aligner. Sept pas dans `lib/theme.js` (`TEXT`), nommés par rôle plutôt que par taille :
+`xs: 11` / `sm: 12` / `base: 13` / `md: 15` / `lg: 18` / `xl: 20` / `title: 22`.
+
+`xl` et `title` restent distincts malgré leurs 2 px d'écart : ils ne se ressemblent qu'en
+taille — `xl` est un grand chiffre en JetBrains Mono, `title` un titre en Space Grotesk. Les
+fondre ferait passer les indicateurs du tableau de bord pour des titres. Sept pas honnêtes
+valent mieux que six dont un serait un compromis.
+
+646 des 648 occurrences converties par script. Les 2 restantes sont volontaires :
+`fontSize: size / 3` (initiale d'avatar, proportionnelle par construction) et le
+`small ? 13 : 14` de `Button`, ramené à `TEXT.base` — un pixel d'écart ne distinguait rien, le
+rembourrage s'en charge déjà.
+
+**Vérification** — `npx vite build` et `oxlint` verts, 119/119 tests frontend. Comparaison
+avant/après en navigateur (mise de côté par `git stash`, captures des mêmes écrans, restauration)
+sur le tableau de bord et Mes préférences : le centrage hérité est bien ce qui disparaît, et
+rien d'autre ne bouge. Thème sombre système vérifié **avec l'émulation réellement active**
+(`matchMedia('(prefers-color-scheme: dark)').matches === true` contrôlé, pas supposé) :
+`color-scheme` calculé reste `light`, contrôles natifs clairs. Page publique de devis :
+`document.fonts.check('16px Inter')` renvoie `true`. Entreprise jetable supprimée après coup.
+
+**Reste à faire** — les points 3 et 4 du chantier, non engagés : l'échelle d'espacement
+(gap/padding sur 8, 10, 6, 16, 12, 20, 4, 5, 14, 7 — plus de 350 occurrences, le morceau le plus
+risqué visuellement puisqu'il change la densité de toute l'application) et la réassignation des
+arrondis par rôle (dette déclarée la veille).

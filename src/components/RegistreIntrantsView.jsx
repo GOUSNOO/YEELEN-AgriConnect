@@ -7,7 +7,7 @@ import {
 } from '../lib/api.js';
 import { Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 const INK_SOFT = COLORS.inkSoft;
 const BORDER = COLORS.border;
@@ -103,13 +103,13 @@ export function RegistreIntrantsView({ farmId }) {
   }
   const darActifs = [...darParParcelle.values()];
 
-  const cell = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontSize: 12.5 };
+  const cell = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontSize: TEXT.sm };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{t('registre.title')}</div>
-        <div style={{ color: INK_SOFT, fontSize: 12.5, marginBottom: 14 }}>{t('registre.subtitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 4 }}>{t('registre.title')}</div>
+        <div style={{ color: INK_SOFT, fontSize: TEXT.sm, marginBottom: 14 }}>{t('registre.subtitle')}</div>
         <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Select label={t('registre.parcelle')} value={form.parcelleId} onChange={(e) => setForm({ ...form, parcelleId: e.target.value })}>
             <option value="">—</option>
@@ -126,7 +126,7 @@ export function RegistreIntrantsView({ farmId }) {
           <Field label={t('registre.quantiteUtilisee')} type="number" value={form.quantiteUtilisee} onChange={(e) => setForm({ ...form, quantiteUtilisee: e.target.value })} />
           <Field label={t('registre.operateur')} value={form.operateur} onChange={(e) => setForm({ ...form, operateur: e.target.value })} />
           <Field label={t('registre.cible')} value={form.cible} onChange={(e) => setForm({ ...form, cible: e.target.value })} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: INK_SOFT, alignSelf: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: INK_SOFT, alignSelf: 'center' }}>
             <input type="checkbox" checked={form.zntRespectee} onChange={(e) => setForm({ ...form, zntRespectee: e.target.checked })} />
             {t('registre.znt')}
           </label>
@@ -138,7 +138,7 @@ export function RegistreIntrantsView({ farmId }) {
       </Card>
 
       {darActifs.length > 0 && (
-        <Card style={{ background: OCHRE_SOFT, border: `1px solid ${OCHRE}`, fontSize: 12.5 }}>
+        <Card style={{ background: OCHRE_SOFT, border: `1px solid ${OCHRE}`, fontSize: TEXT.sm }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 4 }}>
             <AlertTriangle size={15} /> {t('registre.darActifsTitle')}
           </div>
@@ -152,7 +152,7 @@ export function RegistreIntrantsView({ farmId }) {
         {loading ? (
           <div style={{ padding: 16, color: INK_SOFT }}><Loader2 size={14} className="spin" /></div>
         ) : apps.length === 0 ? (
-          <div style={{ padding: 16, color: INK_SOFT, fontSize: 13 }}>{t('registre.empty')}</div>
+          <div style={{ padding: 16, color: INK_SOFT, fontSize: TEXT.base }}>{t('registre.empty')}</div>
         ) : (
           <table className="data-table">
             <thead><tr style={{ textAlign: 'left', color: INK_SOFT }}>

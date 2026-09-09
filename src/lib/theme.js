@@ -46,3 +46,28 @@ export const RADIUS = {
   card: 8,      // cartes, panneaux, modales
   pill: 999,    // pastilles, badges, jauges
 };
+
+// Échelle typographique — sept pas, contre vingt tailles distinctes réparties sur 648 usages
+// avant le 2026-09-10. La dispersion ne venait pas d'une hiérarchie fine mais de décisions
+// prises au coup par coup : 12 et 12,5 px pour le même rôle (186 usages à eux deux), 13 / 13,5 /
+// 14 / 14,5 pour du texte courant, 15 / 16 / 17 pour la même mise en avant. Des écarts d'un
+// demi-pixel que personne ne perçoit comme intentionnels, mais qui empêchent deux libellés de
+// même nature de s'aligner.
+//
+// Les pas sont resserrés en bas (où la distinction est fonctionnelle : un libellé secondaire
+// doit se lire, pas crier) et plus larges en haut (où elle est structurelle). Chaque pas porte
+// un rôle plutôt qu'une taille, pour que le choix se fasse sur l'intention.
+//
+// `xl` et `title` sont volontairement distincts malgré leurs 2 px d'écart : ils ne se
+// ressemblent qu'en taille. `xl` est un grand chiffre en JetBrains Mono, `title` un titre en
+// Space Grotesk — les fondre reviendrait à faire passer les indicateurs du tableau de bord pour
+// des titres, ou l'inverse.
+export const TEXT = {
+  xs: 11,      // badges, mentions discrètes
+  sm: 12,      // libellés secondaires, en-têtes de tableau
+  base: 13,    // texte courant
+  md: 15,      // valeurs mises en avant, sous-titres
+  lg: 18,      // icônes d'action, boutons de fermeture
+  xl: 20,      // grands chiffres des cartes d'indicateurs
+  title: 22,   // titres d'écran et de section
+};

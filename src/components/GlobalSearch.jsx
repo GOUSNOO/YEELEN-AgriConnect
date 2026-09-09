@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import { rechercheGlobale } from '../lib/api.js';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 const sectionLabelStyle = {
-  fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+  fontSize: TEXT.xs, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
   color: COLORS.inkFaint, padding: '10px 16px 4px', textAlign: 'left',
 };
 
@@ -94,14 +94,14 @@ export function GlobalSearch({ onClose, onSelect }) {
             placeholder="Rechercher un contact, un produit, un devis…"
             style={{
               flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent',
-              fontSize: 15, fontFamily: "'Inter', sans-serif", color: COLORS.ink,
+              fontSize: TEXT.md, fontFamily: "'Inter', sans-serif", color: COLORS.ink,
             }}
           />
           <button
             type="submit"
             style={{
               flexShrink: 0, background: COLORS.green, color: '#fff', border: 'none', borderRadius: RADIUS.card,
-              padding: '7px 14px', fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif",
+              padding: '7px 14px', fontSize: TEXT.base, fontWeight: 600, fontFamily: "'Inter', sans-serif",
               cursor: 'pointer', whiteSpace: 'nowrap',
             }}
           >
@@ -121,20 +121,20 @@ export function GlobalSearch({ onClose, onSelect }) {
           </button>
         </form>
         <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-          {loading && <div style={{ padding: 16, fontSize: 13, color: COLORS.inkSoft, textAlign: 'left' }}>Recherche...</div>}
+          {loading && <div style={{ padding: 16, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Recherche...</div>}
           {!loading && query.trim().length >= 2 && !hasResults && (
-            <div style={{ padding: 16, fontSize: 13, color: COLORS.inkSoft, textAlign: 'left' }}>Aucun résultat pour « {query} ».</div>
+            <div style={{ padding: 16, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Aucun résultat pour « {query} ».</div>
           )}
           {!loading && query.trim().length < 2 && (
-            <div style={{ padding: 16, fontSize: 13, color: COLORS.inkSoft, textAlign: 'left' }}>Tapez au moins 2 caractères.</div>
+            <div style={{ padding: 16, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Tapez au moins 2 caractères.</div>
           )}
           {results.contacts.length > 0 && (
             <div>
               <div style={sectionLabelStyle}>Contacts</div>
               {results.contacts.map((c) => (
                 <button key={`c-${c.id}`} onClick={() => onSelect({ kind: 'contact', item: c })} style={resultRowStyle}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{[c.prenom, c.nom].filter(Boolean).join(' ') || c.nom}</span>
-                  <span style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                  <span style={{ fontWeight: 600, fontSize: TEXT.base }}>{[c.prenom, c.nom].filter(Boolean).join(' ') || c.nom}</span>
+                  <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                     {c.email || c.telephone || (c.estClient ? 'Client' : 'Fournisseur')}
                   </span>
                 </button>
@@ -146,8 +146,8 @@ export function GlobalSearch({ onClose, onSelect }) {
               <div style={sectionLabelStyle}>Produits</div>
               {results.produits.map((p) => (
                 <button key={`p-${p.id}`} onClick={() => onSelect({ kind: 'produit', item: p })} style={resultRowStyle}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{p.nom}</span>
-                  <span style={{ fontSize: 12, color: COLORS.inkSoft }}>{p.module}</span>
+                  <span style={{ fontWeight: 600, fontSize: TEXT.base }}>{p.nom}</span>
+                  <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{p.module}</span>
                 </button>
               ))}
             </div>
@@ -157,8 +157,8 @@ export function GlobalSearch({ onClose, onSelect }) {
               <div style={sectionLabelStyle}>Devis</div>
               {results.devis.map((d) => (
                 <button key={`d-${d.id}`} onClick={() => onSelect({ kind: 'devis', item: d })} style={resultRowStyle}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{d.numero}</span>
-                  <span style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                  <span style={{ fontWeight: 600, fontSize: TEXT.base }}>{d.numero}</span>
+                  <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                     {[d.clientPrenom, d.clientNom].filter(Boolean).join(' ')} — {d.statut}
                   </span>
                 </button>

@@ -4,7 +4,7 @@ import { Plus, Trash2, RefreshCw, ExternalLink, Video, AlertTriangle, BellRing, 
 import { getCameras, createCamera, deleteCamera, getCameraAlertes, marquerAlerteVue, regenererTokenCamera } from '../lib/api.js';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import { fmtDate } from '../lib/locale.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Surveillance — l'application ne stocke ni ne relaie aucune vidéo. Elle référence les caméras
 // et affiche ce que chacune expose déjà ; c'est le navigateur de l'utilisateur qui va chercher
@@ -36,7 +36,7 @@ function VueSnapshot({ camera }) {
 
   if (erreur) {
     return (
-      <div style={{ padding: 16, fontSize: 12.5, color: COLORS.red, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+      <div style={{ padding: 16, fontSize: TEXT.sm, color: COLORS.red, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
         <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>{t('surveillance.injoignable')}</span>
       </div>
@@ -71,7 +71,7 @@ function VueCamera({ camera }) {
   // bibliothèque de lecture pour un cas peu fréquent.
   if (camera.typeFlux === 'hls') {
     return (
-      <div style={{ padding: 16, fontSize: 12.5, color: COLORS.inkSoft }}>
+      <div style={{ padding: 16, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
         {t('surveillance.hlsNonLu')}{' '}
         <Button small variant="outline" onClick={() => window.open(camera.url, '_blank', 'noopener')}>
           <ExternalLink size={13} /> {t('surveillance.ouvrirFlux')}
@@ -106,13 +106,13 @@ function UrlWebhook({ camera, onRegenere, canManage }) {
   if (!camera.tokenAlerte) return null;
   return (
     <details style={{ padding: "8px 14px 12px" }}>
-      <summary style={{ cursor: "pointer", fontSize: 12, color: COLORS.inkSoft }}>
+      <summary style={{ cursor: "pointer", fontSize: TEXT.sm, color: COLORS.inkSoft }}>
         {t("surveillance.webhookTitre")}
       </summary>
-      <div style={{ fontSize: 11.5, color: COLORS.inkSoft, margin: "8px 0", lineHeight: 1.5 }}>
+      <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, margin: "8px 0", lineHeight: 1.5 }}>
         {t("surveillance.webhookAide")}
       </div>
-      <code style={{ display: "block", fontSize: 11, background: COLORS.surfaceAlt, padding: "7px 9px",
+      <code style={{ display: "block", fontSize: TEXT.xs, background: COLORS.surfaceAlt, padding: "7px 9px",
         borderRadius: RADIUS.control, wordBreak: "break-all", marginBottom: 8 }}>{url}</code>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <Button small variant="outline" onClick={copier}>
@@ -134,14 +134,14 @@ function UrlWebhook({ camera, onRegenere, canManage }) {
 function JournalAlertes({ alertes, onVue }) {
   const { t } = useTranslation();
   if (alertes.length === 0) {
-    return <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t("surveillance.aucuneAlerte")}</div></Card>;
+    return <Card><div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t("surveillance.aucuneAlerte")}</div></Card>;
   }
   const nonVues = alertes.filter((a) => !a.vue).length;
   return (
     <Card>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <BellRing size={15} />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{t("surveillance.alertesTitre")}</span>
+        <span style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("surveillance.alertesTitre")}</span>
         {nonVues > 0 && <Badge tone="red">{t("surveillance.nonVues", { count: nonVues })}</Badge>}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -150,11 +150,11 @@ function JournalAlertes({ alertes, onVue }) {
             gap: 10, padding: "8px 10px", borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`,
             background: a.vue ? "transparent" : COLORS.redSoft }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: a.vue ? 400 : 600 }}>
+              <div style={{ fontSize: TEXT.base, fontWeight: a.vue ? 400 : 600 }}>
                 {a.cameraNom}
                 {a.emplacementType ? " — " + t("surveillance.emplacements." + a.emplacementType) : ""}
               </div>
-              <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>
+              <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>
                 {t("surveillance.type." + a.type, { defaultValue: a.type })}
                 {a.occurrences > 1 ? " · " + t("surveillance.occurrences", { count: a.occurrences }) : ""}
                 {" · "}
@@ -249,17 +249,17 @@ export default function SurveillanceModule({ canManage = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>
           {t('surveillance.title')}
         </div>
-        <div style={{ fontSize: 13.5, color: COLORS.inkSoft, lineHeight: 1.6 }}>{t('surveillance.intro')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, lineHeight: 1.6 }}>{t('surveillance.intro')}</div>
       </Card>
 
       <JournalAlertes alertes={alertes} onVue={marquerVue} />
 
       {canManage && (
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{t('surveillance.ajouterTitre')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 10 }}>{t('surveillance.ajouterTitre')}</div>
           <form onSubmit={ajouter} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end' }}>
             <Field label={t('surveillance.nom')} value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} placeholder={t('surveillance.nomPlaceholder')} />
             <Select label={t('surveillance.emplacementType')} value={form.emplacementType} onChange={(e) => setForm({ ...form, emplacementType: e.target.value })}>
@@ -282,18 +282,18 @@ export default function SurveillanceModule({ canManage = false }) {
       {loading ? (
         <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('surveillance.chargement')}</div>
       ) : cameras.length === 0 ? (
-        <Card><div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('surveillance.aucune')}</div></Card>
+        <Card><div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('surveillance.aucune')}</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
           {cameras.map((c) => (
             <Card key={c.id} style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontWeight: 600, fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Video size={14} /> {c.nom}
                   </div>
                   {(c.emplacement || c.emplacementType) && (
-                    <div style={{ fontSize: 11.5, color: COLORS.inkSoft }}>{libelleEmplacement(c)}</div>
+                    <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>{libelleEmplacement(c)}</div>
                   )}
                 </div>
                 {canManage && (
@@ -306,7 +306,7 @@ export default function SurveillanceModule({ canManage = false }) {
               <VueCamera camera={c} />
               <UrlWebhook camera={c} onRegenere={regenerer} canManage={canManage} />
               {c.typeFlux === 'snapshot' && (
-                <div style={{ padding: '6px 14px 10px', fontSize: 11, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ padding: '6px 14px 10px', fontSize: TEXT.xs, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <RefreshCw size={11} /> {t('surveillance.rafraichi', { n: c.rafraichissement })}
                 </div>
               )}

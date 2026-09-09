@@ -7,7 +7,7 @@ import {
 } from '../lib/api.js';
 import { Badge, Button, Card, DataTable, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 const CATEGORIES = ['Tracteur/Machine', 'Véhicule', 'Outil manuel', 'Irrigation', 'Autre'];
 const ETATS = ['Fonctionnel', 'En panne', 'En maintenance', 'Hors service'];
@@ -168,7 +168,7 @@ export function EquipementsModule({ canManage = false }) {
     return (
       <Card>
         <p style={{ margin: 0, color: COLORS.red, fontWeight: 600 }}>{t('equipements.errorTitle')}</p>
-        <p style={{ margin: '4px 0 0', color: COLORS.inkSoft, fontSize: 13 }}>{error}</p>
+        <p style={{ margin: '4px 0 0', color: COLORS.inkSoft, fontSize: TEXT.base }}>{error}</p>
       </Card>
     );
   }
@@ -177,7 +177,7 @@ export function EquipementsModule({ canManage = false }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {canManage && (
         <Card>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{t('equipements.addTitle')}</div>
+          <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 10 }}>{t('equipements.addTitle')}</div>
           <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
             <Field label={t("equipements.nom")} placeholder={t("equipements.nomPlaceholder")} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
             <Select label={t("equipements.categorie")} value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
@@ -241,8 +241,8 @@ export function EquipementsModule({ canManage = false }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('equipements.editTitle')}</div>
-              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('equipements.editTitle')}</div>
+              <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
@@ -271,10 +271,10 @@ export function EquipementsModule({ canManage = false }) {
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{detailEquipement.nom}</div>
-                <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('equipements.maintenanceTitle')}</div>
+                <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{detailEquipement.nom}</div>
+                <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('equipements.maintenanceTitle')}</div>
               </div>
-              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: 18 }}>×</button>
+              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
 
             {canManage && (
@@ -295,8 +295,8 @@ export function EquipementsModule({ canManage = false }) {
                 {maintenance.map(m => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{m.description}</div>
-                      <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                      <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{m.description}</div>
+                      <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                         {m.date ? fmtDate(m.date) : '—'}
                         {m.cout != null ? ` · ${fmtMoney(m.cout)}` : ''}
                       </div>

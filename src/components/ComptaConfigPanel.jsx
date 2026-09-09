@@ -6,7 +6,7 @@ import {
   getAccounts, createAccount, deleteAccount,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 // Référentiel compact « Comptabilité — Configuration » : journaux (account.journal-like) +
 // plan de comptes (account.account-like). Étape 2 — rien ne les consomme encore
@@ -84,14 +84,14 @@ export default function ComptaConfigPanel() {
 
   return (
     <Card>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('comptaConfig.title')}
       </button>
 
       {open && (
         <div style={{ marginTop: 14, display: 'grid', gap: 22 }}>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>{t('comptaConfig.journals')} ({journals.length})</div>
+            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 8 }}>{t('comptaConfig.journals')} ({journals.length})</div>
             <form onSubmit={ajouterJournal} style={gridForm}>
               <Field label={t('comptaConfig.name')} value={jForm.name} onChange={(e) => setJForm({ ...jForm, name: e.target.value })} />
               <Field label={t('comptaConfig.code')} value={jForm.code} onChange={(e) => setJForm({ ...jForm, code: e.target.value })} />
@@ -119,7 +119,7 @@ export default function ComptaConfigPanel() {
                         <button
                           onClick={() => activerHash(j)}
                           title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
-                          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? COLORS.green : COLORS.inkFaint, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? COLORS.green : COLORS.inkFaint, display: 'flex', alignItems: 'center', gap: 4, fontSize: TEXT.sm }}
                         >
                           <Lock size={13} /> {j.restrictModeHashTable ? t('comptaConfig.hashActive') : t('comptaConfig.hashInactive')}
                         </button>
@@ -133,7 +133,7 @@ export default function ComptaConfigPanel() {
           </div>
 
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>{t('comptaConfig.accounts')} ({accounts.length})</div>
+            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 8 }}>{t('comptaConfig.accounts')} ({accounts.length})</div>
             <form onSubmit={ajouterCompte} style={gridForm}>
               <Field label={t('comptaConfig.code')} value={aForm.code} onChange={(e) => setAForm({ ...aForm, code: e.target.value })} />
               <Field label={t('comptaConfig.name')} value={aForm.name} onChange={(e) => setAForm({ ...aForm, name: e.target.value })} />

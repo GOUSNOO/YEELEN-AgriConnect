@@ -6,7 +6,7 @@ import {
   getProduitTemplates, getProduitTemplate, createProduitTemplate, regenererVariantesTemplate, deleteProduitTemplate,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Gabarits/variantes + attributs (product.template / product.attribute-like) — étape 2 de
 // l'alignement Odoo produit/stock. Panneau repliable dans StocksTab, sur le modèle de
@@ -168,14 +168,14 @@ export default function ProduitTemplatesPanel({ module, categories }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('gabarits.title')} {loaded ? `(${templates.length})` : ''}
       </button>
 
       {open && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 22 }}>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>{t('gabarits.attributsTitle')}</div>
+            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 8 }}>{t('gabarits.attributsTitle')}</div>
             <form onSubmit={ajouterAttribut} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 10 }}>
               <Field label={t('gabarits.attributNom')} value={attrForm.nom} onChange={(e) => setAttrForm({ ...attrForm, nom: e.target.value })} />
               <Field label={t('gabarits.attributValeurs')} placeholder={t('gabarits.attributValeursPlaceholder')} value={attrForm.valeurs} onChange={(e) => setAttrForm({ ...attrForm, valeurs: e.target.value })} />
@@ -190,7 +190,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
                     {a.valeurs.map((v) => (
-                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: 12.5 }}>
+                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: TEXT.sm }}>
                         {v.valeur}
                         <button type="button" onClick={() => supprimerValeur(v.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex', padding: 0 }}><Trash2 size={11} /></button>
                       </span>
@@ -201,17 +201,17 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                       onChange={(e) => setValeurInputs((s) => ({ ...s, [a.id]: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ajouterValeur(a.id); } }}
                       className="flat-input"
-                      style={{ width: 120, fontSize: 12.5 }}
+                      style={{ width: 120, fontSize: TEXT.sm }}
                     />
                   </div>
                 </div>
               ))}
-              {attributs.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('gabarits.aucunAttribut')}</div>}
+              {attributs.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('gabarits.aucunAttribut')}</div>}
             </div>
           </div>
 
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>{t('gabarits.templatesTitle')}</div>
+            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 8 }}>{t('gabarits.templatesTitle')}</div>
             <form onSubmit={creerGabarit} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, alignItems: 'end' }}>
                 <Field label={t('gabarits.templateNom')} value={tplForm.nom} onChange={(e) => setTplForm({ ...tplForm, nom: e.target.value })} />
@@ -223,15 +223,15 @@ export default function ProduitTemplatesPanel({ module, categories }) {
               </div>
               {attributs.some((a) => a.valeurs.length > 0) && (
                 <div>
-                  <div style={{ fontSize: 12.5, color: COLORS.inkSoft, marginBottom: 6 }}>{t('gabarits.selectionnerValeurs')}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 6 }}>{t('gabarits.selectionnerValeurs')}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {attributs.filter((a) => a.valeurs.length > 0).map((a) => (
                       <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, minWidth: 90 }}>{a.nom}</span>
+                        <span style={{ fontSize: TEXT.sm, fontWeight: 600, minWidth: 90 }}>{a.nom}</span>
                         {a.valeurs.map((v) => {
                           const selected = (tplForm.selection[a.id] || new Set()).has(v.id);
                           return (
-                            <label key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12.5, background: selected ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', cursor: 'pointer' }}>
+                            <label key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: TEXT.sm, background: selected ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', cursor: 'pointer' }}>
                               <input type="checkbox" checked={selected} onChange={() => toggleValeurSelection(a.id, v.id)} style={{ margin: 0 }} />
                               {v.valeur}
                             </label>
@@ -274,7 +274,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                       <tr>
                         <td colSpan={4} style={{ background: COLORS.surfaceAlt }}>
                           {(templateDetail.variantes || []).length === 0 ? (
-                            <div style={{ color: COLORS.inkSoft, fontSize: 13, padding: 8 }}>{t('gabarits.aucuneVariante')}</div>
+                            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base, padding: 8 }}>{t('gabarits.aucuneVariante')}</div>
                           ) : (
                             <table className="data-table" style={{ margin: '4px 0' }}>
                               <thead><tr style={{ color: COLORS.inkSoft }}>
@@ -302,7 +302,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                 ))}
               </tbody>
             </DataTable>
-            {templates.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13, marginTop: 8 }}>{t('gabarits.aucunGabarit')}</div>}
+            {templates.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base, marginTop: 8 }}>{t('gabarits.aucunGabarit')}</div>}
           </div>
         </div>
       )}

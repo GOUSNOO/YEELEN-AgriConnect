@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { getProduitRecettes, getOrdresTransformation, getOrdreTransformation, createOrdreTransformation, deleteOrdreTransformation } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 // Transformation agroalimentaire, étape 2 : ordres de transformation — exécute une recette
 // (panneau ProduitRecettesPanel juste au-dessus) et répercute réellement la consommation des
@@ -90,14 +90,14 @@ export default function OrdresTransformationPanel({ module }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('ordresTransformation.title')} {loaded ? `(${ordres.length})` : ''}
       </button>
 
       {open && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {recettes.length === 0 ? (
-            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('ordresTransformation.aucuneRecetteDisponible')}</div>
+            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('ordresTransformation.aucuneRecetteDisponible')}</div>
           ) : (
             <form onSubmit={executerOrdre} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
               <Select label={t('recettes.title')} value={form.recetteId} onChange={(e) => setForm({ ...form, recetteId: e.target.value })}>
@@ -143,7 +143,7 @@ export default function OrdresTransformationPanel({ module }) {
                   {expandedId === o.id && (
                     <tr>
                       <td colSpan={6} style={{ background: COLORS.surfaceAlt }}>
-                        <div style={{ padding: 8, fontSize: 13 }}>
+                        <div style={{ padding: 8, fontSize: TEXT.base }}>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('ordresTransformation.ingredientsConsommes')}</div>
                           {(detailParOrdre[o.id]?.lignes || []).length === 0 ? (
                             <span style={{ color: COLORS.inkSoft }}>—</span>
@@ -164,7 +164,7 @@ export default function OrdresTransformationPanel({ module }) {
               ))}
             </tbody>
           </DataTable>
-          {ordres.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('ordresTransformation.aucunOrdre')}</div>}
+          {ordres.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('ordresTransformation.aucunOrdre')}</div>}
         </div>
       )}
     </Card>

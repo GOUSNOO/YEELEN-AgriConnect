@@ -4,7 +4,7 @@ import { Sun, CloudRain, Wind, Droplet, Thermometer, Sunrise, Sunset } from 'luc
 import { getMeteo, getParcellesLocalisees } from '../lib/api.js';
 import { Card, Badge, Select } from './ui.jsx';
 import { fmtDate } from '../lib/locale.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Palette locale (App.jsx:COLORS n'est pas exporté — même convention que FeedbackModule/
 // PaymentTermsPanel : valeurs hexadécimales dupliquées, pas une nouvelle dépendance partagée).
@@ -25,8 +25,8 @@ function StatTile({ icon: Icon, label, value, accent }) {
         <Icon size={16} color={accent} />
       </div>
       <div>
-        <div style={{ fontSize: 11.5, color: C.inkSoft, fontWeight: 600 }}>{label}</div>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: C.ink }}>{value}</div>
+        <div style={{ fontSize: TEXT.xs, color: C.inkSoft, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.md, fontWeight: 700, color: C.ink }}>{value}</div>
       </div>
     </div>
   );
@@ -73,7 +73,7 @@ export default function MeteoModule() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>{t('meteo.title')}</div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('meteo.title')}</div>
           {parcelles.length > 0 && (
             <Select label={t('meteo.selectorLabel')} value={parcelleId} onChange={(e) => setParcelleId(e.target.value)} style={{ minWidth: 200 }}>
               <option value="">{t('meteo.selectEntreprise')}</option>
@@ -84,20 +84,20 @@ export default function MeteoModule() {
       </Card>
 
       {loading ? (
-        <Card><div style={{ fontSize: 13, color: C.inkSoft }}>{t('common.loading')}</div></Card>
+        <Card><div style={{ fontSize: TEXT.base, color: C.inkSoft }}>{t('common.loading')}</div></Card>
       ) : nonConfiguree ? (
         <Card>
-          <div style={{ fontSize: 13, color: C.inkSoft }}>{t('meteo.nonConfiguree')}</div>
+          <div style={{ fontSize: TEXT.base, color: C.inkSoft }}>{t('meteo.nonConfiguree')}</div>
         </Card>
       ) : error ? (
         <Card>
-          <div style={{ fontSize: 13, color: C.inkSoft }}>{t('meteo.indisponible')}</div>
+          <div style={{ fontSize: TEXT.base, color: C.inkSoft }}>{t('meteo.indisponible')}</div>
         </Card>
       ) : data && (
         <>
           <Card>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{data.ville}</div>
+              <div style={{ fontSize: TEXT.md, fontWeight: 700, color: C.ink }}>{data.ville}</div>
               <Badge tone={data.source === 'parcelle' ? 'blue' : 'green'}>
                 {data.source === 'parcelle' ? t('meteo.sourceParcelle') : t('meteo.sourceEntreprise')}
               </Badge>
@@ -112,7 +112,7 @@ export default function MeteoModule() {
 
           {data.alertes.length > 0 && (
             <Card>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('meteo.alertesTitle')}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('meteo.alertesTitle')}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {data.alertes.map((a) => (
                   <div key={a.type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -124,7 +124,7 @@ export default function MeteoModule() {
           )}
 
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('meteo.solTitle')}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('meteo.solTitle')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               <StatTile icon={Thermometer} label={t('meteo.solSurface')} value={data.sol.temperatureSurface != null ? `${data.sol.temperatureSurface}°` : '—'} accent={C.ochre} />
               <StatTile icon={Thermometer} label={t('meteo.solProfondeur')} value={data.sol.temperatureProfondeur != null ? `${data.sol.temperatureProfondeur}°` : '—'} accent={C.ochre} />
@@ -135,7 +135,7 @@ export default function MeteoModule() {
 
           {data.previsions[0] && (
             <Card>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{t('meteo.aujourdhui')}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('meteo.aujourdhui')}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                 <StatTile icon={Sunrise} label={t('meteo.leverSoleil')} value={data.previsions[0].leverSoleil ? data.previsions[0].leverSoleil.slice(11, 16) : '—'} accent={C.ochre} />
                 <StatTile icon={Sunset} label={t('meteo.coucherSoleil')} value={data.previsions[0].coucherSoleil ? data.previsions[0].coucherSoleil.slice(11, 16) : '—'} accent={C.ochre} />
@@ -146,7 +146,7 @@ export default function MeteoModule() {
           )}
 
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 6 }}>{t('meteo.previsionTitle')}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>{t('meteo.previsionTitle')}</div>
             <div style={{ overflowX: 'auto' }}>
               <table className="data-table">
                 <thead>

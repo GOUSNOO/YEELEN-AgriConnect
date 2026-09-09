@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Lock, LogOut, ShieldAlert } from 'lucide-react';
 import { Card, Button } from './ui.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Écran plein écran (overlay fixed, au-dessus de tout le shell) quand subscriptionGuard
 // renvoie mode==='locked' — abonnement expiré au-delà de la grâce, ou compte suspendu (voir
@@ -22,10 +22,10 @@ export default function AbonnementBloque({ billing, onLogout }) {
             <div style={{ width: 48, height: 48, borderRadius: RADIUS.card, background: COLORS.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {suspended ? <ShieldAlert size={24} color={COLORS.red} /> : <Lock size={24} color={COLORS.red} />}
             </div>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.lg }}>
               {suspended ? t('billing.blocked.suspendedTitle') : t('billing.blocked.expiredTitle')}
             </div>
-            <div style={{ fontSize: 13.5, color: COLORS.inkSoft }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
               {suspended ? t('billing.blocked.suspendedDesc') : t('billing.blocked.expiredDesc')}
             </div>
             <Button variant="ghost" onClick={onLogout} style={{ marginTop: 10 }}>

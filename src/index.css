@@ -1,53 +1,43 @@
+/* Base du document.
+ *
+ * Ce fichier remplace le gabarit de départ de Vite, resté actif jusqu'ici sans jamais avoir
+ * été décidé pour cette application. Ce qu'il imposait, et pourquoi c'est parti :
+ *
+ *   - `#root { text-align: center }` : tout le contenu héritait du texte centré. Les 37
+ *     `textAlign: 'left'` posés en style inline dans le JSX ne sont pas des choix de mise en
+ *     page, ce sont des réparations de ce défaut. Ils deviennent redondants mais restent sans
+ *     effet de bord, on les laisse en place.
+ *   - `font: 18px/145%` + `letter-spacing: .18px` + `color: #6b6375` : une base de 18 px et un
+ *     texte gris-violet, contredits partout en style inline. La base est maintenant celle que
+ *     l'application utilise réellement (voir TEXT.base dans lib/theme.js).
+ *   - `color-scheme: light dark` et son bloc `prefers-color-scheme` : chez un utilisateur dont
+ *     le système est en thème sombre, les contrôles natifs (listes déroulantes, champs,
+ *     sélecteurs de date) se rendaient en sombre par-dessus une palette claire. Le contournement
+ *     local dans App.css (bordures de .data-table figées en dur plutôt qu'en var(--border))
+ *     traitait le symptôme ; `color-scheme: light` traite la cause — l'application n'a qu'un
+ *     seul thème.
+ *   - `--accent: #aa3bff`, `.counter`, `.hero`, `#next-steps`, `#docs`, `#spacer`, `.ticks`,
+ *     `h1 { 56px }`, `code {}` : sélecteurs du gabarit, sans aucun usage dans le JSX.
+ *
+ * L'import des polices vit ici plutôt que dans le bloc <style> d'App.jsx : ce bloc n'est rendu
+ * que par le shell de l'application, si bien que la page publique de devis (src/components/
+ * DevisPublicView.jsx, montée hors de <App/>) demandait Inter sans jamais la charger.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px; /* TEXT.base */
+  line-height: 1.5;
+  color: #22271d; /* COLORS.ink */
+  background: #fbfaf4; /* COLORS.bg */
+  color-scheme: light;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
 }
 
 body {
@@ -56,51 +46,34 @@ body {
 
 #root {
   max-width: 100%;
-  text-align: center;
   min-height: 100svh;
   box-sizing: border-box;
 }
 
+/* Le JSX emploie <h1>/<h2>/<h3> et <p> pour la sémantique du document ; l'apparence est posée
+   au cas par cas en style inline. On leur donne donc une taille de l'échelle plutôt que celles
+   du navigateur (h1 à 2em, marges verticales), qui n'ont jamais correspondu à rien ici. */
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h2,
+h3 {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-weight: 600;
+  color: inherit;
+  margin: 0 0 8px;
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+  font-size: 22px; /* TEXT.title */
 }
+
 h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
+  font-size: 18px; /* TEXT.lg */
 }
+
+h3 {
+  font-size: 15px; /* TEXT.md */
+}
+
 p {
   margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }

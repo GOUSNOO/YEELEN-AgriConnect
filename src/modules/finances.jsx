@@ -14,7 +14,7 @@ import {
   createBanque,
   deleteBanque,
 } from '../lib/api';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 // Ce module portait sa propre copie de COLORS (une troisième palette, avec les mêmes noms
 // de jetons et un fond beige légèrement différent). Elle est remplacée par la palette
@@ -159,7 +159,7 @@ export function FinancesModule({ role }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
@@ -167,33 +167,33 @@ export function FinancesModule({ role }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardCaisse')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalCaisse)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardCaisse')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalCaisse)}</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardBanque')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{fmtMoney(totalBanque)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardBanque')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{fmtMoney(totalBanque)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardDepenses')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalDepenses)}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardDepenses')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalDepenses)}</div>
         </Card>
         <Card style={{ background: beneficeNet >= 0 ? COLORS.greenSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: 12, color: beneficeNet >= 0 ? COLORS.green : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardBenefice')}</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: beneficeNet >= 0 ? COLORS.green : COLORS.red }}>{fmtMoney(beneficeNet)}</div>
+          <div style={{ fontSize: TEXT.sm, color: beneficeNet >= 0 ? COLORS.green : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('finances.cardBenefice')}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: beneficeNet >= 0 ? COLORS.green : COLORS.red }}>{fmtMoney(beneficeNet)}</div>
         </Card>
       </div>
 
       {soldesParBanque.length > 0 && (
         <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
             {t('finances.soldesParCompte')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
             {soldesParBanque.map(b => (
               <div key={b.id} style={{ padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 12.5, color: COLORS.inkSoft, fontWeight: 600 }}>{b.nomBanque}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700 }}>{fmtMoney(b.soldeActuel)}</div>
+                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600 }}>{b.nomBanque}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.md, fontWeight: 700 }}>{fmtMoney(b.soldeActuel)}</div>
               </div>
             ))}
           </div>
@@ -202,10 +202,10 @@ export function FinancesModule({ role }) {
 
       {isAdmin && (
         <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
             {t('finances.comptePrincipalTitle')}
           </div>
-          <div style={{ fontSize: 13, color: COLORS.inkSoft, marginBottom: 12 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 12 }}>
             {t('finances.comptePrincipalHint')}
           </div>
           <Select
@@ -221,7 +221,7 @@ export function FinancesModule({ role }) {
           <button
             type="button"
             onClick={() => setShowAddBanque(v => !v)}
-            style={{ marginTop: 12, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ marginTop: 12, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <Plus size={14} /> {showAddBanque ? t('finances.addBanqueClose') : t('finances.addBanqueToggle')}
           </button>
@@ -235,7 +235,7 @@ export function FinancesModule({ role }) {
       )}
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>{t('finances.newOperation')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('finances.newOperation')}</div>
         <form onSubmit={addEntry} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
           <Select label={t('finances.categorie')} value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value, banqueId: '' })}>
             {ALL_CATEGORIES.map(cat => <option key={cat} value={cat}>{catLabel(cat)}</option>)}
@@ -255,22 +255,22 @@ export function FinancesModule({ role }) {
         </form>
       </Card>
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t('finances.chartsTitle')}</div>
+        <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 8 }}>{t('finances.chartsTitle')}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('finances.chartRevenus')}</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('finances.chartRevenus')}</div>
             <MiniChart data={chartRevenus.length ? chartRevenus : [{ label: '-', value: 0 }]} color={COLORS.green} />
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t('finances.chartDepenses')}</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('finances.chartDepenses')}</div>
             <MiniChart data={chartDepenses.length ? chartDepenses : [{ label: '-', value: 0 }]} color={COLORS.red} />
           </div>
         </div>
       </Card>
       <Card style={{ padding: 0, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TEXT.base }}>
           <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: 12 }}>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft, fontSize: TEXT.sm }}>
               <th style={{ padding: '12px 16px' }}>{t('finances.date')}</th>
               <th>{t('finances.categorie')}</th>
               <th>{t('finances.colDescription')}</th>
@@ -287,10 +287,10 @@ export function FinancesModule({ role }) {
               const dateLabel = entry.date ? fmtDate(entry.date) : '-';
               return (
                 <tr key={entry.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{dateLabel}</td>
+                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.sm }}>{dateLabel}</td>
                   <td>
                     <Badge tone={isDepense ? 'red' : 'green'}>{catLabel(entry.categorie)}</Badge>
-                    {entry.banqueNom && <span style={{ fontSize: 11, color: COLORS.inkSoft, marginLeft: 6 }}>({entry.banqueNom})</span>}
+                    {entry.banqueNom && <span style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginLeft: 6 }}>({entry.banqueNom})</span>}
                   </td>
                   <td style={{ color: COLORS.inkSoft }}>{entry.description}</td>
                   <td style={{ fontWeight: 600, color: isDepense ? COLORS.red : COLORS.green }}>
@@ -371,12 +371,12 @@ export function BanquesModule({ onCountChange }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
           {t('finances.banques.addTitle')}
         </div>
 
         {formError && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
             {formError}
           </div>
         )}
@@ -393,22 +393,22 @@ export function BanquesModule({ onCountChange }) {
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
           {t('finances.banques.listTitle')}
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: 13, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
             {error}
           </div>
         )}
 
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: COLORS.inkSoft }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, color: COLORS.inkSoft }}>
             <Loader2 size={15} className="spin" /> {t('common.loading')}
           </div>
         ) : banques.length === 0 ? (
-          <div style={{ fontSize: 13, color: COLORS.inkSoft }}>{t('finances.banques.empty')}</div>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('finances.banques.empty')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {banques.map(b => (
@@ -417,14 +417,14 @@ export function BanquesModule({ onCountChange }) {
                 padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`,
               }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{b.nomBanque}</div>
-                  <div style={{ fontSize: 12, color: COLORS.inkSoft }}>
+                  <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{b.nomBanque}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                     {b.typeCompte || t('finances.banques.typeNonRenseigne')}
                     {b.iban && ` · ${b.iban}`}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtMoney(b.solde)}</span>
+                  <span style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fmtMoney(b.solde)}</span>
                   <button onClick={() => removeBanque(b.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
                     <Trash2 size={15} />
                   </button>

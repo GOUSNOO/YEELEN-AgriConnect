@@ -9,7 +9,7 @@ import {
 } from '../lib/api.js';
 import { fmtDate } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
 
 const fr = (d) => (d ? fmtDate(d) : '—');
 
@@ -53,7 +53,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
 
   return (
     <Card>
-      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('rh.referentielsTitle')}
       </button>
 
@@ -64,7 +64,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
               <button key={s.id} onClick={() => setSub(s.id)} style={{
                 background: 'transparent', color: sub === s.id ? COLORS.ink : COLORS.inkSoft,
                 border: 'none', borderBottom: sub === s.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
-                padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                padding: '7px 12px', fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer',
               }}>{s.label}</button>
             ))}
           </div>
@@ -107,7 +107,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
                 <Field label={t('rh.ferieLibelle')} placeholder={t('common.optionalPlaceholder')} value={ferieForm.nom} onChange={e => setFerieForm({ ...ferieForm, nom: e.target.value })} />
                 <Button type="submit" variant="outline"><Plus size={14} /> {t('common.add')}</Button>
               </form>
-              <p style={{ fontSize: 12, color: COLORS.inkSoft, marginBottom: 10 }}>{t('rh.ferieHint')}</p>
+              <p style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 10 }}>{t('rh.ferieHint')}</p>
               {feries.map(f => (
                 <Row key={f.id} label={`${fr(f.date)}${f.nom ? ` — ${f.nom}` : ''}`} onDelete={async () => { await deleteJourFerie(f.id); after(); }} />
               ))}
@@ -119,10 +119,10 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
               <form onSubmit={async e => { e.preventDefault(); if (!typeForm.nom.trim()) return; try { await createCongeType(typeForm); notifySuccess(t('rh.typeAdded')); setTypeForm({ nom: '', paye: true, justificatifRequis: false }); after(); } catch (err) { notifyError(err); } }}
                 style={{ display: 'flex', gap: 12, alignItems: 'end', marginBottom: 12, flexWrap: 'wrap' }}>
                 <Field label={t('rh.typeNom')} value={typeForm.nom} onChange={e => setTypeForm({ ...typeForm, nom: e.target.value })} />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
                   <input type="checkbox" checked={typeForm.paye} onChange={e => setTypeForm({ ...typeForm, paye: e.target.checked })} /> {t('rh.typePaye')}
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
                   <input type="checkbox" checked={typeForm.justificatifRequis} onChange={e => setTypeForm({ ...typeForm, justificatifRequis: e.target.checked })} /> {t('rh.typeJustificatif')}
                 </label>
                 <Button type="submit" variant="outline"><Plus size={14} /> {t('common.add')}</Button>
@@ -140,7 +140,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
 
 function Row({ label, onDelete }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginBottom: 6, fontSize: 13 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginBottom: 6, fontSize: TEXT.base }}>
       <span>{label}</span>
       <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
     </div>

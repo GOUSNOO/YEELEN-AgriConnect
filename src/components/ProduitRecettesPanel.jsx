@@ -6,7 +6,7 @@ import {
   getProduitRecetteLignes, createProduitRecetteLigne, deleteProduitRecetteLigne,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS } from '../lib/theme.js';
+import { COLORS, TEXT } from '../lib/theme.js';
 
 // Transformation agroalimentaire, étape 1 : recettes (mrp.bom-like côté ERP de référence).
 // Panneau repliable dans StocksTab, sur le modèle de ProduitTemplatesPanel/PaymentTermsPanel.
@@ -118,7 +118,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 15, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('recettes.title')} {loaded ? `(${recettes.length})` : ''}
       </button>
 
@@ -165,13 +165,13 @@ export default function ProduitRecettesPanel({ module, produits }) {
                       <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
                         <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {(lignesParRecette[r.id] || []).map((l) => (
-                            <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
+                            <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: TEXT.base }}>
                               <span>{l.produitNom} — {l.quantite}{l.notes ? ` (${l.notes})` : ''}</span>
                               <button type="button" onClick={() => supprimerLigne(r.id, l.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><Trash2 size={12} /></button>
                             </div>
                           ))}
                           {(lignesParRecette[r.id] || []).length === 0 && (
-                            <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('recettes.aucunIngredient')}</div>
+                            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('recettes.aucunIngredient')}</div>
                           )}
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginTop: 6 }}>
                             <select
@@ -199,7 +199,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
               ))}
             </tbody>
           </DataTable>
-          {recettes.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: 13 }}>{t('recettes.aucuneRecette')}</div>}
+          {recettes.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('recettes.aucuneRecette')}</div>}
         </div>
       )}
     </Card>
