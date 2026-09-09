@@ -4,7 +4,11 @@
 // conversion multi-devise). Voir CLAUDE.md « Internationalisation ».
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
-export const DEFAULT_LOCALE_CONFIG = { devise: 'XOF', locale: 'fr-FR' };
+// `fuseau` complète devise/locale : il ne sert pas au formatage mais à savoir de quel jour
+// civil relève une date. Le serveur date les pièces dans ce fuseau (fonction SQL
+// date_entreprise) ; le filtrage par période côté client doit donc raisonner dans le même,
+// sinon une vente saisie en soirée bascule d'un jour dans les rapports.
+export const DEFAULT_LOCALE_CONFIG = { devise: 'XOF', locale: 'fr-FR', fuseau: 'UTC' };
 
 // Copie mutable au niveau module : permet aux helpers autonomes (fmtMoney/fmtDate/…)
 // d'être appelés depuis du code hors composant (fonctions utilitaires, helpers de rendu
@@ -19,8 +23,28 @@ export function setLocaleConfigGlobal(next) {
   _config = {
     devise: next?.devise || DEFAULT_LOCALE_CONFIG.devise,
     locale: next?.locale || DEFAULT_LOCALE_CONFIG.locale,
+    fuseau: next?.fuseau || DEFAULT_LOCALE_CONFIG.fuseau,
   };
   return _config;
+}
+
+// Jour civil (AAAA-MM-JJ) d'une date, vu depuis le fuseau de l'entreprise. `en-CA` est
+// utilisé parce que son format est justement AAAA-MM-JJ ; c'est un détail d'implémentation,
+// pas la langue de l'utilisateur.
+export function jourEntreprise(d, fuseau) {
+  // new Date(null) vaut 1970-01-01, pas une date invalide : on écarte les valeurs vides avant.
+  if (d == null || d === '') return null;
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: fuseau || getLocaleConfig().fuseau || 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(date);
+  } catch {
+    // Fuseau refusé par le navigateur : on retombe sur UTC plutôt que de casser le filtre.
+    return date.toISOString().slice(0, 10);
+  }
 }
 
 const isBlank = (v) => v == null || v === '' || Number.isNaN(Number(v));
@@ -105,6 +129,31 @@ export function useLocale() {
   if (ctx) return ctx;
   return { ...getLocaleConfig(), setLocaleConfig: () => {}, fmtMoney, fmtNumber, fmtDate };
 }
+
+// Fuseaux proposés dans les réglages. La liste vient du navigateur quand il sait la donner
+// (Intl.supportedValuesOf : ~400 identifiants IANA, exactement ceux que Postgres reconnaît
+// côté serveur), sinon on retombe sur une sélection couvrant les grandes régions — l'appli
+// vise tous les continents, une liste franco-africaine seule serait un choix par défaut
+// déguisé. Le serveur valide de toute façon la valeur reçue contre pg_timezone_names.
+const FUSEAUX_REPLI = [
+  'UTC',
+  'Africa/Abidjan', 'Africa/Algiers', 'Africa/Bamako', 'Africa/Casablanca', 'Africa/Dakar',
+  'Africa/Douala', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi', 'Africa/Tunis',
+  'America/Bogota', 'America/Chicago', 'America/Los_Angeles', 'America/Mexico_City',
+  'America/Montreal', 'America/New_York', 'America/Sao_Paulo',
+  'Asia/Bangkok', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Shanghai', 'Asia/Tokyo',
+  'Australia/Sydney',
+  'Europe/Berlin', 'Europe/Brussels', 'Europe/Istanbul', 'Europe/Lisbon', 'Europe/London',
+  'Europe/Madrid', 'Europe/Paris', 'Europe/Rome',
+];
+
+export const FUSEAUX = (() => {
+  try {
+    const dispo = Intl.supportedValuesOf('timeZone');
+    if (Array.isArray(dispo) && dispo.length > 0) return ['UTC', ...dispo.filter((z) => z !== 'UTC')];
+  } catch { /* navigateur sans supportedValuesOf */ }
+  return FUSEAUX_REPLI;
+})();
 
 // Devises et locales proposées dans les réglages (liste courte, extensible).
 export const DEVISES = [

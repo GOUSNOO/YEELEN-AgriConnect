@@ -91,8 +91,11 @@ describe('fmtDate (locale de l\'entreprise)', () => {
 describe('setLocaleConfigGlobal / getLocaleConfig', () => {
   test('normalise les valeurs absentes vers les défauts', () => {
     expect(setLocaleConfigGlobal({})).toEqual(DEFAULT_LOCALE_CONFIG);
-    expect(setLocaleConfigGlobal({ devise: 'EUR' })).toEqual({ devise: 'EUR', locale: 'fr-FR' });
-    expect(getLocaleConfig()).toEqual({ devise: 'EUR', locale: 'fr-FR' });
+    // `fuseau` a rejoint devise/locale : il sert à savoir de quel jour civil relève une date,
+    // et retombe sur UTC comme le serveur quand l'entreprise n'a rien choisi.
+    expect(setLocaleConfigGlobal({ devise: 'EUR' })).toEqual({ devise: 'EUR', locale: 'fr-FR', fuseau: 'UTC' });
+    expect(getLocaleConfig()).toEqual({ devise: 'EUR', locale: 'fr-FR', fuseau: 'UTC' });
+    expect(setLocaleConfigGlobal({ fuseau: 'Europe/Paris' }).fuseau).toBe('Europe/Paris');
   });
 });
 

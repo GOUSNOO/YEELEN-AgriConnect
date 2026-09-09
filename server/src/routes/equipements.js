@@ -139,8 +139,8 @@ router.post('/:id/maintenance', authRequired, requireRole('admin', 'directeur', 
     }
     const result = await pool.query(
       `INSERT INTO equipements_maintenance (equipement_id, user_id, date, description, cout)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5) RETURNING ${MAINTENANCE_COLUMNS}`,
-      [req.params.id, req.user.sub, date || null, description, cout ?? null]
+       VALUES ($1, $2, COALESCE($3, date_entreprise($6)), $4, $5) RETURNING ${MAINTENANCE_COLUMNS}`,
+      [req.params.id, req.user.sub, date || null, description, cout ?? null, req.user.entrepriseId]
     );
     return res.status(201).json({ maintenance: result.rows[0] });
   } catch (err) {

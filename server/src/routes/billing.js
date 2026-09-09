@@ -222,7 +222,7 @@ router.post('/entreprises/:id/activer', ...ecritureAdmin, async (req, res) => {
     );
     await client.query(
       `INSERT INTO abonnement_paiements (entreprise_id, montant, devise, periode_debut, periode_fin, moyen, reference, note, cree_par_user_id)
-       VALUES ($1, $2, $3, CURRENT_DATE, $4::date, $5, $6, $7, $8)`,
+       VALUES ($1, $2, $3, date_entreprise($1), $4::date, $5, $6, $7, $8)`,
       [req.params.id, montant === '' || montant == null ? null : Number(montant), devise || null,
        upd.rows[0].activated_until, moyen || null, reference || null, note || null, req.user.sub]
     );

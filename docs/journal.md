@@ -3519,3 +3519,66 @@ contient encore la majorité des modules — Cultures, Poulailler, Pisciculture,
 Contacts, Finances… On ne peut pas charger paresseusement ce qui vit dans le même fichier.
 Descendre nettement plus bas suppose l'extraction d'`App.jsx` en modules séparés, chantier
 explicitement différé à l'avant-production (mémoire `project_appjsx_extraction_deferred`).
+
+### 2026-09-09 — Fuseau horaire par entreprise (décalage serveur/utilisateur)
+
+Le décalage repéré lors de l'audit précédent, traité ici. Le serveur et la base tournent en
+**UTC** : `CURRENT_DATE` y renvoyait donc la date civile UTC, alors que le filtrage par période
+côté client raisonnait dans le fuseau du **navigateur**. Deux horloges, deux réponses. Une
+vente saisie à 00h30 à Paris (22h30 UTC la veille) était datée de la veille par le serveur et
+disparaissait du rapport « Journalier » — c'est très exactement ce qui avait été observé, et
+que j'avais d'abord attribué à tort à un bug de `matchesPeriod`, lequel était correct.
+
+**Périmètre réel : 24 emplacements, pas 39.** Le chiffre annoncé au départ comptait aussi les
+`now()`, qui écrivent des `timestamptz` — des instants absolus, correctement restitués quel que
+soit le fuseau. Seules les **dates civiles** (`CURRENT_DATE` sur des colonnes `DATE`) étaient
+concernées.
+
+**Le fuseau est porté par l'ENTREPRISE**, pas par l'utilisateur : une pièce est datée dans le
+fuseau de la société (convention comptable), pas dans celui de l'employé en déplacement — et
+l'entreprise a déjà une localisation en base (ville/latitude/longitude, posées pour la météo).
+Nouvelle colonne `entreprises.fuseau TEXT NOT NULL DEFAULT 'UTC'` : le défaut reproduit le
+comportement actuel, donc **aucune entreprise existante ne voit ses dates bouger**.
+
+**Une fonction SQL plutôt que 24 requêtes paramétrées.** `date_entreprise(p_entreprise_id)`
+(plpgsql, `STABLE`) remplace `CURRENT_DATE` partout. Écrite en plpgsql avec un handler
+d'exception, et non en SQL validant contre `pg_timezone_names` : cette vue compte ~1200 lignes
+et la fonction est appelée depuis des `WHERE`, la valider à chaque ligne aurait coûté cher. La
+validation se fait donc à l'écriture (`PUT /api/entreprise` refuse un fuseau inconnu en 400) ;
+le handler n'est qu'un filet — fuseau invalide ou entreprise inconnue retombent sur UTC sans
+jamais faire échouer la requête. Le paramètre passé est celui déjà présent dans la requête
+(`$1` = entreprise_id) ou la **colonne** `entreprise_id` de la table : aucune signature de
+fonction JS n'a changé, sauf trois cas sans entreprise en table (maintenance d'équipement,
+avances salarié) où un paramètre a été ajouté.
+
+**Côté client**, le fuseau accompagne devise/locale : ajouté aux payloads de `login`,
+`/auth/me`, `confirmer-inscription`, `GET`/`PUT /api/entreprise`, porté par `LocaleProvider`,
+et réglable dans Mes préférences (~419 fuseaux listés depuis `Intl.supportedValuesOf`, repli
+sur une sélection multi-continents).
+
+**Deux défauts trouvés par la vérification, pas par la relecture :**
+1. Le sélecteur affichait « UTC » alors que la base disait « Pacific/Honolulu » — le fuseau
+   n'était renvoyé par aucune route d'authentification. Corrigé sur les 7 points concernés.
+2. Plus subtil, et introduit par moi : `matchesPeriod` convertissait la date de la pièce en
+   objet `Date` puis la reprojetait dans le fuseau de l'entreprise. **Double conversion** : une
+   date civile désigne un jour du calendrier, pas un instant, et la reprojeter la faisait
+   reculer d'un jour. Nouvelle fonction `jourCivil()` qui lit le jour **tel quel** (par
+   position, sans regex — les échappements ne survivent pas aux scripts d'édition utilisés
+   ici) ; seul « aujourd'hui » est calculé dans le fuseau de l'entreprise, et la comparaison se
+   fait en chaînes AAAA-MM-JJ, qui s'ordonnent naturellement.
+
+**Tests** : 6 tests d'intégration (`fuseauEntreprise.test.js` : défaut UTC, suivi du fuseau,
+repli sur fuseau invalide/entreprise inconnue, validation du `PUT`, exposition en `GET`,
+datation réelle d'une pièce) → **364/364**. 5 tests frontend (`fuseau.test.jsx`) sur
+`jourEntreprise`, dont un qui a attrapé un vrai défaut au passage : `new Date(null)` vaut
+1970-01-01 et non une date invalide, la fonction ne renvoyait donc pas `null` sur une entrée
+vide. **113 tests frontend.**
+
+**Vérifié en conditions réelles**, entreprise jetable réglée sur `Pacific/Honolulu` (UTC−10,
+donc la veille au moment du test) : le serveur était le 9 septembre en UTC, `date_entreprise`
+renvoyait le 8, l'achat créé sans date portait bien le 8, et le rapport « Journalier » affichait
+ses 100 F CFA — là où l'ancien code, calé sur le jour du navigateur (le 9), l'excluait.
+Entreprise supprimée ensuite.
+
+**Limite connue** : un fuseau reste global à l'entreprise. Une exploitation à cheval sur deux
+fuseaux daterait tout dans celui qu'elle a choisi — cas jugé théorique, non traité.

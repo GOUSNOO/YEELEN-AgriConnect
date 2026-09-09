@@ -389,7 +389,7 @@ router.get('/lots-perimes', authRequired, async (req, res) => {
        FROM stock_lots l JOIN produits p ON p.id = l.produit_id
        WHERE l.entreprise_id = $1 AND l.quantite_restante > 0
          AND l.date_peremption IS NOT NULL
-         AND l.date_peremption <= (CURRENT_DATE + make_interval(days => $2::int))
+         AND l.date_peremption <= (date_entreprise($1) + make_interval(days => $2::int))
        ORDER BY l.date_peremption ASC, l.id ASC`,
       [req.user.entrepriseId, jours]
     );
@@ -427,7 +427,7 @@ router.post('/:id/lots', authRequired, async (req, res) => {
     const ins = await pool.query(
       `INSERT INTO stock_lots (entreprise_id, produit_id, user_id, numero_lot, date_entree, date_peremption,
          quantite_initiale, quantite_restante, cout_unitaire, achat_id, notes)
-       VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE), $6, $7, $8, $9, $10, $11) RETURNING id`,
+       VALUES ($1, $2, $3, $4, COALESCE($5::date, date_entreprise($1)), $6, $7, $8, $9, $10, $11) RETURNING id`,
       [req.user.entrepriseId, req.params.id, req.user.sub, v.numeroLot, v.dateEntree, v.datePeremption,
        v.quantiteInitiale, v.quantiteRestante, v.coutUnitaire, v.achatId, v.notes]
     );

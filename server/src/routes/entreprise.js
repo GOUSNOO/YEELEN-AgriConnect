@@ -15,7 +15,7 @@ router.get('/', authRequired, async (req, res) => {
     const result = await pool.query(
       `SELECT id, nom, siret, adresse, secteur, devise, locale, created_at AS "createdAt",
               ville, latitude::float8 AS latitude, longitude::float8 AS longitude,
-              telephone, pays, numero_tva AS "numeroTva"
+              telephone, pays, numero_tva AS "numeroTva", fuseau
        FROM entreprises WHERE id = $1`,
       [req.user.entrepriseId]
     );
@@ -30,8 +30,18 @@ router.get('/', authRequired, async (req, res) => {
 });
 
 router.put('/', authRequired, requireRole('admin'), async (req, res) => {
-  const { nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva } = req.body;
+  const { nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva, fuseau } = req.body;
   try {
+    // Le fuseau sert à dater les pièces (fonction SQL date_entreprise) : une valeur invalide
+    // ferait retomber toutes les dates sur UTC en silence, donc on la refuse ici plutôt que
+    // de laisser passer. C'est aussi ce qui permet à date_entreprise de ne pas revalider à
+    // chaque appel.
+    if (fuseau != null && fuseau !== '') {
+      const connu = await pool.query('SELECT 1 FROM pg_timezone_names WHERE name = $1', [fuseau]);
+      if (connu.rowCount === 0) {
+        return res.status(400).json({ error: 'Fuseau horaire inconnu.' });
+      }
+    }
     const result = await pool.query(
       `UPDATE entreprises SET
          nom = COALESCE($1, nom),
@@ -45,12 +55,13 @@ router.put('/', authRequired, requireRole('admin'), async (req, res) => {
          longitude = COALESCE($9, longitude),
          telephone = COALESCE($10, telephone),
          pays = COALESCE($11, pays),
-         numero_tva = COALESCE($12, numero_tva)
-       WHERE id = $13
+         numero_tva = COALESCE($12, numero_tva),
+         fuseau = COALESCE($13, fuseau)
+       WHERE id = $14
        RETURNING id, nom, siret, adresse, secteur, devise, locale, created_at AS "createdAt",
                  ville, latitude::float8 AS latitude, longitude::float8 AS longitude,
-                 telephone, pays, numero_tva AS "numeroTva"`,
-      [nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva, req.user.entrepriseId]
+                 telephone, pays, numero_tva AS "numeroTva", fuseau`,
+      [nom, siret, adresse, secteur, devise, locale, ville, latitude, longitude, telephone, pays, numeroTva, fuseau || null, req.user.entrepriseId]
     );
     await logAuditEvent({
       entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,

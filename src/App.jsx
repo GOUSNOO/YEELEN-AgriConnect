@@ -3,7 +3,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
-import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES, PAYS } from './lib/locale.jsx';
+import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES, PAYS, FUSEAUX, getLocaleConfig, jourEntreprise } from './lib/locale.jsx';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -3418,25 +3418,61 @@ function formatDateTimeFr(value) {
   return Number.isNaN(d.getTime()) ? String(value) : fmtDate(d, { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// Jour civil porté par une valeur de date, lu TEL QUEL. Une date de pièce ('2026-09-08')
+// désigne un jour du calendrier, pas un instant : la convertir en Date puis la reprojeter
+// dans un fuseau la ferait reculer ou avancer d un jour. On extrait donc directement les
+// composantes, sans passer par un instant.
+function jourCivil(valeur) {
+  if (valeur == null || valeur === '') return null;
+  if (valeur instanceof Date) {
+    if (Number.isNaN(valeur.getTime())) return null;
+    const m = String(valeur.getMonth() + 1).padStart(2, '0');
+    const j = String(valeur.getDate()).padStart(2, '0');
+    return `${valeur.getFullYear()}-${m}-${j}`;
+  }
+  const texte = String(valeur).trim();
+  // Reconnaissance par position plutôt que par expression régulière : les deux seuls formats
+  // produits par l'app sont 'AAAA-MM-JJ…' (API) et 'JJ/MM/AAAA' (saisie française).
+  const chiffres = (s) => /^[0-9]+$/.test(s);
+  if (texte.length >= 10 && texte[4] === '-' && texte[7] === '-'
+      && chiffres(texte.slice(0, 4)) && chiffres(texte.slice(5, 7)) && chiffres(texte.slice(8, 10))) {
+    return texte.slice(0, 10);
+  }
+  if (texte.length >= 10 && texte[2] === '/' && texte[5] === '/'
+      && chiffres(texte.slice(0, 2)) && chiffres(texte.slice(3, 5)) && chiffres(texte.slice(6, 10))) {
+    return `${texte.slice(6, 10)}-${texte.slice(3, 5)}-${texte.slice(0, 2)}`;
+  }
+  const d = parseDate(texte);
+  return d ? jourCivil(d) : null;
+}
+
+// Filtrage par période. Le serveur date les pièces dans le fuseau de l ENTREPRISE (fonction
+// SQL date_entreprise) ; « aujourd hui » doit donc être calculé dans ce même fuseau, sinon
+// une vente saisie en soirée bascule d un jour. La date de la pièce, elle, est un jour civil
+// déjà exprimé dans ce fuseau : on la compare telle quelle, en chaînes AAAA-MM-JJ, qui
+// s'ordonnent naturellement.
 function matchesPeriod(rowDate, period) {
-  const date = parseDate(rowDate);
-  if (!date) return true;
-  const now = new Date();
-  if (period === 'jour') {
-    const start = new Date(now); start.setHours(0, 0, 0, 0); return date >= start;
-  }
+  const jour = jourCivil(rowDate);
+  if (!jour) return true;
+  const { fuseau } = getLocaleConfig();
+  const aujourdhui = jourEntreprise(new Date(), fuseau);
+  if (!aujourdhui) return true;
+
+  if (period === 'jour') return jour === aujourdhui;
+
+  const [a, m, j] = aujourdhui.split('-').map(Number);
+  const repere = new Date(Date.UTC(a, m - 1, j));
+  const isoUtc = (d) => d.toISOString().slice(0, 10);
+
   if (period === 'semaine') {
-    const day = now.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const start = new Date(now); start.setDate(now.getDate() + diff); start.setHours(0, 0, 0, 0);
-    return date >= start;
+    const jourSemaine = repere.getUTCDay();
+    const decalage = jourSemaine === 0 ? -6 : 1 - jourSemaine; // semaine commençant lundi
+    const debutSemaine = new Date(repere);
+    debutSemaine.setUTCDate(repere.getUTCDate() + decalage);
+    return jour >= isoUtc(debutSemaine);
   }
-  if (period === 'mois') {
-    const start = new Date(now); start.setDate(1); start.setHours(0, 0, 0, 0); return date >= start;
-  }
-  if (period === 'annee') {
-    const start = new Date(now); start.setMonth(0, 1); start.setHours(0, 0, 0, 0); return date >= start;
-  }
+  if (period === 'mois') return jour >= isoUtc(new Date(Date.UTC(a, m - 1, 1)));
+  if (period === 'annee') return jour >= isoUtc(new Date(Date.UTC(a, 0, 1)));
   return true;
 }
 
@@ -8497,7 +8533,7 @@ export default function App() {
   // langue de l'UI sur celle de la locale entreprise ('es-ES' -> 'es', etc.).
   const applyEntrepriseLocale = (entreprise) => {
     if (!entreprise) return;
-    setLocaleConfig({ devise: entreprise.devise, locale: entreprise.locale });
+    setLocaleConfig({ devise: entreprise.devise, locale: entreprise.locale, fuseau: entreprise.fuseau });
     if (!hasExplicitLanguage() && entreprise.locale) {
       const lang = String(entreprise.locale).split('-')[0];
       if (SUPPORTED_LANGS.some(l => l.code === lang)) setLanguage(lang, false);
@@ -8898,20 +8934,21 @@ export default function App() {
 function ProfilModule({ role }) {
  const isAdmin = role === 'admin';
   const { t, i18n } = useTranslation();
-  const { devise, locale, setLocaleConfig } = useLocale();
+  const { devise, locale, fuseau, setLocaleConfig } = useLocale();
   const [prefDevise, setPrefDevise] = useState(devise);
   const [prefLocale, setPrefLocale] = useState(locale);
+  const [prefFuseau, setPrefFuseau] = useState(fuseau);
   const [prefBusy, setPrefBusy] = useState(false);
   const [prefMsg, setPrefMsg] = useState('');
-  useEffect(() => { setPrefDevise(devise); setPrefLocale(locale); }, [devise, locale]);
+  useEffect(() => { setPrefDevise(devise); setPrefLocale(locale); setPrefFuseau(fuseau); }, [devise, locale, fuseau]);
 
   const savePreferences = async () => {
     setPrefBusy(true);
     setPrefMsg('');
     try {
-      if (isAdmin && (prefDevise !== devise || prefLocale !== locale)) {
-        await updateEntreprise({ devise: prefDevise, locale: prefLocale });
-        setLocaleConfig({ devise: prefDevise, locale: prefLocale });
+      if (isAdmin && (prefDevise !== devise || prefLocale !== locale || prefFuseau !== fuseau)) {
+        await updateEntreprise({ devise: prefDevise, locale: prefLocale, fuseau: prefFuseau });
+        setLocaleConfig({ devise: prefDevise, locale: prefLocale, fuseau: prefFuseau });
       }
       setPrefMsg(t('profil.preferencesSaved'));
     } catch (err) {
@@ -9153,6 +9190,9 @@ function ProfilModule({ role }) {
           </Select>
           <Select label={t('profil.locale')} value={prefLocale} onChange={e => setPrefLocale(e.target.value)} disabled={!isAdmin}>
             {LOCALES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+          </Select>
+          <Select label={t('profil.fuseau')} value={prefFuseau} onChange={e => setPrefFuseau(e.target.value)} disabled={!isAdmin} aide={t('profil.fuseauAide')}>
+            {FUSEAUX.map(f => <option key={f} value={f}>{f}</option>)}
           </Select>
           <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: COLORS.inkSoft }}>
             <span>{t('profil.previewMoney')} : <b style={{ color: COLORS.ink }}>{previewMoney(prefLocale, prefDevise, 1234567.5)}</b></span>

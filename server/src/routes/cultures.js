@@ -200,7 +200,7 @@ router.post('/mouvements', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO cultures_mouvements (entreprise_id, user_id, type, date, partenaire, produit, quantite, prix_unitaire, remise)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, COALESCE($4, date_entreprise($1)), $5, $6, $7, $8, $9)
        RETURNING ${MOUVEMENT_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0, Number(remise) || 0]
     );

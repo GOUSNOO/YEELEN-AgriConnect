@@ -287,7 +287,7 @@ router.post('/confirmer-inscription', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT u.id, u.email, u.created_at, u.is_platform_admin, eu.entreprise_id, eu.role,
-              e.nom AS entreprise_nom, e.type_compte, e.devise, e.locale, e.email_confirme
+              e.nom AS entreprise_nom, e.type_compte, e.devise, e.locale, e.fuseau, e.email_confirme
        FROM users u
        JOIN entreprise_utilisateurs eu ON eu.user_id = u.id AND eu.statut = 'Actif'
        JOIN entreprises e ON e.id = eu.entreprise_id
@@ -325,7 +325,7 @@ router.post('/confirmer-inscription', async (req, res) => {
     return res.json({
       token,
       user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, isPlatformAdmin },
-      entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, typeCompte: row.type_compte, devise: row.devise, locale: row.locale },
+      entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, typeCompte: row.type_compte, devise: row.devise, locale: row.locale, fuseau: row.fuseau },
     });
   } catch (err) {
     console.error('[confirmer-inscription]', err);
@@ -402,7 +402,7 @@ router.post('/login', async (req, res) => {
     // Récupéré tôt (avant les vérifications) pour pouvoir tracer l'entreprise
     // concernée même sur les tentatives échouées d'un compte existant.
     const rattachement = await pool.query(
-      `SELECT eu.entreprise_id, eu.role, e.nom AS entreprise_nom, e.devise, e.locale, e.email_confirme
+      `SELECT eu.entreprise_id, eu.role, e.nom AS entreprise_nom, e.devise, e.locale, e.fuseau, e.email_confirme
        FROM entreprise_utilisateurs eu
        JOIN entreprises e ON e.id = eu.entreprise_id
        WHERE eu.user_id = $1 AND eu.statut = 'Actif'
@@ -501,7 +501,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Aucune entreprise associée à ce compte.' });
     }
 
-    const { role, entreprise_nom: entrepriseNom, devise: entrepriseDevise, locale: entrepriseLocale } = rattachement.rows[0];
+    const { role, entreprise_nom: entrepriseNom, devise: entrepriseDevise, locale: entrepriseLocale, fuseau: entrepriseFuseau } = rattachement.rows[0];
     const isPlatformAdmin = user.is_platform_admin === true;
 
     // Le JWT porte entrepriseId/role/isPlatformAdmin en dur : une bascule de rôle ou du
@@ -518,7 +518,7 @@ router.post('/login', async (req, res) => {
     return res.json({
       token,
       user: { id: user.id, email: user.email, role, createdAt: user.created_at, isPlatformAdmin },
-      entreprise: { id: entrepriseId, nom: entrepriseNom, devise: entrepriseDevise, locale: entrepriseLocale },
+      entreprise: { id: entrepriseId, nom: entrepriseNom, devise: entrepriseDevise, locale: entrepriseLocale, fuseau: entrepriseFuseau },
     });
   } catch (err) {
     console.error('[login]', err);
@@ -533,7 +533,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.mfa_method, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom, e.devise, e.locale
+  `SELECT u.id, u.email, u.created_at, u.mfa_enabled, u.mfa_method, u.is_platform_admin, eu.role, e.id AS entreprise_id, e.nom AS entreprise_nom, e.devise, e.locale, e.fuseau
    FROM users u
    JOIN entreprise_utilisateurs eu ON eu.user_id = u.id
    JOIN entreprises e ON e.id = eu.entreprise_id
@@ -548,7 +548,7 @@ router.get('/me', authRequired, async (req, res) => {
     const row = result.rows[0];
 return res.json({
   user: { id: row.id, email: row.email, role: row.role, createdAt: row.created_at, mfaEnabled: row.mfa_enabled, mfaMethod: row.mfa_method || 'totp', isPlatformAdmin: row.is_platform_admin === true },
-  entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, devise: row.devise, locale: row.locale },
+  entreprise: { id: row.entreprise_id, nom: row.entreprise_nom, devise: row.devise, locale: row.locale, fuseau: row.fuseau },
 });
   } catch (err) {
     console.error('[me]', err);

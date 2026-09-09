@@ -163,7 +163,7 @@ router.post('/', authRequired, async (req, res) => {
 
     const documentResult = await client.query(
       `INSERT INTO achats_documents (entreprise_id, user_id, module, date, fournisseur_id, fournisseur_nom, notes, total, statut)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, 'Brouillon')
+       VALUES ($1, $2, $3, COALESCE($4, date_entreprise($1)), $5, $6, $7, $8, 'Brouillon')
        RETURNING ${DOCUMENT_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, module, date || null, fournisseurId || null, fournisseurNom || null, notes || null, total]
     );

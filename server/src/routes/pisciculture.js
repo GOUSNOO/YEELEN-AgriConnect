@@ -33,7 +33,7 @@ router.post('/livraisons', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO pisciculture_livraisons (entreprise_id, user_id, date, client, produit, quantite, statut)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, 'En attente')
+       VALUES ($1, $2, COALESCE($3, date_entreprise($1)), $4, $5, $6, 'En attente')
        RETURNING ${LIVRAISON_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, date || null, client, produit, Number(quantite) || 0]
     );
@@ -91,7 +91,7 @@ router.post('/suivi', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO pisciculture_suivi (entreprise_id, user_id, date, type, quantite, detail)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6)
+       VALUES ($1, $2, COALESCE($3, date_entreprise($1)), $4, $5, $6)
        RETURNING ${SUIVI_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, date || null, type, Number(quantite) || 0, detail]
     );

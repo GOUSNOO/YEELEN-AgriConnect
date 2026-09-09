@@ -1891,6 +1891,8 @@
     "sectionPreferencesHint": "La langue s'applique à votre compte uniquement. La devise et le format régional s'appliquent à toute l'entreprise.",
     "currency": "Devise de l'entreprise",
     "locale": "Format régional de l'entreprise",
+    "fuseau": "Fuseau horaire",
+    "fuseauAide": "Détermine de quel jour relève une vente ou un achat. À régler sur le fuseau de votre exploitation.",
     "savePreferences": "Enregistrer les préférences",
     "preferencesSaved": "Préférences mises à jour.",
     "previewMoney": "Aperçu montant",

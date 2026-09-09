@@ -685,8 +685,8 @@ router.post('/:id/avances', authRequired, requireRole('admin'), async (req, res)
     if (!(await resolveAccessibleSalarie(req, req.params.id))) return res.status(404).json({ error: 'Salarié introuvable.' });
     const result = await pool.query(
       `INSERT INTO salaries_avances (salarie_id, date, montant, motif)
-       VALUES ($1, COALESCE($2, CURRENT_DATE), $3, $4) RETURNING ${AVANCE_COLUMNS}`,
-      [req.params.id, date || null, Number(montant), motif || null]
+       VALUES ($1, COALESCE($2, date_entreprise($5)), $3, $4) RETURNING ${AVANCE_COLUMNS}`,
+      [req.params.id, date || null, Number(montant), motif || null, req.user.entrepriseId]
     );
     return res.status(201).json({ avance: result.rows[0] });
   } catch (err) {

@@ -126,7 +126,7 @@ router.post('/', authRequired, requireRole('admin', 'directeur'), async (req, re
       `INSERT INTO ordres_transformation
          (entreprise_id, user_id, recette_id, recette_nom, produit_sortie_id, produit_sortie_nom,
           quantite_produite, date_transformation, operateur, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, CURRENT_DATE), $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, date_entreprise($1)), $9, $10)
        RETURNING id`,
       [req.user.entrepriseId, req.user.sub, recetteId, rec.nom, rec.produitSortieId, rec.produitSortieNom,
         quantite, dateTransformation || null, operateur || null, notes || null]

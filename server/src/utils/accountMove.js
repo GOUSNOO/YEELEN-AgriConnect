@@ -192,8 +192,8 @@ export async function journalParType(client, entrepriseId, type) {
 export async function posterMove(client, moveId, entrepriseId) {
   const mr = await client.query(
     `SELECT id, move_type AS "moveType", state, journal_id AS "journalId", partner_id AS "partnerId",
-            to_char(COALESCE(invoice_date, CURRENT_DATE), 'YYYY-MM-DD') AS "invoiceDate",
-            to_char(COALESCE(invoice_date_due, invoice_date, CURRENT_DATE), 'YYYY-MM-DD') AS "dueDate",
+            to_char(COALESCE(invoice_date, date_entreprise(entreprise_id)), 'YYYY-MM-DD') AS "invoiceDate",
+            to_char(COALESCE(invoice_date_due, invoice_date, date_entreprise(entreprise_id)), 'YYYY-MM-DD') AS "dueDate",
             payment_term_id AS "paymentTermId", invoice_currency_rate::float8 AS "invoiceCurrencyRate"
      FROM account_move WHERE id = $1 AND entreprise_id = $2`,
     [moveId, entrepriseId]
@@ -295,7 +295,7 @@ export async function posterMove(client, moveId, entrepriseId) {
 
   const name = await prochainNumeroJournal(client, mv.journalId, entrepriseId, mv.invoiceDate, { refund: estAvoir });
   await client.query(
-    `UPDATE account_move SET state = 'posted', name = $1, invoice_date = COALESCE(invoice_date, CURRENT_DATE),
+    `UPDATE account_move SET state = 'posted', name = $1, invoice_date = COALESCE(invoice_date, date_entreprise(entreprise_id)),
        amount_untaxed = $2, amount_tax = $3, amount_total = $4, amount_residual = $4, payment_state = 'not_paid'
      WHERE id = $5`,
     [name, totalHT, totalTaxe, totalTTC, moveId]

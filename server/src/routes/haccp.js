@@ -81,7 +81,7 @@ router.post('/', authRequired, async (req, res) => {
       `INSERT INTO haccp_controles
          (entreprise_id, user_id, ordre_transformation_id, ordre_transformation_nom, type_controle,
           valeur_mesuree, unite, seuil_min, seuil_max, conforme, action_corrective, date_controle, operateur, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,COALESCE($12, CURRENT_DATE),$13,$14)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,COALESCE($12, date_entreprise($1)),$13,$14)
        RETURNING id`,
       [
         req.user.entrepriseId, req.user.sub, ordreTransformationId, ordreNom, typeControle,

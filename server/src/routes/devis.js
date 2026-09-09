@@ -32,7 +32,7 @@ const DEVIS_COLUMNS = `
   ROUND(d.total * COALESCE(d.taux_change, 1), 2)::float8 AS "totalDeviseEntreprise",
   d.conditions_paiement AS "conditionsPaiement", d.livraison_promise AS "livraisonPromise",
   to_char(d.validity_date, 'YYYY-MM-DD') AS "validityDate", d.payment_term_id AS "paymentTermId",
-  (d.statut IN ('Brouillon', 'Devis', 'Envoyé') AND d.validity_date IS NOT NULL AND d.validity_date < CURRENT_DATE) AS expired,
+  (d.statut IN ('Brouillon', 'Devis', 'Envoyé') AND d.validity_date IS NOT NULL AND d.validity_date < date_entreprise(d.entreprise_id)) AS expired,
   d.client_id AS "clientId", c.nom AS "clientNom", c.prenom AS "clientPrenom",
   c.email AS "clientEmail", c.telephone AS "clientTelephone", c.adresse AS "clientAdresse",
   c.adresse_rue AS "clientAdresseRue", c.adresse_ville AS "clientAdresseVille",
@@ -836,8 +836,8 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
       // Paiement complet : une échéance unique, déjà réglée
       const echeanceResult = await client.query(
         `INSERT INTO echeances_paiement (devis_id, montant, date_echeance, statut, date_paiement, ordre)
-         VALUES ($1, $2, CURRENT_DATE, 'Payé', now(), 0) RETURNING id`,
-        [req.params.id, total]
+         VALUES ($1, $2, date_entreprise($3), 'Payé', now(), 0) RETURNING id`,
+        [req.params.id, total, req.user.entrepriseId]
       );
       await syncDevisPaiement(req.user.entrepriseId, req.user.sub, {
         // finances est en devise ENTREPRISE (comme partout ailleurs) — jamais le total brut
@@ -882,7 +882,7 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
     // Échelonné / terme : la dernière échéance porte la date d'exigibilité.
     // Paiement complet (pas d'échéancier) : la facture est réglée le jour même —
     // invoice_date_due = aujourd'hui, aligné sur l'échéance unique créée plus haut
-    // (CURRENT_DATE, statut « Payé »), au lieu d'un J+30 fictif.
+    // (date du jour dans le fuseau de l'entreprise, statut « Payé »), au lieu d'un J+30 fictif.
     const dueDate = echeancesFinales && echeancesFinales.length
       ? echeancesFinales[echeancesFinales.length - 1].dateEcheance
       : new Date().toISOString().slice(0, 10);
@@ -892,7 +892,7 @@ router.post('/:id/facturer', authRequired, requireRole('admin'), async (req, res
         (entreprise_id, journal_id, move_type, state, partner_id, invoice_date, invoice_date_due,
          invoice_origin, payment_term_id, user_id, devise, invoice_currency_rate)
        VALUES ($1, $2, 'out_invoice', 'draft', (SELECT client_id FROM devis WHERE id = $3),
-               CURRENT_DATE, $4, $5, $6, $7, $8, $9) RETURNING id`,
+               date_entreprise($1), $4, $5, $6, $7, $8, $9) RETURNING id`,
       [req.user.entrepriseId, journalVente.id, req.params.id, dueDate, numero, paymentTermIdFinal, req.user.sub, devise, tauxChange]
     );
     const moveId = mv.rows[0].id;

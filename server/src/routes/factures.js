@@ -247,13 +247,13 @@ router.get('/overdue', authRequired, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT ${MOVE_COLUMNS},
-              (CURRENT_DATE - COALESCE(m.invoice_date_due, m.invoice_date, m.date)) AS "daysOverdue"
+              (date_entreprise(m.entreprise_id) - COALESCE(m.invoice_date_due, m.invoice_date, m.date)) AS "daysOverdue"
        FROM account_move m
        LEFT JOIN contacts c ON c.id = m.partner_id
        JOIN entreprises e ON e.id = m.entreprise_id
        WHERE m.entreprise_id = $1 AND m.state = 'posted' AND m.move_type = 'out_invoice'
          AND m.payment_state IN ('not_paid', 'partial')
-         AND COALESCE(m.invoice_date_due, m.invoice_date, m.date) < CURRENT_DATE
+         AND COALESCE(m.invoice_date_due, m.invoice_date, m.date) < date_entreprise(m.entreprise_id)
        ORDER BY COALESCE(m.invoice_date_due, m.invoice_date, m.date) ASC`,
       [req.user.entrepriseId]
     );
@@ -268,7 +268,7 @@ router.get('/overdue', authRequired, async (req, res) => {
 router.post('/:id/mark-reminded', ...ecriture, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `UPDATE account_move SET relance_niveau = relance_niveau + 1, derniere_relance = CURRENT_DATE
+      `UPDATE account_move SET relance_niveau = relance_niveau + 1, derniere_relance = date_entreprise($2)
        WHERE id = $1 AND entreprise_id = $2 AND move_type = 'out_invoice' AND state = 'posted'
        RETURNING id`,
       [req.params.id, req.user.entrepriseId]

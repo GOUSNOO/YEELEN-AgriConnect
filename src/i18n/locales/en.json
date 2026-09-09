@@ -1891,6 +1891,8 @@
     "sectionPreferencesHint": "Language applies to your account only. Currency and regional format apply to the whole business.",
     "currency": "Business currency",
     "locale": "Business regional format",
+    "fuseau": "Time zone",
+    "fuseauAide": "Determines which day a sale or purchase belongs to. Set it to your farm's time zone.",
     "savePreferences": "Save preferences",
     "preferencesSaved": "Preferences updated.",
     "previewMoney": "Amount preview",

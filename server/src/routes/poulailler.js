@@ -44,7 +44,7 @@ router.post('/mouvements', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO poulailler_mouvements (entreprise_id, user_id, type, date, partenaire, produit, quantite, prix_unitaire, remise)
-       VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, COALESCE($4, date_entreprise($1)), $5, $6, $7, $8, $9)
        RETURNING ${MOUVEMENT_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, type, date || null, partenaire, produit, Number(quantite) || 0, Number(prixUnitaire) || 0, Number(remise) || 0]
     );
@@ -142,7 +142,7 @@ router.post('/livraisons', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO poulailler_livraisons (entreprise_id, user_id, date, client, produit, quantite, statut)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, 'En attente')
+       VALUES ($1, $2, COALESCE($3, date_entreprise($1)), $4, $5, $6, 'En attente')
        RETURNING ${LIVRAISON_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, date || null, client, produit, Number(quantite) || 0]
     );
@@ -201,7 +201,7 @@ router.post('/suivi', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO poulailler_suivi (entreprise_id, user_id, date, type, quantite, detail)
-       VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6)
+       VALUES ($1, $2, COALESCE($3, date_entreprise($1)), $4, $5, $6)
        RETURNING ${SUIVI_COLUMNS}`,
       [req.user.entrepriseId, req.user.sub, date || null, type, Number(quantite) || 0, detail]
     );

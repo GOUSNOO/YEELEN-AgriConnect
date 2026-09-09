@@ -2026,6 +2026,40 @@ ALTER TABLE produits            DROP CONSTRAINT IF EXISTS produits_module_check;
 ALTER TABLE produits            ADD CONSTRAINT produits_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
 ALTER TABLE produit_templates   DROP CONSTRAINT IF EXISTS produit_templates_module_check;
 ALTER TABLE produit_templates   ADD CONSTRAINT produit_templates_module_check CHECK (module IN ('Cultures', 'Poulailler', 'Pisciculture'));
+
+-- ═══════════════ Fuseau horaire par entreprise (2026-09-09) ═══════════════
+-- Le serveur tourne en UTC : CURRENT_DATE y renvoie donc la date civile UTC, pas celle
+-- vécue par l'utilisateur. Une vente saisie à 00h30 à Paris (22h30 UTC la veille) était
+-- datée du jour précédent, et n'apparaissait pas dans son rapport journalier.
+--
+-- Le fuseau est porté par l ENTREPRISE, pas par l utilisateur : une pièce est datée dans le
+-- fuseau de la société (convention comptable), pas dans celui de l employé en déplacement.
+-- Valeur par défaut 'UTC' — c'est le comportement actuel, donc aucune entreprise existante
+-- ne voit ses dates bouger tant qu elle n a rien choisi.
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS fuseau TEXT NOT NULL DEFAULT 'UTC';
+
+-- Remplace CURRENT_DATE dans toutes les requêtes qui datent une pièce ou comparent une
+-- échéance. Centralisée ici plutôt que dupliquée dans ~24 requêtes : un seul endroit à
+-- corriger, et un fuseau invalide retombe sur UTC au lieu de faire échouer la requête.
+--
+-- En plpgsql avec un handler plutôt qu une validation contre pg_timezone_names : cette vue
+-- compte ~1200 lignes et la fonction est appelée depuis des WHERE, donc la valider à chaque
+-- ligne coûterait cher. Le fuseau est validé à l écriture (PUT /api/entreprise) ; le handler
+-- ne sert que de filet si une valeur invalide arrive malgré tout en base.
+-- STABLE (pas IMMUTABLE) : le résultat dépend de now().
+CREATE OR REPLACE FUNCTION date_entreprise(p_entreprise_id INTEGER) RETURNS DATE AS $fn$
+DECLARE
+  v_fuseau TEXT;
+BEGIN
+  SELECT fuseau INTO v_fuseau FROM entreprises WHERE id = p_entreprise_id;
+  IF v_fuseau IS NULL OR btrim(v_fuseau) = '' THEN
+    RETURN (now() AT TIME ZONE 'UTC')::date;
+  END IF;
+  RETURN (now() AT TIME ZONE v_fuseau)::date;
+EXCEPTION WHEN OTHERS THEN
+  RETURN (now() AT TIME ZONE 'UTC')::date;
+END;
+$fn$ LANGUAGE plpgsql STABLE;
 `;
 
 // Catégories par défaut créées pour chaque entreprise qui n'en a pas encore, au même titre
