@@ -3436,3 +3436,38 @@ EUR, l'autre en devise entreprise), supprimée ensuite.
 
 **Non traité, repéré en passant** : sur l'écran Rapports, la période « Journalier » affiche 0
 alors que les ventes datent du jour — `matchesPeriod` mérite un coup d'œil.
+
+### 2026-09-09 — Vérification navigateur du registre HACCP (dette fermée) + correctif du badge
+
+Dernière dette de vérification du projet : l'étape 3 de la transformation agroalimentaire
+(registre HACCP) avait été livrée le 2026-09-06 sans contrôle visuel, l'extension navigateur
+étant indisponible ce jour-là. Refaite ici sur une entreprise jetable (recette de mouture,
+ordre de transformation, deux contrôles dont un non conforme), supprimée ensuite.
+
+**Défaut trouvé — exactement ce que cette vérification devait attraper.** `HaccpPanel` ne
+chargeait ses données qu'à l'ouverture du panneau (`useEffect(… if (open && !loaded) charger())`).
+Or son en-tête porte un badge « N non conforme(s) » dont l'intérêt est justement d'alerter
+**sans** qu'on ait à déplier le panneau. Tant que les contrôles n'étaient pas chargés,
+`controles` restait vide, `nonConformes` valait 0, et ni le compteur `(N)` ni le badge ne
+s'affichaient : le badge n'a jamais prévenu personne depuis sa mise en service. Aucun test ne
+le couvrait, et l'API-level testing du 2026-09-06 ne pouvait pas le voir.
+
+Corrigé en scindant le chargement : les **contrôles** sont chargés au montage (c'est ce qui
+alimente le badge), les **ordres de transformation** restent en chargement paresseux à
+l'ouverture puisqu'ils ne servent qu'au formulaire d'ajout — inutile d'appeler cette route sur
+un panneau que l'utilisateur n'ouvrira peut-être jamais.
+
+**Tests** : nouveau `src/components/HaccpPanel.test.jsx` (3 tests : badge visible panneau
+replié, compteur dans l'en-tête au chargement, et absence d'appel aux ordres tant que le
+panneau est fermé). Vérifiés rouges sans le correctif, verts avec. **108 tests frontend.**
+
+**Reste de la vérification, tout conforme** : saisie d'un contrôle par le formulaire (type,
+valeur mesurée + unité, opérateur) → apparaît dans le tableau, compteur passé à 3, badge
+inchangé à 1 non conforme ; filtrage par module correct ; snapshot texte de l'ordre lié
+affiché. L'export CSV ne lève aucune erreur console, mais **le fichier lui-même n'a pas pu
+être ouvert** : le navigateur intégré bloque les téléchargements déclenchés par la page. La
+génération a donc été relue dans le code (colonnes, échappement des guillemets, séparateur
+`;`) sans être exécutée de bout en bout — seul point non vérifié en conditions réelles.
+
+Note : un « — » affiché en valeur mesurée pendant la mise en place venait du script de
+préparation (champ `valeur` au lieu de `valeurMesuree`), pas de l'application.

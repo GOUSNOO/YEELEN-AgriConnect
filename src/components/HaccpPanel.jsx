@@ -15,6 +15,7 @@ export default function HaccpPanel({ module }) {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [ordres, setOrdres] = useState([]);
+  const [ordresCharges, setOrdresCharges] = useState(false);
   const [controles, setControles] = useState([]);
 
   const emptyForm = {
@@ -24,23 +25,38 @@ export default function HaccpPanel({ module }) {
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
 
-  const charger = async () => {
+  // Les contrôles sont chargés dès le montage, pas à l ouverture du panneau : le badge
+  // « N non conforme(s) » de l en-tête n a d intérêt que s il alerte SANS qu on ait à
+  // déplier le panneau. Tant qu il attendait l ouverture, controles restait vide, donc le
+  // compteur valait 0 et le badge ne s affichait jamais avant qu on aille voir — il ne
+  // prévenait personne.
+  const chargerControles = async () => {
     try {
-      const [{ ordres: fetchedOrdres }, { controles: fetchedControles }] = await Promise.all([
-        getOrdresTransformation(module),
-        getHaccpControles({ module }),
-      ]);
-      setOrdres(fetchedOrdres || []);
-      setControles(fetchedControles || []);
+      const { controles: fetched } = await getHaccpControles({ module });
+      setControles(fetched || []);
     } catch (err) {
-      console.error('[HaccpPanel charger]', err);
+      console.error('[HaccpPanel chargerControles]', err);
     } finally {
       setLoaded(true);
     }
   };
 
+  // Les ordres de transformation ne servent qu au formulaire d ajout : inutile de les
+  // charger tant que le panneau est replié.
+  const chargerOrdres = async () => {
+    try {
+      const { ordres: fetched } = await getOrdresTransformation(module);
+      setOrdres(fetched || []);
+    } catch (err) {
+      console.error('[HaccpPanel chargerOrdres]', err);
+    } finally {
+      setOrdresCharges(true);
+    }
+  };
+
+  useEffect(() => { chargerControles(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [module]);
   useEffect(() => {
-    if (open && !loaded) charger();
+    if (open && !ordresCharges) chargerOrdres();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -58,7 +74,7 @@ export default function HaccpPanel({ module }) {
       });
       notifySuccess(t('haccp.controleAdded'));
       setForm(emptyForm);
-      await charger();
+      await chargerControles();
     } catch (err) {
       notifyError(err, t('haccp.controleAddError'));
     } finally {
@@ -71,7 +87,7 @@ export default function HaccpPanel({ module }) {
     try {
       await deleteHaccpControle(id);
       notifySuccess(t('haccp.controleDeleted'));
-      await charger();
+      await chargerControles();
     } catch (err) {
       notifyError(err, t('haccp.controleDeleteError'));
     }
