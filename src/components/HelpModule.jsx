@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react';
 import { Card } from './ui.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Ordre d'affichage des sections ; le contenu (titre + texte/points) est dans i18n
 // sous help.sections.<id>.
@@ -17,7 +17,7 @@ export function HelpModule() {
   const [openId, setOpenId] = useState(SECTION_IDS[0]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card style={{ textAlign: 'left' }}>
         <h2 style={{ marginTop: 0 }}>{t('help.title')}</h2>
         <p style={{ margin: 0, color: COLORS.inkSoft, fontSize: TEXT.base }}>
@@ -47,7 +47,7 @@ export function HelpModule() {
                 <div style={{ padding: '0 16px 16px', fontSize: TEXT.base, color: COLORS.inkSoft, lineHeight: 1.6, textAlign: 'left' }}>
                   {text && <p style={{ margin: 0 }}>{text}</p>}
                   {Array.isArray(points) && points.length > 0 && (
-                    <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <ul style={{ margin: 0, paddingLeft: SPACE.lg, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                       {points.map((point, idx) => <li key={idx}>{point}</li>)}
                     </ul>
                   )}

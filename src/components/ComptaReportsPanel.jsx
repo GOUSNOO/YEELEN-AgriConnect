@@ -8,7 +8,7 @@ import {
 } from '../lib/api.js';
 import { useLocale, fmtMoneyWith } from '../lib/locale.jsx';
 import { Card, Button, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 const INK_SOFT = COLORS.inkSoft;
 const BORDER = COLORS.border;
@@ -19,11 +19,11 @@ const BORDER = COLORS.border;
 function Section({ titre, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ marginBottom: 10 }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.base, color: COLORS.ink, padding: 0 }}>
+    <div style={{ marginBottom: SPACE.sm }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, fontSize: TEXT.base, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />} {titre}
       </button>
-      {open && <div style={{ marginTop: 10 }}>{children}</div>}
+      {open && <div style={{ marginTop: SPACE.sm }}>{children}</div>}
     </div>
   );
 }
@@ -149,7 +149,7 @@ export default function ComptaReportsPanel({ onChange }) {
 
   return (
     <Card>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 12 }}>{t('comptaReports.title')}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.md }}>{t('comptaReports.title')}</div>
 
       <Section titre={t('comptaReports.aged')} defaultOpen>
         {!aged ? <Loader2 size={14} className="spin" /> : aged.partners.length === 0 ? (
@@ -225,7 +225,7 @@ export default function ComptaReportsPanel({ onChange }) {
       </Section>
 
       <Section titre={t('comptaReports.payments', { count: paiements.length })}>
-        <form onSubmit={submitPaiement} style={{ display: 'grid', gridTemplateColumns: 'fit-content(120px) minmax(0,1fr) fit-content(120px) minmax(0,1fr)', gap: '8px 14px', alignItems: 'center', maxWidth: 620, marginBottom: 14 }}>
+        <form onSubmit={submitPaiement} style={{ display: 'grid', gridTemplateColumns: 'fit-content(120px) minmax(0,1fr) fit-content(120px) minmax(0,1fr)', gap: '8px 14px', alignItems: 'center', maxWidth: 620, marginBottom: SPACE.md }}>
           <div className="field-group-label">{t('comptaReports.partner')}</div>
           <select className="flat-input" value={payForm.partnerId} onChange={(e) => setPayForm({ ...payForm, partnerId: e.target.value })}>
             <option value="">—</option>
@@ -263,7 +263,7 @@ export default function ComptaReportsPanel({ onChange }) {
                     {allocFor === p.id && (
                       <tr>
                         <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
-                          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'end', flexWrap: 'wrap' }}>
                             <label style={{ fontSize: TEXT.sm, color: INK_SOFT }}>{t('comptaReports.invoice')}
                               <select className="flat-input" value={allocForm.moveId} onChange={(e) => setAllocForm({ ...allocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
                                 <option value="">—</option>
@@ -310,7 +310,7 @@ export default function ComptaReportsPanel({ onChange }) {
                     {cnAllocFor === cn.id && (
                       <tr>
                         <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
-                          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'end', flexWrap: 'wrap' }}>
                             <label style={{ fontSize: TEXT.sm, color: INK_SOFT }}>{t('comptaReports.invoice')}
                               <select className="flat-input" value={cnAllocForm.moveId} onChange={(e) => setCnAllocForm({ ...cnAllocForm, moveId: e.target.value })} style={{ minWidth: 220, marginTop: 3 }}>
                                 <option value="">—</option>

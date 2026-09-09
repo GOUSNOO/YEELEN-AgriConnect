@@ -62,6 +62,31 @@ export const RADIUS = {
 // ressemblent qu'en taille. `xl` est un grand chiffre en JetBrains Mono, `title` un titre en
 // Space Grotesk — les fondre reviendrait à faire passer les indicateurs du tableau de bord pour
 // des titres, ou l'inverse.
+// Échelle d'espacement — sept pas sur une grille de 4 px, contre vingt et une valeurs avant le
+// 2026-09-10 (993 occurrences de gap / padding / margin). La dispersion n'exprimait aucune
+// hiérarchie : 6, 8 et 10 px servaient tous les trois d'écart entre éléments d'une même ligne
+// (353 usages à eux trois), 12 et 14 d'écart entre blocs. Sur une grille de 4, tout ce qui doit
+// s'aligner s'aligne, et les valeurs hors grille — 5, 6, 7, 9, 10, 14, 18, 22, 26 — disparaissent.
+//
+// Règle de conversion appliquée : au multiple de 4 le plus proche, les ex æquo (10, 14, 22, 26)
+// arrondis vers le BAS. Ce n'est pas un choix esthétique — réduire un espacement ne peut jamais
+// provoquer un retour à la ligne ni un débordement, l'augmenter si. Seule exception assumée :
+// 6 → 8 plutôt que 6 → 4. Ces 114 occurrences sont presque toutes l'écart entre une icône et son
+// libellé ; les ramener à 4 px collerait l'icône au texte au lieu de l'en séparer.
+//
+// Les valeurs de 0 à 3 px ne sont PAS converties : ce ne sont pas des espacements mais des
+// corrections optiques (un `marginTop: 1` qui aligne une icône sur la ligne de base du texte).
+// Les porter à 4 px casserait l'alignement qu'elles servent à obtenir.
+export const SPACE = {
+  xs: 4,     // séparation minimale entre deux éléments accolés
+  sm: 8,     // écart courant sur une même ligne (icône ↔ libellé, champs voisins)
+  md: 12,    // écart entre deux blocs liés
+  lg: 16,    // rembourrage de carte, écart entre blocs distincts
+  xl: 20,    // rembourrage de page
+  xxl: 24,   // séparation entre sections
+  huge: 40,  // grands vides délibérés (états vides, écrans d'accueil)
+};
+
 export const TEXT = {
   xs: 11,      // badges, mentions discrètes
   sm: 12,      // libellés secondaires, en-têtes de tableau

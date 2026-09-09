@@ -11,7 +11,7 @@ import { useLocale, fmtMoneyWith, aujourdhuiEntreprise } from '../lib/locale.jsx
 import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 const STATE_TONE = { draft: 'blue', posted: 'green', cancel: 'red' };
 const PAY_TONE = { not_paid: 'ochre', partial: 'ochre', paid: 'green', in_payment: 'ochre', reversed: 'red' };
@@ -218,12 +218,12 @@ export default function FacturesModule() {
   const flatInput = { width: '100%', boxSizing: 'border-box', border: '1px solid transparent', background: 'transparent', borderRadius: RADIUS.control, padding: '5px 6px', fontSize: TEXT.base };
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gap: SPACE.lg }}>
       <ComptaReportsPanel onChange={charger} />
 
       {/* ─── Liste des factures (colonnes dans l'ordre du tree Odoo) ─── */}
       <Card>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'end', flexWrap: 'wrap', marginBottom: SPACE.md }}>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginRight: 'auto' }}>{t('factures.title')}</div>
           <Select label={t('factures.filterType')} value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
             <option value="">{t('common.all')}</option>
@@ -238,7 +238,7 @@ export default function FacturesModule() {
           </Select>
         </div>
 
-        {apiError && <div style={{ color: COLORS.red, fontSize: TEXT.base, marginBottom: 8 }}>{apiError}</div>}
+        {apiError && <div style={{ color: COLORS.red, fontSize: TEXT.base, marginBottom: SPACE.sm }}>{apiError}</div>}
 
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
@@ -278,8 +278,8 @@ export default function FacturesModule() {
 
       {/* ─── Formulaire de création (brouillon) ─── */}
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 12 }}>{t('factures.newTitle')}</div>
-        <form onSubmit={submitForm} style={{ display: 'grid', gap: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.md }}>{t('factures.newTitle')}</div>
+        <form onSubmit={submitForm} style={{ display: 'grid', gap: SPACE.md }}>
           <div className="field-group" style={{ maxWidth: 620 }}>
             <div className="field-group-label">{t('factures.moveType')}</div>
             <select className="flat-input" value={form.moveType} onChange={(e) => setForm({ ...form, moveType: e.target.value })}>
@@ -330,7 +330,7 @@ export default function FacturesModule() {
             </table>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md }}>
             <Button type="button" variant="outline" onClick={addLigne}><Plus size={14} /> {t('factures.addLine')}</Button>
             <div style={{ marginLeft: 'auto', fontWeight: 700, fontSize: TEXT.md }}>{t('factures.totalLabel', { total: fmtMoney(totalForm) })}</div>
             <Button type="submit" disabled={saving}>{saving ? <Loader2 size={14} className="spin" /> : null} {t('factures.createDraft')}</Button>
@@ -340,9 +340,9 @@ export default function FacturesModule() {
 
       {/* ─── Modal détail — fiche account.move d'Odoo (métriques SCSS réelles, App.css .oe-*) ─── */}
       {detail && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={() => setDetail(null)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: SPACE.lg }} onClick={() => setDetail(null)}>
           <div className="oe-invoice" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 1040, maxHeight: '92vh', overflow: 'auto' }}>
-            <button onClick={() => setDetail(null)} aria-label={t('common.close')} style={{ position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: RADIUS.card, border: 0, background: COLORS.border, cursor: 'pointer', zIndex: 3 }}><X size={14} /></button>
+            <button onClick={() => setDetail(null)} aria-label={t('common.close')} style={{ position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: RADIUS.control, border: 0, background: COLORS.border, cursor: 'pointer', zIndex: 3 }}><X size={14} /></button>
 
             <div className="oe-invoice__cp">
               {detail.state === 'draft' && <Button small disabled={detailBusy} onClick={() => action(() => postFacture(detail.id), t('factures.posted'))}>{t('factures.postBtn')}</Button>}
@@ -387,7 +387,7 @@ export default function FacturesModule() {
               </div>
 
               {avoirForm && (
-                <form onSubmit={submitAvoir} style={{ border: `1px solid ${BORDER}`, borderRadius: RADIUS.control, padding: 12, marginBottom: 16, display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 16px', alignItems: 'center' }}>
+                <form onSubmit={submitAvoir} style={{ border: `1px solid ${BORDER}`, borderRadius: RADIUS.control, padding: SPACE.md, marginBottom: SPACE.lg, display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 16px', alignItems: 'center' }}>
                   <label style={{ fontSize: TEXT.base, opacity: 0.66 }}>{t('factures.avoirReason')}</label>
                   <input className="flat-input" value={avoirForm.reason} onChange={(e) => setAvoirForm({ ...avoirForm, reason: e.target.value })} />
                   <label style={{ fontSize: TEXT.base, opacity: 0.66 }}>{t('factures.avoirMethod')}</label>
@@ -396,7 +396,7 @@ export default function FacturesModule() {
                     <option value="refund">{t('factures.avoirMethodRefund')}</option>
                   </select>
                   <span />
-                  <span style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ display: 'flex', gap: SPACE.sm }}>
                     <Button type="submit" disabled={detailBusy}>{t('factures.createAvoir')}</Button>
                     <Button type="button" variant="outline" disabled={detailBusy} onClick={() => setAvoirForm(null)}>{t('common.cancel')}</Button>
                   </span>
@@ -480,12 +480,12 @@ export default function FacturesModule() {
                     <span>{t('devis.totalDeviseEntreprise')}</span><span>{fmtMoney(detail.amountTotalDeviseEntreprise)}</span>
                   </div>
                 )}
-                {detail.state === 'posted' && (<><dt style={{ marginTop: 4 }}>{t('factures.paid')}</dt><dd style={{ marginTop: 4 }}>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountTotal - detail.amountResidual })}</dd><dt style={{ fontWeight: 700 }}>{t('factures.amountResidual')}</dt><dd style={{ fontWeight: 700 }}>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountResidual })}</dd></>)}
+                {detail.state === 'posted' && (<><dt style={{ marginTop: SPACE.xs }}>{t('factures.paid')}</dt><dd style={{ marginTop: SPACE.xs }}>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountTotal - detail.amountResidual })}</dd><dt style={{ fontWeight: 700 }}>{t('factures.amountResidual')}</dt><dd style={{ fontWeight: 700 }}>{montantAffiche({ devise: detail.devise, amountTotal: detail.amountResidual })}</dd></>)}
               </dl>
 
               {detail.echeances && detail.echeances.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontWeight: 500, fontSize: TEXT.base, marginBottom: 4 }}>{t('factures.echeances')}</div>
+                <div style={{ marginBottom: SPACE.lg }}>
+                  <div style={{ fontWeight: 500, fontSize: TEXT.base, marginBottom: SPACE.xs }}>{t('factures.echeances')}</div>
                   <table className="oe-list"><tbody>
                     {detail.echeances.map((e) => (
                       <tr key={e.id}><td style={{ width: '40%' }}>{fmtDate(e.dateEcheance)}</td><td className="num" style={{ width: '40%' }}>{enDevise(e.montant, detail.devise)}</td><td style={{ width: '20%', color: e.statut === 'Payé' ? COLORS.green : 'inherit' }}>{e.statut}</td></tr>
@@ -495,8 +495,8 @@ export default function FacturesModule() {
               )}
 
               {detail.paiements && detail.paiements.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontWeight: 500, fontSize: TEXT.base, marginBottom: 4 }}>{t('factures.paiements')}</div>
+                <div style={{ marginBottom: SPACE.lg }}>
+                  <div style={{ fontWeight: 500, fontSize: TEXT.base, marginBottom: SPACE.xs }}>{t('factures.paiements')}</div>
                   <table className="oe-list"><tbody>
                     {detail.paiements.map((p) => (
                       <tr key={p.id}><td style={{ width: '45%' }}>{p.paymentMoveName || `#${p.id}`}</td><td style={{ width: '30%' }}>{p.paymentDate ? fmtDate(p.paymentDate) : ''}</td><td className="num" style={{ width: '25%' }}>{enDevise(p.amount, detail.devise)}</td></tr>
@@ -506,7 +506,7 @@ export default function FacturesModule() {
               )}
 
               {detail.state === 'posted' && detail.moveType === 'out_invoice' && detail.amountResidual > 0.01 && (
-                <form id="fac-pay-form" onSubmit={submitPaiement} style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14, display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 16px', alignItems: 'center' }}>
+                <form id="fac-pay-form" onSubmit={submitPaiement} style={{ borderTop: `1px solid ${BORDER}`, paddingTop: SPACE.md, display: 'grid', gridTemplateColumns: 'fit-content(150px) minmax(0,1fr)', gap: '8px 16px', alignItems: 'center' }}>
                   <label style={{ fontSize: TEXT.base, opacity: 0.66 }}>{t('factures.paymentAmount')}</label>
                   <input className="flat-input" type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} style={{ maxWidth: 180 }} />
                   <label style={{ fontSize: TEXT.base, opacity: 0.66 }}>{t('factures.paymentDate')}</label>

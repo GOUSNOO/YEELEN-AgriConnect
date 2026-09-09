@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { getProduitRecettes, getOrdresTransformation, getOrdreTransformation, createOrdreTransformation, deleteOrdreTransformation } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Transformation agroalimentaire, étape 2 : ordres de transformation — exécute une recette
 // (panneau ProduitRecettesPanel juste au-dessus) et répercute réellement la consommation des
@@ -90,16 +90,16 @@ export default function OrdresTransformationPanel({ module }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('ordresTransformation.title')} {loaded ? `(${ordres.length})` : ''}
       </button>
 
       {open && (
-        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ marginTop: SPACE.md, display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
           {recettes.length === 0 ? (
             <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('ordresTransformation.aucuneRecetteDisponible')}</div>
           ) : (
-            <form onSubmit={executerOrdre} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <form onSubmit={executerOrdre} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
               <Select label={t('recettes.title')} value={form.recetteId} onChange={(e) => setForm({ ...form, recetteId: e.target.value })}>
                 <option value="">{t('common.none')}</option>
                 {recettes.map((r) => <option key={r.id} value={r.id}>{r.nom} → {r.produitSortieNom}</option>)}
@@ -126,7 +126,7 @@ export default function OrdresTransformationPanel({ module }) {
                 <React.Fragment key={o.id}>
                   <tr>
                     <td>
-                      <button type="button" onClick={() => toggleDetail(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: COLORS.ink }}>
+                      <button type="button" onClick={() => toggleDetail(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.xs, padding: 0, fontWeight: 600, color: COLORS.ink }}>
                         {expandedId === o.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {o.dateTransformation}
                       </button>
                     </td>
@@ -143,8 +143,8 @@ export default function OrdresTransformationPanel({ module }) {
                   {expandedId === o.id && (
                     <tr>
                       <td colSpan={6} style={{ background: COLORS.surfaceAlt }}>
-                        <div style={{ padding: 8, fontSize: TEXT.base }}>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('ordresTransformation.ingredientsConsommes')}</div>
+                        <div style={{ padding: SPACE.sm, fontSize: TEXT.base }}>
+                          <div style={{ fontWeight: 600, marginBottom: SPACE.xs }}>{t('ordresTransformation.ingredientsConsommes')}</div>
                           {(detailParOrdre[o.id]?.lignes || []).length === 0 ? (
                             <span style={{ color: COLORS.inkSoft }}>—</span>
                           ) : (
@@ -154,8 +154,8 @@ export default function OrdresTransformationPanel({ module }) {
                               ))}
                             </div>
                           )}
-                          {o.operateur && <div style={{ marginTop: 4 }}>{t('ordresTransformation.operateur')}: {o.operateur}</div>}
-                          {o.notes && <div style={{ marginTop: 4 }}>{o.notes}</div>}
+                          {o.operateur && <div style={{ marginTop: SPACE.xs }}>{t('ordresTransformation.operateur')}: {o.operateur}</div>}
+                          {o.notes && <div style={{ marginTop: SPACE.xs }}>{o.notes}</div>}
                         </div>
                       </td>
                     </tr>

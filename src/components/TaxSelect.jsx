@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Sélecteur multi-taxes compact pour une cellule de tableau de lignes de devis — équivalent
 // du widget many2many_tags de sale.order.line.tax_id d'un ERP de référence, en version
@@ -34,7 +34,7 @@ export default function TaxSelect({ value, options, onChange, disabled }) {
       <div
         onClick={() => !disabled && setOpen((o) => !o)}
         style={{
-          display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', minHeight: 24,
+          display: 'flex', flexWrap: 'wrap', gap: SPACE.xs, alignItems: 'center', minHeight: 24,
           padding: '2px 4px', border: '1px solid transparent', borderRadius: RADIUS.control,
           cursor: disabled ? 'default' : 'pointer',
         }}
@@ -43,7 +43,7 @@ export default function TaxSelect({ value, options, onChange, disabled }) {
         {selectedTaxes.map((o) => (
           <span key={o.id} style={{
             display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: TEXT.xs, lineHeight: 1.4,
-            background: COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '1px 7px', whiteSpace: 'nowrap',
+            background: COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.pill, padding: '1px 7px', whiteSpace: 'nowrap',
           }}>
             {o.name}
             {!disabled && (
@@ -60,13 +60,13 @@ export default function TaxSelect({ value, options, onChange, disabled }) {
         <div style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 30, minWidth: 200,
           background: '#fff', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card,
-          boxShadow: '0 6px 20px rgba(0,0,0,0.12)', padding: 6, marginTop: 2,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.12)', padding: SPACE.sm, marginTop: 2,
         }}>
           {(options || []).length === 0 && (
             <div style={{ fontSize: TEXT.sm, color: COLORS.inkFaint, padding: '6px 8px' }}>{t('taxes.emptyRef')}</div>
           )}
           {(options || []).map((o) => (
-            <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, padding: '5px 8px', cursor: 'pointer', borderRadius: RADIUS.control }}>
+            <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, padding: '5px 8px', cursor: 'pointer', borderRadius: RADIUS.control }}>
               <input type="checkbox" checked={selected.includes(o.id)} onChange={() => toggle(o.id)} />
               <span>{o.name} <span style={{ color: COLORS.inkSoft }}>· {o.amountType === 'fixed' ? o.amount : `${o.amount} %`}</span></span>
             </label>

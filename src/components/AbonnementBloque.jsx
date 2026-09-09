@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Lock, LogOut, ShieldAlert } from 'lucide-react';
 import { Card, Button } from './ui.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Écran plein écran (overlay fixed, au-dessus de tout le shell) quand subscriptionGuard
 // renvoie mode==='locked' — abonnement expiré au-delà de la grâce, ou compte suspendu (voir
@@ -15,10 +15,10 @@ export default function AbonnementBloque({ billing, onLogout }) {
   const suspended = billing?.status === 'suspended';
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(34,39,29,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 16 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(34,39,29,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: SPACE.lg }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: SPACE.sm }}>
             <div style={{ width: 48, height: 48, borderRadius: RADIUS.card, background: COLORS.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {suspended ? <ShieldAlert size={24} color={COLORS.red} /> : <Lock size={24} color={COLORS.red} />}
             </div>
@@ -28,7 +28,7 @@ export default function AbonnementBloque({ billing, onLogout }) {
             <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
               {suspended ? t('billing.blocked.suspendedDesc') : t('billing.blocked.expiredDesc')}
             </div>
-            <Button variant="ghost" onClick={onLogout} style={{ marginTop: 10 }}>
+            <Button variant="ghost" onClick={onLogout} style={{ marginTop: SPACE.sm }}>
               <LogOut size={14} /> {t('shell.logout')}
             </Button>
           </div>

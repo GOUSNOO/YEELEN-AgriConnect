@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { createTax, deleteTax } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Référentiel compact des taxes réutilisables (account.tax-like), rendu dans DevisModule.
 // Étape 1 : on expose amount_type 'percent' et 'fixed' (à l'unité) + price_include. Les
@@ -49,20 +49,20 @@ export default function TaxesPanel({ taxes, onChange }) {
 
   return (
     <Card>
-      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('taxes.title')} ({(taxes || []).length})
       </button>
 
       {open && (
-        <div style={{ marginTop: 14 }}>
-          <form onSubmit={ajouter} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 12 }}>
+        <div style={{ marginTop: SPACE.md }}>
+          <form onSubmit={ajouter} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.md }}>
             <Field label={t('taxes.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Select label={t('taxes.amountType')} value={form.amountType} onChange={(e) => setForm({ ...form, amountType: e.target.value })}>
               <option value="percent">{t('taxes.amountTypePercent')}</option>
               <option value="fixed">{t('taxes.amountTypeFixed')}</option>
             </Select>
             <Field label={t('taxes.amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, color: COLORS.inkSoft }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.inkSoft }}>
               <input type="checkbox" checked={form.priceInclude} onChange={(e) => setForm({ ...form, priceInclude: e.target.checked })} />
               {t('taxes.priceInclude')}
             </label>

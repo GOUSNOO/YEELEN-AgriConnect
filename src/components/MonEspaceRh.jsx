@@ -8,7 +8,7 @@ import {
 } from '../lib/api.js';
 import { fmtMoney, fmtDate, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Jour de l'entreprise, pas le jour UTC (voir aujourdhuiEntreprise dans lib/locale.jsx).
 const today = () => aujourdhuiEntreprise();
@@ -63,7 +63,7 @@ export default function MonEspaceRh() {
   if (fiche === null) {
     return (
       <Card>
-        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>{t('rh.monEspaceTitle')}</div>
+        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.monEspaceTitle')}</div>
         <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('rh.monEspaceNoFiche')}</p>
       </Card>
     );
@@ -86,9 +86,9 @@ export default function MonEspaceRh() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: SPACE.md, alignItems: 'center' }}>
           {fiche.photo
             ? <img src={fiche.photo} alt="" style={{ width: 56, height: 56, borderRadius: RADIUS.card, objectFit: 'cover' }} />
             : <div style={{ width: 56, height: 56, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(fiche.prenom?.[0] || '') + (fiche.nom?.[0] || '')}</div>}
@@ -104,8 +104,8 @@ export default function MonEspaceRh() {
       </Card>
 
       <Card>
-        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.monSolde', { annee })}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.monSolde', { annee })}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: SPACE.sm }}>
           {solde.map(x => (
             <div key={x.typeId} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px' }}>
               <div style={{ fontSize: TEXT.sm, fontWeight: 600, color: x.couleur || COLORS.ink }}>{x.nom}</div>
@@ -118,8 +118,8 @@ export default function MonEspaceRh() {
       </Card>
 
       <Card>
-        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.demanderConge')}</div>
-        <form onSubmit={submitConge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.demanderConge')}</div>
+        <form onSubmit={submitConge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Select label={t('rh.typeField')} value={form.typeId} onChange={e => setForm({ ...form, typeId: e.target.value })}>
             <option value="">—</option>
             {types.map(ct => <option key={ct.id} value={ct.id}>{ct.nom}</option>)}
@@ -127,10 +127,10 @@ export default function MonEspaceRh() {
           <Field label={t('rh.du')} type="date" value={form.dateDebut} onChange={e => setForm({ ...form, dateDebut: e.target.value })} />
           <Field label={t('rh.au')} type="date" value={form.dateFin} onChange={e => setForm({ ...form, dateFin: e.target.value })} />
           <Field label={t('rh.motif')} placeholder={t('common.optionalPlaceholder')} value={form.motif} onChange={e => setForm({ ...form, motif: e.target.value })} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm }}>
             <input type="checkbox" checked={form.demiJourDebut} onChange={e => setForm({ ...form, demiJourDebut: e.target.checked })} /> {t('rh.demiPremier')}
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm }}>
             <input type="checkbox" checked={form.demiJourFin} onChange={e => setForm({ ...form, demiJourFin: e.target.checked })} /> {t('rh.demiDernier')}
           </label>
           <Button type="submit" variant="green"><Plus size={15} /> {t('common.send')}</Button>
@@ -138,16 +138,16 @@ export default function MonEspaceRh() {
       </Card>
 
       <Card>
-        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.mesDemandes')}</div>
+        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.mesDemandes')}</div>
         {conges.length === 0 ? <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('rh.congesEmpty')}</p> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             {conges.map(c => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                 <div>
                   <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fr(c.dateDebut)} → {fr(c.dateFin)} · {c.nbJours != null ? t('rh.nbJours', { count: c.nbJours }) : '—'}</div>
                   <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{c.typeNom || t('rh.typeNonPrecise')}{c.motif ? ` · ${c.motif}` : ''}</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                   <Badge tone={CONGE_TONE[c.statut] || 'blue'}>{t(`rh.congeStatut.${c.statut}`, { defaultValue: c.statut })}</Badge>
                   {c.statut === 'Demandé' && (
                     <button onClick={() => annuler(c.id)} title={t('rh.annulerTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><X size={16} /></button>
@@ -159,11 +159,11 @@ export default function MonEspaceRh() {
         )}
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: SPACE.lg }}>
         <Card>
-          <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.mesPresences')}</div>
+          <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.mesPresences')}</div>
           {presences.length === 0 ? <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('rh.aucune')}</p> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
               {presences.slice(0, 12).map(p => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm }}>
                   <span>{fr(p.date)}</span><Badge tone={PRESENCE_TONE[p.statut] || 'blue'}>{t(`rh.presenceStatut.${p.statut}`, { defaultValue: p.statut })}</Badge>
@@ -173,10 +173,10 @@ export default function MonEspaceRh() {
           )}
         </Card>
         <Card>
-          <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.mesAvances')}</div>
-          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.totalLabel', { total: fcfa(avances.reduce((s, a) => s + Number(a.montant), 0)) })}</div>
+          <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.mesAvances')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: SPACE.sm }}>{t('rh.totalLabel', { total: fcfa(avances.reduce((s, a) => s + Number(a.montant), 0)) })}</div>
           {avances.length === 0 ? <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('rh.aucune')}</p> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
               {avances.slice(0, 12).map(a => (
                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm }}>
                   <span>{fr(a.date)}{a.motif ? ` · ${a.motif}` : ''}</span><span style={{ fontWeight: 600 }}>{fcfa(a.montant)}</span>
@@ -188,10 +188,10 @@ export default function MonEspaceRh() {
       </div>
 
       <Card>
-        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.monBulletin')}</div>
+        <div style={{ fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.monBulletin')}</div>
         <Field label={t('rh.mois')} type="month" value={mois} onChange={e => setMois(e.target.value)} style={{ maxWidth: 180 }} />
         {!bulletin ? <p style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('common.loading')}</p> : (
-          <div className="field-group" style={{ maxWidth: 420, marginTop: 12 }}>
+          <div className="field-group" style={{ maxWidth: 420, marginTop: SPACE.md }}>
             <div className="field-group-label">{t('rh.bulletinSalaireRef')}</div><div style={{ fontSize: TEXT.base }}>{fcfa(bulletin.salaire)}</div>
             <div className="field-group-label">{t('rh.bulletinAvances')}</div><div style={{ fontSize: TEXT.base }}>− {fcfa(bulletin.avances)}</div>
             <div className="field-group-label">{t('rh.bulletinAbsencesNonPayees')}</div><div style={{ fontSize: TEXT.base }}>{t('rh.bulletinJoursVal', { jours: bulletin.joursAbsenceNonPayee, ouvres: bulletin.joursOuvresMois })}</div>
@@ -199,7 +199,7 @@ export default function MonEspaceRh() {
             <div className="field-group-label"><b>{t('rh.bulletinNet')}</b></div><div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{fcfa(bulletin.netEstime)}</div>
           </div>
         )}
-        <p style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 12 }}>{t('rh.bulletinDisclaimer')}</p>
+        <p style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: SPACE.md }}>{t('rh.bulletinDisclaimer')}</p>
       </Card>
     </div>
   );

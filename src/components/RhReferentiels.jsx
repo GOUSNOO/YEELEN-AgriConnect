@@ -9,7 +9,7 @@ import {
 } from '../lib/api.js';
 import { fmtDate } from '../lib/locale.jsx';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 const fr = (d) => (d ? fmtDate(d) : '—');
 
@@ -53,13 +53,13 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
 
   return (
     <Card>
-      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('rh.referentielsTitle')}
       </button>
 
       {open && (
-        <div style={{ marginTop: 14 }}>
-          <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: SPACE.md }}>
+          <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}`, marginBottom: SPACE.md, flexWrap: 'wrap' }}>
             {SUBS.map(s => (
               <button key={s.id} onClick={() => setSub(s.id)} style={{
                 background: 'transparent', color: sub === s.id ? COLORS.ink : COLORS.inkSoft,
@@ -72,7 +72,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
           {sub === 'departements' && (
             <>
               <form onSubmit={async e => { e.preventDefault(); if (!depForm.nom.trim()) return; try { await createDepartement(depForm); notifySuccess(t('rh.depAdded')); setDepForm({ nom: '' }); after(); } catch (err) { notifyError(err); } }}
-                style={{ display: 'flex', gap: 10, alignItems: 'end', marginBottom: 12, flexWrap: 'wrap' }}>
+                style={{ display: 'flex', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.md, flexWrap: 'wrap' }}>
                 <Field label={t('rh.depNom')} value={depForm.nom} onChange={e => setDepForm({ nom: e.target.value })} />
                 <Button type="submit" variant="outline"><Plus size={14} /> {t('common.add')}</Button>
               </form>
@@ -85,7 +85,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
           {sub === 'postes' && (
             <>
               <form onSubmit={async e => { e.preventDefault(); if (!posteForm.intitule.trim()) return; try { await createPoste(posteForm); notifySuccess(t('rh.posteAdded')); setPosteForm({ intitule: '', departementId: '' }); after(); } catch (err) { notifyError(err); } }}
-                style={{ display: 'flex', gap: 10, alignItems: 'end', marginBottom: 12, flexWrap: 'wrap' }}>
+                style={{ display: 'flex', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.md, flexWrap: 'wrap' }}>
                 <Field label={t('rh.posteIntitule')} value={posteForm.intitule} onChange={e => setPosteForm({ ...posteForm, intitule: e.target.value })} />
                 <Select label={t('rh.fieldDepartement')} value={posteForm.departementId} onChange={e => setPosteForm({ ...posteForm, departementId: e.target.value })}>
                   <option value="">—</option>
@@ -102,12 +102,12 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
           {sub === 'feries' && (
             <>
               <form onSubmit={async e => { e.preventDefault(); if (!ferieForm.date) return; try { await createJourFerie(ferieForm); notifySuccess(t('rh.ferieAdded')); setFerieForm({ date: '', nom: '' }); after(); } catch (err) { notifyError(err); } }}
-                style={{ display: 'flex', gap: 10, alignItems: 'end', marginBottom: 12, flexWrap: 'wrap' }}>
+                style={{ display: 'flex', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.md, flexWrap: 'wrap' }}>
                 <Field label={t('common.date')} type="date" value={ferieForm.date} onChange={e => setFerieForm({ ...ferieForm, date: e.target.value })} />
                 <Field label={t('rh.ferieLibelle')} placeholder={t('common.optionalPlaceholder')} value={ferieForm.nom} onChange={e => setFerieForm({ ...ferieForm, nom: e.target.value })} />
                 <Button type="submit" variant="outline"><Plus size={14} /> {t('common.add')}</Button>
               </form>
-              <p style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 10 }}>{t('rh.ferieHint')}</p>
+              <p style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('rh.ferieHint')}</p>
               {feries.map(f => (
                 <Row key={f.id} label={`${fr(f.date)}${f.nom ? ` — ${f.nom}` : ''}`} onDelete={async () => { await deleteJourFerie(f.id); after(); }} />
               ))}
@@ -117,12 +117,12 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
           {sub === 'types' && (
             <>
               <form onSubmit={async e => { e.preventDefault(); if (!typeForm.nom.trim()) return; try { await createCongeType(typeForm); notifySuccess(t('rh.typeAdded')); setTypeForm({ nom: '', paye: true, justificatifRequis: false }); after(); } catch (err) { notifyError(err); } }}
-                style={{ display: 'flex', gap: 12, alignItems: 'end', marginBottom: 12, flexWrap: 'wrap' }}>
+                style={{ display: 'flex', gap: SPACE.md, alignItems: 'end', marginBottom: SPACE.md, flexWrap: 'wrap' }}>
                 <Field label={t('rh.typeNom')} value={typeForm.nom} onChange={e => setTypeForm({ ...typeForm, nom: e.target.value })} />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm }}>
                   <input type="checkbox" checked={typeForm.paye} onChange={e => setTypeForm({ ...typeForm, paye: e.target.checked })} /> {t('rh.typePaye')}
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm }}>
                   <input type="checkbox" checked={typeForm.justificatifRequis} onChange={e => setTypeForm({ ...typeForm, justificatifRequis: e.target.checked })} /> {t('rh.typeJustificatif')}
                 </label>
                 <Button type="submit" variant="outline"><Plus size={14} /> {t('common.add')}</Button>
@@ -140,7 +140,7 @@ export default function RhReferentiels({ canManage = false, onChanged }) {
 
 function Row({ label, onDelete }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginBottom: 6, fontSize: TEXT.base }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginBottom: SPACE.sm, fontSize: TEXT.base }}>
       <span>{label}</span>
       <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
     </div>

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Thermometer, Droplet, ArrowRight } from 'lucide-react';
 import { getMeteo } from '../lib/api.js';
 import { Card, Badge } from './ui.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 const C = {
   ink: COLORS.ink, inkSoft: COLORS.inkSoft,
@@ -57,23 +57,23 @@ export default function MeteoWidget({ onOuvrirMeteo }) {
     <Card>
       <button
         onClick={onOuvrirMeteo}
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'none', border: 'none', cursor: onOuvrirMeteo ? 'pointer' : 'default', padding: 0, marginBottom: 10 }}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: 'none', border: 'none', cursor: onOuvrirMeteo ? 'pointer' : 'default', padding: 0, marginBottom: SPACE.sm }}
       >
         <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, color: C.ink }}>{data.ville}</span>
         {onOuvrirMeteo && <ArrowRight size={15} color={C.inkSoft} />}
       </button>
-      <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', gap: SPACE.lg, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <Thermometer size={16} color={C.ochre} />
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.md, fontWeight: 700, color: C.ink }}>{data.actuel.temperature}°</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <Droplet size={16} color={C.blue} />
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.md, fontWeight: 700, color: C.ink }}>{data.actuel.humidite}%</span>
         </div>
       </div>
       {alertePrincipale && (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: SPACE.sm }}>
           <Badge tone={GRAVITE_TONE[alertePrincipale.gravite] || 'blue'}>{alertePrincipale.message}</Badge>
         </div>
       )}

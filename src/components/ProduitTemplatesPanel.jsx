@@ -6,7 +6,7 @@ import {
   getProduitTemplates, getProduitTemplate, createProduitTemplate, regenererVariantesTemplate, deleteProduitTemplate,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Gabarits/variantes + attributs (product.template / product.attribute-like) — étape 2 de
 // l'alignement Odoo produit/stock. Panneau repliable dans StocksTab, sur le modèle de
@@ -168,29 +168,29 @@ export default function ProduitTemplatesPanel({ module, categories }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('gabarits.title')} {loaded ? `(${templates.length})` : ''}
       </button>
 
       {open && (
-        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 22 }}>
+        <div style={{ marginTop: SPACE.md, display: 'flex', flexDirection: 'column', gap: SPACE.xl }}>
           <div>
-            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 8 }}>{t('gabarits.attributsTitle')}</div>
-            <form onSubmit={ajouterAttribut} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 10 }}>
+            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: SPACE.sm }}>{t('gabarits.attributsTitle')}</div>
+            <form onSubmit={ajouterAttribut} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.sm }}>
               <Field label={t('gabarits.attributNom')} value={attrForm.nom} onChange={(e) => setAttrForm({ ...attrForm, nom: e.target.value })} />
               <Field label={t('gabarits.attributValeurs')} placeholder={t('gabarits.attributValeursPlaceholder')} value={attrForm.valeurs} onChange={(e) => setAttrForm({ ...attrForm, valeurs: e.target.value })} />
               <Button type="submit" variant="outline" disabled={attrBusy}><Plus size={14} /> {t('common.add')}</Button>
             </form>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               {attributs.map((a) => (
-                <div key={a.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 10 }}>
+                <div key={a.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: SPACE.sm }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong>{a.nom}</strong>
                     <button type="button" onClick={() => supprimerAttribut(a.id, a.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, marginTop: SPACE.sm, alignItems: 'center' }}>
                     {a.valeurs.map((v) => (
-                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: TEXT.sm }}>
+                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE.xs, background: COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: TEXT.sm }}>
                         {v.valeur}
                         <button type="button" onClick={() => supprimerValeur(v.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex', padding: 0 }}><Trash2 size={11} /></button>
                       </span>
@@ -211,9 +211,9 @@ export default function ProduitTemplatesPanel({ module, categories }) {
           </div>
 
           <div>
-            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 8 }}>{t('gabarits.templatesTitle')}</div>
-            <form onSubmit={creerGabarit} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: SPACE.sm }}>{t('gabarits.templatesTitle')}</div>
+            <form onSubmit={creerGabarit} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, marginBottom: SPACE.md }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
                 <Field label={t('gabarits.templateNom')} value={tplForm.nom} onChange={(e) => setTplForm({ ...tplForm, nom: e.target.value })} />
                 <Select label={t('stocks.categorie')} value={tplForm.categorieId} onChange={(e) => setTplForm({ ...tplForm, categorieId: e.target.value })}>
                   <option value="">{t('common.none')}</option>
@@ -223,15 +223,15 @@ export default function ProduitTemplatesPanel({ module, categories }) {
               </div>
               {attributs.some((a) => a.valeurs.length > 0) && (
                 <div>
-                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 6 }}>{t('gabarits.selectionnerValeurs')}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('gabarits.selectionnerValeurs')}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                     {attributs.filter((a) => a.valeurs.length > 0).map((a) => (
-                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: TEXT.sm, fontWeight: 600, minWidth: 90 }}>{a.nom}</span>
                         {a.valeurs.map((v) => {
                           const selected = (tplForm.selection[a.id] || new Set()).has(v.id);
                           return (
-                            <label key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: TEXT.sm, background: selected ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', cursor: 'pointer' }}>
+                            <label key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.sm, background: selected ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.pill, padding: '3px 8px', cursor: 'pointer' }}>
                               <input type="checkbox" checked={selected} onChange={() => toggleValeurSelection(a.id, v.id)} style={{ margin: 0 }} />
                               {v.valeur}
                             </label>
@@ -257,14 +257,14 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                   <React.Fragment key={tpl.id}>
                     <tr>
                       <td>
-                        <button type="button" onClick={() => toggleDetail(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: COLORS.ink }}>
+                        <button type="button" onClick={() => toggleDetail(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.xs, padding: 0, fontWeight: 600, color: COLORS.ink }}>
                           {expandedTemplateId === tpl.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {tpl.nom}
                         </button>
                       </td>
                       <td style={{ color: COLORS.inkSoft }}>{tpl.categorie}</td>
                       <td>{tpl.nbVariantes}</td>
                       <td>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: SPACE.sm, justifyContent: 'flex-end' }}>
                           <button type="button" title={t('gabarits.regenerer')} onClick={() => regenerer(tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><RefreshCw size={14} /></button>
                           <button type="button" onClick={() => supprimerGabarit(tpl.id, tpl.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                         </div>
@@ -274,7 +274,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                       <tr>
                         <td colSpan={4} style={{ background: COLORS.surfaceAlt }}>
                           {(templateDetail.variantes || []).length === 0 ? (
-                            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base, padding: 8 }}>{t('gabarits.aucuneVariante')}</div>
+                            <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base, padding: SPACE.sm }}>{t('gabarits.aucuneVariante')}</div>
                           ) : (
                             <table className="data-table" style={{ margin: '4px 0' }}>
                               <thead><tr style={{ color: COLORS.inkSoft }}>
@@ -302,7 +302,7 @@ export default function ProduitTemplatesPanel({ module, categories }) {
                 ))}
               </tbody>
             </DataTable>
-            {templates.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base, marginTop: 8 }}>{t('gabarits.aucunGabarit')}</div>}
+            {templates.length === 0 && <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base, marginTop: SPACE.sm }}>{t('gabarits.aucunGabarit')}</div>}
           </div>
         </div>
       )}

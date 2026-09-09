@@ -4,7 +4,7 @@ import { Send } from 'lucide-react';
 import { createFeedback, getAllFeedback, updateFeedbackStatus } from '../lib/api.js';
 import { Badge, Button, Card, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 const TYPES = ['Suggestion', 'Frustration', 'Bug', 'Autre'];
 const STATUTS = ['Nouveau', 'Lu', 'Traité'];
@@ -72,17 +72,17 @@ export function FeedbackModule({ isPlatformAdmin }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
         <h2 style={{ marginTop: 0 }}>{t('feedback.formTitle')}</h2>
         <p style={{ marginTop: 0, color: COLORS.inkSoft, fontSize: TEXT.base }}>
           {t('feedback.formHint')}
         </p>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           <Select label={t('feedback.typeLabel')} value={form.type} onChange={e => setForm(prev => ({ ...prev, type: e.target.value }))}>
             {TYPES.map(ty => <option key={ty} value={ty}>{t(`feedback.typeLabels.${ty}`, { defaultValue: ty })}</option>)}
           </Select>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
             {t('feedback.messageLabel')}
             <textarea
               className="flat-input"
@@ -109,11 +109,11 @@ export function FeedbackModule({ isPlatformAdmin }) {
           ) : allFeedback.length === 0 ? (
             <p style={{ margin: 0, color: COLORS.inkSoft }}>{t('feedback.adminEmpty')}</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               {allFeedback.map(f => (
                 <div key={f.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE.sm, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'center', flexWrap: 'wrap' }}>
                       <Badge tone={TYPE_TONE[f.type] || 'green'}>{t(`feedback.typeLabels.${f.type}`, { defaultValue: f.type })}</Badge>
                       <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                         {f.entrepriseNom}{f.userEmail ? ` — ${f.userEmail}` : ''}

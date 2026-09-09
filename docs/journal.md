@@ -3897,3 +3897,73 @@ rien d'autre ne bouge. Thème sombre système vérifié **avec l'émulation rée
 (gap/padding sur 8, 10, 6, 16, 12, 20, 4, 5, 14, 7 — plus de 350 occurrences, le morceau le plus
 risqué visuellement puisqu'il change la densité de toute l'application) et la réassignation des
 arrondis par rôle (dette déclarée la veille).
+
+### 2026-09-10 — Espacements sur une grille de 4 px, et arrondis rendus à leur rôle
+
+Points 3 et 4 du chantier design, les deux derniers.
+
+**L'échelle d'espacement**
+
+Vingt et une valeurs distinctes sur 993 occurrences de `gap` / `padding` / `margin`. Comme pour
+les tailles de police, la dispersion n'exprimait aucune hiérarchie : `gap: 6` (43), `gap: 8`
+(61) et `gap: 10` (64) servaient tous les trois d'écart entre éléments d'une même ligne ;
+`marginBottom` se répartissait sur 10 / 12 / 16 / 8 / 14 / 6 sans règle discernable.
+
+Sept pas sur une grille de 4 px (`SPACE` dans `lib/theme.js`). Deux décisions méritent d'être
+écrites, parce qu'elles ne découlent pas d'un arrondi mécanique :
+
+- **Les ex æquo (10, 14, 22, 26) sont arrondis vers le bas.** Ce n'est pas un choix esthétique :
+  réduire un espacement ne peut jamais provoquer un retour à la ligne ni un débordement,
+  l'augmenter si. À défaut de pouvoir ouvrir les ~200 écrans concernés, c'est la règle qui rend
+  la conversion sûre par construction.
+- **Seule exception : 6 → 8 plutôt que 6 → 4.** Ces 114 occurrences sont presque toutes l'écart
+  entre une icône et son libellé ; les ramener à 4 px collerait l'icône au texte au lieu de l'en
+  séparer. La règle générale aurait donné le mauvais résultat ici, donc elle cède.
+
+**Les valeurs de 0 à 3 px ne sont pas converties** (111 occurrences). Ce ne sont pas des
+espacements mais des corrections optiques — un `marginTop: 1` qui aligne une icône sur la ligne
+de base du texte. Les porter à 4 px casserait précisément l'alignement qu'elles servent à
+obtenir. 882 occurrences converties, 111 laissées, délibérément.
+
+**Hors périmètre, assumé** : les 166 rembourrages écrits en chaîne (`padding: '9px 12px'`).
+Ce sont majoritairement des rembourrages de contrôles calés sur le CSS de l'ERP de référence, où
+un pixel change la hauteur du composant — un autre problème (dimensionnement d'un composant) que
+le rythme de mise en page traité ici.
+
+**Les arrondis rendus à leur rôle**
+
+Dette déclarée la veille : les douze valeurs avaient été ramenées à trois jetons, mais classées
+sur leur valeur d'origine et non sur leur rôle — d'où 122 `RADIUS.card` contre 15
+`RADIUS.control`. Le symptôme concret, mesuré dans le navigateur : dans le formulaire « Récoltes »,
+le bouton « Ajouter » affichait 8 px et le champ de date juste à côté 4 px. Deux contrôles
+voisins, deux arrondis.
+
+Reclassement, sur le rôle réel et non sur la valeur :
+
+- `Button` (primitive de `ui.jsx`) → `control`. Un seul changement qui corrige tous les boutons
+  de l'application d'un coup.
+- 14 `<button>` stylés en ligne → `control`, trouvés en remontant depuis chaque occurrence
+  jusqu'à la balise englobante plutôt qu'en cherchant sur la même ligne (le style et la balise
+  sont presque toujours sur des lignes différentes).
+- Le conteneur du sélecteur segmenté Connexion/Inscription → `control` : son cadre extérieur
+  était plus rond que les boutons qu'il contient.
+- Les entrées du menu mobile → `control` : ce sont des boutons, pas des surfaces.
+- Les étiquettes de taxes (`TaxSelect`) → `pill`, pour rejoindre `Badge`, qui est le même objet.
+- **`.app-shell` perd son arrondi.** Un élément qui occupe tout l'écran n'a pas de coins à
+  arrondir : ces 8 px ne faisaient que rogner le fond aux quatre angles de la page.
+
+Ce qui **reste** en `card` a été vérifié un par un : bandeaux d'erreur, panneaux de modale,
+sous-panneaux bordés, lignes de liste. Ce sont des surfaces, pas des contrôles — les passer en
+`control` aurait été un changement de goût déguisé en règle. Répartition finale : 103 `card`,
+32 `control`, 18 `pill`.
+
+**Vérification** — build et `oxlint` verts, 119/119 tests. Comparaison avant/après en navigateur
+sur le même écran à la même largeur (`git stash`, captures, restauration) : l'écart se lit à
+environ 5 px sur la hauteur totale d'une carte de formulaire, rien ne casse. Contrôles mesurés
+après coup plutôt que jugés à l'œil : bouton « Ajouter » et champ de date renvoient tous deux
+`4px`, une carte `8px`, `.app-shell` `0px`. Absence de débordement horizontal confirmée
+(`scrollWidth === clientWidth`), le correctif de largeur du 2026-09-06 tient toujours. Panneau
+de navigation mobile ouvert et vérifié. Entreprise jetable supprimée après coup.
+
+Le chantier design est terminé : palette, base typographique, échelle de texte, échelle
+d'espacement, arrondis. Tout passe désormais par `src/lib/theme.js`.

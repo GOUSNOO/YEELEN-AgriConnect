@@ -6,7 +6,7 @@ import {
   getProduitRecetteLignes, createProduitRecetteLigne, deleteProduitRecetteLigne,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, DataTable, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Transformation agroalimentaire, étape 1 : recettes (mrp.bom-like côté ERP de référence).
 // Panneau repliable dans StocksTab, sur le modèle de ProduitTemplatesPanel/PaymentTermsPanel.
@@ -118,13 +118,13 @@ export default function ProduitRecettesPanel({ module, produits }) {
 
   return (
     <Card>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, padding: 0 }}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {t('recettes.title')} {loaded ? `(${recettes.length})` : ''}
       </button>
 
       {open && (
-        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <form onSubmit={creerRecette} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ marginTop: SPACE.md, display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+          <form onSubmit={creerRecette} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
             <Field label={t('recettes.nom')} value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} />
             <Select label={t('recettes.produitSortie')} value={form.produitSortieId} onChange={(e) => setForm({ ...form, produitSortieId: e.target.value })}>
               <option value="">{t('common.none')}</option>
@@ -147,7 +147,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
                 <React.Fragment key={r.id}>
                   <tr>
                     <td>
-                      <button type="button" onClick={() => toggleDetail(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600, color: COLORS.ink }}>
+                      <button type="button" onClick={() => toggleDetail(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.xs, padding: 0, fontWeight: 600, color: COLORS.ink }}>
                         {expandedId === r.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {r.nom}
                       </button>
                     </td>
@@ -163,7 +163,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
                   {expandedId === r.id && (
                     <tr>
                       <td colSpan={5} style={{ background: COLORS.surfaceAlt }}>
-                        <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ padding: SPACE.sm, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                           {(lignesParRecette[r.id] || []).map((l) => (
                             <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: TEXT.base }}>
                               <span>{l.produitNom} — {l.quantite}{l.notes ? ` (${l.notes})` : ''}</span>
@@ -173,7 +173,7 @@ export default function ProduitRecettesPanel({ module, produits }) {
                           {(lignesParRecette[r.id] || []).length === 0 && (
                             <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('recettes.aucunIngredient')}</div>
                           )}
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginTop: 6 }}>
+                          <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', alignItems: 'end', marginTop: SPACE.sm }}>
                             <select
                               className="flat-input"
                               value={(ligneForms[r.id] || emptyLigneForm).produitId}

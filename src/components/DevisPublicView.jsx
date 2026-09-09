@@ -4,7 +4,7 @@ import { FileText, Eraser, CheckCircle2, Loader2 } from 'lucide-react';
 import { getDevisPublic, signerDevisPublic, devisPublicPdfUrl } from '../lib/api.js';
 import { fmtMoneyWith, fmtDateWith } from '../lib/locale.jsx';
 import { Card, Button, Field, Badge, DataTable } from './ui.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 const C = {
   ink: COLORS.ink, inkSoft: COLORS.inkSoft, border: COLORS.border, bg: COLORS.bg,
@@ -84,7 +84,7 @@ function SignaturePad({ onChange }) {
         onPointerLeave={onPointerUp}
         style={{ width: '100%', height: 180, border: `1px solid ${C.border}`, borderRadius: RADIUS.card, touchAction: 'none', cursor: 'crosshair', background: '#fff' }}
       />
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: SPACE.sm }}>
         <Button small variant="outline" onClick={effacer}><Eraser size={13} /> {'Effacer'}</Button>
       </div>
       {/* exposé pour le parent via un accès impératif au canvas au moment de la soumission */}
@@ -158,28 +158,28 @@ export default function DevisPublicView({ token }) {
 
         {!loading && error && (
           <Card style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 600, color: C.ink, marginBottom: 6 }}>{t('devisPublic.introuvableTitre')}</div>
+            <div style={{ fontWeight: 600, color: C.ink, marginBottom: SPACE.sm }}>{t('devisPublic.introuvableTitre')}</div>
             <div style={{ fontSize: TEXT.base, color: C.inkSoft }}>{error}</div>
           </Card>
         )}
 
         {!loading && !error && devis && (
           <>
-            <Card style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+            <Card style={{ marginBottom: SPACE.lg }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: SPACE.sm }}>
                 <div>
                   <div style={{ fontSize: TEXT.sm, color: C.inkSoft }}>{devis.entrepriseNom}</div>
                   <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.xl, color: C.ink }}>{devis.numero}</div>
                 </div>
                 <Badge tone={devis.statut === 'Signé' || devis.statut === 'Facturé' ? 'green' : devis.statut === 'Annulé' ? 'red' : 'ochre'}>{devis.statut}</Badge>
               </div>
-              <div style={{ marginTop: 10, fontSize: TEXT.base, color: C.inkSoft }}>
+              <div style={{ marginTop: SPACE.sm, fontSize: TEXT.base, color: C.inkSoft }}>
                 {t('devisPublic.pour')} <strong style={{ color: C.ink }}>{`${devis.clientPrenom || ''} ${devis.clientNom || ''}`.trim()}</strong> — {date(devis.date)}
               </div>
-              {devis.notes && <div style={{ marginTop: 8, fontSize: TEXT.base, color: C.inkSoft, whiteSpace: 'pre-wrap' }}>{devis.notes}</div>}
+              {devis.notes && <div style={{ marginTop: SPACE.sm, fontSize: TEXT.base, color: C.inkSoft, whiteSpace: 'pre-wrap' }}>{devis.notes}</div>}
             </Card>
 
-            <Card style={{ marginBottom: 16 }}>
+            <Card style={{ marginBottom: SPACE.lg }}>
               <DataTable>
                 <thead><tr><th>{t('devisPublic.colArticle')}</th><th>{t('devisPublic.colQte')}</th><th>{t('devisPublic.colPu')}</th><th>{t('devisPublic.colTotal')}</th></tr></thead>
                 <tbody>
@@ -195,7 +195,7 @@ export default function DevisPublicView({ token }) {
                   ))}
                 </tbody>
               </DataTable>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: SPACE.md, paddingTop: SPACE.md, borderTop: `1px solid ${C.border}` }}>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.lg, color: C.ink }}>
                   {t('devisPublic.total')} {money(devis.total)}
                 </div>
@@ -203,12 +203,12 @@ export default function DevisPublicView({ token }) {
             </Card>
 
             {(devis.statut === 'Signé' || devis.statut === 'Facturé' || aSigne) && (
-              <Card style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.green, fontWeight: 600, marginBottom: 10 }}>
+              <Card style={{ marginBottom: SPACE.lg }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, color: C.green, fontWeight: 600, marginBottom: SPACE.sm }}>
                   <CheckCircle2 size={18} /> {t('devisPublic.signeTitre')}
                 </div>
                 {devis.signataireNom && (
-                  <div style={{ fontSize: TEXT.base, color: C.inkSoft, marginBottom: 8 }}>
+                  <div style={{ fontSize: TEXT.base, color: C.inkSoft, marginBottom: SPACE.sm }}>
                     {t('devisPublic.signePar')} <strong style={{ color: C.ink }}>{devis.signataireNom}</strong>
                     {devis.dateSignature ? ` — ${date(devis.dateSignature)}` : ''}
                   </div>
@@ -216,8 +216,8 @@ export default function DevisPublicView({ token }) {
                 {devis.signatureData && (
                   <img src={devis.signatureData} alt={t('devisPublic.signeTitre')} style={{ maxWidth: 260, border: `1px solid ${C.border}`, borderRadius: RADIUS.card }} />
                 )}
-                <div style={{ marginTop: 12 }}>
-                  <a href={devisPublicPdfUrl(token)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, color: C.ink, textDecoration: 'none', fontWeight: 600 }}>
+                <div style={{ marginTop: SPACE.md }}>
+                  <a href={devisPublicPdfUrl(token)} style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, color: C.ink, textDecoration: 'none', fontWeight: 600 }}>
                     <FileText size={15} /> {t('devisPublic.telechargerPdf')}
                   </a>
                 </div>
@@ -230,15 +230,15 @@ export default function DevisPublicView({ token }) {
 
             {devis.statut !== 'Signé' && devis.statut !== 'Facturé' && devis.statut !== 'Annulé' && !aSigne && (
               <Card>
-                <div style={{ fontWeight: 600, color: C.ink, marginBottom: 10 }}>{t('devisPublic.signerTitre')}</div>
-                <div style={{ marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, color: C.ink, marginBottom: SPACE.sm }}>{t('devisPublic.signerTitre')}</div>
+                <div style={{ marginBottom: SPACE.sm }}>
                   <Field label={t('devisPublic.votreNom')} value={signataireNom} onChange={(e) => setSignataireNom(e.target.value)} placeholder={t('devisPublic.votreNomPlaceholder')} />
                 </div>
                 <div ref={canvasWrapRef}>
                   <SignaturePad onChange={setSignatureDessinee} />
                 </div>
-                {erreurSignature && <div style={{ marginTop: 8, fontSize: TEXT.sm, color: C.red }}>{erreurSignature}</div>}
-                <div style={{ marginTop: 12 }}>
+                {erreurSignature && <div style={{ marginTop: SPACE.sm, fontSize: TEXT.sm, color: C.red }}>{erreurSignature}</div>}
+                <div style={{ marginTop: SPACE.md }}>
                   <Button variant="green" disabled={!signatureDessinee || !signataireNom.trim() || envoiEnCours} onClick={soumettreSignature}>
                     {envoiEnCours ? t('devisPublic.envoiEnCours') : t('devisPublic.validerSignature')}
                   </Button>

@@ -15,7 +15,7 @@ import {
 } from '../lib/api.js';
 import { fmtMoney, fmtDate, useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Badge, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Jour de l'entreprise, pas le jour UTC : un champ pré-rempli doit proposer la même date
 // que celle que le serveur retiendrait si on le laissait vide.
@@ -39,10 +39,10 @@ export function EmployeeRhModal({ employee, canManage = false, onClose }) {
   const sid = employee.id;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 800, maxHeight: '88vh', overflowY: 'auto', padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: SPACE.lg }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 800, maxHeight: '88vh', overflowY: 'auto', padding: SPACE.xl }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.md }}>
+          <div style={{ display: 'flex', gap: SPACE.md, alignItems: 'center' }}>
             {employee.photo
               ? <img src={employee.photo} alt="" style={{ width: 52, height: 52, borderRadius: RADIUS.card, objectFit: 'cover' }} />
               : <div style={{ width: 52, height: 52, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(employee.prenom?.[0] || '') + (employee.nom?.[0] || '')}</div>}
@@ -57,7 +57,7 @@ export function EmployeeRhModal({ employee, canManage = false, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
         </div>
 
-        <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: `1px solid ${COLORS.border}`, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: SPACE.xs, marginBottom: SPACE.lg, borderBottom: `1px solid ${COLORS.border}`, flexWrap: 'wrap' }}>
           {SECTION_IDS.map(id => (
             <button key={id} onClick={() => setSection(id)} style={{
               background: 'transparent', color: section === id ? COLORS.ink : COLORS.inkSoft,
@@ -136,7 +136,7 @@ function PresencesTab({ sid, canManage }) {
   return (
     <div>
       {canManage && (
-        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, alignItems: 'end', marginBottom: 16 }}>
+        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.lg }}>
           <Field label={t('rh.fieldDate')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t('rh.fieldStatut')} value={form.statut} onChange={e => setForm({ ...form, statut: e.target.value })}>
             <option value="Présent">{t('rh.presenceStatut.Présent')}</option>
@@ -149,7 +149,7 @@ function PresencesTab({ sid, canManage }) {
         </form>
       )}
       {rows === null ? <Loading /> : rows.length === 0 ? <Empty>{t('rh.presenceEmpty')}</Empty> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           {rows.map(p => (
             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
               <div><div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fr(p.date)}</div>{p.notes && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{p.notes}</div>}</div>
@@ -206,9 +206,9 @@ function CongesTab({ sid, canManage }) {
 
   return (
     <div>
-      <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.soldeAnnee', { annee })}</div>
+      <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: SPACE.sm }}>{t('rh.soldeAnnee', { annee })}</div>
       {solde === null ? <Loading /> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: SPACE.sm, marginBottom: SPACE.lg }}>
           {solde.map(x => (
             <div key={x.typeId} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px' }}>
               <div style={{ fontSize: TEXT.sm, fontWeight: 600, color: x.couleur || COLORS.ink }}>{x.nom}</div>
@@ -221,8 +221,8 @@ function CongesTab({ sid, canManage }) {
 
       {canManage && (
         <>
-          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.droitsAnnuels')}</div>
-          <form onSubmit={submitDroit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10, alignItems: 'end', marginBottom: 10 }}>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: SPACE.sm }}>{t('rh.droitsAnnuels')}</div>
+          <form onSubmit={submitDroit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.sm }}>
             <Select label={t('rh.typeField')} value={droitForm.typeId} onChange={e => setDroitForm({ ...droitForm, typeId: e.target.value })}>
               <option value="">—</option>
               {types.map(ct => <option key={ct.id} value={ct.id}>{ct.nom}</option>)}
@@ -231,7 +231,7 @@ function CongesTab({ sid, canManage }) {
             <Field label={t('rh.joursAlloues')} type="number" value={droitForm.joursAlloues} onChange={e => setDroitForm({ ...droitForm, joursAlloues: e.target.value })} />
             <Button type="submit" variant="outline"><Plus size={14} /> {t('common.save')}</Button>
           </form>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, marginBottom: SPACE.lg }}>
             {droits.map(d => (
               <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.base }}>
                 <span>{d.typeNom} · {d.annee} · <b>{t('rh.nbJours', { count: d.joursAlloues })}</b></span>
@@ -242,8 +242,8 @@ function CongesTab({ sid, canManage }) {
         </>
       )}
 
-      <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 8 }}>{t('rh.demandes')}</div>
-      <form onSubmit={submitConge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, alignItems: 'end', marginBottom: 12 }}>
+      <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: SPACE.sm }}>{t('rh.demandes')}</div>
+      <form onSubmit={submitConge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.md }}>
         <Select label={t('rh.typeField')} value={form.typeId} onChange={e => setForm({ ...form, typeId: e.target.value })}>
           <option value="">—</option>
           {types.map(ct => <option key={ct.id} value={ct.id}>{ct.nom}</option>)}
@@ -251,23 +251,23 @@ function CongesTab({ sid, canManage }) {
         <Field label={t('rh.du')} type="date" value={form.dateDebut} onChange={e => setForm({ ...form, dateDebut: e.target.value })} />
         <Field label={t('rh.au')} type="date" value={form.dateFin} onChange={e => setForm({ ...form, dateFin: e.target.value })} />
         <Field label={t('rh.motif')} placeholder={t('common.optionalPlaceholder')} value={form.motif} onChange={e => setForm({ ...form, motif: e.target.value })} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm }}>
           <input type="checkbox" checked={form.demiJourDebut} onChange={e => setForm({ ...form, demiJourDebut: e.target.checked })} /> {t('rh.demiPremier')}
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm }}>
           <input type="checkbox" checked={form.demiJourFin} onChange={e => setForm({ ...form, demiJourFin: e.target.checked })} /> {t('rh.demiDernier')}
         </label>
         <Button type="submit" variant="ochre"><Plus size={14} /> {t('rh.demander')}</Button>
       </form>
       {conges === null ? <Loading /> : conges.length === 0 ? <Empty>{t('rh.congesEmpty')}</Empty> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           {conges.map(c => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
               <div>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fr(c.dateDebut)} → {fr(c.dateFin)} · {c.nbJours != null ? t('rh.nbJours', { count: c.nbJours }) : '—'}</div>
                 <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{c.typeNom || t('rh.typeNonPrecise')}{c.motif ? ` · ${c.motif}` : ''}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                 <Badge tone={CONGE_TONE[c.statut] || 'blue'}>{t(`rh.congeStatut.${c.statut}`, { defaultValue: c.statut })}</Badge>
                 {canManage && c.statut === 'Demandé' && (
                   <>
@@ -303,7 +303,7 @@ function AvancesTab({ sid, canManage }) {
   return (
     <div>
       {canManage && (
-        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, alignItems: 'end', marginBottom: 16 }}>
+        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.lg }}>
           <Field label={t('rh.fieldDate')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Field label={t('rh.montantDevise', { devise })} type="number" value={form.montant} onChange={e => setForm({ ...form, montant: e.target.value })} />
           <Field label={t('rh.motif')} placeholder={t('common.optionalPlaceholder')} value={form.motif} onChange={e => setForm({ ...form, motif: e.target.value })} />
@@ -312,9 +312,9 @@ function AvancesTab({ sid, canManage }) {
       )}
       {rows === null ? <Loading /> : (
         <>
-          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 10 }}>{t('rh.totalLabel', { total: fcfa(total) })}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: SPACE.sm }}>{t('rh.totalLabel', { total: fcfa(total) })}</div>
           {rows.length === 0 ? <Empty>{t('rh.avancesEmpty')}</Empty> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               {rows.map(a => (
                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                   <div><div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{fcfa(a.montant)}</div><div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{fr(a.date)}{a.motif ? ` · ${a.motif}` : ''}</div></div>
@@ -345,7 +345,7 @@ function ContratsTab({ sid, canManage }) {
   return (
     <div>
       {canManage && (
-        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, alignItems: 'end', marginBottom: 16 }}>
+        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.lg }}>
           <Select label={t('rh.typeField')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
             <option>CDI</option><option>CDD</option><option>Saisonnier</option><option>Stage</option>
           </Select>
@@ -401,7 +401,7 @@ function TempsTab({ sid, employee, canManage }) {
   return (
     <div>
       {canManage && (
-        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10, alignItems: 'end', marginBottom: 16 }}>
+        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.lg }}>
           <Field label={t('rh.fieldDate')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Field label={t('rh.heures')} type="number" step="0.5" value={form.heures} onChange={e => setForm({ ...form, heures: e.target.value })} />
           <Select label={t('rh.parcelle')} value={form.parcelleId} onChange={e => setForm({ ...form, parcelleId: e.target.value })}>
@@ -414,7 +414,7 @@ function TempsTab({ sid, employee, canManage }) {
       )}
       {rows === null ? <Loading /> : (
         <>
-          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: 10 }}>
+          <div style={{ fontSize: TEXT.base, fontWeight: 700, marginBottom: SPACE.sm }}>
             {cout != null ? t('rh.totalHeuresCout', { count: total, cout: fcfa(Math.round(cout)) }) : t('rh.totalHeures', { count: total })}
           </div>
           {rows.length === 0 ? <Empty>{t('rh.tempsEmpty')}</Empty> : (
@@ -449,7 +449,7 @@ function BulletinTab({ sid }) {
     <div>
       <Field label={t('rh.mois')} type="month" value={mois} onChange={e => setMois(e.target.value)} style={{ maxWidth: 180 }} />
       {!data ? <Loading /> : (
-        <div className="field-group" style={{ maxWidth: 420, marginTop: 14 }}>
+        <div className="field-group" style={{ maxWidth: 420, marginTop: SPACE.md }}>
           <div className="field-group-label">{t('rh.bulletinSalaireRef')}</div><div style={{ fontSize: TEXT.base }}>{fcfa(data.salaire)} {data.contratType ? `(${data.contratType})` : ''}</div>
           <div className="field-group-label">{t('rh.bulletinAvances')}</div><div style={{ fontSize: TEXT.base }}>− {fcfa(data.avances)}</div>
           <div className="field-group-label">{t('rh.bulletinJoursAbsence')}</div><div style={{ fontSize: TEXT.base }}>{t('rh.bulletinJoursAbsenceVal', { jours: data.joursAbsenceNonPayee, ouvres: data.joursOuvresMois })}</div>
@@ -457,7 +457,7 @@ function BulletinTab({ sid }) {
           <div className="field-group-label"><b>{t('rh.bulletinNet')}</b></div><div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{fcfa(data.netEstime)}</div>
         </div>
       )}
-      <p style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 12 }}>{t('rh.bulletinDisclaimer')}</p>
+      <p style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: SPACE.md }}>{t('rh.bulletinDisclaimer')}</p>
     </div>
   );
 }
@@ -470,7 +470,7 @@ function HistoriqueTab({ sid }) {
   if (rows === null) return <Loading />;
   if (rows.length === 0) return <Empty>{t('rh.historiqueEmpty')}</Empty>;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
       {rows.map(m => (
         <div key={m.id} style={{ padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.sm }}>
           <div style={{ color: COLORS.inkSoft }}>{fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}{m.userEmail ? ` · ${m.userEmail}` : ''}</div>
@@ -498,16 +498,16 @@ function ActivitesTab({ sid }) {
   };
   return (
     <div>
-      <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, alignItems: 'end', marginBottom: 14 }}>
+      <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.md }}>
         <Field label={t('rh.activiteField')} placeholder={t('rh.activitePlaceholder')} value={form.titre} onChange={e => setForm({ ...form, titre: e.target.value })} />
         <Field label={t('rh.echeance')} type="date" value={form.dateEcheance} onChange={e => setForm({ ...form, dateEcheance: e.target.value })} />
         <Button type="submit" variant="outline"><Plus size={14} /> {t('rh.planifier')}</Button>
       </form>
       {rows === null ? <Loading /> : rows.length === 0 ? <Empty>{t('rh.activitesEmpty')}</Empty> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           {rows.map(a => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, textDecoration: a.termine ? 'line-through' : 'none', color: a.termine ? COLORS.inkSoft : COLORS.ink }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, textDecoration: a.termine ? 'line-through' : 'none', color: a.termine ? COLORS.inkSoft : COLORS.ink }}>
                 <input type="checkbox" checked={a.termine} onChange={() => updateActivite(a.id, !a.termine).then(load)} />
                 {a.titre}{a.dateEcheance ? ` · ${fr(a.dateEcheance)}` : ''}
               </label>
@@ -535,12 +535,12 @@ function MessagesTab({ sid }) {
   };
   return (
     <div>
-      <form onSubmit={submit} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+      <form onSubmit={submit} style={{ display: 'flex', gap: SPACE.sm, marginBottom: SPACE.md }}>
         <input className="flat-input" value={txt} onChange={e => setTxt(e.target.value)} placeholder={t('rh.messagePlaceholder')} style={{ flex: 1, background: '#fff', color: COLORS.ink }} />
         <Button type="submit" variant="outline">{t('common.send')}</Button>
       </form>
       {rows === null ? <Loading /> : rows.length === 0 ? <Empty>{t('rh.messagesEmpty')}</Empty> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           {rows.map(m => (
             <div key={m.id} style={{ padding: '9px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, fontSize: TEXT.base }}>
               <div style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}>{m.userEmail || t('rh.utilisateur')} · {fmtDate(m.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</div>

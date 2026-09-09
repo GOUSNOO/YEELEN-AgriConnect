@@ -4,7 +4,7 @@ import { Plus, Trash2, PencilLine } from 'lucide-react';
 import { getObservations, createObservation, updateObservation, deleteObservation } from '../lib/api.js';
 import { Badge, Button, Card, Field, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
-import { COLORS, TEXT } from '../lib/theme.js';
+import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 const emptyForm = { notes: '', localisation: '' };
 
@@ -97,7 +97,7 @@ export function ObservationListView() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>{t('observations.journalTitle')}</h2>
         <Button onClick={openCreateModal}><Plus size={16} /> {t('observations.add')}</Button>
@@ -108,12 +108,12 @@ export function ObservationListView() {
           <p style={{ margin: 0, color: COLORS.inkSoft }}>{t('observations.empty')}</p>
         </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           {observations.map((obs) => (
             <Card key={obs.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE.md }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'center', marginBottom: SPACE.sm }}>
                     <Badge tone="green">
                       {obs.dateObservation ? fmtDate(obs.dateObservation) : '—'}
                     </Badge>
@@ -121,7 +121,7 @@ export function ObservationListView() {
                   </div>
                   <p style={{ margin: 0, fontSize: TEXT.base, color: COLORS.ink }}>{obs.notes}</p>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: SPACE.sm, flexShrink: 0 }}>
                   <Button variant="ghost" small onClick={() => openEditModal(obs)} aria-label={t('common.edit')}>
                     <PencilLine size={14} />
                   </Button>
@@ -142,8 +142,8 @@ export function ObservationListView() {
         }}>
           <Card style={{ width: '100%', maxWidth: 420 }}>
             <h3 style={{ marginTop: 0 }}>{editingId ? t('observations.editTitle') : t('observations.createTitle')}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
                 {t('observations.description')}
                 <textarea
                   className="flat-input"
@@ -159,7 +159,7 @@ export function ObservationListView() {
                 onChange={(e) => setForm(prev => ({ ...prev, localisation: e.target.value }))}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm, marginTop: SPACE.xl }}>
               <Button variant="outline" onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleSave}>{editingId ? t('observations.update') : t('observations.create')}</Button>
             </div>

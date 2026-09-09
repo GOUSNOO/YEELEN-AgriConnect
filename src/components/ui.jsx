@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, Check, HelpCircle } from 'lucide-react';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 let toastListeners = [];
 function notify(message, type = 'error') {
@@ -37,14 +37,14 @@ export function ToastContainer() {
   return (
     <div style={{
       position: 'fixed', top: 16, right: 16, zIndex: 9999,
-      display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 340
+      display: 'flex', flexDirection: 'column', gap: SPACE.sm, maxWidth: 340
     }}>
       {toasts.map(t => (
         <div key={t.id} style={{
           background: t.type === 'error' ? COLORS.redSoft : COLORS.greenSoft,
           color: t.type === 'error' ? COLORS.red : COLORS.green,
           borderRadius: RADIUS.card, padding: '11px 14px',
-          fontSize: TEXT.base, fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: 8,
+          fontSize: TEXT.base, fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: SPACE.sm,
           boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
         }}>
           {t.type === 'error' ? <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> : <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />}
@@ -87,8 +87,8 @@ export function Button({ children, onClick, variant = 'default', small, style, t
     // `small` ne joue plus sur la taille du texte (13 contre 14 px : un pixel, invisible), mais
     // sur la seule chose qui distinguait vraiment les deux tailles de bouton — le rembourrage.
     fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: TEXT.base,
-    padding: small ? '6px 12px' : '8px 16px', borderRadius: RADIUS.card, cursor: disabled ? 'not-allowed' : 'pointer',
-    border: '1px solid transparent', display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: small ? '6px 12px' : '8px 16px', borderRadius: RADIUS.control, cursor: disabled ? 'not-allowed' : 'pointer',
+    border: '1px solid transparent', display: 'inline-flex', alignItems: 'center', gap: SPACE.sm,
     transition: 'transform 0.1s ease, opacity 0.15s ease', opacity: disabled ? 0.5 : 1,
   };
   const variants = {
@@ -149,7 +149,7 @@ export function AideChamp({ texte }) {
       <button
         type="button" onClick={toggle} aria-label="Aide sur ce champ"
         style={{
-          background: 'transparent', border: 'none', padding: 0, marginLeft: 4,
+          background: 'transparent', border: 'none', padding: 0, marginLeft: SPACE.xs,
           cursor: 'pointer', color: open ? COLORS.green : COLORS.inkFaint, display: 'inline-flex',
         }}
       >
@@ -189,7 +189,7 @@ export function AideChamp({ texte }) {
 // déjà utilisés (une centaine d'endroits dans l'app).
 export function Field({ label, aide, className, style, ...props }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
       {(label || aide) && (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>{label}{aide ? <AideChamp texte={aide} /> : null}</span>
       )}
@@ -204,7 +204,7 @@ export function Field({ label, aide, className, style, ...props }) {
 
 export function Select({ label, aide, children, className, style, ...props }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}>
       {(label || aide) && (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>{label}{aide ? <AideChamp texte={aide} /> : null}</span>
       )}
@@ -246,7 +246,7 @@ export function GaugeDial({ value, max = 100, label, unit, colorMain, colorTrack
   const offset = circumference * (1 - pct);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: SPACE.sm }}>
       <div style={{ position: 'relative', width: size, height: size }}>
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colorTrack} strokeWidth={stroke} />
@@ -278,9 +278,9 @@ export function MiniChart({ data, color, height = 110 }) {
   }
   const max = Math.max(...data.map(d => d.value), 1);
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height, marginTop: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: SPACE.sm, height, marginTop: SPACE.sm }}>
       {data.map((item, i) => (
-        <div key={item.id != null ? item.id : `${item.label}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+        <div key={item.id != null ? item.id : `${item.label}-${i}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: SPACE.sm }}>
           <div style={{ width: '100%', maxWidth: 24, height: `${Math.max(8, (item.value / max) * 100)}%`, minHeight: 8, background: color, borderRadius: '6px 6px 0 0' }} />
           <span style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, textAlign: 'center' }}>{item.label}</span>
         </div>

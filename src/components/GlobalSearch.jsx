@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import { rechercheGlobale } from '../lib/api.js';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 const sectionLabelStyle = {
   fontSize: TEXT.xs, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
@@ -83,7 +83,7 @@ export function GlobalSearch({ onClose, onSelect }) {
           width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden',
         }}
       >
-        <form onSubmit={submit} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: `1px solid ${COLORS.border}` }}>
+        <form onSubmit={submit} style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, padding: '12px 14px', borderBottom: `1px solid ${COLORS.border}` }}>
           <Search size={18} color={COLORS.inkSoft} style={{ flexShrink: 0 }} />
           <input
             ref={inputRef}
@@ -100,7 +100,7 @@ export function GlobalSearch({ onClose, onSelect }) {
           <button
             type="submit"
             style={{
-              flexShrink: 0, background: COLORS.green, color: '#fff', border: 'none', borderRadius: RADIUS.card,
+              flexShrink: 0, background: COLORS.green, color: '#fff', border: 'none', borderRadius: RADIUS.control,
               padding: '7px 14px', fontSize: TEXT.base, fontWeight: 600, fontFamily: "'Inter', sans-serif",
               cursor: 'pointer', whiteSpace: 'nowrap',
             }}
@@ -114,19 +114,19 @@ export function GlobalSearch({ onClose, onSelect }) {
             title="Fermer (Échap)"
             style={{
               flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer',
-              color: COLORS.inkSoft, display: 'flex', alignItems: 'center', padding: 4,
+              color: COLORS.inkSoft, display: 'flex', alignItems: 'center', padding: SPACE.xs,
             }}
           >
             <X size={18} />
           </button>
         </form>
         <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-          {loading && <div style={{ padding: 16, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Recherche...</div>}
+          {loading && <div style={{ padding: SPACE.lg, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Recherche...</div>}
           {!loading && query.trim().length >= 2 && !hasResults && (
-            <div style={{ padding: 16, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Aucun résultat pour « {query} ».</div>
+            <div style={{ padding: SPACE.lg, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Aucun résultat pour « {query} ».</div>
           )}
           {!loading && query.trim().length < 2 && (
-            <div style={{ padding: 16, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Tapez au moins 2 caractères.</div>
+            <div style={{ padding: SPACE.lg, fontSize: TEXT.base, color: COLORS.inkSoft, textAlign: 'left' }}>Tapez au moins 2 caractères.</div>
           )}
           {results.contacts.length > 0 && (
             <div>

@@ -4,7 +4,7 @@ import { Sun, CloudRain, Wind, Droplet, Thermometer, Sunrise, Sunset } from 'luc
 import { getMeteo, getParcellesLocalisees } from '../lib/api.js';
 import { Card, Badge, Select } from './ui.jsx';
 import { fmtDate } from '../lib/locale.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Palette locale (App.jsx:COLORS n'est pas exporté — même convention que FeedbackModule/
 // PaymentTermsPanel : valeurs hexadécimales dupliquées, pas une nouvelle dépendance partagée).
@@ -20,7 +20,7 @@ const GRAVITE_TONE = { haute: 'red', moyenne: 'ochre', basse: 'blue' };
 
 function StatTile({ icon: Icon, label, value, accent }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: `1px solid ${C.border}`, borderRadius: RADIUS.card }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, padding: '10px 12px', background: '#fff', border: `1px solid ${C.border}`, borderRadius: RADIUS.card }}>
       <div style={{ width: 34, height: 34, borderRadius: RADIUS.card, background: accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon size={16} color={accent} />
       </div>
@@ -70,9 +70,9 @@ export default function MeteoModule() {
   useEffect(() => { charger(); }, [charger]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: SPACE.sm }}>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('meteo.title')}</div>
           {parcelles.length > 0 && (
             <Select label={t('meteo.selectorLabel')} value={parcelleId} onChange={(e) => setParcelleId(e.target.value)} style={{ minWidth: 200 }}>
@@ -96,13 +96,13 @@ export default function MeteoModule() {
       ) : data && (
         <>
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.md, flexWrap: 'wrap', gap: SPACE.sm }}>
               <div style={{ fontSize: TEXT.md, fontWeight: 700, color: C.ink }}>{data.ville}</div>
               <Badge tone={data.source === 'parcelle' ? 'blue' : 'green'}>
                 {data.source === 'parcelle' ? t('meteo.sourceParcelle') : t('meteo.sourceEntreprise')}
               </Badge>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm }}>
               <StatTile icon={Thermometer} label={t('meteo.temperature')} value={`${data.actuel.temperature}°`} accent={C.ochre} />
               <StatTile icon={Droplet} label={t('meteo.humidite')} value={`${data.actuel.humidite}%`} accent={C.blue} />
               <StatTile icon={CloudRain} label={t('meteo.precipitation')} value={`${data.actuel.precipitation} mm`} accent={C.blue} />
@@ -112,10 +112,10 @@ export default function MeteoModule() {
 
           {data.alertes.length > 0 && (
             <Card>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('meteo.alertesTitle')}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('meteo.alertesTitle')}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 {data.alertes.map((a) => (
-                  <div key={a.type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div key={a.type} style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                     <Badge tone={GRAVITE_TONE[a.gravite] || 'blue'}>{a.message}</Badge>
                   </div>
                 ))}
@@ -124,8 +124,8 @@ export default function MeteoModule() {
           )}
 
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('meteo.solTitle')}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('meteo.solTitle')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm }}>
               <StatTile icon={Thermometer} label={t('meteo.solSurface')} value={data.sol.temperatureSurface != null ? `${data.sol.temperatureSurface}°` : '—'} accent={C.ochre} />
               <StatTile icon={Thermometer} label={t('meteo.solProfondeur')} value={data.sol.temperatureProfondeur != null ? `${data.sol.temperatureProfondeur}°` : '—'} accent={C.ochre} />
               <StatTile icon={Droplet} label={t('meteo.solHumiditeSurface')} value={data.sol.humiditeSurface != null ? data.sol.humiditeSurface : '—'} accent={C.blue} />
@@ -135,8 +135,8 @@ export default function MeteoModule() {
 
           {data.previsions[0] && (
             <Card>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('meteo.aujourdhui')}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('meteo.aujourdhui')}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm }}>
                 <StatTile icon={Sunrise} label={t('meteo.leverSoleil')} value={data.previsions[0].leverSoleil ? data.previsions[0].leverSoleil.slice(11, 16) : '—'} accent={C.ochre} />
                 <StatTile icon={Sunset} label={t('meteo.coucherSoleil')} value={data.previsions[0].coucherSoleil ? data.previsions[0].coucherSoleil.slice(11, 16) : '—'} accent={C.ochre} />
                 <StatTile icon={Sun} label={t('meteo.uvMax')} value={data.previsions[0].uvMax ?? '—'} accent={C.ochre} />
@@ -146,7 +146,7 @@ export default function MeteoModule() {
           )}
 
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>{t('meteo.previsionTitle')}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('meteo.previsionTitle')}</div>
             <div style={{ overflowX: 'auto' }}>
               <table className="data-table">
                 <thead>

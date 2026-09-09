@@ -85,7 +85,7 @@ import { FinancesModule, BanquesModule } from './modules/finances.jsx';
 
 // Palette et formes : voir src/lib/theme.js. Le nom COLORS est conservé pour que les usages
 // de ce fichier restent inchangés — seules les valeurs ont été unifiées (2026-09-09).
-import { COLORS, NAVBAR_BORDER, RADIUS, TEXT } from './lib/theme.js';
+import { COLORS, NAVBAR_BORDER, RADIUS, TEXT, SPACE } from './lib/theme.js';
 
 
 // Regroupement des menus de la navbar — même taxonomie que le champ `category` d'availableTabs.
@@ -116,9 +116,9 @@ function ParcelMapTab({ parcelles }) {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
-      <Card style={{ padding: 14 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('cultures.map.title')}</div>
+    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: SPACE.lg, alignItems: 'start' }}>
+      <Card style={{ padding: SPACE.md }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('cultures.map.title')}</div>
         <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
           {parcelles.map(p => {
             const status = statusOf(p);
@@ -142,23 +142,23 @@ function ParcelMapTab({ parcelles }) {
             );
           })}
         </div>
-        <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> {t('cultures.map.statusNormal')}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> {t('cultures.map.statusToWater')}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> {t('cultures.map.statusHighTemp')}</span>
+        <div style={{ display: 'flex', gap: SPACE.md, marginTop: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> {t('cultures.map.statusNormal')}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> {t('cultures.map.statusToWater')}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> {t('cultures.map.statusHighTemp')}</span>
         </div>
       </Card>
 
       {selected && (
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.md }}>
             <div>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{selected.nom}</div>
               <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{selected.culture}</div>
             </div>
             <Badge tone={statusOf(selected).tone}>{statusOf(selected).label}</Badge>
           </div>
-          <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0' }}>
+          <div style={{ display: 'flex', gap: SPACE.xl, justifyContent: 'center', padding: '6px 0' }}>
             <GaugeDial value={selected.humidite} label={t('cultures.soilHumidity')} unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
             <GaugeDial value={selected.temperature} max={45} label={t('cultures.temperature')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
           </div>
@@ -184,17 +184,17 @@ function EnvironnementTab({ farmId }) {
   const days = t('common.days', { returnObjects: true });
   return (
     <Card>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.md }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('poulailler.ambianceTitle')}</div>
         <Badge tone={alerte ? 'red' : 'green'}>{alerte ? t('poulailler.conditionsWatch') : t('poulailler.conditionsNormal')}</Badge>
       </div>
-      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0' }}>
+      <div style={{ display: 'flex', gap: SPACE.xl, justifyContent: 'center', padding: '10px 0' }}>
         <GaugeDial value={env.temperature} max={45} label={t('poulailler.temperature')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
         <GaugeDial value={env.humidite} label={t('poulailler.humidite')} unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: SPACE.md, marginTop: SPACE.sm }}>
         <div>
-          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.tempEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.tempEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 27 },
             { label: days[1], value: 29 },
@@ -203,7 +203,7 @@ function EnvironnementTab({ farmId }) {
           ]} color={COLORS.ochre} />
         </div>
         <div>
-          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.humidityEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.humidityEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 62 },
             { label: days[1], value: 58 },
@@ -236,18 +236,18 @@ function BassinsEnvironnementTab({ farmId }) {
   const days = t('common.days', { returnObjects: true });
   return (
     <Card>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.md }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('pisciculture.bassinsTitle')}</div>
         <Badge tone={alerte ? 'red' : 'green'}>{alerte ? t('pisciculture.conditionsWatch') : t('pisciculture.conditionsNormal')}</Badge>
       </div>
-      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '10px 0', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: SPACE.xl, justifyContent: 'center', padding: '10px 0', flexWrap: 'wrap' }}>
         <GaugeDial value={env.ph} max={14} label={t('pisciculture.ph')} unit="" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
         <GaugeDial value={env.oxygene} max={10} label={t('pisciculture.oxygene')} unit=" mg/L" colorMain={COLORS.green} colorTrack={COLORS.greenSoft} icon={<Droplet size={15} color={COLORS.green} />} />
         <GaugeDial value={env.temperature} max={40} label={t('pisciculture.temperatureEau')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: SPACE.md, marginTop: SPACE.sm }}>
         <div>
-          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.phEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.xs }}>{t('pisciculture.phEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 7.1 },
             { label: days[1], value: 7.3 },
@@ -256,7 +256,7 @@ function BassinsEnvironnementTab({ farmId }) {
           ]} color={COLORS.blue} />
         </div>
         <div>
-          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.oxygeneEvolution')}</div>
+          <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.xs }}>{t('pisciculture.oxygeneEvolution')}</div>
           <MiniChart data={[
             { label: days[0], value: 6.8 },
             { label: days[1], value: 6.2 },
@@ -311,7 +311,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: SPACE.md, alignItems: 'start' }}>
       {DEVIS_KANBAN_COLUMNS.map(col => {
         const items = devisListe.filter(d => col.statuts.includes(d.statut));
         const isValidTarget = draggedDevis && isValidDevisTransition(draggedDevis.statut, col.key);
@@ -321,15 +321,15 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
             onDragOver={(e) => { if (isValidTarget) e.preventDefault(); }}
             onDrop={(e) => { e.preventDefault(); handleDrop(col.key); setDraggedId(null); }}
             style={{
-              background: isValidTarget ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.card, padding: 10,
+              background: isValidTarget ? COLORS.greenSoft : COLORS.surfaceAlt, borderRadius: RADIUS.card, padding: SPACE.sm,
               minHeight: 120, border: `1.5px dashed ${isValidTarget ? COLORS.green : 'transparent'}`,
               transition: 'background 0.15s ease, border-color 0.15s ease',
             }}
           >
-            <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: SPACE.sm, display: 'flex', justifyContent: 'space-between' }}>
               <span>{t(`devis.statut.${col.key}`)}</span><span>{items.length}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               {items.map(d => (
                 <div
                   key={d.id}
@@ -338,7 +338,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
                   onDragEnd={() => setDraggedId(null)}
                   onClick={() => onOpenDetail(d.id)}
                   style={{
-                    background: '#fff', borderRadius: RADIUS.card, padding: 10, cursor: 'grab',
+                    background: '#fff', borderRadius: RADIUS.card, padding: SPACE.sm, cursor: 'grab',
                     border: `1px solid ${COLORS.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     opacity: draggedId === d.id ? 0.4 : 1,
                   }}
@@ -513,9 +513,9 @@ function ActivitesSection({ ressourceType, ressourceId }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, textAlign: 'left' }}>
       <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft }}>{t('activites.title')}</div>
-      <form onSubmit={submit} style={{ display: 'flex', gap: 6 }}>
+      <form onSubmit={submit} style={{ display: 'flex', gap: SPACE.sm }}>
         <input
           className="flat-input"
           placeholder={t('activites.placeholder')}
@@ -539,9 +539,9 @@ function ActivitesSection({ ressourceType, ressourceId }) {
       ) : activites.length === 0 ? (
         <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('activites.empty')}</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
           {activites.map(a => (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.sm, opacity: a.termine ? 0.5 : 1 }}>
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm, opacity: a.termine ? 0.5 : 1 }}>
               <input type="checkbox" checked={a.termine} onChange={() => toggle(a)} style={{ cursor: 'pointer' }} />
               <span style={{ flex: 1, textDecoration: a.termine ? 'line-through' : 'none' }}>{a.titre}</span>
               {a.dateEcheance && <span style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}>{fmtDate(a.dateEcheance)}</span>}
@@ -742,8 +742,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
     ].filter(Boolean);
     const adresseLibre = lignesAdresse.length === 0 && client.adresse ? client.adresse : null;
     return (
-      <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: TEXT.sm, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <div style={{ fontWeight: 600, color: COLORS.ink, display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ marginTop: SPACE.sm, padding: '8px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: TEXT.sm, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div style={{ fontWeight: 600, color: COLORS.ink, display: 'flex', alignItems: 'center', gap: SPACE.xs }}>
           {client.isCompany ? <Building2 size={13} /> : <UserIcon size={13} />}
           {clientLabel(client)}
         </div>
@@ -1124,7 +1124,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const devisAffiches = filtreStatut ? devisListe.filter(d => d.statut === filtreStatut) : devisListe;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <datalist id={catalogDatalistId}>
         {catalogItems.map(item => <option key={`${item.module}-${item.id}`} value={item.nom} />)}
       </datalist>
@@ -1132,7 +1132,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
         {(clientsListe || []).map(c => <option key={c.id} value={clientLabel(c)} />)}
       </datalist>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
@@ -1155,10 +1155,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
           équivalent : une liste filtrée, pas un point de création) */}
       {!filtreStatut && (
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t("devis.newTitle")}
         </div>
-        <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           <div>
             <Field
               label={t("devis.client")}
@@ -1176,7 +1176,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             {renderClientCard(findClientById(form.clientId))}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
             {/* Tableau continu façon ERP (une seule ligne par article, sans boîte séparée par
                 champ) plutôt que la grille de <Field> encadrés d'avant — voir la demande
@@ -1259,7 +1259,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   {ligne.type !== 'section' && (
                     <tr>
                       <td></td>
-                      <td colSpan={9} style={{ paddingBottom: 8 }}>
+                      <td colSpan={9} style={{ paddingBottom: SPACE.sm }}>
                         <Select label={t("devis.recolteLiee")} value={ligne.recolteId} onChange={e => updateLigne(i, 'recolteId', e.target.value)}>
                           <option value="">{t("common.none")}</option>
                           {recoltes.map(r => (
@@ -1274,7 +1274,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </tbody>
             </table>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: SPACE.sm }}>
               <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}>
                 <Plus size={14} /> {t("devis.addLigne")}
               </Button>
@@ -1284,14 +1284,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: SPACE.sm }}>
             <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
             <Field label={t("devis.validityDate")} aide={t("devis.validityDateAide")} type="date" value={form.validityDate} onChange={e => setForm({ ...form, validityDate: e.target.value })} />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: SPACE.sm, borderTop: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalForm) })}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: SPACE.sm }}>
               <Button type="submit" variant="green" disabled={saving}>
                 {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {t("devis.create")}
               </Button>
@@ -1302,14 +1302,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
       )}
 
       {/* Liste des devis existants */}
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: SPACE.sm }}>
         <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>{t('devis.vueListe')}</Button>
         <Button variant={vueDevis === 'kanban' ? 'default' : 'ghost'} small onClick={() => setVueDevis('kanban')}>{t('devis.vueKanban')}</Button>
       </div>
 
       {vueDevis === 'kanban' ? (
         loading ? (
-          <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
+          <div style={{ padding: SPACE.xl, display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft }}>
             <Loader2 size={16} className="spin" /> {t("common.loading")}
           </div>
         ) : (
@@ -1326,11 +1326,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
       ) : (
       <Card style={{ padding: 0 }}>
         {loading ? (
-          <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft }}>
+          <div style={{ padding: SPACE.xl, display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft }}>
             <Loader2 size={16} className="spin" /> {t("common.loading")}
           </div>
         ) : devisAffiches.length === 0 ? (
-          <div style={{ padding: 20, color: COLORS.inkSoft, fontSize: TEXT.base }}>
+          <div style={{ padding: SPACE.xl, color: COLORS.inkSoft, fontSize: TEXT.base }}>
             {filtreStatut ? t('devis.emptyAFacturer') : t('devis.emptyList')}
           </div>
         ) : (
@@ -1351,11 +1351,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   <td>{d.clientPrenom} {d.clientNom}</td>
                   <td>
                     <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
-                    {d.expired && <span style={{ marginLeft: 6 }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
+                    {d.expired && <span style={{ marginLeft: SPACE.sm }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
                   </td>
                   <td style={{ fontWeight: 600 }}>{enDevise(d.total, d.devise)}</td>
-                  <td style={{ textAlign: 'right', paddingRight: 16 }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <td style={{ textAlign: 'right', paddingRight: SPACE.lg }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
                       {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
                         <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
                       )}
@@ -1392,23 +1392,23 @@ function DevisModule({ clientsListe, filtreStatut }) {
           return s + taxesLigneCalc(brut, l.quantite, l.taxIds).taxe;
         }, 0);
         return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={closeDetailPopup}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: SPACE.lg }} onClick={closeDetailPopup}>
           {/* Disposition à deux colonnes façon fiche d'un ERP de référence (Order Lines + chatter à droite) — voir
               project_erp_devis_visual_alignment : même structure (barre d'action + chevrons en
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
           <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
-            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: RADIUS.card, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: TEXT.md, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
+            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: RADIUS.control, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: TEXT.md, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
 
-            <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: 22, boxSizing: 'border-box' }}>
+            <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: SPACE.xl, boxSizing: 'border-box' }}>
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
                   la ligne au hasard selon la largeur : actions principales (transition de
                   statut) en haut, outils du document (aperçu/téléchargement/annulation) en
                   dessous — même logique de regroupement qu'un ERP de référence (actions primaires vs. menu
                   secondaire), sans reproduire son menu déroulant. */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12, paddingRight: 26 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: SPACE.sm, marginBottom: SPACE.md, paddingRight: SPACE.xxl }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
+                  <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
                     {detailData.statut === 'Brouillon' && detailData.clientEmail && (
                       <Button variant="green" onClick={() => handleEnvoyer(detailData.id)} disabled={actionBusy}>
                         {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.envoyerClient")}
@@ -1435,7 +1435,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       </Button>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', alignItems: 'center' }}>
                     <Button small variant="outline" onClick={() => openDevisPdf(detailData.id)}>
                       <FileText size={14} /> {t("devis.apercu")}
                     </Button>
@@ -1455,13 +1455,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 <DevisStatusBar statut={detailData.statut} />
               </div>
 
-              <div style={{ fontWeight: 700, fontSize: TEXT.title, marginBottom: 8 }}>{detailData.numero}</div>
+              <div style={{ fontWeight: 700, fontSize: TEXT.title, marginBottom: SPACE.sm }}>{detailData.numero}</div>
 
               {/* "Boutons intelligents" façon ERP — dérivés de données déjà chargées, sans
                   nouvel appel réseau, plus un lien direct vers la fiche du client (seul
                   vrai renvoi vers un autre enregistrement possible ici, voir highlightFromUrl
                   dans App pour le mécanisme de navigation). */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', marginBottom: SPACE.lg }}>
                 <div style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.surfaceAlt, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                   {t("devis.smartLignes", { count: nbLignesProduit })}
                 </div>
@@ -1473,7 +1473,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 {detailData.clientId && (
                   <button
                     onClick={() => { navigate(`/app/clients?highlight=${detailData.clientId}`); closeDetailPopup(); }}
-                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}
+                    style={{ padding: '5px 10px', borderRadius: RADIUS.control, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}
                   >
                     {t("devis.voirContact")}
                   </button>
@@ -1481,7 +1481,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 {detailData.move && (
                   <button
                     onClick={() => { navigate('/app/factures'); closeDetailPopup(); }}
-                    style={{ padding: '5px 10px', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}
+                    style={{ padding: '5px 10px', borderRadius: RADIUS.control, background: COLORS.greenSoft, border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}
                   >
                     {t("devis.voirFacture", { name: detailData.move.name })} · {t(`factures.pay.${detailData.move.paymentState}`)}
                   </button>
@@ -1491,7 +1491,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               {/* Onglets façon ERP au-dessus du tableau — Générateur de devis/Autres
                   informations n'ont pas d'équivalent réel ici (voir project_erp_devis_visual_alignment),
                   seuls Lignes de commande/Notes sont repris. */}
-              <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}`, marginBottom: SPACE.lg }}>
                 {[{ id: 'lignes', label: t('devis.tabLignes') }, { id: 'notes', label: t('devis.tabNotes') }].map(tab => (
                   <button
                     key={tab.id}
@@ -1507,9 +1507,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20, fontSize: TEXT.base }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.xxl, marginBottom: SPACE.xl, fontSize: TEXT.base }}>
                 <div>
-                  <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.client")}</div>
+                  <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: SPACE.xs }}>{t("devis.client")}</div>
                   <div style={{ fontWeight: 600 }}>{detailData.clientPrenom} {detailData.clientNom}</div>
                   {detailData.clientEmail ? (
                     <div style={{ color: COLORS.inkSoft }}>{detailData.clientEmail}</div>
@@ -1529,22 +1529,22 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   ) : detailData.clientAdresse && <div style={{ color: COLORS.inkSoft }}>{detailData.clientAdresse}</div>}
                 </div>
                 <div>
-                  <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: 4 }}>{t("devis.details")}</div>
+                  <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: SPACE.xs }}>{t("devis.details")}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                     <span style={{ color: COLORS.inkSoft }}>{t("common.date")}</span>
                     <span>{fmtDate(detailData.date || detailData.createdAt)}</span>
                   </div>
                   {modifiable ? (
                     <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: SPACE.sm }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.conditionsPaiement")}</span>
                         <input className="flat-input" value={detailMeta.conditionsPaiement} onChange={e => setDetailMeta(m => ({ ...m, conditionsPaiement: e.target.value }))} placeholder={t("devis.conditionsPaiementPlaceholder")} style={{ width: 120, textAlign: 'right' }} />
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: SPACE.sm }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.livraisonPromise")}</span>
                         <input className="flat-input" type="date" value={detailMeta.livraisonPromise} onChange={e => setDetailMeta(m => ({ ...m, livraisonPromise: e.target.value }))} style={{ width: 'auto' }} />
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', gap: SPACE.sm }}>
                         <span style={{ color: COLORS.inkSoft, whiteSpace: 'nowrap' }}>{t("devis.validityDate")}</span>
                         <input className="flat-input" type="date" value={detailMeta.validityDate} onChange={e => setDetailMeta(m => ({ ...m, validityDate: e.target.value }))} style={{ width: 'auto' }} />
                       </div>
@@ -1594,7 +1594,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </div>
               ) : (
               <>
-              <DataTable style={{ marginBottom: 12 }}>
+              <DataTable style={{ marginBottom: SPACE.md }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                     <th style={{ width: '25%' }}>{t("devis.colProduit")}</th><th style={{ width: '10%' }}>{t("devis.colQte")}</th><th style={{ width: '10%' }}>{t("devis.colLivre")}</th><th style={{ width: '10%' }}>{t("devis.colFacture")}</th><th style={{ width: '6%' }}>{t("devis.colUnite")}</th><th style={{ width: '10%' }}>{t("devis.colPU")}</th><th style={{ width: '5%' }}>{t("devis.colRemise")}</th><th style={{ width: '14%' }}>{t("devis.colTaxe")}</th><th style={{ width: '10%', textAlign: 'right' }}>{t("common.total")}</th>
@@ -1648,19 +1648,19 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 </tbody>
               </DataTable>
               {detailData.statut !== 'Brouillon' && (
-                <div style={{ textAlign: 'right', marginBottom: 10 }}>
+                <div style={{ textAlign: 'right', marginBottom: SPACE.sm }}>
                   <Button small variant="outline" onClick={handleSaveQuantites} disabled={quantitesSaving}>
                     {quantitesSaving ? <Loader2 size={14} className="spin" /> : null} {t("devis.enregistrerQuantites")}
                   </Button>
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.md }}>
                 <div style={{ minWidth: 240 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft, padding: '2px 0' }}>
                     <span>{t("devis.montantHT")}</span><span>{enDevise(montantHT, detailData.devise)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: TEXT.sm, color: COLORS.inkSoft, padding: '2px 0', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: TEXT.sm, color: COLORS.inkSoft, padding: '2px 0', gap: SPACE.sm }}>
                     <span>{t("devis.remiseGlobale")}</span>
                     {modifiable ? (
                       <input className="flat-input" type="number" value={detailMeta.remiseGlobale} onChange={e => setDetailMeta(m => ({ ...m, remiseGlobale: e.target.value }))} style={{ width: 64, textAlign: 'right' }} />
@@ -1673,13 +1673,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     <span>{t("devis.montantTaxes")}</span><span>{enDevise(montantTaxe, detailData.devise)}</span>
                   </div>
                   {modifiable && (
-                    <div style={{ textAlign: 'right', marginTop: 4, marginBottom: 4 }}>
+                    <div style={{ textAlign: 'right', marginTop: SPACE.xs, marginBottom: SPACE.xs }}>
                       <Button small variant="outline" onClick={handleSaveDetailMeta} disabled={detailMetaSaving}>
                         {detailMetaSaving ? <Loader2 size={14} className="spin" /> : null} {t("common.save")}
                       </Button>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: TEXT.md, borderTop: `2px solid ${COLORS.border}`, paddingTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: TEXT.md, borderTop: `2px solid ${COLORS.border}`, paddingTop: SPACE.sm }}>
                     <span>{t("common.total")}</span>
                     <span>{enDevise(detailData.total, detailData.devise)}</span>
                   </div>
@@ -1689,7 +1689,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                     </div>
                   )}
                   {margeInfo && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: SPACE.xs }}>
                       <span>{t("devis.marge")}</span><span>{t("devis.margeValeur", { montant: fmtMoney(margeInfo.marge), pct: margeInfo.pourcentage.toFixed(1) })}</span>
                     </div>
                   )}
@@ -1698,10 +1698,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               {detailData.echeances && detailData.echeances.length > 0 && (
                 <div>
-                  <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 8 }}>
+                  <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.sm }}>
                     {t("devis.echeances")} {detailData.modePaiement && `· ${detailData.modePaiement}`}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                     {detailData.echeances.map(ech => (
                       <div key={ech.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
                         <div>
@@ -1731,9 +1731,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
             {/* Panneau latéral façon chatter d'un ERP de référence : messages, activités planifiées, journal des modifications */}
             <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, textAlign: 'left', marginBottom: SPACE.lg }}>
                 <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft }}>{t("devis.messages")}</div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'flex-start' }}>
                   <textarea
                     className="flat-input"
                     rows={2}
@@ -1752,7 +1752,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 {messages.length === 0 ? (
                   <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontStyle: 'italic' }}>{t("devis.noMessage")}</div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                     {messages.map(m => (
                       <div key={m.id} style={{ padding: '6px 8px', borderRadius: RADIUS.control, background: '#fff', border: `1px solid ${COLORS.border}` }}>
                         <div style={{ fontSize: TEXT.sm, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.contenu}</div>
@@ -1764,9 +1764,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </div>
               <ActivitesSection ressourceType="devis" ressourceId={detailData.id} />
               {journal.length > 0 && (
-                <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginTop: 16, textAlign: 'left' }}>
-                  <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6 }}>{t("devis.historique")}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACE.md, marginTop: SPACE.lg, textAlign: 'left' }}>
+                  <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t("devis.historique")}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                     {journal.map(j => (
                       <div key={j.id} style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
                         {fmtDate(j.createdAt, { dateStyle: 'short', timeStyle: 'short' })} — {j.userEmail || t('devis.systeme')} :{' '}
@@ -1786,28 +1786,28 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Popup demandant le mode et la modalité de paiement avant de facturer */}
       {paiementPopupOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }} onClick={() => setPaiementPopupOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: 22, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: TEXT.md, marginBottom: 14 }}>{t("devis.paiementTitle")}</div>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: SPACE.xl, maxWidth: 500, width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 700, fontSize: TEXT.md, marginBottom: SPACE.md }}>{t("devis.paiementTitle")}</div>
 
-            <Select label={t("devis.modePaiement")} value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: 12 }}>
+            <Select label={t("devis.modePaiement")} value={paiementForm.modePaiement} onChange={e => setPaiementForm({ ...paiementForm, modePaiement: e.target.value })} style={{ marginBottom: SPACE.md }}>
               <option value="Espèces">{t("devis.modePaiementEspeces")}</option>
               <option value="Banque">{t("devis.modePaiementBanque")}</option>
               <option value="Mobile Money">{t("devis.modePaiementMobile")}</option>
               <option value="Chèque">{t("devis.modePaiementCheque")}</option>
             </Select>
 
-            <Select label={t("devis.conditionPaiement")} value={paiementForm.paymentTermId} onChange={e => setPaiementForm({ ...paiementForm, paymentTermId: e.target.value })} style={{ marginBottom: 12 }}>
+            <Select label={t("devis.conditionPaiement")} value={paiementForm.paymentTermId} onChange={e => setPaiementForm({ ...paiementForm, paymentTermId: e.target.value })} style={{ marginBottom: SPACE.md }}>
               <option value="">{t("devis.saisieManuelle")}</option>
               {paymentTerms.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
             </Select>
 
             {paiementForm.paymentTermId && (
-              <div style={{ marginBottom: 14, padding: '10px 12px', background: COLORS.surfaceAlt, borderRadius: RADIUS.card }}>
-                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: 8 }}>
+              <div style={{ marginBottom: SPACE.md, padding: '10px 12px', background: COLORS.surfaceAlt, borderRadius: RADIUS.card }}>
+                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>
                   {resumeTerme(paymentTerms.find(pt => String(pt.id) === String(paiementForm.paymentTermId)) || { lignes: [] })}
                 </div>
-                <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 6 }}>{t("devis.acompte")}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.sm }}>{t("devis.acompte")}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.sm }}>
                   <Select value={paiementForm.acompteMethod} onChange={e => setPaiementForm({ ...paiementForm, acompteMethod: e.target.value })}>
                     <option value="">{t("devis.acompteAucun")}</option>
                     <option value="percentage">%</option>
@@ -1821,12 +1821,12 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </div>
             )}
 
-            <div style={{ display: paiementForm.paymentTermId ? 'none' : 'flex', gap: 8, marginBottom: 14 }}>
+            <div style={{ display: paiementForm.paymentTermId ? 'none' : 'flex', gap: SPACE.sm, marginBottom: SPACE.md }}>
               <button
                 type="button"
                 onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'complet' })}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.control, cursor: 'pointer',
                   border: `1.5px solid ${paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.border}`,
                   background: paiementForm.modalitePaiement === 'complet' ? COLORS.greenSoft : '#fff',
                   color: paiementForm.modalitePaiement === 'complet' ? COLORS.green : COLORS.inkSoft,
@@ -1839,7 +1839,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 type="button"
                 onClick={() => setPaiementForm({ ...paiementForm, modalitePaiement: 'echelonne' })}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.control, cursor: 'pointer',
                   border: `1.5px solid ${paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.border}`,
                   background: paiementForm.modalitePaiement === 'echelonne' ? COLORS.greenSoft : '#fff',
                   color: paiementForm.modalitePaiement === 'echelonne' ? COLORS.green : COLORS.inkSoft,
@@ -1851,10 +1851,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </div>
 
             {!paiementForm.paymentTermId && paiementForm.modalitePaiement === 'echelonne' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, marginBottom: SPACE.md }}>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.echeances")}</div>
                 {paiementForm.echeances.map((e, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
                     <Field label={i === 0 ? t('devis.montant') : ''} type="text" inputMode="decimal" placeholder="0" value={e.montant} onChange={ev => updateEcheance(i, 'montant', ev.target.value.replace(/[^\d]/g, ''))} />
                     <Field label={i === 0 ? t('common.date') : ''} type="date" value={e.dateEcheance} onChange={ev => updateEcheance(i, 'dateEcheance', ev.target.value)} />
                     <button type="button" onClick={() => removeEcheance(i)} disabled={paiementForm.echeances.length === 1} style={{ background: 'none', border: 'none', cursor: paiementForm.echeances.length === 1 ? 'default' : 'pointer', color: paiementForm.echeances.length === 1 ? COLORS.border : COLORS.red, padding: '9px 0' }}>
@@ -1868,7 +1868,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: SPACE.sm, justifyContent: 'flex-end' }}>
               <Button variant="ghost" onClick={() => setPaiementPopupOpen(false)}>{t("common.cancel")}</Button>
               <Button variant="green" onClick={submitFacturer} disabled={actionBusy}>
                 {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.confirmerFacturer")}
@@ -1880,17 +1880,17 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {/* Fenêtre de modification d'un devis existant, séparée du formulaire de création */}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t("devis.editTitle")}</div>
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
             {editForm.statut === 'Signé' && (
-              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: RADIUS.card, padding: '8px 12px', fontSize: TEXT.sm, marginBottom: 12 }}>
+              <div style={{ background: COLORS.ochreSoft, color: COLORS.ink, border: `1px solid ${COLORS.ochre}`, borderRadius: RADIUS.card, padding: '8px 12px', fontSize: TEXT.sm, marginBottom: SPACE.md }}>
                 {t("devis.editSigneNotice")}
               </div>
             )}
-            <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
               <div>
                 <Field
                   label={t("devis.client")}
@@ -1908,7 +1908,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 {renderClientCard(findClientById(editForm.clientId))}
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.lignesProduits")}</div>
                 <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">
@@ -1986,7 +1986,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       {ligne.type !== 'section' && (
                         <tr>
                           <td></td>
-                          <td colSpan={9} style={{ paddingBottom: 8 }}>
+                          <td colSpan={9} style={{ paddingBottom: SPACE.sm }}>
                             <Select label={t("devis.recolteLiee")} value={ligne.recolteId} onChange={e => updateEditLigne(i, 'recolteId', e.target.value)}>
                               <option value="">{t("common.none")}</option>
                               {recoltes.map(r => (
@@ -2001,7 +2001,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   </tbody>
                 </table>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: SPACE.sm }}>
                   <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}>
                     <Plus size={14} /> {t("devis.addLigne")}
                   </Button>
@@ -2013,9 +2013,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
               <Field label={t("devis.notes")} placeholder={t("devis.notesPlaceholder")} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: SPACE.sm, borderTop: `1px solid ${COLORS.border}` }}>
                 <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t("devis.totalLabel", { total: fmtMoney(totalEditForm) })}</div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: SPACE.sm }}>
                   <Button type="button" variant="ghost" onClick={cancelEditDevis}>{t("common.cancel")}</Button>
                   <Button type="submit" variant="green" disabled={editSaving}>
                     {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} {t("devis.update")}
@@ -2069,18 +2069,18 @@ function VentesAnalyseTab() {
 
   return (
     <Card>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
         {t('ventes.analyseTitle')}
       </div>
       {loading ? (
-        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <Loader2 size={15} className="spin" /> {t('common.loading')}
         </div>
       ) : mouvements.length === 0 ? (
         <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('ventes.analyseEmpty')}</div>
       ) : (
         <>
-          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 12 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.md }}>
             {t('ventes.analyseResume', { count: mouvements.length, total: fmtMoney(total) })}
           </div>
           <DataTable>
@@ -2127,8 +2127,8 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${COLORS.border}` }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+      <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}` }}>
         {VENTES_SOUS_NAV.map(item => (
           <button
             key={item.id}
@@ -2149,7 +2149,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'commandes' && (
         <>
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.xs }}>
               {t('ventes.devisTitle')}
             </div>
             <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
@@ -2162,7 +2162,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'a_facturer' && (
         <>
           <Card>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.xs }}>
               {t('ventes.aFacturerTitle')}
             </div>
             <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
@@ -2176,7 +2176,7 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
       {sousNav === 'analyse' && <VentesAnalyseTab />}
       {sousNav === 'configuration' && (
         <Card>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 12 }}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.md }}>
             {t('ventes.configTitle')}
           </div>
           <ListesPrixManager />
@@ -2512,16 +2512,16 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <datalist id={catalogDatalistId}>
         {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
       </datalist>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t('achats.newTitle')}
         </div>
-        {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
-        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+        {error && <div style={{ color: COLORS.red, marginBottom: SPACE.sm }}>{error}</div>}
+        <form onSubmit={submitForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Select label={t('achats.fournisseur')} value={form.fournisseurId} onChange={e => setForm({ ...form, fournisseurId: e.target.value, fournisseurNom: '' })}>
             <option value="">{t('achats.selectFournisseur')}</option>
             {fournisseurs.map(f => (
@@ -2533,10 +2533,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             <Field label={t('achats.fournisseurNom')} placeholder={t('achats.fournisseurNomPlaceholder')} value={form.fournisseurNom} onChange={e => setForm({ ...form, fournisseurNom: e.target.value })} />
           )}
           <Field label={t('achats.notes')} placeholder={t('common.optionalPlaceholder')} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
             {form.lignes.map((ligne, index) => (
-              <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+              <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
                 <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                   const value = e.target.value;
                   updateLigne(index, 'produit', value);
@@ -2556,9 +2556,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
             ))}
             <Button type="button" variant="ghost" onClick={addLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('achats.addLigne')}</Button>
           </div>
-          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: SPACE.sm, borderTop: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalForm) })}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: SPACE.sm }}>
               <Button type="submit" variant="ochre">{t('achats.submit')}</Button>
             </div>
           </div>
@@ -2566,9 +2566,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       </Card>
 
       <Card>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.md }}>
           <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{t('achats.historique')}</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
             <Button small variant="outline" onClick={exportCsv}><Download size={14} /> {t('achats.exportCsv')}</Button>
             <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> {t('achats.exportPdf')}</Button>
           </div>
@@ -2598,7 +2598,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
                 <td style={{ fontWeight: 600 }}>{fmtMoney(doc.total)}</td>
                 <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.sm }}>
                     {statut === 'Brouillon' && (
                       <Button small variant="outline" onClick={() => changerStatutDoc(doc.id, 'commander')}>{t('achats.commander')}</Button>
                     )}
@@ -2625,20 +2625,20 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       </Card>
       {detailDoc && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div>
                 <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{detailDoc.fournisseurNom}</div>
                 <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{fmtDate(detailDoc.date)}</div>
               </div>
               <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: 6 }}>{fmtMoney(detailDoc.total)}</div></div>
-              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('achats.notes')}</strong><div style={{ marginTop: 6 }}>{detailDoc.notes || t('achats.detailNoNote')}</div></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.md, marginBottom: SPACE.md }}>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: SPACE.sm }}>{fmtMoney(detailDoc.total)}</div></div>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('achats.notes')}</strong><div style={{ marginTop: SPACE.sm }}>{detailDoc.notes || t('achats.detailNoNote')}</div></div>
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 8 }}>{t('achats.detailLignes')}</div>
+            <div style={{ marginBottom: SPACE.md }}>
+              <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.sm }}>{t('achats.detailLignes')}</div>
               <DataTable>
                 <thead>
                   <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
@@ -2667,13 +2667,13 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       {/* Fenêtre de modification d'un achat existant, séparée du formulaire d'ajout */}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('achats.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
-            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+            {error && <div style={{ color: COLORS.red, marginBottom: SPACE.sm }}>{error}</div>}
+            <form onSubmit={submitEditForm} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
               <Select label={t('achats.fournisseur')} value={editForm.fournisseurId} onChange={e => setEditForm({ ...editForm, fournisseurId: e.target.value, fournisseurNom: '' })}>
                 <option value="">{t('achats.selectFournisseur')}</option>
                 {fournisseurs.map(f => (
@@ -2685,10 +2685,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 <Field label={t('achats.fournisseurNom')} placeholder={t('achats.fournisseurNomPlaceholder')} value={editForm.fournisseurNom} onChange={e => setEditForm({ ...editForm, fournisseurNom: e.target.value })} />
               )}
               <Field label={t('achats.notes')} placeholder={t('common.optionalPlaceholder')} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
-              <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
                 {editForm.lignes.map((ligne, index) => (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
                     <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                       const value = e.target.value;
                       updateEditLigne(index, 'produit', value);
@@ -2708,9 +2708,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 ))}
                 <Button type="button" variant="ghost" onClick={addEditLigne} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> {t('achats.addLigne')}</Button>
               </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${COLORS.border}` }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: SPACE.sm, borderTop: `1px solid ${COLORS.border}` }}>
                 <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{t('achats.totalLabel', { total: fmtMoney(totalEditForm) })}</div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: SPACE.sm }}>
                   <Button type="button" variant="ghost" onClick={cancelEdit}>{t('common.cancel')}</Button>
                   <Button type="submit" variant="green" disabled={editSubmitting}>
                     {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('achats.update')}
@@ -2823,7 +2823,7 @@ function IntrantChamps({ v, patch, t }) {
         </>
       )}
       {['semence', 'engrais', 'phytosanitaire'].includes(type) && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, alignSelf: 'center' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft, alignSelf: 'center' }}>
           <input type="checkbox" checked={v.bioAutorise} onChange={e => patch({ bioAutorise: e.target.checked })} />
           {t('stocks.bioAutorise')}
         </label>
@@ -3135,13 +3135,13 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   }));
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('stocks.loading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('stocks.loading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
           <Select label={t('stocks.categorie')} value={form.categorieId} onChange={e => setForm({ ...form, categorieId: Number(e.target.value) })}>
             {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
@@ -3157,11 +3157,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           <IntrantChamps v={form} patch={p => setForm(f => ({ ...f, ...p }))} t={t} />
           <Button variant="ochre" type="submit"><Plus size={15} /> {t('common.add')}</Button>
         </form>
-        <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: TEXT.sm, padding: 0, marginTop: 10 }}>
+        <button type="button" onClick={() => setCatManagerOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, fontSize: TEXT.sm, padding: 0, marginTop: SPACE.sm }}>
           {catManagerOpen ? t('stocks.hideCategories') : t('stocks.manageCategories')}
         </button>
         {catManagerOpen && (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ marginTop: SPACE.sm, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             {categories.map(c => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: TEXT.base }}>
                 <span>{c.completeName || c.nom}</span>
@@ -3170,7 +3170,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 </button>
               </div>
             ))}
-            <form onSubmit={addCategorie} style={{ display: 'flex', gap: 8 }}>
+            <form onSubmit={addCategorie} style={{ display: 'flex', gap: SPACE.sm }}>
               <Field placeholder={t('stocks.newCategorie')} value={newCatNom} onChange={e => setNewCatNom(e.target.value)} />
               <select className="flat-input" value={newCatParentId} onChange={e => setNewCatParentId(e.target.value)} style={{ maxWidth: 180 }}>
                 <option value="">{t('stocks.categorieParentNone')}</option>
@@ -3189,14 +3189,14 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       <HaccpPanel module={moduleType} />
       <Card>
         <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
-        <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: 6 }}>{t('stocks.stockEvolutionAide')}</div>
+        <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('stocks.stockEvolutionAide')}</div>
         {stockEvolution.length === 0 ? (
           <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('stocks.stockEvolutionVide')}</div>
         ) : (
           <>
             <MiniChart data={stockEvolution} color={COLORS.blue} />
             {evolution && evolution.sansCout > 0 && (
-              <div style={{ fontSize: TEXT.xs, color: COLORS.ochre, marginTop: 6 }}>
+              <div style={{ fontSize: TEXT.xs, color: COLORS.ochre, marginTop: SPACE.sm }}>
                 {t('stocks.stockEvolutionSansCout', { count: evolution.sansCout })}
               </div>
             )}
@@ -3205,7 +3205,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       </Card>
       {lotsPerimes.length > 0 && (
         <Card style={{ background: COLORS.ochreSoft, border: `1px solid ${COLORS.ochre}`, fontSize: TEXT.base }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontWeight: 600, marginBottom: SPACE.xs }}>
             <AlertTriangle size={15} /> {t('stocks.lotsPerimesTitle', { n: lotsPerimes.length, jours: LOT_PEREMPTION_SEUIL_JOURS })}
           </div>
           <div style={{ color: COLORS.inkSoft }}>
@@ -3215,7 +3215,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         </Card>
       )}
       <Card style={{ padding: 0 }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 12px 0' }}>
+        <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', padding: '10px 12px 0' }}>
           {['', ...TYPES_INTRANT].map(x => (
             <button key={x || 'all'} type="button" onClick={() => setFiltreType(x)}
               style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: TEXT.sm, cursor: 'pointer' }}>
@@ -3243,7 +3243,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             ) : rows.map(s => (
               <React.Fragment key={s.id}>
               <tr>
-                <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: 6, color: COLORS.green, fontSize: TEXT.xs }}>bio</span> : null}</td>
+                <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: SPACE.sm, color: COLORS.green, fontSize: TEXT.xs }}>bio</span> : null}</td>
                 <td><Badge tone="ochre">{s.categorie}</Badge></td>
                 <td style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>
                   {s.typeIntrant ? t(`stocks.intrant.${s.typeIntrant}`) : '—'}
@@ -3252,12 +3252,12 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 <td>{s.quantite} {s.unite}</td>
                 <td>
                   {s.quantite <= s.seuil
-                    ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><AlertTriangle size={13} /> {t('stocks.stockLow', { seuil: s.seuil })}</span>
+                    ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontWeight: 600 }}><AlertTriangle size={13} /> {t('stocks.stockLow', { seuil: s.seuil })}</span>
                     : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
                 </td>
                 <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? fmtMoney(s.prixDefaut) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
                     <button onClick={() => toggleLots(s.id)} title={t('stocks.lotsTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: lotsFor === s.id ? COLORS.ochre : COLORS.inkSoft, display: 'flex' }}>
                       <Package size={15} />
                     </button>
@@ -3276,11 +3276,11 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               {lotsFor === s.id && (
                 <tr>
                   <td colSpan={7} style={{ background: COLORS.bg, padding: '10px 14px' }}>
-                    <div style={{ fontSize: TEXT.sm, fontWeight: 600, marginBottom: 6 }}>{t('stocks.lotsTitle')}</div>
+                    <div style={{ fontSize: TEXT.sm, fontWeight: 600, marginBottom: SPACE.sm }}>{t('stocks.lotsTitle')}</div>
                     {lots.length === 0 ? (
                       <div style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>{t('stocks.lotsEmpty')}</div>
                     ) : (
-                      <DataTable style={{ marginBottom: 8 }}>
+                      <DataTable style={{ marginBottom: SPACE.sm }}>
                         <thead><tr style={{ color: COLORS.inkSoft }}>
                           <th>{t('stocks.lotNumero')}</th>
                           <th>{t('stocks.lotDateEntree')}</th>
@@ -3310,7 +3310,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                         </tbody>
                       </DataTable>
                     )}
-                    <form onSubmit={addLot} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end' }}>
+                    <form onSubmit={addLot} style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', alignItems: 'end' }}>
                       <Field label={t('stocks.lotNumero')} value={lotForm.numeroLot} onChange={e => setLotForm({ ...lotForm, numeroLot: e.target.value })} />
                       <Field label={t('stocks.lotPeremption')} type="date" value={lotForm.datePeremption} onChange={e => setLotForm({ ...lotForm, datePeremption: e.target.value })} />
                       <Field label={t('stocks.lotQuantiteInitiale')} type="number" value={lotForm.quantiteInitiale} onChange={e => setLotForm({ ...lotForm, quantiteInitiale: e.target.value })} />
@@ -3331,13 +3331,13 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('stocks.editArticle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
                 <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
                 <Select label={t('stocks.categorie')} value={editForm.categorieId} onChange={e => setEditForm({ ...editForm, categorieId: Number(e.target.value) })}>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.completeName || c.nom}</option>)}
@@ -3352,7 +3352,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
                 <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={editForm.cout} onChange={e => setEditForm({ ...editForm, cout: e.target.value })} />
                 <IntrantChamps v={editForm} patch={p => setEditForm(f => ({ ...f, ...p }))} t={t} />
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
                   {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('common.save')}
                 </Button>
@@ -3365,8 +3365,8 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {historiqueArticle && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeHistorique}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div>
                 <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{historiqueArticle.nom}</div>
                 <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('stocks.historiqueTitle')}</div>
@@ -3378,7 +3378,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
             ) : historiqueMouvements.length === 0 ? (
               <div style={{ color: COLORS.inkSoft }}>{t('stocks.historiqueEmpty')}</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 {historiqueMouvements.map(m => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                     <div>
@@ -3557,13 +3557,13 @@ function LivraisonsTab({ farmId }) {
   };
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('poulailler.livraisonsLoading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('poulailler.livraisonsLoading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('poulailler.client')} placeholder={t('poulailler.clientPlaceholder')} value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} />
           <Field label={t('poulailler.produit')} placeholder={t('poulailler.produitPlaceholder')} value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
           <Field label={t('poulailler.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
@@ -3663,13 +3663,13 @@ function PiscicultureLivraisonsTab({ farmId }) {
   };
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('pisciculture.livraisonsLoading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('pisciculture.livraisonsLoading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('pisciculture.client')} placeholder={t('pisciculture.clientPlaceholder')} value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} />
           <Field label={t('pisciculture.produit')} placeholder={t('pisciculture.produitPlaceholder')} value={form.produit} onChange={e => setForm({ ...form, produit: e.target.value })} />
           <Field label={t('pisciculture.quantite')} type="number" placeholder="0" value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} />
@@ -3763,18 +3763,18 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: SPACE.md }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalVentes')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: SPACE.xs }}>{t('compta.totalVentes')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.totalAchats')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: SPACE.xs }}>{t('compta.totalAchats')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
         </Card>
         <Card style={{ background: solde >= 0 ? COLORS.blueSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: solde >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('compta.solde')}</div>
+          <div style={{ fontSize: TEXT.sm, color: solde >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: SPACE.xs }}>{t('compta.solde')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: solde >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(solde)}</div>
         </Card>
       </div>
@@ -3795,15 +3795,15 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
           </thead>
           <tbody>
             {ledger.length === 0 && (
-              <tr><td colSpan={4} style={{ padding: 20, color: COLORS.inkSoft, textAlign: 'center' }}>{t('compta.emptyLedger')}</td></tr>
+              <tr><td colSpan={4} style={{ padding: SPACE.xl, color: COLORS.inkSoft, textAlign: 'center' }}>{t('compta.emptyLedger')}</td></tr>
             )}
             {ledger.map(l => (
               <tr key={l.type + l.id}>
                 <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{fmtDate(l.date)}</td>
                 <td>
                   {l.type === 'Vente'
-                    ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowUpCircle size={13} /> {t('compta.vente')}</span>
-                    : <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}><ArrowDownCircle size={13} /> {t('compta.achat')}</span>}
+                    ? <span style={{ color: COLORS.green, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontWeight: 600 }}><ArrowUpCircle size={13} /> {t('compta.vente')}</span>
+                    : <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontWeight: 600 }}><ArrowDownCircle size={13} /> {t('compta.achat')}</span>}
                 </td>
                 <td>{l.produit} — {l.partenaire} ({l.quantite})</td>
                 <td style={{ textAlign: 'right', fontWeight: 600, color: l.montant >= 0 ? COLORS.green : COLORS.red }}>
@@ -3818,20 +3818,20 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
       {/* Popup listant tout l'historique (modifications + suppressions) du module */}
       {historiqueOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHistoriqueOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: 20, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
-            <div style={{ fontWeight: 700, fontSize: TEXT.md, marginBottom: 12 }}>{t('compta.historiqueBtn')}</div>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, padding: SPACE.xl, maxWidth: 800, width: '90%', maxHeight: '75vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 700, fontSize: TEXT.md, marginBottom: SPACE.md }}>{t('compta.historiqueBtn')}</div>
             {historiqueLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, color: COLORS.inkSoft }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.inkSoft }}>
                 <Loader2 size={15} className="spin" /> {t('common.loading')}
               </div>
             ) : historiqueData.length === 0 ? (
               <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('compta.historiqueEmpty')}</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 {historiqueData.map(h => {
                   const values = h.action === 'suppression' ? h.anciennesValeurs : h.nouvellesValeurs;
                   return (
-                    <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 8 }}>
+                    <div key={h.id} style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: SPACE.sm }}>
                       <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>
                         <Badge tone={h.action === 'suppression' ? 'red' : 'blue'}>{h.action === 'suppression' ? t('compta.supprime') : t('compta.modifie')}</Badge>
                         {' '}{t('compta.parUtilisateur', { email: h.utilisateurEmail || t('compta.utilisateurInconnu') })}
@@ -3842,13 +3842,13 @@ function ComptabiliteTab({ farmId, ventesKey = 'ventes', achatsKey = 'achats', r
                         </div>
                       )}
                       <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{fmtDate(h.date, { dateStyle: 'short', timeStyle: 'short' })}</div>
-                      <div style={{ fontSize: TEXT.base, marginTop: 4 }}>{t('compta.raison', { raison: h.raison })}</div>
+                      <div style={{ fontSize: TEXT.base, marginTop: SPACE.xs }}>{t('compta.raison', { raison: h.raison })}</div>
                     </div>
                   );
                 })}
               </div>
             )}
-            <Button variant="ghost" onClick={() => setHistoriqueOpen(false)} style={{ marginTop: 14 }}>{t('common.close')}</Button>
+            <Button variant="ghost" onClick={() => setHistoriqueOpen(false)} style={{ marginTop: SPACE.md }}>{t('common.close')}</Button>
           </div>
         </div>
       )}
@@ -3923,14 +3923,14 @@ function PoultryMonitoringTab({ farmId }) {
   const quantityLabel = unitLabel(form.type);
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('poulailler.suiviLoading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('poulailler.suiviLoading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('poulailler.suiviTitle')}</div>
-        <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('poulailler.suiviTitle')}</div>
+        <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('common.date')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t('compta.type')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
             <option value="mortalite">{typeLabel('mortalite')}</option>
@@ -3945,25 +3945,25 @@ function PoultryMonitoringTab({ farmId }) {
         </form>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: SPACE.md }}>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryMortalite')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.summaryMortalite')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryNaissances')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.summaryNaissances')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{summary.naissance}</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryVaccinations')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.summaryVaccinations')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{summary.vaccination}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryAliments')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.summaryAliments')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('poulailler.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('poulailler.summaryOeufs')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: SPACE.xs }}>{t('poulailler.summaryOeufs')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{summary.oeufs}</div>
         </Card>
       </div>
@@ -4062,14 +4062,14 @@ function PiscicultureMonitoringTab({ farmId }) {
   const quantityLabel = unitLabel(form.type);
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('pisciculture.suiviLoading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('pisciculture.suiviLoading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('pisciculture.suiviTitle')}</div>
-        <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('pisciculture.suiviTitle')}</div>
+        <form onSubmit={addRecord} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('common.date')} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t('compta.type')} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, quantity: '' })}>
             <option value="mortalite">{typeLabel('mortalite')}</option>
@@ -4083,21 +4083,21 @@ function PiscicultureMonitoringTab({ farmId }) {
         </form>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: SPACE.md }}>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryMortalite')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: SPACE.xs }}>{t('pisciculture.summaryMortalite')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{summary.mortalite}</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryCroissance')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: SPACE.xs }}>{t('pisciculture.summaryCroissance')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{summary.croissance} {t('pisciculture.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryAliments')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: SPACE.xs }}>{t('pisciculture.summaryAliments')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.ochre }}>{summary.alimentation} {t('pisciculture.unit.kg')}</div>
         </Card>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('pisciculture.summaryTraitements')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: SPACE.xs }}>{t('pisciculture.summaryTraitements')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{summary.traitement}</div>
         </Card>
       </div>
@@ -4136,7 +4136,7 @@ function ModuleTabButton({ tab, active, onClick, accentColor }) {
   const Icon = tab.icon;
   return (
     <button onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
+      display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
       padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
       background: active ? accentColor : 'transparent', color: active ? '#fff' : COLORS.inkSoft,
     }}>
@@ -4193,8 +4193,8 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
   const activeHiddenInOverflow = overflowTabs.some(t => t.id === activeTab);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'flex', gap: 6, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 10 }}>
-      <div ref={measureRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', display: 'flex', gap: 6, top: -9999, left: -9999 }}>
+    <div ref={containerRef} style={{ position: 'relative', display: 'flex', gap: SPACE.sm, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: SPACE.sm }}>
+      <div ref={measureRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', display: 'flex', gap: SPACE.sm, top: -9999, left: -9999 }}>
         {tabs.map(t => <ModuleTabButton key={t.id} tab={t} active={false} onClick={() => {}} accentColor={accentColor} />)}
       </div>
       {visibleTabs.map(t => (
@@ -4203,7 +4203,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
       {overflowTabs.length > 0 && (
         <div style={{ position: 'relative' }}>
           <button onClick={() => setMoreOpen(o => !o)} style={{
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
+            display: 'flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
             padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
             background: activeHiddenInOverflow ? accentColor : 'transparent',
             color: activeHiddenInOverflow ? '#fff' : COLORS.inkSoft,
@@ -4212,7 +4212,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
           </button>
           {moreOpen && (
             <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: RADIUS.card,
+              position: 'absolute', top: '100%', right: 0, marginTop: SPACE.xs, background: '#fff', borderRadius: RADIUS.card,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`, zIndex: 30,
               display: 'flex', flexDirection: 'column', minWidth: 160, overflow: 'hidden',
             }}>
@@ -4221,7 +4221,7 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
                 const active = activeTab === t.id;
                 return (
                   <button key={t.id} onClick={() => { onSelect(t.id); setMoreOpen(false); }} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, fontWeight: 600, textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, fontWeight: 600, textAlign: 'left',
                     padding: '10px 14px', border: 'none', cursor: 'pointer',
                     background: active ? COLORS.surfaceAlt : 'transparent', color: COLORS.ink,
                   }}>
@@ -4299,7 +4299,7 @@ function ParcelleMeteoSection({ parcelle }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
       <div style={{ position: 'relative' }}>
         <Field
           label={t('cultures.meteoParcelleRecherche')}
@@ -4308,7 +4308,7 @@ function ParcelleMeteoSection({ parcelle }) {
           onChange={(e) => setVilleQuery(e.target.value)}
         />
         {villeResultats.length > 0 && (
-          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: 4, overflow: 'hidden' }}>
+          <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: SPACE.xs, overflow: 'hidden' }}>
             {villeResultats.map((v, i) => (
               <button
                 key={`${v.nom}-${i}`}
@@ -4328,7 +4328,7 @@ function ParcelleMeteoSection({ parcelle }) {
       ) : error ? (
         <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{error}</div>
       ) : data ? (
-        <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
           <div>
             <b>{data.ville}</b> ({data.source === 'parcelle' ? t('cultures.meteoParcelleSourcePropre') : t('cultures.meteoParcelleSourceEntreprise')})
           </div>
@@ -4373,9 +4373,9 @@ function ParcellePrecisionSection({ parcelle }) {
   }, [parcelle.id]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
       <div>
-        <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+        <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: SPACE.sm, textTransform: 'uppercase', letterSpacing: 0.3 }}>
           {t('precisionAgricole.solTitle')}
         </div>
         {solLoading ? (
@@ -4383,14 +4383,14 @@ function ParcellePrecisionSection({ parcelle }) {
         ) : solError ? (
           <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{solError}</div>
         ) : sol ? (
-          <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
             <div>
               {t('precisionAgricole.texture')} : <b>{sol.texture.classe ? t(`precisionAgricole.textureClasse.${sol.texture.classe}`) : '—'}</b>
               {' '}({t('precisionAgricole.argile')} {sol.texture.argile}% · {t('precisionAgricole.sable')} {sol.texture.sable}% · {t('precisionAgricole.limon')} {sol.texture.limon}%)
             </div>
             <div>pH : <b>{sol.ph ?? '—'}</b> · {t('precisionAgricole.carboneOrganique')} : {sol.carboneOrganique ?? '—'} g/kg · {t('precisionAgricole.azote')} : {sol.azote ?? '—'} g/kg</div>
             {sol.culturesSuggerees.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.xs, marginTop: 2 }}>
                 <span style={{ color: COLORS.inkSoft }}>{t('precisionAgricole.culturesSuggerees')} :</span>
                 {sol.culturesSuggerees.map((c) => <Badge key={c} tone="green">{c}</Badge>)}
               </div>
@@ -4400,7 +4400,7 @@ function ParcellePrecisionSection({ parcelle }) {
       </div>
 
       <div>
-        <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+        <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft, marginBottom: SPACE.sm, textTransform: 'uppercase', letterSpacing: 0.3 }}>
           {t('precisionAgricole.ndviTitle')}
         </div>
         {ndviLoading ? (
@@ -4412,7 +4412,7 @@ function ParcellePrecisionSection({ parcelle }) {
         ) : ndvi && ndvi.historique.length === 0 ? (
           <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('precisionAgricole.ndviAucuneImage')}</div>
         ) : ndvi ? (
-          <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ink, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div>
               NDVI : <b>{ndvi.ndviActuel}</b> ({ndvi.dateActuelle}) —{' '}
               <Badge tone={BANDE_NDVI_TONE[ndvi.bande] || 'blue'}>{t(`precisionAgricole.bande.${ndvi.bande}`)}</Badge>
@@ -4614,13 +4614,13 @@ function CulturesModule({ farmId, highlightProduitId }) {
   };
 
   if (!loaded) {
-    return <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
+    return <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft, padding: SPACE.huge }}>
       <Loader2 size={18} className="spin" /> {t('cultures.loadingParcelles')}
     </div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <ModuleTabBar
         tabs={[
           { id: 'parcelles', label: t('cultures.tabParcelles'), icon: Sprout },
@@ -4637,10 +4637,10 @@ function CulturesModule({ farmId, highlightProduitId }) {
       />
 
       {tab === 'parcelles' && (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('cultures.addParcelleTitle')}</div>
-        <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('cultures.addParcelleTitle')}</div>
+        <form onSubmit={addParcelle} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('cultures.fieldNom')} placeholder={t('cultures.fieldNomPlaceholder')} value={newParcelleForm.nom} onChange={e => setNewParcelleForm({ ...newParcelleForm, nom: e.target.value })} />
           <Field label={t('cultures.fieldCulture')} placeholder={t('cultures.fieldCulturePlaceholder')} value={newParcelleForm.culture} onChange={e => setNewParcelleForm({ ...newParcelleForm, culture: e.target.value })} />
           <Field label={t('cultures.fieldSeuil')} type="number" value={newParcelleForm.seuil} onChange={e => setNewParcelleForm({ ...newParcelleForm, seuil: e.target.value })} />
@@ -4649,24 +4649,24 @@ function CulturesModule({ farmId, highlightProduitId }) {
           <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? t('cultures.adding') : t('common.add')}</Button>
         </form>
       </Card>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: SPACE.lg }}>
         {parcelles.map(p => {
           const needsWater = p.humidite < p.seuil;
           return (
             <Card key={p.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACE.md }}>
                 <div>
                   <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink }}>{p.nom}</div>
                   <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{p.culture}</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                   <Badge tone={needsWater ? 'blue' : 'green'}>{needsWater ? t('cultures.wateringRecommended') : t('cultures.soilMoistEnough')}</Badge>
                   <button onClick={() => removeParcelle(p.id, p.nom)} title={t('cultures.deleteParcelleTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}>
                     <Trash2 size={15} />
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 22, justifyContent: 'center', padding: '6px 0 14px' }}>
+              <div style={{ display: 'flex', gap: SPACE.xl, justifyContent: 'center', padding: '6px 0 14px' }}>
                 <GaugeDial
                   value={p.humidite} label={t('cultures.soilHumidity')} unit="%"
                   colorMain={COLORS.blue} colorTrack={COLORS.blueSoft}
@@ -4678,10 +4678,10 @@ function CulturesModule({ farmId, highlightProduitId }) {
                   icon={<Thermometer size={15} color={COLORS.ochre} />}
                 />
               </div>
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACE.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button
                   onClick={() => toggleMode(p.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500 }}
                 >
                   {p.mode === 'auto' ? <ToggleRight size={22} color={COLORS.green} /> : <ToggleLeft size={22} color={COLORS.inkSoft} />}
                   {p.mode === 'auto' ? t('cultures.modeAuto') : t('cultures.modeManuel')}
@@ -4695,16 +4695,16 @@ function CulturesModule({ farmId, highlightProduitId }) {
                   {p.vanneOuverte ? t('cultures.valveOpen') : t('cultures.valveClosed')}
                 </Button>
               </div>
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: SPACE.md, paddingTop: SPACE.md }}>
                 <button
                   onClick={() => setPlanningOpenId(id => (id === p.id ? null : p.id))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
                 >
                   <ChevronRight size={14} style={{ transform: planningOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                   {t('cultures.planningTitle')}
                 </button>
                 {planningOpenId === p.id && (
-                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ marginTop: SPACE.sm, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                     <Field
                       label={t('cultures.dateSemis')}
                       type="date"
@@ -4724,30 +4724,30 @@ function CulturesModule({ farmId, highlightProduitId }) {
                   </div>
                 )}
               </div>
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: SPACE.md, paddingTop: SPACE.md }}>
                 <button
                   onClick={() => setMeteoOpenId(id => (id === p.id ? null : p.id))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
                 >
                   <ChevronRight size={14} style={{ transform: meteoOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                   {t('cultures.meteoParcelleTitle')}
                 </button>
                 {meteoOpenId === p.id && (
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: SPACE.sm }}>
                     <ParcelleMeteoSection parcelle={p} />
                   </div>
                 )}
               </div>
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 12, paddingTop: 12 }}>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: SPACE.md, paddingTop: SPACE.md }}>
                 <button
                   onClick={() => setPrecisionOpenId(id => (id === p.id ? null : p.id))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600, padding: 0 }}
                 >
                   <ChevronRight size={14} style={{ transform: precisionOpenId === p.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                   {t('cultures.precisionTitle')}
                 </button>
                 {precisionOpenId === p.id && (
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: SPACE.sm }}>
                     <ParcellePrecisionSection parcelle={p} />
                   </div>
                 )}
@@ -4758,15 +4758,15 @@ function CulturesModule({ farmId, highlightProduitId }) {
       </div>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <ClipboardList size={16} color={COLORS.green} /> {t('cultures.valveHistory')}
         </div>
         {historique.length === 0 ? (
           <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('cultures.noEvent')}</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, maxHeight: 220, overflowY: 'auto' }}>
             {historique.map(h => (
-              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
+              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: SPACE.sm }}>
                 <span><strong style={{ fontWeight: 600 }}>{h.parcelle}</strong> — {renderAction(h.action)}</span>
                 <span style={{ color: COLORS.inkSoft, fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs }}>{formatDateTimeFr(h.date)}</span>
               </div>
@@ -4809,7 +4809,7 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
     { id: 'comptabilite', label: t('poulailler.tabComptabilite'), icon: Wallet },
   ];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} accentColor={COLORS.ochre} />
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
@@ -4848,7 +4848,7 @@ function PiscicultureModule({ farmId, highlightProduitId }) {
     { id: 'comptabilite', label: t('pisciculture.tabComptabilite'), icon: Wallet },
   ];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} accentColor={COLORS.blue} />
       {tab === 'environnement' && <BassinsEnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PiscicultureMonitoringTab farmId={farmId} />}
@@ -4978,13 +4978,13 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
               {t('auth.confirmationTitle')}
             </div>
-            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 18 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
               {t('auth.confirmationHint', { email: confirmationEmail })}
             </div>
-            <form onSubmit={submitConfirmation} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form onSubmit={submitConfirmation} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
               <Field label={t('auth.confirmationCode')} placeholder="123456" value={confirmationCode} onChange={e => setConfirmationCode(e.target.value)} required maxLength={6} />
               {error && (
-                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
@@ -4993,16 +4993,16 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                   {resendMsg}
                 </div>
               )}
-              <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
+              <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: SPACE.sm }} disabled={busy}>
                 {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('auth.confirmationSubmit')}
               </Button>
             </form>
-            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: SPACE.lg, textAlign: 'center' }}>
               <button type="button" onClick={resendConfirmationCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>
                 {t('auth.resendCode')}
               </button>
             </div>
-            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 8, textAlign: 'center' }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: SPACE.sm, textAlign: 'center' }}>
               <button type="button" onClick={() => { setConfirmationStep(false); setConfirmationCode(''); setError(''); setResendMsg(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>
                 {t('common.back')}
               </button>
@@ -5021,21 +5021,21 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
               {t('auth.mfaTitle')}
             </div>
-            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 18 }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
               {mfaMethod === 'email' ? t('auth.mfaHintEmail') : t('auth.mfaHint')}
             </div>
-            <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form onSubmit={submitMfa} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
               <Field label={t('auth.mfaCode')} placeholder="123456" value={mfaCode} onChange={e => setMfaCode(e.target.value)} required maxLength={6} />
               {error && (
-                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
-              <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
+              <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: SPACE.sm }} disabled={busy}>
                 {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {t('auth.mfaSubmit')}
               </Button>
             </form>
-            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: SPACE.lg, textAlign: 'center' }}>
               <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>
                 {t('common.back')}
               </button>
@@ -5049,14 +5049,14 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
   return (
     <div style={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', marginBottom: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, justifyContent: 'center', marginBottom: SPACE.xxl }}>
           <div style={{ width: 40, height: 40, borderRadius: RADIUS.card, background: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={21} color="#fff" />
           </div>
           <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.xl, color: COLORS.ink }}>{t('auth.brand')}</span>
         </div>
         <Card>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: COLORS.surfaceAlt, borderRadius: RADIUS.card, padding: 4 }}>
+          <div style={{ display: 'flex', gap: SPACE.sm, marginBottom: SPACE.lg, background: COLORS.surfaceAlt, borderRadius: RADIUS.control, padding: SPACE.xs }}>
             <button
               type="button"
               onClick={() => { setMode('login'); setError(''); }}
@@ -5087,17 +5087,17 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
             {mode === 'login' ? t('auth.titleLogin') : t('auth.titleRegister')}
           </div>
-          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 18 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
             {mode === 'login' ? t('auth.subtitleLogin') : t('auth.subtitleRegister')}
           </div>
 
           {mode === 'register' && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <div style={{ display: 'flex', gap: SPACE.sm, marginBottom: SPACE.md }}>
               <button
                 type="button"
                 onClick={() => setTypeCompte('entreprise')}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.control, cursor: 'pointer',
                   border: `1.5px solid ${typeCompte === 'entreprise' ? COLORS.green : COLORS.border}`,
                   background: typeCompte === 'entreprise' ? COLORS.greenSoft || COLORS.greenSoft : '#fff',
                   color: typeCompte === 'entreprise' ? COLORS.green : COLORS.inkSoft,
@@ -5110,7 +5110,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
                 type="button"
                 onClick={() => setTypeCompte('particulier')}
                 style={{
-                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.card, cursor: 'pointer',
+                  flex: 1, padding: '10px 8px', borderRadius: RADIUS.control, cursor: 'pointer',
                   border: `1.5px solid ${typeCompte === 'particulier' ? COLORS.green : COLORS.border}`,
                   background: typeCompte === 'particulier' ? COLORS.greenSoft || COLORS.greenSoft : '#fff',
                   color: typeCompte === 'particulier' ? COLORS.green : COLORS.inkSoft,
@@ -5122,7 +5122,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
             </div>
           )}
 
-          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
             <Field label={t('auth.email')} type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={e => setEmail(e.target.value)} required />
             <Field label={t('auth.password')} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 6 : undefined} />
             {mode === 'register' && (
@@ -5142,7 +5142,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
             {mode === 'register' && typeCompte === 'entreprise' && (
               <>
                 <Field label={t('auth.address')} placeholder={t('auth.addressPlaceholder')} value={adresse} onChange={e => setAdresse(e.target.value)} required />
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: SPACE.sm }}>
                   <Field label={t('auth.phone')} placeholder={t('auth.phonePlaceholder')} value={telephone} onChange={e => setTelephone(e.target.value)} required style={{ flex: 1 }} />
                   <Field label={t('auth.vatNumber')} placeholder={t('auth.vatNumberPlaceholder')} value={numeroTva} onChange={e => setNumeroTva(e.target.value)} required style={{ flex: 1 }} />
                 </div>
@@ -5153,7 +5153,7 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               </>
             )}
             {mode === 'register' && (
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Select label={t('auth.currency')} value={devise} onChange={e => setDevise(e.target.value)} style={{ flex: 1 }}>
                   {DEVISES.map(d => <option key={d.code} value={d.code}>{d.label}</option>)}
                 </Select>
@@ -5163,22 +5163,22 @@ function LoginScreen({ onAuth, onConfirmerInscription, onRenvoyerCodeInscription
               </div>
             )}
             {error && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                 <AlertTriangle size={14} /> {error}
               </div>
             )}
-            <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: 6 }} disabled={busy}>
+            <Button type="submit" variant="green" style={{ justifyContent: 'center', marginTop: SPACE.sm }} disabled={busy}>
               {busy ? <Loader2 size={15} className="spin" /> : <Lock size={14} />} {mode === 'login' ? t('auth.submitLogin') : t('auth.submitRegister')}
             </Button>
           </form>
-          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginTop: SPACE.lg, textAlign: 'center' }}>
             {mode === 'login' ? (
               <>{t('auth.noAccount')} <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>{t('auth.submitRegister')}</button></>
             ) : (
               <>{t('auth.hasAccount')} <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base }}>{t('auth.submitLogin')}</button></>
             )}
           </div>
-          <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' }}>
+          <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginTop: SPACE.sm, textAlign: 'center' }}>
             {t('auth.footer')}
           </div>
         </Card>
@@ -5194,7 +5194,7 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
   return (
     <Card style={{
       border: active ? `2px solid ${accentColor}` : `1px solid ${COLORS.border}`,
-      display: 'flex', flexDirection: 'column', gap: 14
+      display: 'flex', flexDirection: 'column', gap: SPACE.md
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ width: 42, height: 42, borderRadius: RADIUS.card, background: accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -5206,14 +5206,14 @@ function OptionCard({ icon: Icon, title, description, features, price, active, o
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>{title}</div>
         <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, lineHeight: 1.5 }}>{description}</div>
       </div>
-      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
         {features.map((f, i) => (
-          <li key={i} style={{ display: 'flex', gap: 7, fontSize: TEXT.base, color: COLORS.ink }}>
+          <li key={i} style={{ display: 'flex', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.ink }}>
             <Check size={15} color={accentColor} style={{ flexShrink: 0, marginTop: 1 }} /> {f}
           </li>
         ))}
       </ul>
-      <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACE.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{price}</span>
         <Button variant={active ? 'outline' : accent} onClick={onToggle}>
           {active ? t('optionCard.deactivate') : t('optionCard.activate')}
@@ -5363,15 +5363,15 @@ function AgriculturalCalendarModule({ farmId }) {
   };
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('calendar.loading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('calendar.loading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('calendar.planTitle')}</div>
-        {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
-        <form onSubmit={addEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('calendar.planTitle')}</div>
+        {error && <div style={{ color: COLORS.red, marginBottom: SPACE.sm }}>{error}</div>}
+        <form onSubmit={addEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t("common.date")} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t("common.type")} value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
             <option value="irrigation">{typeLabel("irrigation")}</option>
@@ -5386,21 +5386,21 @@ function AgriculturalCalendarModule({ farmId }) {
         </form>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: SPACE.lg, alignItems: 'start' }}>
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.sm }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('calendar.calendarTitle')}</div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: SPACE.sm }}>
               <Button small variant="outline" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}>←</Button>
               <Button small variant="outline" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}>→</Button>
             </div>
           </div>
-          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 8 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>
             {fmtDate(viewMonth, { month: 'long', year: 'numeric' })}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: SPACE.sm }}>
             {t('common.daysShort', { returnObjects: true }).map((day, idx) => (
-              <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: TEXT.xs, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: 4 }}>{day}</div>
+              <div key={`day-${idx}`} style={{ textAlign: 'center', fontSize: TEXT.xs, fontWeight: 700, color: COLORS.inkSoft, paddingBottom: SPACE.xs }}>{day}</div>
             ))}
             {Array.from({ length: firstDayOffset }).map((_, idx) => (
               <div key={`empty-${idx}`} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px dashed ${COLORS.border}` }} />
@@ -5412,9 +5412,9 @@ function AgriculturalCalendarModule({ farmId }) {
               const dayEvents = eventsByDay[cellIso] || [];
               const isToday = cellIso === today;
               return (
-                <div key={cellIso} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, padding: 6, background: isToday ? COLORS.greenSoft : COLORS.surfaceAlt }}>
-                  <div style={{ fontSize: TEXT.sm, fontWeight: 700, marginBottom: 5, color: isToday ? COLORS.green : COLORS.ink }}>{dayNumber}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div key={cellIso} style={{ minHeight: 78, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, padding: SPACE.sm, background: isToday ? COLORS.greenSoft : COLORS.surfaceAlt }}>
+                  <div style={{ fontSize: TEXT.sm, fontWeight: 700, marginBottom: SPACE.xs, color: isToday ? COLORS.green : COLORS.ink }}>{dayNumber}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
                     {dayEvents.slice(0, 2).map(event => {
                       const meta = activityMeta[event.type] || { tone: 'green' };
                       return <div key={event.id} style={{ fontSize: TEXT.xs, padding: '3px 5px', borderRadius: RADIUS.control, background: meta.tone === 'blue' ? COLORS.blueSoft : meta.tone === 'green' ? COLORS.greenSoft : meta.tone === 'red' ? COLORS.redSoft : COLORS.ochreSoft, color: meta.tone === 'blue' ? COLORS.blue : meta.tone === 'green' ? COLORS.green : meta.tone === 'red' ? COLORS.red : COLORS.ochre }}>
@@ -5429,10 +5429,10 @@ function AgriculturalCalendarModule({ farmId }) {
           </div>
         </Card>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('calendar.typesTitle')}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div style={{ fontWeight: 600, marginBottom: SPACE.sm }}>{t('calendar.typesTitle')}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               {Object.entries(activityMeta).map(([key, meta]) => (
                 <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base, color: COLORS.inkSoft }}>
                   <span>{typeLabel(key)}</span>
@@ -5442,14 +5442,14 @@ function AgriculturalCalendarModule({ farmId }) {
             </div>
           </Card>
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('calendar.allEvents')}</div>
-            <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: 8 }}>{t('calendar.allEventsHint')}</div>
+            <div style={{ fontWeight: 600, marginBottom: SPACE.sm }}>{t('calendar.allEvents')}</div>
+            <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('calendar.allEventsHint')}</div>
             {allEventsSorted.length === 0 ? (
               <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('calendar.empty')}</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, maxHeight: 320, overflowY: 'auto' }}>
                 {allEventsSorted.map(event => (
-                  <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 7 }}>
+                  <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACE.sm, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: SPACE.sm }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{event.title}</div>
                       <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 3 }}>{fmtDate(event.date)} • {typeLabel(event.type)}</div>
@@ -5466,12 +5466,12 @@ function AgriculturalCalendarModule({ farmId }) {
       </div>
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditEvent}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('calendar.editTitle')}</div>
               <button onClick={cancelEditEvent} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            <form onSubmit={saveEditEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <form onSubmit={saveEditEvent} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
               <Field label={t("common.date")} type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} required />
               <Select label={t("common.type")} value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value })}>
                 <option value="irrigation">{typeLabel("irrigation")}</option>
@@ -5482,7 +5482,7 @@ function AgriculturalCalendarModule({ farmId }) {
               </Select>
               <Field label={t("calendar.titre")} placeholder={t("calendar.titrePlaceholder")} value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} required />
               <Field label={t("calendar.description")} placeholder={t("calendar.descriptionPlaceholder")} value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
                   {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t("common.save")}
                 </Button>
@@ -5680,15 +5680,15 @@ function HarvestsModule({ farmId }) {
   const totalQuantite = harvests.reduce((sum, item) => sum + (Number(item.quantite) || 0), 0);
 
   if (!loaded) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('harvests.loading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('harvests.loading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('harvests.recordTitle')}</div>
-        {error && <div style={{ color: COLORS.red, marginBottom: 10 }}>{error}</div>}
-        <form onSubmit={addHarvest} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('harvests.recordTitle')}</div>
+        {error && <div style={{ color: COLORS.red, marginBottom: SPACE.sm }}>{error}</div>}
+        <form onSubmit={addHarvest} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t("common.date")} type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           <Select label={t("harvests.parcelle")} value={form.parcelleId} onChange={e => setForm({ ...form, parcelleId: e.target.value, parcelleNom: '' })}>
             <option value="">{t("harvests.selectParcelle")}</option>
@@ -5712,13 +5712,13 @@ function HarvestsModule({ farmId }) {
         </form>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: SPACE.md }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('harvests.totalQuantite')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: SPACE.xs }}>{t('harvests.totalQuantite')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtNumber(totalQuantite)} kg</div>
         </Card>
         <Card style={{ background: COLORS.blueSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: 4 }}>{t('harvests.nbEnregistrements')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.blue, fontWeight: 600, marginBottom: SPACE.xs }}>{t('harvests.nbEnregistrements')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.blue }}>{harvests.length}</div>
         </Card>
       </div>
@@ -5751,7 +5751,7 @@ function HarvestsModule({ farmId }) {
                 <td>{item.destination}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button onClick={() => startEdit(item)} title={t('common.edit')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
-                  <button onClick={() => removeHarvest(item.id)} title={t('common.delete')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, marginLeft: 8 }}><Trash2 size={15} /></button>
+                  <button onClick={() => removeHarvest(item.id)} title={t('common.delete')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, marginLeft: SPACE.sm }}><Trash2 size={15} /></button>
                 </td>
               </tr>
             ))}
@@ -5760,13 +5760,13 @@ function HarvestsModule({ farmId }) {
       </Card>
 
       {editingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 560, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: SPACE.lg }} onClick={cancelEdit}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 560, padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('harvests.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            <form onSubmit={saveEdit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <form onSubmit={saveEdit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
               <Field label={t("common.date")} type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
               <Select label={t("harvests.parcelle")} value={editForm.parcelleId} onChange={e => setEditForm({ ...editForm, parcelleId: e.target.value, parcelleNom: '' })}>
                 <option value="">{t("harvests.selectParcelle")}</option>
@@ -5784,7 +5784,7 @@ function HarvestsModule({ farmId }) {
                 <option value="Faible">{qualiteLabel("Faible")}</option>
               </Select>
               <Field label={t("harvests.destination")} placeholder={t("harvests.destinationPlaceholder")} value={editForm.destination} onChange={e => setEditForm({ ...editForm, destination: e.target.value })} />
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
                   {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t("common.save")}
                 </Button>
@@ -5910,24 +5910,24 @@ function AIAssistantModule({ farmId, activated }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 8 }}>{t('assistant.title')}</div>
-        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('assistant.title')}</div>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.md }}>
           {t('assistant.hint')}
         </div>
-        <form onSubmit={askAssistant} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <form onSubmit={askAssistant} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           <Field label={t("assistant.questionLabel")} placeholder={t("assistant.questionPlaceholder")} value={question} onChange={e => setQuestion(e.target.value)} />
           <Button variant="green" type="submit" disabled={!loaded}><Search size={15} /> {t('assistant.ask')}</Button>
         </form>
       </Card>
       <Card>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('assistant.answerTitle')}</div>
+        <div style={{ fontWeight: 600, marginBottom: SPACE.sm }}>{t('assistant.answerTitle')}</div>
         <div style={{ fontSize: TEXT.base, color: COLORS.ink, lineHeight: 1.6 }}>{answer}</div>
       </Card>
       <Card>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('assistant.examplesTitle')}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: TEXT.base, color: COLORS.inkSoft }}>
+        <div style={{ fontWeight: 600, marginBottom: SPACE.sm }}>{t('assistant.examplesTitle')}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.inkSoft }}>
           <div>• {t('assistant.example1')}</div>
           <div>• {t('assistant.example2')}</div>
           <div>• {t('assistant.example3')}</div>
@@ -6042,7 +6042,7 @@ function ForecastingModule({ farmId, activated }) {
   }, [farmId, activated]);
 
   if (!loaded || !forecast) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('forecast.loading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('forecast.loading')}</div>;
   }
 
   // Aucune projection tant qu aucun mois révolu ne porte de données : mieux vaut le dire
@@ -6058,9 +6058,9 @@ function ForecastingModule({ farmId, activated }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 8 }}>{t('forecast.title')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('forecast.title')}</div>
         <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
           {assezDeDonnees
             ? t('forecast.subtitle', { count: forecast.moisFinance })
@@ -6068,12 +6068,12 @@ function ForecastingModule({ farmId, activated }) {
         </div>
       </Card>
       {assezDeDonnees && (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: SPACE.md }}>
         {items.map(item => {
           const accent = item.tone === 'green' ? COLORS.green : item.tone === 'red' ? COLORS.red : item.tone === 'blue' ? COLORS.blue : COLORS.ochre;
           const soft = item.tone === 'green' ? COLORS.greenSoft : item.tone === 'red' ? COLORS.redSoft : item.tone === 'blue' ? COLORS.blueSoft : COLORS.ochreSoft;
           return (
-            <Card key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Card key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600 }}>{item.label}</span>
                 <div style={{ width: 36, height: 36, borderRadius: RADIUS.card, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -6087,7 +6087,7 @@ function ForecastingModule({ farmId, activated }) {
       </div>
       )}
       <Card>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('forecast.noteTitle')}</div>
+        <div style={{ fontWeight: 600, marginBottom: SPACE.sm }}>{t('forecast.noteTitle')}</div>
         <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, lineHeight: 1.6 }}>
           {forecast.aDesParcelles
             ? t('forecast.note', { humidity: forecast.avgParcelleHumidity.toFixed(0), clientSpend: fmtMoney(forecast.clientSpend) })
@@ -6141,7 +6141,7 @@ function ReportsModule({ farmId, activated }) {
   }, [raw, period]);
 
   if (!loaded || !filtered) {
-    return <div style={{ color: COLORS.inkSoft, padding: 20 }}>{t('reports.loading')}</div>;
+    return <div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}>{t('reports.loading')}</div>;
   }
 
   const totalVentes = filtered.ventes.reduce((s, r) => s + montantLigneEntreprise(r), 0);
@@ -6206,10 +6206,10 @@ function ReportsModule({ farmId, activated }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('reports.title')}</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('reports.title')}</div>
+        <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
           {REPORT_PERIODS.map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{
               padding: '8px 14px', borderRadius: RADIUS.pill, border: `1px solid ${period === p ? COLORS.green : COLORS.border}`,
@@ -6222,26 +6222,26 @@ function ReportsModule({ farmId, activated }) {
         </div>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: SPACE.md }}>
         <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardVentes')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600, marginBottom: SPACE.xs }}>{t('reports.cardVentes')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.green }}>{fmtMoney(totalVentes)}</div>
         </Card>
         <Card style={{ background: COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardAchats')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.red, fontWeight: 600, marginBottom: SPACE.xs }}>{t('reports.cardAchats')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.red }}>{fmtMoney(totalAchats)}</div>
         </Card>
         <Card style={{ background: benefice >= 0 ? COLORS.blueSoft : COLORS.redSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: benefice >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardBenefice')}</div>
+          <div style={{ fontSize: TEXT.sm, color: benefice >= 0 ? COLORS.blue : COLORS.red, fontWeight: 600, marginBottom: SPACE.xs }}>{t('reports.cardBenefice')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: benefice >= 0 ? COLORS.blue : COLORS.red }}>{fmtMoney(benefice)}</div>
         </Card>
         <Card style={{ background: COLORS.ochreSoft, border: 'none' }}>
-          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: 4 }}>{t('reports.cardRecoltes')}</div>
+          <div style={{ fontSize: TEXT.sm, color: COLORS.ochre, fontWeight: 600, marginBottom: SPACE.xs }}>{t('reports.cardRecoltes')}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xl, fontWeight: 700, color: COLORS.ochre }}>{fmtNumber(totalRecoltes)} kg</div>
         </Card>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
         <Button variant="green" onClick={generatePdf}><Download size={15} /> {t('reports.downloadPdf', { period: periodLabel(period).toLowerCase() })}</Button>
         <Button variant="blue" onClick={exportToExcel}><Download size={15} /> {t('reports.exportCsv')}</Button>
       </div>
@@ -6273,10 +6273,10 @@ function HomeGridTile({ label, icon: Icon, inactive, onClick }) {
   const { t } = useTranslation();
   return (
     <button onClick={onClick} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
-      minHeight: 116, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: SPACE.sm,
+      minHeight: 116, borderRadius: RADIUS.control, border: `1px solid ${COLORS.border}`,
       background: inactive ? COLORS.surfaceAlt : COLORS.surface, cursor: 'pointer',
-      opacity: inactive ? 0.6 : 1, position: 'relative', padding: 12,
+      opacity: inactive ? 0.6 : 1, position: 'relative', padding: SPACE.md,
     }}>
       {inactive && (
         <span style={{ position: 'absolute', top: 8, right: 8, fontSize: TEXT.xs, fontWeight: 700, padding: '2px 6px', borderRadius: RADIUS.pill, background: COLORS.ochreSoft, color: COLORS.ochre }}>
@@ -6310,11 +6310,11 @@ function HomeGrid({ tabs, activated, permissions, onToggle, onSelect }) {
     }))
     .filter(cat => cat.modules.length > 0 || cat.items.length > 0);
 
-  const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 14 };
-  const sectionLabelStyle = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft };
+  const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: SPACE.md };
+  const sectionLabelStyle = { display: 'flex', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.sm, fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.xs, letterSpacing: '0.07em', textTransform: 'uppercase', color: COLORS.inkSoft };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xxl }}>
       {pinned.length > 0 && (
         <div>
           <div style={sectionLabelStyle}>{t('home.general')}</div>
@@ -6442,14 +6442,14 @@ function HomeOverview({ farmId, activated }) {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: SPACE.md }}>
         {cards.map(card => {
           const Icon = card.icon;
           const accent = card.tone === 'green' ? COLORS.green : card.tone === 'red' ? COLORS.red : card.tone === 'blue' ? COLORS.blue : COLORS.ochre;
           const soft = card.tone === 'green' ? COLORS.greenSoft : card.tone === 'red' ? COLORS.redSoft : card.tone === 'blue' ? COLORS.blueSoft : COLORS.ochreSoft;
           return (
-            <Card key={card.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Card key={card.label} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 600 }}>{card.label}</span>
                 <div style={{ width: 36, height: 36, borderRadius: RADIUS.card, background: soft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -6462,11 +6462,11 @@ function HomeOverview({ farmId, activated }) {
         })}
       </div>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('home.alertsTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('home.alertsTitle')}</div>
         {stats.alertes.length === 0 ? (
           <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('home.noAlerts')}</div>
         ) : (
-          <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7, color: COLORS.ink }}>
+          <ul style={{ margin: 0, paddingLeft: SPACE.lg, display: 'flex', flexDirection: 'column', gap: SPACE.sm, color: COLORS.ink }}>
             {stats.alertes.map(alert => <li key={alert} style={{ fontSize: TEXT.base }}>{alert}</li>)}
           </ul>
         )}
@@ -6653,7 +6653,7 @@ function EmployeesModule({ farmId, role }) {
 
   // Bloc "informations complémentaires" partagé par le formulaire d'ajout et la modale d'édition.
   const renderInfosPlus = (f, setF) => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
       <Field label={t('rh.fieldDateNaissance')} type="date" value={f.dateNaissance} onChange={e => setF({ ...f, dateNaissance: e.target.value })} />
       <Field label={t('rh.fieldContactUrgenceNom')} value={f.contactUrgenceNom} onChange={e => setF({ ...f, contactUrgenceNom: e.target.value })} />
       <Field label={t('rh.fieldContactUrgenceTel')} value={f.contactUrgenceTel} onChange={e => setF({ ...f, contactUrgenceTel: e.target.value })} />
@@ -6661,14 +6661,14 @@ function EmployeesModule({ farmId, role }) {
       <Field label={t('rh.fieldCoutHoraire', { devise })} type="number" value={f.coutHoraire} onChange={e => setF({ ...f, coutHoraire: e.target.value })} />
       <Field label={t('rh.fieldHeuresHebdo')} type="number" value={f.heuresHebdo} onChange={e => setF({ ...f, heuresHebdo: e.target.value })} />
       <div style={{ gridColumn: '1 / -1' }}>
-        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500, marginBottom: 4 }}>{t('rh.joursTravailles')}</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, fontWeight: 500, marginBottom: SPACE.xs }}>{t('rh.joursTravailles')}</div>
+        <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
           {JOURS_SEMAINE.map(j => {
             const on = (f.joursTravailles || '').split(',').map(s => s.trim()).includes(j);
             return (
               <button key={j} type="button" onClick={() => toggleJour(setF, f, j)} style={{
                 background: on ? COLORS.green : 'transparent', color: on ? '#fff' : COLORS.inkSoft,
-                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: RADIUS.card, padding: '4px 10px', fontSize: TEXT.sm, cursor: 'pointer',
+                border: `1px solid ${on ? COLORS.green : COLORS.border}`, borderRadius: RADIUS.control, padding: '4px 10px', fontSize: TEXT.sm, cursor: 'pointer',
               }}>{t(`rh.jours.${j}`, { defaultValue: j })}</button>
             );
           })}
@@ -6679,7 +6679,7 @@ function EmployeesModule({ farmId, role }) {
 
   const managerOptions = (excludeId) => employees.filter(e => e.id !== excludeId);
   const renderIdentite = (f, setF, excludeManagerId) => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
       <Field label={t('rh.fieldNom')} placeholder={t('rh.fieldNom')} value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required />
       <Field label={t('rh.fieldPrenom')} placeholder={t('rh.fieldPrenom')} value={f.prenom} onChange={e => setF({ ...f, prenom: e.target.value })} required />
       <Select label={t('rh.fieldPoste')} value={f.posteId} onChange={e => setF({ ...f, posteId: e.target.value })}>
@@ -6703,18 +6703,18 @@ function EmployeesModule({ farmId, role }) {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>{t('rh.addEmployeeTitle')}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.addEmployeeTitle')}</div>
 
         {formError && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: SPACE.md }}>
             {formError}
           </div>
         )}
 
-        <form onSubmit={addEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <form onSubmit={addEmployee} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+          <div style={{ display: 'flex', gap: SPACE.lg, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <ContactAvatar photo={form.photo} nom={form.nom} prenom={form.prenom} isCompany={false} size={72} onChange={(b64) => setForm({ ...form, photo: b64 })} />
             <div style={{ flex: 1, minWidth: 260 }}>{renderIdentite(form, setForm)}</div>
           </div>
@@ -6724,13 +6724,13 @@ function EmployeesModule({ farmId, role }) {
           </button>
           {showMoreAdd && renderInfosPlus(form, setForm)}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer' }}>
             <input type="checkbox" checked={form.createAccount} onChange={e => setForm({ ...form, createAccount: e.target.checked })} />
             {t('rh.createLogin')}
           </label>
 
           {form.createAccount && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end', padding: SPACE.md, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
               <Field label={t('rh.loginEmail')} type="email" placeholder="email@exemple.com" value={form.compteEmail} onChange={e => setForm({ ...form, compteEmail: e.target.value })} required={form.createAccount} />
               <Select label={t('rh.roleField')} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
                 <option value="admin">{t('role.admin')}</option>
@@ -6751,39 +6751,39 @@ function EmployeesModule({ farmId, role }) {
       </Card>
 
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: SPACE.sm, marginBottom: SPACE.sm }}>
           <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('rh.employeesTitle')}</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'center' }}>
             <select className="flat-input" value={filterDept} onChange={e => setFilterDept(e.target.value)} style={{ background: '#fff', color: COLORS.ink, fontSize: TEXT.sm }}>
               <option value="">{t('rh.allDepartments')}</option>
               {departements.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
             </select>
-            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '5px 10px', fontSize: TEXT.sm, color: COLORS.inkSoft, cursor: 'pointer' }}>
+            <button type="button" onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')} style={{ background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, padding: '5px 10px', fontSize: TEXT.sm, color: COLORS.inkSoft, cursor: 'pointer' }}>
               {viewMode === 'list' ? t('rh.trombinoscope') : t('rh.list')}
             </button>
           </div>
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>{error}</div>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: SPACE.md }}>{error}</div>
         )}
 
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, color: COLORS.inkSoft }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.inkSoft }}>
             <Loader2 size={15} className="spin" /> {t('common.loading')}
           </div>
         ) : employees.length === 0 ? (
           <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{filterDept ? t('rh.noEmployeeInDept') : t('rh.noEmployee')}</div>
         ) : viewMode === 'grid' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: SPACE.md }}>
             {employees.map(emp => (
-              <div key={emp.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
+              <div key={emp.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: SPACE.md, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: SPACE.sm, textAlign: 'center' }}>
                 {emp.photo
                   ? <img src={emp.photo} alt="" style={{ width: 64, height: 64, borderRadius: RADIUS.card, objectFit: 'cover' }} />
                   : <div style={{ width: 64, height: 64, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
                 <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{emp.prenom} {emp.nom}</div>
                 <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft }}>{emp.posteNom || emp.poste || '—'}{emp.departementNom ? ` · ${emp.departementNom}` : ''}</div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: SPACE.sm, marginTop: SPACE.xs }}>
                   <button onClick={() => setRhEmployee(emp)} title={t('rh.ficheRh')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><ClipboardList size={15} /></button>
                   {canManageRh && <button onClick={() => startEditEmployee(emp)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}><Settings2 size={15} /></button>}
                   {canManageRh && <button onClick={() => removeEmployee(emp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={15} /></button>}
@@ -6792,10 +6792,10 @@ function EmployeesModule({ farmId, role }) {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             {employees.map(emp => (
               <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'center' }}>
                   {emp.photo
                     ? <img src={emp.photo} alt="" style={{ width: 38, height: 38, borderRadius: RADIUS.card, objectFit: 'cover' }} />
                     : <div style={{ width: 38, height: 38, borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: TEXT.base }}>{(emp.prenom?.[0] || '') + (emp.nom?.[0] || '')}</div>}
@@ -6811,7 +6811,7 @@ function EmployeesModule({ farmId, role }) {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                   <button onClick={() => setRhEmployee(emp)} title={t('rh.ficheRh')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                     <ClipboardList size={15} />
                   </button>
@@ -6835,26 +6835,26 @@ function EmployeesModule({ farmId, role }) {
       <RhReferentiels canManage={canManageRh} onChanged={() => { loadRefs(); loadEmployees(); }} />
 
       {editingEmp && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={cancelEditEmployee}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: SPACE.lg }} onClick={cancelEditEmployee}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('rh.editEmployeeTitle')}</div>
               <button onClick={cancelEditEmployee} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
 
             {editError && (
-              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>{editError}</div>
+              <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: SPACE.md }}>{editError}</div>
             )}
 
-            <form onSubmit={saveEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <form onSubmit={saveEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+              <div style={{ display: 'flex', gap: SPACE.lg, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <ContactAvatar photo={editForm.photo} nom={editForm.nom} prenom={editForm.prenom} isCompany={false} size={72} onChange={(b64) => setEditForm({ ...editForm, photo: b64 })} />
                 <div style={{ flex: 1, minWidth: 260 }}>{renderIdentite(editForm, setEditForm, editingId)}</div>
               </div>
 
               {renderInfosPlus(editForm, setEditForm)}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
                 <Select label={t('rh.fieldStatut')} value={editForm.statut} onChange={e => setEditForm({ ...editForm, statut: e.target.value })}>
                   <option value="Actif">{t('rh.statutActif')}</option>
                   <option value="Inactif">{t('rh.statutInactif')}</option>
@@ -6865,12 +6865,12 @@ function EmployeesModule({ farmId, role }) {
 
               {!editingEmp.compteEmail && (
                 <>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, fontWeight: 600, cursor: 'pointer' }}>
                     <input type="checkbox" checked={editForm.linkAccount} onChange={e => setEditForm({ ...editForm, linkAccount: e.target.checked })} />
                     {t('rh.createLogin')}
                   </label>
                   {editForm.linkAccount && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, alignItems: 'end', padding: 12, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end', padding: SPACE.md, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
                       <Field label={t('rh.loginEmail')} type="email" value={editForm.compteEmail} onChange={e => setEditForm({ ...editForm, compteEmail: e.target.value })} required />
                       <Select label={t('rh.roleField')} value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
                         <option value="admin">{t('role.admin')}</option>
@@ -6886,7 +6886,7 @@ function EmployeesModule({ farmId, role }) {
                 </>
               )}
 
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>
                   {editSubmitting ? <Loader2 size={15} className="spin" /> : <Check size={15} />} {t('common.save')}
                 </Button>
@@ -6956,13 +6956,13 @@ function NotificationsModule({ farmId, activated }) {
   }, [farmId, activated, t]);
 
   return (
-    <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('notifications.title')}</div>
       {notifications.length === 0 ? (
         <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('notifications.empty')}</div>
       ) : (
         notifications.map(item => (
-          <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: '10px 12px', display: 'flex', gap: SPACE.sm, alignItems: 'flex-start' }}>
             <div style={{ fontSize: TEXT.lg }}>{item.icon}</div>
             <div>
               <div style={{ fontWeight: 700, fontSize: TEXT.base }}>{item.title}</div>
@@ -7148,8 +7148,8 @@ function ListesPrixManager() {
         {open ? t('contacts.listes.toggleHide') : t('contacts.listes.toggleShow')}
       </button>
       {open && (
-        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <form onSubmit={createListe} style={{ display: 'flex', gap: 8 }}>
+        <div style={{ marginTop: SPACE.md, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
+          <form onSubmit={createListe} style={{ display: 'flex', gap: SPACE.sm }}>
             <Field placeholder={t("contacts.listes.newPlaceholder")} value={newNom} onChange={e => setNewNom(e.target.value)} />
             <Button type="submit" variant="ochre" disabled={creating} style={{ whiteSpace: 'nowrap' }}>
               {creating ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t("contacts.listes.create")}
@@ -7160,20 +7160,20 @@ function ListesPrixManager() {
           ) : listes.length === 0 ? (
             <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t("contacts.listes.empty")}</div>
           ) : listes.map(liste => (
-            <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: 10 }}>
+            <div key={liste.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: SPACE.sm }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(liste.id)}>
                 <div>
                   <span style={{ fontWeight: 700 }}>{liste.nom}</span>
-                  <span style={{ color: COLORS.inkSoft, fontSize: TEXT.sm, marginLeft: 8 }}>{t('contacts.listes.articleCount', { count: liste.nombreLignes })}</span>
+                  <span style={{ color: COLORS.inkSoft, fontSize: TEXT.sm, marginLeft: SPACE.sm }}>{t('contacts.listes.articleCount', { count: liste.nombreLignes })}</span>
                 </div>
                 <button onClick={(ev) => { ev.stopPropagation(); removeListe(liste.id, liste.nom); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                   <Trash2 size={14} />
                 </button>
               </div>
               {expandedId === liste.id && (
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, background: COLORS.paper, borderRadius: RADIUS.card }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, alignItems: 'end' }}>
+                <div style={{ marginTop: SPACE.sm, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
+                  <form onSubmit={(e) => addLigne(e, liste.id)} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, padding: SPACE.sm, background: COLORS.paper, borderRadius: RADIUS.card }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
                       <Select label={t("contacts.listes.appliedOn")} value={ligneForm.appliedOn} onChange={e => setLigneForm({ ...emptyLigneForm, appliedOn: e.target.value })}>
                         <option value="variante">{t('contacts.listes.appliedOnVariante')}</option>
                         <option value="gabarit">{t('contacts.listes.appliedOnGabarit')}</option>
@@ -7214,7 +7214,7 @@ function ListesPrixManager() {
                       {t('contacts.listes.advanced')}
                     </button>
                     {advancedOpen && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm }}>
                         <Field label={t("contacts.listes.quantiteMin")} type="number" placeholder="0" value={ligneForm.quantiteMin} onChange={e => setLigneForm({ ...ligneForm, quantiteMin: e.target.value })} />
                         <Field label={t("contacts.listes.dateDebut")} type="date" value={ligneForm.dateDebut} onChange={e => setLigneForm({ ...ligneForm, dateDebut: e.target.value })} />
                         <Field label={t("contacts.listes.dateFin")} type="date" value={ligneForm.dateFin} onChange={e => setLigneForm({ ...ligneForm, dateFin: e.target.value })} />
@@ -7230,7 +7230,7 @@ function ListesPrixManager() {
                           ? t('contacts.listes.ligneResume', { cible: cibleDeLigne(l), mode: modeDeLigne(l), qte: l.quantiteMin })
                           : `${cibleDeLigne(l)} · ${modeDeLigne(l)}`}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                         <button onClick={() => removeLigne(l.id, liste.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button>
                       </div>
                     </div>
@@ -7306,7 +7306,7 @@ function ContactAvatar({ photo, nom, prenom, isCompany, onChange, size = 130 }) 
             type="button"
             title={t("contacts.avatarChange")}
             onClick={() => inputRef.current?.click()}
-            style={{ position: 'absolute', bottom: -6, right: -6, width: 28, height: 28, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.inkSoft, padding: 0 }}
+            style={{ position: 'absolute', bottom: -6, right: -6, width: 28, height: 28, borderRadius: RADIUS.control, border: `1px solid ${COLORS.border}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.inkSoft, padding: 0 }}
           >
             <Camera size={14} />
           </button>
@@ -7376,10 +7376,10 @@ function ContactTagsManager({ tags, onChange }) {
         {tr('contacts.tags.toggle')} {open ? '▲' : '▼'}
       </button>
       {open && (
-        <div style={{ marginTop: 8, padding: 12, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ marginTop: SPACE.sm, padding: SPACE.md, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm }}>
             {tags.map(t => (
-              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: TEXT.sm }}>
+              <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE.xs, background: t.couleur + '22', color: t.couleur, border: `1px solid ${t.couleur}55`, borderRadius: RADIUS.pill, padding: '3px 8px', fontSize: TEXT.sm }}>
                 {t.nom}
                 <button type="button" onClick={() => remove(t.id, t.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}>
                   <Trash2 size={11} />
@@ -7388,7 +7388,7 @@ function ContactTagsManager({ tags, onChange }) {
             ))}
             {tags.length === 0 && <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.tags.empty")}</span>}
           </div>
-          <form onSubmit={create} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <form onSubmit={create} style={{ display: 'flex', gap: SPACE.sm, alignItems: 'center' }}>
             <input className="flat-input" value={nom} onChange={e => setNom(e.target.value)} placeholder={tr("contacts.tags.placeholder")} style={{ flex: 1 }} />
             <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)} style={{ width: 32, height: 30, padding: 0, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, cursor: 'pointer' }} />
             <Button small type="submit" variant="outline" disabled={creating}>{creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />}</Button>
@@ -7676,7 +7676,7 @@ function ContactsTab({ type, highlightId }) {
   );
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: COLORS.inkSoft, padding: 40 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft, padding: SPACE.huge }}>
       <Loader2 size={18} className="spin" /> {tr("contacts.loading", { typePlural: L.pl })}
     </div>
   );
@@ -7690,19 +7690,19 @@ function ContactsTab({ type, highlightId }) {
   const renderFields = (f, setF, excludeCompanyId) => {
     const companies = contacts.filter(c => c.isCompany && c.id !== excludeCompanyId);
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+        <div style={{ display: 'flex', gap: SPACE.lg }}>
           <ContactAvatar photo={f.photo} nom={f.nom} prenom={f.prenom} isCompany={f.isCompany} onChange={photo => setF({ ...f, photo })} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: TEXT.base, color: COLORS.inkSoft, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: SPACE.lg }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.base, color: COLORS.inkSoft, cursor: 'pointer' }}>
                 <input type="radio" checked={!f.isCompany} onChange={() => setF({ ...f, isCompany: false })} /> <UserIcon size={13} /> {tr("contacts.particulier")}
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: TEXT.base, color: COLORS.inkSoft, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.base, color: COLORS.inkSoft, cursor: 'pointer' }}>
                 <input type="radio" checked={f.isCompany} onChange={() => setF({ ...f, isCompany: true })} /> <Building2 size={13} /> {tr("contacts.societe")}
               </label>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: SPACE.sm }}>
               <input
                 placeholder={f.isCompany ? tr("contacts.companyNamePlaceholder") : L.nomPh}
                 value={f.nom} onChange={e => setF({ ...f, nom: e.target.value })} required
@@ -7715,12 +7715,12 @@ function ContactsTab({ type, highlightId }) {
                 />
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
               <Mail size={14} color={COLORS.blue} />
               <input type="email" placeholder={tr("contacts.emailPlaceholder")} value={f.email} onChange={e => setF({ ...f, email: e.target.value })}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
               <PhoneIcon size={14} color={COLORS.blue} />
               <input placeholder={tr("contacts.telephonePlaceholder")} value={f.telephone} onChange={e => setF({ ...f, telephone: e.target.value })}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, color: COLORS.ink, borderBottom: `1px solid ${COLORS.border}`, padding: '3px 2px' }} />
@@ -7732,7 +7732,7 @@ function ContactsTab({ type, highlightId }) {
             individuellement — juste une bordure discrète au survol/focus (classe
             .flat-input, voir App.css) et une étiquette à gauche sur la même ligne
             que la valeur, comme dans la fiche contact d'un ERP de référence. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.xxl }}>
           <div className="field-group">
             {!f.isCompany && (
               <>
@@ -7782,7 +7782,7 @@ function ContactsTab({ type, highlightId }) {
             )}
             <div className="field-group-label">{tr("contacts.labelTags")}</div>
             <div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm }}>
                 {contactTags.map(t => {
                   const active = f.tagIds.includes(t.id);
                   return (
@@ -7799,7 +7799,7 @@ function ContactsTab({ type, highlightId }) {
               <ContactTagsManager tags={contactTags} onChange={loadTags} />
             </div>
             <div />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: TEXT.base, color: COLORS.inkSoft }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.inkSoft }}>
               <input type="checkbox" checked={f.estAutre} onChange={e => setF({ ...f, estAutre: e.target.checked })} />
               {tr("contacts.estAussi", { autre: L.autre })}
             </label>
@@ -7815,20 +7815,20 @@ function ContactsTab({ type, highlightId }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       {apiError && (
-        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <AlertTriangle size={15} /> {apiError}
           <button onClick={() => setApiError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: COLORS.red, cursor: 'pointer', fontWeight: 700 }}>x</button>
         </div>
       )}
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {tr("contacts.addTitle", { type: L.s })}
         </div>
-        <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form onSubmit={submitForm} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           {renderFields(form, setForm, null)}
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: SPACE.sm }}>
             <Button type="submit" variant={type === 'client' ? 'green' : 'ochre'} disabled={saving}>
               {saving ? <Loader2 size={14} className="spin" /> : <Plus size={15} />} {tr("common.add")}
             </Button>
@@ -7836,15 +7836,15 @@ function ContactsTab({ type, highlightId }) {
         </form>
       </Card>
       {type === 'client' && <ListesPrixManager />}
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: TEXT.base }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: TEXT.base }}>
         <Search size={14} color={COLORS.inkSoft} />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("contacts.searchPlaceholder", { type: L.s })} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, flex: 1, color: COLORS.ink }} />
       </label>
       {filtered.length === 0 ? (
         <Card><div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{tr("contacts.noneFound", { type: L.s })}</div></Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: SPACE.lg, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             {filtered.map(contact => (
               <Card
                 key={contact.id}
@@ -7852,10 +7852,10 @@ function ContactsTab({ type, highlightId }) {
                 onClick={() => setSelectedId(contact.id)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                     <ContactAvatar photo={contact.photo} nom={contact.nom} prenom={contact.prenom} isCompany={contact.isCompany} size={36} />
                     <div>
-                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                         {contact.isCompany ? contact.nom : `${contact.prenom || ''} ${contact.nom}`}
                         {contact.isCompany && <Building2 size={12} color={COLORS.inkSoft} />}
                       </div>
@@ -7864,7 +7864,7 @@ function ContactsTab({ type, highlightId }) {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: SPACE.sm }}>
                     <button onClick={(ev) => { ev.stopPropagation(); startEdit(contact); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}>
                       <Settings2 size={14} />
                     </button>
@@ -7873,9 +7873,9 @@ function ContactsTab({ type, highlightId }) {
                     </button>
                   </div>
                 </div>
-                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 6 }}>{contact.adresse || tr("contacts.noAdresse")}</div>
+                <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: SPACE.sm }}>{contact.adresse || tr("contacts.noAdresse")}</div>
                 {contact.tags && contact.tags.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.xs, marginTop: SPACE.sm }}>
                     {contact.tags.map(t => (
                       <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 7px', fontSize: TEXT.xs }}>{t.nom}</span>
                     ))}
@@ -7885,11 +7885,11 @@ function ContactsTab({ type, highlightId }) {
             ))}
           </div>
           {selectedContact && (
-            <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Card style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md }}>
                 <ContactAvatar photo={selectedContact.photo} nom={selectedContact.nom} prenom={selectedContact.prenom} isCompany={selectedContact.isCompany} size={56} />
                 <div>
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                     {selectedContact.isCompany ? selectedContact.nom : `${selectedContact.prenom || ''} ${selectedContact.nom}`}
                     {selectedContact.isCompany && <Building2 size={14} color={COLORS.inkSoft} />}
                   </div>
@@ -7898,13 +7898,13 @@ function ContactsTab({ type, highlightId }) {
                 </div>
               </div>
               {selectedContact.tags && selectedContact.tags.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.xs }}>
                   {selectedContact.tags.map(t => (
                     <span key={t.id} style={{ background: t.couleur + '22', color: t.couleur, borderRadius: RADIUS.pill, padding: '2px 8px', fontSize: TEXT.xs }}>{t.nom}</span>
                   ))}
                 </div>
               )}
-              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, display: 'flex', flexDirection: 'column', gap: SPACE.xs }}>
                 <span>{tr("contacts.detailTel", { value: selectedContact.telephone || tr("contacts.nonRenseigne") })}</span>
                 <span>{tr("contacts.detailEmail", { value: selectedContact.email || tr("contacts.nonRenseigne") })}</span>
                 <span>{tr("contacts.detailAdresse", { value: selectedContact.adresse || tr("contacts.nonRenseignee") })}</span>
@@ -7918,7 +7918,7 @@ function ContactsTab({ type, highlightId }) {
                 )}
                 <span style={{ fontSize: TEXT.xs, color: COLORS.border }}>{tr("contacts.detailId", { value: selectedContact.id })}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: SPACE.sm }}>
                 <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
                   <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}>{tr("contacts.enregistreLe")}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base, fontWeight: 700, color: COLORS.green }}>
@@ -7934,7 +7934,7 @@ function ContactsTab({ type, highlightId }) {
                 <button
                   onClick={() => setRelatedOpen(o => !o)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 6, background: COLORS.ochreSoft, color: COLORS.ochre,
+                    display: 'flex', alignItems: 'center', gap: SPACE.sm, background: COLORS.ochreSoft, color: COLORS.ochre,
                     border: 'none', borderRadius: RADIUS.pill, padding: '6px 12px', fontSize: TEXT.sm, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
@@ -7942,7 +7942,7 @@ function ContactsTab({ type, highlightId }) {
                   <ChevronRight size={14} style={{ transform: relatedOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
                 </button>
                 {relatedOpen && (
-                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                  <div style={{ marginTop: SPACE.sm, display: 'flex', flexDirection: 'column', gap: SPACE.sm, maxHeight: 220, overflowY: 'auto' }}>
                     {relatedList.length === 0 && !relatedLoading && (
                       <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{type === 'client' ? tr('contacts.noRelatedDevis') : tr('contacts.noRelatedAchats')}</div>
                     )}
@@ -7961,7 +7961,7 @@ function ContactsTab({ type, highlightId }) {
                   </div>
                 )}
               </div>
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 10 }}>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACE.sm }}>
                 <ActivitesSection ressourceType="contact" ressourceId={selectedContact.id} />
               </div>
             </Card>
@@ -7970,14 +7970,14 @@ function ContactsTab({ type, highlightId }) {
       )}
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{tr("contacts.editTitle", { type: L.s })}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={submitEditForm} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
               {renderFields(editForm, setEditForm, editingId)}
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Button type="submit" variant="green" disabled={editSaving}>
                   {editSaving ? <Loader2 size={14} className="spin" /> : <Check size={15} />} {tr("common.save")}
                 </Button>
@@ -7989,9 +7989,9 @@ function ContactsTab({ type, highlightId }) {
                 Société déjà enregistrée : une nouvelle fiche n'a pas encore d'id auquel
                 rattacher qui que ce soit. */}
             {editForm.isCompany && (
-              <div style={{ marginTop: 18, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
-                <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 10 }}>{tr("contacts.subContactsTitle")}</div>
-                <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 4, alignItems: 'end', marginBottom: 12 }}>
+              <div style={{ marginTop: SPACE.lg, borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACE.md }}>
+                <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: SPACE.sm }}>{tr("contacts.subContactsTitle")}</div>
+                <form onSubmit={submitSubContact} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: SPACE.xs, alignItems: 'end', marginBottom: SPACE.md }}>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.subNom")}
                     <input className="flat-input" value={subForm.nom} onChange={e => setSubForm({ ...subForm, nom: e.target.value })} required />
                   </label>
@@ -8012,14 +8012,14 @@ function ContactsTab({ type, highlightId }) {
                   </Button>
                 </form>
                 {subContactsLoading ? (
-                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="spin" /> {tr("common.loading")}</div>
+                  <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, display: 'flex', alignItems: 'center', gap: SPACE.sm }}><Loader2 size={13} className="spin" /> {tr("common.loading")}</div>
                 ) : subContacts.length === 0 ? (
                   <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{tr("contacts.noSubContact")}</div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                     {subContacts.map(sc => (
                       <div key={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
                           <ContactAvatar photo={sc.photo} nom={sc.nom} prenom={sc.prenom} isCompany={false} size={28} />
                           <div>
                             <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{sc.prenom} {sc.nom}</div>
@@ -8073,16 +8073,16 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
   ];
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 6 }}>{t('modulesScreen.title')}</div>
+      <div style={{ textAlign: 'center', marginBottom: SPACE.xxl }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: SPACE.sm }}>{t('modulesScreen.title')}</div>
         <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('modulesScreen.subtitle')}</div>
         {tarifs && (
-          <div style={{ fontSize: TEXT.base, color: COLORS.green, marginTop: 8, fontWeight: 600 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.green, marginTop: SPACE.sm, fontWeight: 600 }}>
             {t('modulesScreen.bundleHint', { amount: fmtMoney(tarifs.prixBundle.montant) })}
           </div>
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: SPACE.lg }}>
         {MODULES.map(m => (
           <OptionCard
             key={m.key}
@@ -8095,7 +8095,7 @@ function ModulesScreen({ activated, onToggle, onContinue }) {
           />
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 26 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: SPACE.xxl }}>
         <Button variant="default" disabled={!anyActive} onClick={onContinue} style={{ padding: '11px 22px' }}>
           {t('modulesScreen.continue')} <ChevronRight size={16} />
         </Button>
@@ -8140,7 +8140,7 @@ function TopNavbar({
   const activeTabObj = tabs.find(tb => tb.id === activeTab);
 
   const navBtnStyle = (active) => ({
-    display: 'flex', alignItems: 'center', gap: 6, height: 46, padding: '0 .63em',
+    display: 'flex', alignItems: 'center', gap: SPACE.sm, height: 46, padding: '0 .63em',
     background: active ? 'rgba(255,255,255,.18)' : 'transparent', border: 'none', borderRadius: 0,
     color: '#fff', fontSize: TEXT.base, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
   });
@@ -8153,7 +8153,7 @@ function TopNavbar({
   return (
     <>
       <div ref={navRef} style={{ display: 'flex', alignItems: 'center', height: 46, padding: '0 16px', background: COLORS.green, borderBottom: `1px solid ${NAVBAR_BORDER}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: 14, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, paddingRight: SPACE.md, flexShrink: 0 }}>
           <div style={{ width: 26, height: 26, borderRadius: RADIUS.control, background: 'rgba(255,255,255,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sprout size={15} color="#fff" />
           </div>
@@ -8197,7 +8197,7 @@ function TopNavbar({
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(0,0,0,.08)'; }}
                         onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                          display: 'flex', alignItems: 'center', gap: SPACE.sm, width: '100%', textAlign: 'left',
                           padding: '3px 20px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: TEXT.base,
                           background: active ? `${cat.color}22` : 'transparent',
                           color: active ? cat.color : COLORS.ink, fontWeight: active ? 700 : 500,
@@ -8213,7 +8213,7 @@ function TopNavbar({
           ))}
         </div>
 
-        <div className="navbar-actions-desktop" style={{ position: 'relative', flexShrink: 0, paddingLeft: 10 }}>
+        <div className="navbar-actions-desktop" style={{ position: 'relative', flexShrink: 0, paddingLeft: SPACE.sm }}>
           <button
             onClick={() => setAvatarOpen(o => !o)}
             title={t('shell.userMenu')}
@@ -8227,7 +8227,7 @@ function TopNavbar({
           </button>
           {avatarOpen && (
             <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: 6, background: COLORS.surface, borderRadius: RADIUS.control,
+              position: 'absolute', top: '100%', right: 0, marginTop: SPACE.sm, background: COLORS.surface, borderRadius: RADIUS.control,
               boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: `1px solid ${COLORS.border}`,
               zIndex: 30, minWidth: 220, overflow: 'hidden',
             }}>
@@ -8255,12 +8255,12 @@ function TopNavbar({
         </div>
       </div>
 
-      <div style={{ padding: '8px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, fontSize: TEXT.sm }}>
+      <div style={{ padding: '8px 16px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap', background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}`, fontSize: TEXT.sm }}>
         <span style={{ color: COLORS.inkSoft }}>
           {activeCategory && <>{t(activeCategory.labelKey)}<span style={{ padding: '0 8px' }}>/</span></>}
           <strong style={{ color: COLORS.ink }}>{activeTabObj?.label}</strong>
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <span style={{ padding: '6px 10px', borderRadius: RADIUS.pill, background: isOnline ? COLORS.greenSoft : COLORS.ochreSoft, color: isOnline ? COLORS.green : COLORS.ochre, fontWeight: 600 }}>
             {isOnline ? t('shell.online') : t('shell.offline')}
           </span>
@@ -8300,8 +8300,8 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
   const handleClose = () => { setVisible(false); setTimeout(onClose, 200); };
 
   const itemStyle = (active, indent) => ({
-    display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-    padding: `7px 10px 7px ${indent}px`, borderRadius: RADIUS.card,
+    display: 'flex', alignItems: 'center', gap: SPACE.sm, width: '100%',
+    padding: `7px 10px 7px ${indent}px`, borderRadius: RADIUS.control,
     fontSize: TEXT.base, fontWeight: active ? 700 : 500, textAlign: 'left',
     border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
     background: active ? COLORS.greenSoft : 'transparent',
@@ -8317,7 +8317,7 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
         display: 'flex', flexDirection: 'column', gap: 2,
         transform: visible ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .2s ease',
       }}>
-        <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={handleClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, marginBottom: SPACE.sm, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <X size={16} /> {t('common.close')}
         </button>
         {pinned.map(tb => {
@@ -8332,9 +8332,9 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
         {categories.map(cat => {
           const isCollapsed = !!collapsed[cat.id];
           return (
-            <div key={cat.id} style={{ marginTop: 4 }}>
+            <div key={cat.id} style={{ marginTop: SPACE.xs }}>
               <button onClick={() => setCollapsed(c => ({ ...c, [cat.id]: !c[cat.id] }))} style={{
-                display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none',
+                display: 'flex', alignItems: 'center', gap: SPACE.sm, width: '100%', background: 'none', border: 'none',
                 padding: '6px 10px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2.5, background: cat.color, flexShrink: 0 }} />
@@ -8355,9 +8355,9 @@ function MobileNavPanel({ pinned, categories, activeTab, user, roleLabel, onSele
             </div>
           );
         })}
-        <div style={{ marginTop: 'auto', paddingTop: 14, borderTop: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ marginTop: 'auto', paddingTop: SPACE.md, borderTop: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
           <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{user} — {roleLabel}</span>
-          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.base, padding: '7px 10px' }}>
+          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.base, padding: '7px 10px' }}>
             <LogOut size={15} /> {t('shell.logout')}
           </button>
         </div>
@@ -8752,7 +8752,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: '100svh', borderRadius: RADIUS.card, color: COLORS.ink }}>
+    <div className="app-shell" style={{ fontFamily: "'Inter', sans-serif", background: COLORS.bg, minHeight: '100svh', color: COLORS.ink }}>
       <ToastContainer />
       <style>{`
         .spin { animation: spin 1s linear infinite; }
@@ -8798,13 +8798,13 @@ export default function App() {
             lastSync={lastSync}
           />
           {billing?.mode === 'trial' && !trialBannerDismissed && (
-            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, fontSize: TEXT.sm, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.greenSoft, color: COLORS.green, fontSize: TEXT.sm, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: SPACE.sm }}>
               <span>{t('billing.trialBanner', { count: billing.daysLeft })}</span>
               <button onClick={() => setTrialBannerDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 700, fontSize: TEXT.base }}>×</button>
             </div>
           )}
           {billing?.mode === 'readonly' && (
-            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: TEXT.sm, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ margin: '8px 22px 0', padding: '8px 14px', borderRadius: RADIUS.card, background: COLORS.ochreSoft, color: COLORS.ochre, fontSize: TEXT.sm, fontWeight: 600, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
               <AlertTriangle size={14} /> {t('billing.readonlyBanner', { count: billing.daysLeft })}
             </div>
           )}
@@ -8827,13 +8827,13 @@ export default function App() {
       {/* Écran de transition : propose de configurer l'entreprise maintenant ou plus tard */}
 {screen === 'onboarding-choice' && (
   <div style={{ maxWidth: 480, margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
-    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 10 }}>
+    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: SPACE.sm }}>
       {t('onboarding.configTitle')}
     </div>
-    <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 26 }}>
+    <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.xxl }}>
       {t('onboarding.configDesc')}
     </div>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
       <Button variant="green" onClick={goToOnboardingBanques} style={{ justifyContent: 'center' }}>
         {t('onboarding.now')}
       </Button>
@@ -8847,8 +8847,8 @@ export default function App() {
 {/* Étape 1 du wizard : comptes bancaires */}
 {screen === 'onboarding-banques' && (
   <div style={{ maxWidth: 700, margin: '0 auto', padding: '36px 16px' }}>
-    <div style={{ textAlign: 'center', marginBottom: 22 }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 6 }}>
+    <div style={{ textAlign: 'center', marginBottom: SPACE.xl }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: SPACE.sm }}>
         {t('onboarding.banquesTitle')}
       </div>
       <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
@@ -8856,7 +8856,7 @@ export default function App() {
       </div>
     </div>
     <BanquesModule />
-    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
+    <div style={{ display: 'flex', justifyContent: 'center', gap: SPACE.sm, marginTop: SPACE.xl }}>
       <Button variant="ghost" onClick={confirmerPasDeBanque}>
         {t('onboarding.noBanque')}
       </Button>
@@ -8870,8 +8870,8 @@ export default function App() {
 {/* Étape 2 du wizard : salariés */}
 {screen === 'onboarding-salaries' && (
   <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 16px' }}>
-    <div style={{ textAlign: 'center', marginBottom: 22 }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: 6 }}>
+    <div style={{ textAlign: 'center', marginBottom: SPACE.xl }}>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.title, marginBottom: SPACE.sm }}>
         {t('onboarding.salariesTitle')}
       </div>
       <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
@@ -8879,7 +8879,7 @@ export default function App() {
       </div>
     </div>
     <EmployeesModule farmId={user} />
-    <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 22 }}>
+    <div style={{ display: 'flex', justifyContent: 'center', gap: SPACE.sm, marginTop: SPACE.xl }}>
       <Button variant="ghost" onClick={confirmerPasDeSalarie}>
         {t('onboarding.noSalarie')}
       </Button>
@@ -8894,7 +8894,7 @@ export default function App() {
         <div className="dashboard-shell" style={{ padding: '20px 22px 34px' }}>
           {/* Les modules d onglets sont chargés à la demande : un seul Suspense ici suffit,
               chaque onglet n en rend qu un à la fois. */}
-          <Suspense fallback={<div style={{ color: COLORS.inkSoft, padding: 20 }}><Loader2 size={16} className="spin" /></div>}>
+          <Suspense fallback={<div style={{ color: COLORS.inkSoft, padding: SPACE.xl }}><Loader2 size={16} className="spin" /></div>}>
             {tab === 'accueil' && (
               <HomeGrid
                 tabs={availableTabs} activated={activated} permissions={roleConfig.permissions}
@@ -9156,23 +9156,23 @@ function ProfilModule({ role }) {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: SPACE.lg, alignItems: 'start' }}>
 
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
           {t('profil.companyInfoTitle')}
         </div>
-        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
           {t('profil.companyInfoHint')}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           <Field label={t('auth.companyName')} value={infoEntreprise.nom} onChange={e => setInfoEntreprise(v => ({ ...v, nom: e.target.value }))} disabled={!isAdmin} />
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: SPACE.sm }}>
             <Field label={t('auth.siret')} value={infoEntreprise.siret} onChange={e => setInfoEntreprise(v => ({ ...v, siret: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }} />
             <Field label={t('auth.vatNumber')} value={infoEntreprise.numeroTva} onChange={e => setInfoEntreprise(v => ({ ...v, numeroTva: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }} />
           </div>
           <Field label={t('auth.address')} value={infoEntreprise.adresse} onChange={e => setInfoEntreprise(v => ({ ...v, adresse: e.target.value }))} disabled={!isAdmin} />
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: SPACE.sm }}>
             <Field label={t('auth.phone')} value={infoEntreprise.telephone} onChange={e => setInfoEntreprise(v => ({ ...v, telephone: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }} />
             <Select label={t('auth.country')} value={infoEntreprise.pays} onChange={e => setInfoEntreprise(v => ({ ...v, pays: e.target.value }))} disabled={!isAdmin} style={{ flex: 1 }}>
               <option value="">{t('auth.countryPlaceholder')}</option>
@@ -9189,13 +9189,13 @@ function ProfilModule({ role }) {
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t('profil.sectionPreferences')}
         </div>
-        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
           {t('profil.sectionPreferencesHint')}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           <Select
             label={t('language.label')}
             value={i18n.resolvedLanguage || i18n.language}
@@ -9212,7 +9212,7 @@ function ProfilModule({ role }) {
           <Select label={t('profil.fuseau')} value={prefFuseau} onChange={e => setPrefFuseau(e.target.value)} disabled={!isAdmin} aide={t('profil.fuseauAide')}>
             {FUSEAUX.map(f => <option key={f} value={f}>{f}</option>)}
           </Select>
-          <div style={{ display: 'flex', gap: 16, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
+          <div style={{ display: 'flex', gap: SPACE.lg, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
             <span>{t('profil.previewMoney')} : <b style={{ color: COLORS.ink }}>{previewMoney(prefLocale, prefDevise, 1234567.5)}</b></span>
             <span>{t('profil.previewDate')} : <b style={{ color: COLORS.ink }}>{previewDate(prefLocale, new Date())}</b></span>
           </div>
@@ -9229,16 +9229,16 @@ function ProfilModule({ role }) {
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 3 }}>
           {t('profil.locationTitle')}
         </div>
-        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
           {t('profil.locationHint')}
         </div>
         {villeActuelle && (
-          <div style={{ fontSize: TEXT.base, color: COLORS.ink, marginBottom: 12 }}>
+          <div style={{ fontSize: TEXT.base, color: COLORS.ink, marginBottom: SPACE.md }}>
             {t('profil.locationCurrent')} : <b>{villeActuelle.ville}</b>
           </div>
         )}
         {isAdmin && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div style={{ position: 'relative' }}>
               <Field
                 label={t('profil.locationSearch')}
@@ -9246,9 +9246,9 @@ function ProfilModule({ role }) {
                 value={villeQuery}
                 onChange={(e) => { setVilleQuery(e.target.value); setVilleSelection(null); }}
               />
-              {villeLoading && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: 4 }}>{t('common.loading')}</div>}
+              {villeLoading && <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft, marginTop: SPACE.xs }}>{t('common.loading')}</div>}
               {villeResultats.length > 0 && (
-                <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: 4, overflow: 'hidden' }}>
+                <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, marginTop: SPACE.xs, overflow: 'hidden' }}>
                   {villeResultats.map((v, i) => (
                     <button
                       key={`${v.nom}-${i}`}
@@ -9275,28 +9275,28 @@ function ProfilModule({ role }) {
       </Card>
 
       <Card>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: 6 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t('profil.securityTitle')}
         </div>
-        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: 16 }}>
+        <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.lg }}>
           {t('profil.securityHint')}
         </div>
 
         {error && (
-          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
+          <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: SPACE.md }}>
             {error}
           </div>
         )}
         {success && (
-          <div style={{ background: COLORS.greenSoft || COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: 12 }}>
+          <div style={{ background: COLORS.greenSoft || COLORS.greenSoft, color: COLORS.green, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: SPACE.md }}>
             {success}
           </div>
         )}
 
         {!mfaMode && !mfaEnabled && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('profil.mfaChooseMethod')}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               {['totp', 'email'].map(m => (
                 <button
                   key={m}
@@ -9304,7 +9304,7 @@ function ProfilModule({ role }) {
                   onClick={() => setChosenMethod(m)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 14px', borderRadius: RADIUS.card, cursor: 'pointer',
+                    padding: '10px 14px', borderRadius: RADIUS.control, cursor: 'pointer',
                     border: `1px solid ${chosenMethod === m ? COLORS.ink : COLORS.border}`,
                     background: chosenMethod === m ? COLORS.ink : '#fff',
                     color: chosenMethod === m ? '#fff' : COLORS.ink,
@@ -9324,11 +9324,11 @@ function ProfilModule({ role }) {
 
         {mfaMode === 'totp' && qrCode && (
           <div>
-            <div style={{ fontSize: TEXT.base, marginBottom: 10 }}>
+            <div style={{ fontSize: TEXT.base, marginBottom: SPACE.sm }}>
               {t('profil.mfaScanHint')}
             </div>
-            <img src={qrCode} alt={t("profil.mfaQrAlt")} style={{ width: 180, height: 180, marginBottom: 14, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }} />
-            <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <img src={qrCode} alt={t("profil.mfaQrAlt")} style={{ width: 180, height: 180, marginBottom: SPACE.md, borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }} />
+            <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               <Field label={t("auth.mfaCode")} placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
               <Button type="submit" variant="green" disabled={busy}>
                 {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaConfirm')}
@@ -9339,23 +9339,23 @@ function ProfilModule({ role }) {
 
         {mfaMode === 'email' && (
           <div>
-            <div style={{ fontSize: TEXT.base, marginBottom: 10 }}>
+            <div style={{ fontSize: TEXT.base, marginBottom: SPACE.sm }}>
               {t('profil.mfaCodeSent', { sentTo })}
             </div>
-            <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <form onSubmit={confirmSetup} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
               <Field label={t("auth.mfaCode")} placeholder="123456" value={code} onChange={e => setCode(e.target.value)} required maxLength={6} />
               <Button type="submit" variant="green" disabled={busy}>
                 {busy ? <Loader2 size={15} className="spin" /> : null} {t('profil.mfaConfirm')}
               </Button>
             </form>
-            <button type="button" onClick={resendEmailCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base, marginTop: 8, padding: 0 }}>
+            <button type="button" onClick={resendEmailCode} disabled={busy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.green, fontWeight: 600, fontSize: TEXT.base, marginTop: SPACE.sm, padding: 0 }}>
               {t('profil.mfaResend')}
             </button>
           </div>
         )}
 
         {mfaEnabled && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
               {t('profil.mfaMethodActive', { method: methodLabels[mfaMethod] || mfaMethod })}
             </div>

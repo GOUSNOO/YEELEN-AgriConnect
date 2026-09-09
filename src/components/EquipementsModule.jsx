@@ -7,7 +7,7 @@ import {
 } from '../lib/api.js';
 import { Badge, Button, Card, DataTable, Field, Select, notifyError, notifySuccess } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
-import { COLORS, RADIUS, TEXT } from '../lib/theme.js';
+import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 const CATEGORIES = ['Tracteur/Machine', 'Véhicule', 'Outil manuel', 'Irrigation', 'Autre'];
 const ETATS = ['Fonctionnel', 'En panne', 'En maintenance', 'Hors service'];
@@ -174,11 +174,11 @@ export function EquipementsModule({ canManage = false }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       {canManage && (
         <Card>
-          <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: 10 }}>{t('equipements.addTitle')}</div>
-          <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+          <div style={{ fontWeight: 600, fontSize: TEXT.base, marginBottom: SPACE.sm }}>{t('equipements.addTitle')}</div>
+          <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
             <Field label={t("equipements.nom")} placeholder={t("equipements.nomPlaceholder")} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
             <Select label={t("equipements.categorie")} value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
               {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
@@ -215,7 +215,7 @@ export function EquipementsModule({ canManage = false }) {
                 <td><Badge tone={ETAT_TONE[eq.etat] || 'blue'}>{etatLabel(eq.etat)}</Badge></td>
                 <td>{eq.valeur != null ? fmtMoney(eq.valeur) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
                     <button onClick={() => openDetail(eq)} title={t("equipements.maintenanceTitle")} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
                       <Wrench size={15} />
                     </button>
@@ -239,13 +239,13 @@ export function EquipementsModule({ canManage = false }) {
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 500, padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('equipements.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
-            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+            <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
                 <Field label={t("equipements.nom")} value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} required />
                 <Select label={t("equipements.categorie")} value={editForm.categorie} onChange={e => setEditForm({ ...editForm, categorie: e.target.value })}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
@@ -257,7 +257,7 @@ export function EquipementsModule({ canManage = false }) {
                 <Field label={t("equipements.valeur", { devise })} type="number" value={editForm.valeur} onChange={e => setEditForm({ ...editForm, valeur: e.target.value })} />
                 <Field label={t("equipements.notes")} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: SPACE.sm }}>
                 <Button type="submit" variant="green" disabled={editSubmitting}>{t("common.save")}</Button>
                 <Button type="button" onClick={cancelEdit}>{t("common.cancel")}</Button>
               </div>
@@ -268,8 +268,8 @@ export function EquipementsModule({ canManage = false }) {
 
       {detailEquipement && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: SPACE.xl }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div>
                 <div style={{ fontSize: TEXT.md, fontWeight: 700 }}>{detailEquipement.nom}</div>
                 <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{t('equipements.maintenanceTitle')}</div>
@@ -278,7 +278,7 @@ export function EquipementsModule({ canManage = false }) {
             </div>
 
             {canManage && (
-              <form onSubmit={addMaintenance} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, alignItems: 'end', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
+              <form onSubmit={addMaintenance} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: SPACE.sm, alignItems: 'end', marginBottom: SPACE.lg, paddingBottom: SPACE.lg, borderBottom: `1px solid ${COLORS.border}` }}>
                 <Field label={t("equipements.maintDate")} type="date" value={maintenanceForm.date} onChange={e => setMaintenanceForm({ ...maintenanceForm, date: e.target.value })} />
                 <Field label={t("equipements.maintDescription")} placeholder={t("equipements.maintDescriptionPlaceholder")} value={maintenanceForm.description} onChange={e => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })} />
                 <Field label={t("equipements.maintCout", { devise })} type="number" placeholder={t("equipements.notesPlaceholder")} value={maintenanceForm.cout} onChange={e => setMaintenanceForm({ ...maintenanceForm, cout: e.target.value })} />
@@ -291,7 +291,7 @@ export function EquipementsModule({ canManage = false }) {
             ) : maintenance.length === 0 ? (
               <p style={{ color: COLORS.inkSoft }}>{t('equipements.maintEmpty')}</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 {maintenance.map(m => (
                   <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card }}>
                     <div>
