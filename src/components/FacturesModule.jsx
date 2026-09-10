@@ -11,6 +11,7 @@ import { useLocale, fmtMoneyWith, aujourdhuiEntreprise } from '../lib/locale.jsx
 import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
+import ComptaEtatsPanel from './ComptaEtatsPanel.jsx';
 import ComptaConfigPanel from './ComptaConfigPanel';
 import PaymentTermsPanel from './PaymentTermsPanel';
 import TaxesPanel from './TaxesPanel';
@@ -241,7 +242,12 @@ export default function FacturesModule() {
     <div style={{ display: 'grid', gap: SPACE.lg }}>
       <SousNavOnglets items={FACTURES_SOUS_NAV} actif={sousOnglet} onSelect={setSousOnglet} />
 
-      {sousOnglet === 'rapports' && <ComptaReportsPanel onChange={charger} />}
+      {sousOnglet === 'rapports' && (
+        <>
+          <ComptaEtatsPanel />
+          <ComptaReportsPanel onChange={charger} />
+        </>
+      )}
 
       {sousOnglet === 'configuration' && (
         <>

@@ -4611,3 +4611,50 @@ chose à distance (voir la barre d'outils atterrie dans `ParcelMapTab`).
 nouveau sa liste, Ventes → Configuration ne montre plus que les listes de prix, et Finance →
 Factures affiche ses trois onglets, Configuration comprise avec ses quatre conditions de paiement
 et ses cinq journaux. Entreprise jetable nettoyée, image frontend reconstruite.
+
+### 2026-09-10 — Grand livre et balance générale (chantier 2 de l'audit)
+
+La partie double était complète depuis fin août — écritures, journaux, plan de comptes, lettrage,
+avoirs, écart de change — mais **aucun état n'en sortait**. On saisissait ; on ne pouvait rien
+lire. L'audit du matin l'avait classé deuxième manque du module ; c'est le plus structurant,
+parce que tout le reste (compte de résultat, bilan, déclaration de TVA) se lit sur ces deux
+états-là.
+
+- `GET /api/factures/grand-livre` — lignes d'écriture par compte, avec **solde d'ouverture** et
+  solde progressif calculés côté serveur. Le progressif est une valeur comptable : la laisser
+  calculer à l'écran l'aurait rendue dépendante de l'ordre de tri de la liste.
+- `GET /api/factures/balance` — un compte par ligne : à-nouveau, débit, crédit, clôture, plus des
+  totaux qui portent le drapeau `equilibre`. Un compte jamais mouvementé **et** sans à-nouveau
+  est exclu ; un compte soldé à zéro sur la période mais qui avait un solde avant reste visible —
+  c'est justement ce qu'on vérifie en clôture.
+- Frontend : `src/components/ComptaEtatsPanel.jsx`, dans Finance → Factures → **Rapports**,
+  au-dessus du suivi client. Période partagée entre les deux états — les consulter sur des bornes
+  différentes serait le meilleur moyen de comparer deux choses qui ne se comparent pas.
+
+#### Trois pièges connus, évités volontairement
+
+L'utilisateur avait demandé d'éviter les erreurs déjà mémorisées. Les trois qui s'appliquaient :
+
+1. **Routes déclarées avant `GET /:id`**, comme `aged-receivable` et `overdue` — sinon
+   `/grand-livre` serait capté comme un identifiant.
+2. **Aucun backtick dans les commentaires SQL** des littéraux de gabarit. Le garde permanent
+   (`sqlBackticks.test.js`, écrit la veille après la 4ᵉ occurrence) est passé au vert.
+3. **`fmtMoney`, jamais `enDevise`** : `debit`/`credit` sont toujours en devise de l'entreprise.
+   Y appliquer la devise du document réintroduirait le bug multi-devise en sens inverse. C'est
+   écrit en tête des deux fichiers, pas seulement ici.
+
+#### Deux défauts trouvés en construisant, pas en relisant
+
+- `String.prototype.replace` **consomme les `$`** d'une chaîne de remplacement : le filtre par
+  compte s'est écrit `${paramsLignes.length}` littéralement au lieu de s'interpoler. Corrigé en
+  passant une fonction plutôt qu'une chaîne.
+- Numérotation de paramètres décalée : le même filtre utilisait `$4` dans une requête qui n'en
+  comptait que deux. Séparé en `paramsLignes`/`paramsOuverture` — la requête d'ouverture n'a pas
+  les mêmes bornes que celle des lignes, prétendre le contraire ne pouvait que casser.
+
+**Vérification** — 6 tests d'intégration ajoutés, **404/404** ; build, `oxlint`, 130/130 tests
+frontend. En navigateur sur une entreprise jetable à deux factures postées : balance équilibrée
+(74 000 au débit comme au crédit), grand livre avec ses soldes progressifs (50 000 → 74 000), et
+une période déplacée après la dernière écriture qui reporte correctement le à-nouveau sans
+afficher un seul mouvement. Onglets voisins (Factures, Configuration) rouverts — le garde que je
+m'étais donné la veille. Entreprise jetable purgée, image frontend reconstruite.

@@ -2234,5 +2234,32 @@
     "videStock": "Aucun stock enregistré pour ce module.",
     "videMouvements": "Aucun mouvement enregistré pour ce module.",
     "erreurChargement": "Impossible de charger les données de stock."
+  },
+  "comptaEtats": {
+    "titreBalance": "Balance générale",
+    "titreGrandLivre": "Grand livre",
+    "du": "Du",
+    "au": "Au",
+    "postedSeulement": "Écritures validées uniquement",
+    "resumeBalance_one": "{{count}} compte",
+    "resumeBalance_other": "{{count}} comptes",
+    "resumeGrandLivre_one": "{{count}} compte mouvementé",
+    "resumeGrandLivre_other": "{{count}} comptes mouvementés",
+    "colCompte": "Compte",
+    "colIntitule": "Intitulé",
+    "colOuverture": "À nouveau",
+    "colDebit": "Débit",
+    "colCredit": "Crédit",
+    "colCloture": "Solde",
+    "colPiece": "Pièce",
+    "colLibelle": "Libellé",
+    "colPartenaire": "Tiers",
+    "colSolde": "Solde progressif",
+    "totaux": "Totaux",
+    "ouvertureCourte": "À nouveau {{montant}}",
+    "desequilibre": "Débit et crédit ne s’équilibrent pas : une écriture est déséquilibrée.",
+    "videBalance": "Aucune écriture validée sur cette période.",
+    "videGrandLivre": "Aucun compte mouvementé sur cette période.",
+    "erreurChargement": "Impossible de charger les états comptables."
   }
 }

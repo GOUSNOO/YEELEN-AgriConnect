@@ -174,3 +174,99 @@ describe('Factures (account.move) — cycle de vie + double-partie + lettrage', 
     expect((await request(app).get('/api/factures').set(bearer(b.token))).body.factures.map((f) => f.id)).not.toContain(facture.id);
   });
 });
+
+// États comptables (2026-09-10) : la partie double était complète, mais rien n'en sortait.
+// Ces tests portent sur ce qui rend un état comptable utilisable — l'équilibre, l'exclusion des
+// brouillons, et le report du solde d'ouverture.
+describe('Grand livre et balance générale', () => {
+  let admin;
+  let clientId;
+
+  const creerEtValider = async (montant, poster = true) => {
+    const creation = await request(app).post('/api/factures').set(bearer(admin.token)).send({
+      moveType: 'out_invoice', partnerId: clientId,
+      lignes: [{ name: 'Prestation', quantity: 1, priceUnit: montant }],
+    });
+    expect(creation.status).toBe(201);
+    const id = creation.body.facture.id;
+    if (poster) {
+      const post = await request(app).post(`/api/factures/${id}/post`).set(bearer(admin.token)).send({});
+      expect(post.status).toBe(200);
+    }
+    return id;
+  };
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    clientId = await createClient(admin.token);
+    await creerEtValider(50000);
+  });
+
+  test('la balance équilibre : total débit = total crédit', async () => {
+    const res = await request(app).get('/api/factures/balance').set(bearer(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body.totaux.debit).toBe(res.body.totaux.credit);
+    expect(res.body.totaux.equilibre).toBe(true);
+    // Une facture client posée touche au moins la créance et le produit.
+    expect(res.body.comptes.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Le point qui fait la différence entre un état comptable et une somme de lignes.
+  test('un brouillon ne pèse pas dans la balance', async () => {
+    const avant = await request(app).get('/api/factures/balance').set(bearer(admin.token));
+    const totalAvant = avant.body.totaux.debit;
+
+    await creerEtValider(9999, false); // laissé en brouillon
+
+    const apres = await request(app).get('/api/factures/balance').set(bearer(admin.token));
+    expect(apres.body.totaux.debit).toBe(totalAvant);
+    expect(apres.body.totaux.equilibre).toBe(true);
+  });
+
+  // Sans report d'ouverture, un état commencé en cours d'exercice repart de zéro et ment.
+  test("ce qui précède la période arrive en solde d'ouverture, pas en mouvement", async () => {
+    const demain = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const apresDemain = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    const res = await request(app)
+      .get(`/api/factures/balance?dateDebut=${demain}&dateFin=${apresDemain}`)
+      .set(bearer(admin.token));
+    expect(res.status).toBe(200);
+    const creance = res.body.comptes.find(c => c.ouverture !== 0);
+    expect(creance).toBeTruthy();
+    expect(creance.debit).toBe(0);
+    expect(creance.credit).toBe(0);
+    expect(creance.cloture).toBe(creance.ouverture);
+  });
+
+  test('le grand livre regroupe par compte et porte un solde progressif cohérent', async () => {
+    const res = await request(app).get('/api/factures/grand-livre').set(bearer(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body.comptes.length).toBeGreaterThanOrEqual(2);
+    for (const compte of res.body.comptes) {
+      expect(compte.lignes.length).toBeGreaterThan(0);
+      // Le dernier solde progressif doit valoir ouverture + débits - crédits.
+      const attendu = Number((compte.ouverture + compte.totalDebit - compte.totalCredit).toFixed(2));
+      expect(compte.lignes[compte.lignes.length - 1].soldeProgressif).toBe(attendu);
+      expect(compte.solde).toBe(attendu);
+    }
+  });
+
+  test('le grand livre se restreint à un compte', async () => {
+    const tout = await request(app).get('/api/factures/grand-livre').set(bearer(admin.token));
+    const premier = tout.body.comptes[0];
+    const filtre = await request(app)
+      .get(`/api/factures/grand-livre?compteId=${premier.compteId}`)
+      .set(bearer(admin.token));
+    expect(filtre.body.comptes).toHaveLength(1);
+    expect(filtre.body.comptes[0].compteId).toBe(premier.compteId);
+  });
+
+  test('isolation : une autre entreprise voit une balance vide et équilibrée', async () => {
+    const autre = await registerEntreprise();
+    const res = await request(app).get('/api/factures/balance').set(bearer(autre.token));
+    expect(res.status).toBe(200);
+    expect(res.body.comptes).toHaveLength(0);
+    expect(res.body.totaux.debit).toBe(0);
+    expect(res.body.totaux.equilibre).toBe(true);
+  });
+});

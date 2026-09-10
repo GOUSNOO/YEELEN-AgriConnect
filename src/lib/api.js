@@ -888,6 +888,25 @@ export async function getContactPrixEffectifs(contactId) {
 
 // Résolution serveur d'un prix effectif (étape 4 alignement produit/stock Odoo — remplace le
 // calcul purement client qu'était prixPourMatch dans DevisModule).
+// États comptables : grand livre et balance générale. Les deux prennent la même période
+// (dateDebut / dateFin, ISO) ; sans elle, le serveur retient l'année civile en cours.
+export async function getGrandLivre({ dateDebut, dateFin, compteId } = {}) {
+  const params = new URLSearchParams();
+  if (dateDebut) params.set('dateDebut', dateDebut);
+  if (dateFin) params.set('dateFin', dateFin);
+  if (compteId) params.set('compteId', String(compteId));
+  const q = params.toString();
+  return request(`/factures/grand-livre${q ? `?${q}` : ''}`);
+}
+
+export async function getBalanceGenerale({ dateDebut, dateFin } = {}) {
+  const params = new URLSearchParams();
+  if (dateDebut) params.set('dateDebut', dateDebut);
+  if (dateFin) params.set('dateFin', dateFin);
+  const q = params.toString();
+  return request(`/factures/balance${q ? `?${q}` : ''}`);
+}
+
 // Stock par emplacement et registre des mouvements — la donnée existait en base (stock_quants,
 // stock_moves) sans qu'aucune route ne la lise. Voir routes/produits.js.
 export async function getStockEmplacements(module) {

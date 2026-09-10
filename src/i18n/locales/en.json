@@ -2234,5 +2234,32 @@
     "videStock": "No stock recorded for this module.",
     "videMouvements": "No move recorded for this module.",
     "erreurChargement": "Could not load the stock data."
+  },
+  "comptaEtats": {
+    "titreBalance": "Trial balance",
+    "titreGrandLivre": "General ledger",
+    "du": "From",
+    "au": "To",
+    "postedSeulement": "Posted entries only",
+    "resumeBalance_one": "{{count}} account",
+    "resumeBalance_other": "{{count}} accounts",
+    "resumeGrandLivre_one": "{{count}} account with moves",
+    "resumeGrandLivre_other": "{{count}} accounts with moves",
+    "colCompte": "Account",
+    "colIntitule": "Name",
+    "colOuverture": "Opening",
+    "colDebit": "Debit",
+    "colCredit": "Credit",
+    "colCloture": "Balance",
+    "colPiece": "Entry",
+    "colLibelle": "Label",
+    "colPartenaire": "Partner",
+    "colSolde": "Running balance",
+    "totaux": "Totals",
+    "ouvertureCourte": "Opening {{montant}}",
+    "desequilibre": "Debit and credit do not balance: an entry is unbalanced.",
+    "videBalance": "No posted entry for this period.",
+    "videGrandLivre": "No account with moves for this period.",
+    "erreurChargement": "Could not load the accounting statements."
   }
 }

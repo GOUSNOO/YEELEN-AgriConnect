@@ -346,6 +346,175 @@ router.get('/verify-hash', ...ecriture, async (req, res) => {
     return res.status(500).json({ error: 'Erreur lors de la vérification.' });
   }
 });
+// ─── États comptables : grand livre et balance générale ───
+//
+// La comptabilité en partie double était complète — écritures, journaux, plan de comptes,
+// lettrage, avoirs, écart de change — mais aucun état n'en sortait : on saisissait juste, on ne
+// pouvait rien lire. L'audit du 2026-09-10 l'a posé comme le manque principal du module.
+//
+// Trois règles communes aux deux états :
+//   1. Seules les pièces "posted" comptent. Un brouillon n'est pas une écriture comptable ;
+//      l'inclure fausserait la balance et ferait mentir l'égalité débit = crédit.
+//   2. La date qui fait foi est account_move.date (la date comptable), pas invoice_date.
+//      account_move_line ne porte pas de date : elle appartient à la pièce.
+//   3. Les montants viennent de debit/credit, toujours en devise de l'entreprise (voir
+//      utils/accountMove.js). Ne JAMAIS leur appliquer un formatage en devise du document —
+//      c'est le piège documenté dans CLAUDE.md sur les écrans multi-devises.
+//
+// Déclarées AVANT GET /:id, comme aged-receivable et overdue : sans cela "/grand-livre" serait
+// capté comme un identifiant.
+
+// Période par défaut : l'année civile en cours de l'entreprise, dans son propre fuseau.
+async function resoudrePeriode(entrepriseId, query) {
+  const { rows } = await pool.query(
+    "SELECT to_char(date_trunc('year', date_entreprise($1)), 'YYYY-MM-DD') AS debut, to_char(date_entreprise($1), 'YYYY-MM-DD') AS fin",
+    [entrepriseId]
+  );
+  const estIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  return {
+    debut: estIso(query.dateDebut) ? query.dateDebut : rows[0].debut,
+    fin: estIso(query.dateFin) ? query.dateFin : rows[0].fin,
+  };
+}
+
+router.get('/grand-livre', authRequired, async (req, res) => {
+  try {
+    const { debut, fin } = await resoudrePeriode(req.user.entrepriseId, req.query);
+    const compteId = Number(req.query.compteId) || null;
+
+    const paramsLignes = [req.user.entrepriseId, debut, fin];
+    const paramsOuverture = [req.user.entrepriseId, debut];
+    let filtreLignes = '';
+    let filtreOuverture = '';
+    if (compteId) {
+      paramsLignes.push(compteId);
+      paramsOuverture.push(compteId);
+      filtreLignes = ` AND a.id = $${paramsLignes.length}`;
+      filtreOuverture = ` AND a.id = $${paramsOuverture.length}`;
+    }
+
+    // Solde d'ouverture par compte : tout ce qui précède la période. Sans lui, le solde
+    // progressif partirait de zéro et ne voudrait rien dire au milieu d'un exercice.
+    const ouvertures = await pool.query(
+      `SELECT l.account_id AS "compteId",
+              COALESCE(SUM(l.debit - l.credit), 0)::float8 AS ouverture
+         FROM account_move_line l
+         JOIN account_move m ON m.id = l.move_id
+         JOIN account_account a ON a.id = l.account_id
+        WHERE l.entreprise_id = $1 AND m.state = 'posted' AND m.date < $2${filtreOuverture}
+        GROUP BY l.account_id`,
+      paramsOuverture
+    );
+    const ouvertureParCompte = new Map(ouvertures.rows.map(r => [r.compteId, r.ouverture]));
+
+    const lignes = await pool.query(
+      `SELECT a.id AS "compteId", a.code AS "compteCode", a.name AS "compteNom",
+              a.account_type AS "compteType",
+              to_char(m.date, 'YYYY-MM-DD') AS date,
+              m.id AS "moveId", m.name AS "pieceNom",
+              j.code AS "journalCode",
+              l.name AS libelle,
+              COALESCE(NULLIF(btrim(COALESCE(c.prenom, '') || ' ' || c.nom), ''), '') AS "partenaireNom",
+              l.debit::float8 AS debit, l.credit::float8 AS credit,
+              l.matching_number AS lettrage
+         FROM account_move_line l
+         JOIN account_move m ON m.id = l.move_id
+         JOIN account_account a ON a.id = l.account_id
+         LEFT JOIN account_journal j ON j.id = m.journal_id
+         LEFT JOIN contacts c ON c.id = l.partner_id
+        WHERE l.entreprise_id = $1 AND m.state = 'posted'
+          AND m.date >= $2 AND m.date <= $3${filtreLignes}
+        ORDER BY a.code ASC, m.date ASC, m.id ASC, l.sequence ASC, l.id ASC`,
+      paramsLignes
+    );
+
+    // Regroupement par compte + solde progressif, calculé ici plutôt qu'à l'écran : c'est une
+    // valeur comptable, elle ne doit pas dépendre de l'ordre dans lequel une liste est triée.
+    const comptes = [];
+    const parId = new Map();
+    for (const l of lignes.rows) {
+      let compte = parId.get(l.compteId);
+      if (!compte) {
+        const ouverture = ouvertureParCompte.get(l.compteId) || 0;
+        compte = {
+          compteId: l.compteId, code: l.compteCode, nom: l.compteNom, type: l.compteType,
+          ouverture, totalDebit: 0, totalCredit: 0, solde: ouverture, lignes: [],
+        };
+        parId.set(l.compteId, compte);
+        comptes.push(compte);
+      }
+      compte.totalDebit += l.debit;
+      compte.totalCredit += l.credit;
+      compte.solde += l.debit - l.credit;
+      compte.lignes.push({
+        date: l.date, moveId: l.moveId, piece: l.pieceNom, journal: l.journalCode,
+        libelle: l.libelle, partenaire: l.partenaireNom || null,
+        debit: l.debit, credit: l.credit, lettrage: l.lettrage,
+        soldeProgressif: Number(compte.solde.toFixed(2)),
+      });
+    }
+    for (const c of comptes) {
+      c.totalDebit = Number(c.totalDebit.toFixed(2));
+      c.totalCredit = Number(c.totalCredit.toFixed(2));
+      c.solde = Number(c.solde.toFixed(2));
+    }
+
+    return res.json({ periode: { debut, fin }, comptes });
+  } catch (err) {
+    console.error('[GET /factures/grand-livre]', err);
+    return res.status(500).json({ error: 'Erreur lors de la construction du grand livre.' });
+  }
+});
+
+router.get('/balance', authRequired, async (req, res) => {
+  try {
+    const { debut, fin } = await resoudrePeriode(req.user.entrepriseId, req.query);
+
+    // Un LEFT JOIN sur account_move avec le filtre "posted" DANS la condition de jointure, et
+    // non dans le WHERE : ainsi une ligne rattachée à un brouillon donne m NULL, ses FILTER sont
+    // faux et elle pèse zéro — au lieu de faire disparaître le compte entier de l'état.
+    const result = await pool.query(
+      `SELECT a.id AS "compteId", a.code, a.name AS nom, a.account_type AS type,
+              COALESCE(SUM(l.debit - l.credit) FILTER (WHERE m.date < $2), 0)::float8 AS ouverture,
+              COALESCE(SUM(l.debit) FILTER (WHERE m.date >= $2 AND m.date <= $3), 0)::float8 AS debit,
+              COALESCE(SUM(l.credit) FILTER (WHERE m.date >= $2 AND m.date <= $3), 0)::float8 AS credit
+         FROM account_account a
+         LEFT JOIN account_move_line l ON l.account_id = a.id AND l.entreprise_id = $1
+         LEFT JOIN account_move m ON m.id = l.move_id AND m.state = 'posted'
+        WHERE a.entreprise_id = $1
+        GROUP BY a.id, a.code, a.name, a.account_type
+        ORDER BY a.code ASC`,
+      [req.user.entrepriseId, debut, fin]
+    );
+
+    // Un compte jamais mouvementé et sans solde d'ouverture n'apprend rien : il allongerait
+    // l'état de tout le plan comptable. Un compte soldé à zéro sur la période mais qui avait un
+    // solde avant, lui, doit rester visible — c'est justement ce qu'on vérifie en clôture.
+    const comptes = result.rows
+      .filter(c => c.ouverture !== 0 || c.debit !== 0 || c.credit !== 0)
+      .map(c => ({ ...c, cloture: Number((c.ouverture + c.debit - c.credit).toFixed(2)) }));
+
+    const totaux = comptes.reduce(
+      (acc, c) => ({
+        ouverture: acc.ouverture + c.ouverture,
+        debit: acc.debit + c.debit,
+        credit: acc.credit + c.credit,
+        cloture: acc.cloture + c.cloture,
+      }),
+      { ouverture: 0, debit: 0, credit: 0, cloture: 0 }
+    );
+    for (const k of Object.keys(totaux)) totaux[k] = Number(totaux[k].toFixed(2));
+    // La partie double impose l'égalité. On la renvoie plutôt que de la laisser deviner :
+    // un écart signale une écriture déséquilibrée, pas une erreur d'affichage.
+    totaux.equilibre = Math.abs(totaux.debit - totaux.credit) < 0.01;
+
+    return res.json({ periode: { debut, fin }, comptes, totaux });
+  } catch (err) {
+    console.error('[GET /factures/balance]', err);
+    return res.status(500).json({ error: 'Erreur lors de la construction de la balance.' });
+  }
+});
+
 
 // ─── GET /api/factures/:id ─────────────────────────────────────────────────
 router.get('/:id', authRequired, async (req, res) => {
