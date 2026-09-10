@@ -4327,3 +4327,66 @@ de quantité enregistrée depuis le formulaire est retrouvée en base (10 → 25
 **Fausse alerte, notée pour mémoire** : ma sonde de vérification cherchait le texte « Rechercher
 un devis » dans `innerText` pour conclure que la liste était revenue — c'est un `placeholder`,
 qui n'y figure pas. La liste était bien là. La sonde était fausse, pas l'application.
+
+### 2026-09-10 — Cycle de vie des achats : deux axes au lieu d'un
+
+Dernier écart de fond signalé sur le module Achats, tranché avec l'utilisateur parmi trois
+options : séparer l'état de commande de l'état de réception, sans aller jusqu'aux quantités
+reçues ligne par ligne.
+
+**Le défaut.** Un seul champ `statut` valait Brouillon → Commandé → Reçu. « Reçu » y était à la
+fois une étape de commande et un constat de livraison, si bien que rien ne distinguait une
+commande confirmée en attente de marchandise d'une commande jamais confirmée — et qu'annuler
+une réception faisait reculer tout le document. L'ERP de référence tient deux champs séparés
+(`purchase.order.state` draft/sent/purchase/cancel, et `receipt_status` pending/partial/full).
+
+**Ce qui est en place.**
+- Axe commande : `statut` ∈ Brouillon / **Envoyée** / Commandé / **Annulée**. L'étape d'envoi au
+  fournisseur et l'annulation manquaient toutes deux.
+- Axe réception : nouvelle colonne `etat_reception` ∈ en_attente / partiel / recu.
+- **Stock et finances ne se déclenchent plus que sur l'axe réception**, à la réception complète.
+  Confirmer une commande n'engage plus rien ; annuler une réception laisse la commande
+  confirmée et ne fait repartir que la marchandise.
+- Sept routes au lieu de trois : `envoyer`, `commander`, `annuler`, `remettre-brouillon`,
+  `reception-partielle`, `recevoir`, `annuler-reception`.
+- Migration des lignes existantes avant la pose des contraintes : « Reçu » devient
+  « Commandé + recu », « Commandé » devient « Commandé + en_attente ».
+
+**Limite assumée, inscrite dans le code.** Sans quantité reçue par ligne, « Partiellement reçu »
+est un **constat**, pas un mouvement : on ne sait pas quoi entrer en stock. L'état sert à
+l'équipe (« une partie est arrivée, la commande reste ouverte ») ; stock et finances attendent la
+réception complète. C'est l'option choisie ; les quantités par ligne lèveraient la limite.
+
+**Côté écran** : la barre de chevrons ne porte plus que la commande, « Annulée » en sort comme
+statut terminal (badge rouge, même traitement qu'un devis annulé) ; la fiche affiche deux lignes
+d'en-tête, COMMANDE et RÉCEPTION, chacune avec ses propres actions ; la liste gagne une colonne
+Réception à côté de la colonne Commande, et sept pastilles de filtre couvrant les deux axes. Le
+sous-onglet « À recevoir » devient le croisement des deux — commande confirmée, marchandise pas
+entièrement arrivée — ce qui est exactement la question qu'il posait.
+
+**Deux défauts de ma part, trouvés en vérifiant.**
+- **Quatrième occurrence des backticks dans un commentaire SQL.** Une note en mémoire n'a
+  manifestement pas suffi : j'ai ajouté un **test** (`server/src/test/sqlBackticks.test.js`) qui
+  balaie `server/src` et échoue en nommant fichier et ligne. Vérifié par test négatif — un
+  backtick réintroduit volontairement le fait bien échouer.
+- **Deux colonnes portaient l'identifiant `reception`** dans la liste des achats : la date de
+  réception (masquée par défaut) et le nouvel état. Le masquage portant sur l'identifiant,
+  il éteignait les deux — la colonne Réception n'apparaissait tout simplement pas, sans erreur.
+  Trouvée en lisant les en-têtes du tableau rendu, pas le code.
+
+**Et une fragilité préexistante, corrigée à la racine.** Ajouter quatre tests a suffi à faire
+échouer, à chaque exécution, des tests différents et sans rapport (RH, journaux, récoltes). Trois
+exécutions vertes après avoir mis mon changement de côté ont montré que le déclencheur venait
+bien de moi ; la cause, elle, était ailleurs : `POST /register` limite les inscriptions par IP, et
+l'assistant de test dérivait l'IP de `Date.now() + seq`. Deux fichiers démarrant dans la même
+milliseconde partageaient donc le même compteur de limite, et le `beforeAll` d'un describe entier
+tombait. Une part aléatoire rend la collision négligeable. **393/393 deux fois de suite** après
+correction, contre des échecs tournants avant.
+
+**Vérification** — build, `oxlint`, 130/130 frontend, 69/69 unitaires backend, 393/393
+d'intégration (+4 sur les deux axes). En navigateur, les quatre combinaisons créées puis lues :
+Brouillon/en attente, Envoyée/en attente, Commandé/partiellement reçu, Commandé/reçu — avec **une
+seule écriture de finances**, celle du reçu. Puis « Marquer reçu » depuis la fiche (deuxième
+écriture, −7 000 F CFA au total) et « Annuler réception » (retour à une écriture, commande
+toujours confirmée, date effacée, réapparition dans « À recevoir »). Entreprise nettoyée, images
+backend et frontend reconstruites.

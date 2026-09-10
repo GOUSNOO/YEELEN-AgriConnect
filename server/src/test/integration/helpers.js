@@ -31,7 +31,14 @@ export async function registerEntreprise(opts = {}) {
   // toute la suite — une IP dérivée du seul `seq` collision entre fichiers (deux "10.0.0.1"
   // distincts au sens de audit_log.ip_address = même compteur de limite). L'horloge réelle
   // n'est, elle, jamais réinitialisée.
-  const n = (Date.now() + seq) % 16777216; // 256^3, espace des 3 derniers octets
+  // Une part aléatoire en plus de l'horloge et du compteur. POST /register limite les
+  // inscriptions par adresse IP (429) : deux fichiers de test qui démarrent dans la même
+  // milliseconde tombaient sur la même IP, avec le même compteur de limite, et la suite
+  // échouait sur des tests apparemment sans rapport — un describe entier tombe dès que son
+  // beforeAll n'obtient pas de compte. Fragilité préexistante, rendue atteignable en ajoutant
+  // des tests : le seul fait de décaler les temps de démarrage suffit à provoquer la
+  // coïncidence. Avec un tirage aléatoire sur 2^24, elle redevient négligeable.
+  const n = ((Date.now() + seq) ^ Math.floor(Math.random() * 16777216)) % 16777216; // 256^3
   const ip = opts.ip || `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`;
   const res = await request(app).post('/api/auth/register').set('X-Forwarded-For', ip).send({
     email,

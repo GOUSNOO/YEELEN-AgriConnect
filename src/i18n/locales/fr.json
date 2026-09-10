@@ -501,7 +501,8 @@
     "statut": {
       "Brouillon": "Brouillon",
       "Commandé": "Commandé",
-      "Reçu": "Reçu"
+      "Envoyée": "Envoyée",
+      "Annulée": "Annulée"
     },
     "navCommandes": "Commandes",
     "navARecevoir": "À recevoir",
@@ -523,7 +524,24 @@
     "recevoirLotOk_one": "{{count}} achat marqué reçu.",
     "recevoirLotOk_other": "{{count}} achats marqués reçus.",
     "recevoirLotEchec_one": "{{count}} achat n'a pas pu être reçu.",
-    "recevoirLotEchec_other": "{{count}} achats n'ont pas pu être reçus."
+    "recevoirLotEchec_other": "{{count}} achats n'ont pas pu être reçus.",
+    "reception": {
+      "en_attente": "En attente",
+      "partiel": "Partiellement reçu",
+      "recu": "Reçu"
+    },
+    "axeCommande": "Commande",
+    "axeReception": "Réception",
+    "colCommandeEtat": "Commande",
+    "colReceptionEtat": "Réception",
+    "envoyerFournisseur": "Envoyer au fournisseur",
+    "marquerPartiel": "Partiellement reçu",
+    "remettreBrouillon": "Remettre en brouillon",
+    "confirmAnnuler": "Annuler cette commande ?",
+    "okEnvoye": "Demande envoyée au fournisseur.",
+    "okAnnule": "Commande annulée.",
+    "okRemisBrouillon": "Achat remis en brouillon.",
+    "okPartiel": "Réception partielle enregistrée."
   },
   "compta": {
     "totalVentes": "Total ventes",

@@ -38,6 +38,7 @@ import {
   getPiscicultureSuivi, createPiscicultureSuivi,
   getAchatsDocuments, getAchatDocument, createAchatDocument, updateAchatDocument, deleteAchatDocument, getAchatsLedger, getAchatsParFournisseur,
   commanderAchatDocument, recevoirAchatDocument, annulerReceptionAchatDocument,
+  envoyerAchatDocument, annulerAchatDocument, remettreBrouillonAchatDocument, receptionPartielleAchatDocument,
   getListesPrix, createListePrix, deleteListePrix, getListePrixLignes, createListePrixLigne, deleteListePrixLigne, getPrixEffectif,
   getProduitTemplates,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
@@ -464,17 +465,30 @@ function DevisStatusBar({ statut }) {
   return <StatusBarChevrons steps={DEVIS_STATUT_STEPS} statut={statut} cleTraduction="devis.statut" />;
 }
 
-// Cycle de vie d'un achat, côté route : Brouillon → Commandé → Reçu (routes/achats.js,
-// POST /:id/commander, /recevoir, /annuler-reception). Trois étapes, pas de statut terminal
-// hors chaîne — l'annulation de réception ramène simplement à "Commandé".
+// Axe COMMANDE seul — l'état de réception vit sur son propre axe depuis le 2026-09-10, comme
+// `receipt_status` dans l'ERP de référence. Mélanger les deux dans une seule barre de chevrons
+// était précisément le défaut corrigé : « Reçu » y était à la fois une étape de commande et un
+// constat de livraison.
 const ACHAT_STATUT_STEPS = [
   { key: 'Brouillon', matches: ['Brouillon'] },
+  { key: 'Envoyée', matches: ['Envoyée'] },
   { key: 'Commandé', matches: ['Commandé'] },
-  { key: 'Reçu', matches: ['Reçu'] },
 ];
 
+// Annulée est terminal, hors chaîne : aucun chevron ne doit s'allumer, un badge rouge le dit
+// plus clairement (même traitement que DevisStatusBar).
 function AchatStatusBar({ statut }) {
+  const { t } = useTranslation();
+  if (statut === 'Annulée') return <Badge tone="red">{t('achats.statut.Annulée')}</Badge>;
   return <StatusBarChevrons steps={ACHAT_STATUT_STEPS} statut={statut} cleTraduction="achats.statut" />;
+}
+
+// L'axe réception, rendu séparément — c'est lui qui commande stock et finances.
+const TON_RECEPTION = { en_attente: 'ochre', partiel: 'blue', recu: 'green' };
+function BadgeReception({ etat }) {
+  const { t } = useTranslation();
+  const valeur = etat || 'en_attente';
+  return <Badge tone={TON_RECEPTION[valeur] || 'blue'}>{t(`achats.reception.${valeur}`)}</Badge>;
 }
 
 function ActivitesSection({ ressourceType, ressourceId }) {
@@ -1311,7 +1325,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
-      {!filtreStatut && creationOuverte && (
+      {!filtreReception && creationOuverte && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t("devis.newTitle")}
@@ -2420,7 +2434,7 @@ function AchatsAvecSousNav({ farmId, storageKey, moduleType }) {
               {t('achats.aRecevoirSubtitle')}
             </div>
           </Card>
-          <AchatModule farmId={farmId} storageKey={storageKey} moduleType={moduleType} filtreStatut="Commandé" />
+          <AchatModule farmId={farmId} storageKey={storageKey} moduleType={moduleType} filtreReception />
         </>
       )}
       {sousNav === 'produits' && <StocksTab farmId={farmId} moduleType={moduleType} />}
@@ -2428,10 +2442,11 @@ function AchatsAvecSousNav({ farmId, storageKey, moduleType }) {
   );
 }
 
-// `filtreStatut` reproduit le fonctionnement de DevisModule en vue « À facturer » : une liste
-// restreinte à une étape du cycle, sans formulaire de création — dans l'ERP de référence, ces
-// entrées de menu sont des listes filtrées, pas des seconds points de saisie.
-function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures', filtreStatut }) {
+// `filtreReception` restreint la liste aux commandes confirmées dont la marchandise n'est pas
+// entièrement arrivée — le croisement des deux axes, et la question que pose le sous-onglet
+// « À recevoir ». Comme la vue « À facturer » d'un devis : une liste filtrée, pas un second
+// point de saisie.
+function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures', filtreReception }) {
   const { t } = useTranslation();
   const { fmtMoney, fmtDate } = useLocale();
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -2455,7 +2470,12 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   // Filtrage côté client, comme DevisModule pour sa vue « À facturer » : la liste complète est
   // déjà chargée, un second appel réseau n'apporterait rien. 'Reçu' par défaut pour les lignes
   // historiques créées avant l'introduction de la colonne statut.
-  const docsAffiches = filtreStatut ? docs.filter(d => (d.statut || 'Reçu') === filtreStatut) : docs;
+  // « À recevoir » = une commande confirmée dont la marchandise n'est pas entièrement là.
+  // Sur l'ancien modèle c'était un filtre de statut ; avec deux axes, c'est le croisement des
+  // deux, ce qui est exactement la question posée.
+  const docsAffiches = filtreReception
+    ? docs.filter(d => d.statut === 'Commandé' && (d.etatReception || 'en_attente') !== 'recu')
+    : docs;
   // Même modèle que DevisModule, URL comprise : le document ouvert vit dans ?achat=.
   const [achatUrl, setAchatUrl] = useParametreUrl('achat');
   const creationOuverte = achatUrl === 'nouveau';
@@ -2480,12 +2500,19 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const outilsAchats = useListeOutils(docsAffiches, useMemo(() => ({
     rechercheChamps: (d) => [d.numero, d.fournisseurNom, d.notes, d.total],
     filtres: [
-      { id: 'brouillon', labelKey: 'achats.statut.Brouillon', test: (d) => (d.statut || 'Reçu') === 'Brouillon' },
+      { id: 'brouillon', labelKey: 'achats.statut.Brouillon', test: (d) => d.statut === 'Brouillon' },
+      { id: 'envoyee', labelKey: 'achats.statut.Envoyée', test: (d) => d.statut === 'Envoyée' },
       { id: 'commande', labelKey: 'achats.statut.Commandé', test: (d) => d.statut === 'Commandé' },
-      { id: 'recu', labelKey: 'achats.statut.Reçu', test: (d) => (d.statut || 'Reçu') === 'Reçu' },
+      { id: 'annulee', labelKey: 'achats.statut.Annulée', test: (d) => d.statut === 'Annulée' },
+      // Second axe : ces deux-là répondent à « qu'est-ce que j'attends encore ? », la question
+      // qui motivait le sous-onglet « À recevoir ».
+      { id: 'attente', labelKey: 'achats.reception.en_attente', test: (d) => (d.etatReception || 'en_attente') === 'en_attente' },
+      { id: 'partiel', labelKey: 'achats.reception.partiel', test: (d) => d.etatReception === 'partiel' },
+      { id: 'recu', labelKey: 'achats.reception.recu', test: (d) => d.etatReception === 'recu' },
     ],
     groupes: [
-      { id: 'statut', labelKey: 'common.status', valeur: (d) => d.statut || 'Reçu' },
+      { id: 'statut', labelKey: 'common.status', valeur: (d) => d.statut || 'Brouillon' },
+      { id: 'reception', labelKey: 'achats.colReceptionEtat', valeur: (d) => d.etatReception || 'en_attente' },
       { id: 'fournisseur', labelKey: 'achats.fournisseur', valeur: (d) => d.fournisseurNom || '—' },
       { id: 'mois', labelKey: 'listes.groupeMois', valeur: (d) => (d.date || '').slice(0, 7) || '—' },
     ],
@@ -2494,7 +2521,8 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       date: (d) => d.date,
       fournisseur: (d) => d.fournisseurNom,
       total: (d) => Number(d.total) || 0,
-      statut: (d) => d.statut || 'Reçu',
+      statut: (d) => d.statut || 'Brouillon',
+      reception: (d) => d.etatReception || 'en_attente',
     },
     triParDefaut: { colonne: 'date', sens: 'desc' },
   }), []));
@@ -2742,11 +2770,23 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const changerStatutDoc = async (id, action, confirmMessage) => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
     try {
-      const api = { commander: commanderAchatDocument, recevoir: recevoirAchatDocument, annulerReception: annulerReceptionAchatDocument }[action];
+      const api = {
+        envoyer: envoyerAchatDocument,
+        commander: commanderAchatDocument,
+        annuler: annulerAchatDocument,
+        remettreBrouillon: remettreBrouillonAchatDocument,
+        receptionPartielle: receptionPartielleAchatDocument,
+        recevoir: recevoirAchatDocument,
+        annulerReception: annulerReceptionAchatDocument,
+      }[action];
       await api(id);
       await loadDocs();
       notifySuccess({
+        envoyer: t('achats.okEnvoye'),
         commander: t('achats.okCommande'),
+        annuler: t('achats.okAnnule'),
+        remettreBrouillon: t('achats.okRemisBrouillon'),
+        receptionPartielle: t('achats.okPartiel'),
         recevoir: t('achats.okRecu'),
         annulerReception: t('achats.okAnnulerReception'),
       }[action]);
@@ -2814,7 +2854,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       rendu: (d) => d.acheteurNom || '—' },
     // La référence a une « arrivée prévue » (date_planned) que nous ne collectons pas : nous
     // n'avons que la réception effective. Colonne réelle plutôt que champ inventé.
-    { id: 'reception', labelKey: 'achats.colReception', optionnelle: true, masqueeParDefaut: true,
+    { id: 'receptionDate', labelKey: 'achats.colReception', optionnelle: true, masqueeParDefaut: true,
       rendu: (d) => (d.dateReception ? formatDateFr(d.dateReception) : '—') },
     { id: 'notes', labelKey: 'achats.notes', optionnelle: true, masqueeParDefaut: true,
       rendu: (d) => d.notes || '—' },
@@ -2823,16 +2863,19 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       somme: (d) => Number(d.total) || 0,
       formatSomme: (n) => fmtMoney(n),
       rendu: (d) => fmtMoney(d.total) },
-    { id: 'statut', labelKey: 'common.status', triable: true,
+    { id: 'statut', labelKey: 'achats.colCommandeEtat', triable: true,
       rendu: (d) => {
-        const statut = d.statut || 'Reçu';
-        return <Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge>;
+        const statut = d.statut || 'Brouillon';
+        const tons = { Brouillon: 'ochre', 'Envoyée': 'blue', 'Commandé': 'green', 'Annulée': 'red' };
+        return <Badge tone={tons[statut] || 'blue'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge>;
       } },
+    { id: 'reception', labelKey: 'achats.colReceptionEtat', triable: true,
+      rendu: (d) => <BadgeReception etat={d.etatReception} /> },
     // Les transitions d'état vivent dans l'en-tête de la fiche, avec la barre de chevrons —
     // comme pour un devis, et comme dans la référence, où l'action porte sur le document.
     { id: 'actions', labelKey: 'common.actions', alignement: 'right',
       rendu: (d) => {
-        const modifiable = ['Brouillon', 'Commandé'].includes(d.statut || 'Reçu');
+        const modifiable = ['Brouillon', 'Envoyée'].includes(d.statut) && (d.etatReception || 'en_attente') === 'en_attente';
         if (!modifiable) return null;
         return (
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.sm }} onClick={e => e.stopPropagation()}>
@@ -2884,7 +2927,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
       {/* Formulaire de création — masqué en vue « À recevoir », comme DevisModule masque le
           sien en vue « À facturer ». */}
-      {!filtreStatut && creationOuverte && (
+      {!filtreReception && creationOuverte && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t('achats.newTitle')}
@@ -2940,7 +2983,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       {!enFormulaire && (
         <Card>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center' }}>
-            {!filtreStatut ? (
+            {!filtreReception ? (
               <Button variant="green" onClick={() => setAchatUrl('nouveau', { remplacer: false })}><Plus size={14} /> {t('achats.nouveau')}</Button>
             ) : <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{t('achats.historique')}</div>}
             <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
@@ -2966,9 +3009,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           colonnes={colonnesAchats}
           cle={(d) => d.id}
           onLigneClic={(d) => setAchatUrl(d.id, { remplacer: false })}
+          ligneAttenuee={(d) => d.statut === 'Annulée'}
           selectionActive
           actionsGroupees={(selection) => {
-            const recevables = docs.filter(d => selection.includes(d.id) && d.statut === 'Commandé');
+            const recevables = docs.filter(d => selection.includes(d.id) && d.statut === 'Commandé' && (d.etatReception || 'en_attente') !== 'recu');
             if (recevables.length === 0) return null;
             return (
               <Button variant="green" small onClick={() => recevoirLot(recevables)}>
@@ -2978,7 +3022,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           }}
           vide={(
             <div style={{ padding: SPACE.xl, color: COLORS.inkSoft, fontSize: TEXT.base }}>
-              {outilsAchats.actif ? t('listes.aucunResultat') : (filtreStatut ? t('achats.emptyARecevoir') : t('achats.emptyTable'))}
+              {outilsAchats.actif ? t('listes.aucunResultat') : (filtreReception ? t('achats.emptyARecevoir') : t('achats.emptyTable'))}
             </div>
           )}
         />
@@ -2998,17 +3042,47 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.lg }}>
-              <AchatStatusBar statut={detailDoc.statut || 'Reçu'} />
+            {/* Deux lignes pour deux axes : la commande au-dessus, la réception en dessous.
+                Les mélanger était le défaut d'origine. Les actions de chaque ligne ne portent
+                que sur son propre axe. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.sm }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: TEXT.xs, color: COLORS.inkFaint, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('achats.axeCommande')}</span>
+                <AchatStatusBar statut={detailDoc.statut || 'Brouillon'} />
+              </div>
               <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
-                {(detailDoc.statut || 'Reçu') === 'Brouillon' && (
-                  <Button small variant="outline" onClick={() => { changerStatutDoc(detailDoc.id, 'commander'); closeDetail(); }}>{t('achats.commander')}</Button>
+                {detailDoc.statut === 'Brouillon' && (
+                  <Button small variant="outline" onClick={() => changerStatutDoc(detailDoc.id, 'envoyer')}>{t('achats.envoyerFournisseur')}</Button>
                 )}
-                {detailDoc.statut === 'Commandé' && (
-                  <Button small variant="green" onClick={() => { changerStatutDoc(detailDoc.id, 'recevoir'); closeDetail(); }}>{t('achats.marquerRecu')}</Button>
+                {['Brouillon', 'Envoyée'].includes(detailDoc.statut) && (
+                  <Button small variant="green" onClick={() => changerStatutDoc(detailDoc.id, 'commander')}>{t('achats.commander')}</Button>
                 )}
-                {(detailDoc.statut || 'Reçu') === 'Reçu' && (
-                  <Button small variant="ghost" onClick={() => { changerStatutDoc(detailDoc.id, 'annulerReception', t('achats.confirmAnnulerReception')); closeDetail(); }}>{t('achats.annulerReception')}</Button>
+                {['Brouillon', 'Envoyée', 'Commandé'].includes(detailDoc.statut) && (detailDoc.etatReception || 'en_attente') === 'en_attente' && (
+                  <Button small variant="danger" onClick={() => changerStatutDoc(detailDoc.id, 'annuler', t('achats.confirmAnnuler'))}>{t('common.cancel')}</Button>
+                )}
+                {detailDoc.statut === 'Annulée' && (
+                  <Button small variant="outline" onClick={() => changerStatutDoc(detailDoc.id, 'remettreBrouillon')}>{t('achats.remettreBrouillon')}</Button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.lg }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: TEXT.xs, color: COLORS.inkFaint, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('achats.axeReception')}</span>
+                <BadgeReception etat={detailDoc.etatReception} />
+                {detailDoc.dateReception && (
+                  <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{formatDateFr(detailDoc.dateReception)}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
+                {detailDoc.statut === 'Commandé' && (detailDoc.etatReception || 'en_attente') === 'en_attente' && (
+                  <Button small variant="outline" onClick={() => changerStatutDoc(detailDoc.id, 'receptionPartielle')}>{t('achats.marquerPartiel')}</Button>
+                )}
+                {detailDoc.statut === 'Commandé' && (detailDoc.etatReception || 'en_attente') !== 'recu' && (
+                  <Button small variant="green" onClick={() => changerStatutDoc(detailDoc.id, 'recevoir')}>{t('achats.marquerRecu')}</Button>
+                )}
+                {(detailDoc.etatReception || 'en_attente') === 'recu' && (
+                  <Button small variant="ghost" onClick={() => changerStatutDoc(detailDoc.id, 'annulerReception', t('achats.confirmAnnulerReception'))}>{t('achats.annulerReception')}</Button>
                 )}
               </div>
             </div>

@@ -58,13 +58,15 @@ describe('Achats — cycle brouillon → commandé → reçu → réception annu
     expect(commander.status).toBe(200);
     expect(commander.body.document.statut).toBe('Commandé');
 
-    // Deux fois commander : interdit
+    // Deux fois commander : interdit (Commandé n'est plus un point de départ valide)
     const reCommander = await request(app).post(`/api/achats/${docId}/commander`).set(bearer(admin.token)).send({});
     expect(reCommander.status).toBe(400);
 
     const recevoir = await request(app).post(`/api/achats/${docId}/recevoir`).set(bearer(admin.token)).send({});
     expect(recevoir.status).toBe(200);
-    expect(recevoir.body.document.statut).toBe('Reçu');
+    // Le statut de commande NE bouge PAS : la marchandise arrive sur l'autre axe.
+    expect(recevoir.body.document.statut).toBe('Commandé');
+    expect(recevoir.body.document.etatReception).toBe('recu');
 
     const apres = await financesDe(admin.token);
     const ligne = apres.find(isAchatRow);
@@ -74,6 +76,7 @@ describe('Achats — cycle brouillon → commandé → reçu → réception annu
     const annuler = await request(app).post(`/api/achats/${docId}/annuler-reception`).set(bearer(admin.token)).send({});
     expect(annuler.status).toBe(200);
     expect(annuler.body.document.statut).toBe('Commandé');
+    expect(annuler.body.document.etatReception).toBe('en_attente');
     expect((await financesDe(admin.token)).some(isAchatRow)).toBe(false);
   });
 
@@ -158,5 +161,83 @@ describe('Achats — référence lisible (numero)', () => {
     const autre = await registerEntreprise();
     const sien = await creer(autre.token, 'Article A');
     expect(sien.body.document.numero).toBe(`ACH-${annee}-0001`);
+  });
+});
+
+describe('Achats — deux axes : commande et réception', () => {
+  let admin;
+  const creer = () => request(app).post('/api/achats').set(bearer(admin.token))
+    .send({ module: 'Cultures', fournisseurNom: 'Fournisseur Axes', lignes: [{ produit: 'Sacs', quantite: 4, prixUnitaire: 250 }] });
+
+  beforeAll(async () => { admin = await registerEntreprise(); });
+
+  test('brouillon → envoyée → commandé, sans jamais toucher à la réception', async () => {
+    const doc = (await creer()).body.document;
+    expect(doc.statut).toBe('Brouillon');
+    expect(doc.etatReception).toBe('en_attente');
+
+    const envoi = await request(app).post(`/api/achats/${doc.id}/envoyer`).set(bearer(admin.token)).send({});
+    expect(envoi.status).toBe(200);
+    expect(envoi.body.document.statut).toBe('Envoyée');
+    expect(envoi.body.document.etatReception).toBe('en_attente');
+
+    const commande = await request(app).post(`/api/achats/${doc.id}/commander`).set(bearer(admin.token)).send({});
+    expect(commande.status).toBe(200);
+    expect(commande.body.document.statut).toBe('Commandé');
+
+    // Renvoyer une commande déjà confirmée n'a pas de sens
+    const renvoi = await request(app).post(`/api/achats/${doc.id}/envoyer`).set(bearer(admin.token)).send({});
+    expect(renvoi.status).toBe(400);
+  });
+
+  // Le point même de la séparation : une commande confirmée dont la marchandise n'est pas là.
+  test('réception partielle : constat sur l’axe réception, aucun mouvement de stock ni de finances', async () => {
+    const doc = (await creer()).body.document;
+    await request(app).post(`/api/achats/${doc.id}/commander`).set(bearer(admin.token)).send({});
+
+    const partielle = await request(app).post(`/api/achats/${doc.id}/reception-partielle`).set(bearer(admin.token)).send({});
+    expect(partielle.status).toBe(200);
+    expect(partielle.body.document.statut).toBe('Commandé');
+    expect(partielle.body.document.etatReception).toBe('partiel');
+
+    const finances = await financesDe(admin.token);
+    expect(finances.some(f => f.description.includes('Fournisseur Axes'))).toBe(false);
+
+    // puis réception complète : là seulement les finances bougent
+    const complete = await request(app).post(`/api/achats/${doc.id}/recevoir`).set(bearer(admin.token)).send({});
+    expect(complete.status).toBe(200);
+    expect(complete.body.document.etatReception).toBe('recu');
+    expect((await financesDe(admin.token)).some(f => f.description.includes('Fournisseur Axes'))).toBe(true);
+
+    // et on ne reçoit pas deux fois
+    const bis = await request(app).post(`/api/achats/${doc.id}/recevoir`).set(bearer(admin.token)).send({});
+    expect(bis.status).toBe(400);
+  });
+
+  test('annulation possible tant que rien n’est arrivé, refusée ensuite', async () => {
+    const doc = (await creer()).body.document;
+    await request(app).post(`/api/achats/${doc.id}/commander`).set(bearer(admin.token)).send({});
+    await request(app).post(`/api/achats/${doc.id}/recevoir`).set(bearer(admin.token)).send({});
+
+    const refus = await request(app).post(`/api/achats/${doc.id}/annuler`).set(bearer(admin.token)).send({});
+    expect(refus.status).toBe(400);
+    expect(refus.body.error).toMatch(/réception/i);
+
+    await request(app).post(`/api/achats/${doc.id}/annuler-reception`).set(bearer(admin.token)).send({});
+    const annule = await request(app).post(`/api/achats/${doc.id}/annuler`).set(bearer(admin.token)).send({});
+    expect(annule.status).toBe(200);
+    expect(annule.body.document.statut).toBe('Annulée');
+
+    const retour = await request(app).post(`/api/achats/${doc.id}/remettre-brouillon`).set(bearer(admin.token)).send({});
+    expect(retour.status).toBe(200);
+    expect(retour.body.document.statut).toBe('Brouillon');
+  });
+
+  test('recevoir sans commande confirmée → 400', async () => {
+    const doc = (await creer()).body.document;
+    const tropTot = await request(app).post(`/api/achats/${doc.id}/recevoir`).set(bearer(admin.token)).send({});
+    expect(tropTot.status).toBe(400);
+    const partielTropTot = await request(app).post(`/api/achats/${doc.id}/reception-partielle`).set(bearer(admin.token)).send({});
+    expect(partielTropTot.status).toBe(400);
   });
 });

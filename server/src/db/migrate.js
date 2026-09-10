@@ -1330,6 +1330,31 @@ UPDATE achats_documents ad
 
 -- Index partiel plutôt qu'une contrainte : les lignes sans numéro (aucune après le backfill,
 -- mais la colonne reste nullable) ne doivent pas entrer en collision entre elles.
+-- Cycle de vie d'un achat, séparé en deux axes comme dans l'ERP de référence (purchase.order :
+-- "state" draft/sent/purchase/cancel d'un côté, "receipt_status" pending/partial/full de
+-- l'autre). Jusqu'ici un seul champ mélangeait les deux : « Reçu » était à la fois un état de
+-- commande et un constat de livraison, si bien que rien ne distinguait une commande confirmée
+-- en attente de marchandise d'une commande jamais confirmée.
+--
+-- Les valeurs de statut restent en français capitalisé, comme devis.statut : « Brouillon » et
+-- « Commandé » existent déjà en base et ne bougent pas, seul « Reçu » migre vers l'autre axe.
+ALTER TABLE achats_documents ADD COLUMN IF NOT EXISTS etat_reception TEXT NOT NULL DEFAULT 'en_attente';
+
+-- Reprise des lignes existantes AVANT de poser les contraintes, sans quoi « Reçu » les violerait.
+UPDATE achats_documents SET etat_reception = 'recu', statut = 'Commandé'
+ WHERE statut = 'Reçu';
+
+ALTER TABLE achats_documents DROP CONSTRAINT IF EXISTS achats_documents_statut_check;
+ALTER TABLE achats_documents ADD CONSTRAINT achats_documents_statut_check
+  CHECK (statut IN ('Brouillon', 'Envoyée', 'Commandé', 'Annulée'));
+ALTER TABLE achats_documents DROP CONSTRAINT IF EXISTS achats_documents_etat_reception_check;
+ALTER TABLE achats_documents ADD CONSTRAINT achats_documents_etat_reception_check
+  CHECK (etat_reception IN ('en_attente', 'partiel', 'recu'));
+
+-- Le DEFAULT de statut valait « Reçu » (voir plus haut : les achats étaient réputés déjà
+-- arrivés). Il n'a plus de sens sur l'axe commande.
+ALTER TABLE achats_documents ALTER COLUMN statut SET DEFAULT 'Brouillon';
+
 CREATE UNIQUE INDEX IF NOT EXISTS achats_documents_numero_unique
   ON achats_documents (entreprise_id, numero) WHERE numero IS NOT NULL;
 

@@ -501,7 +501,8 @@
     "statut": {
       "Brouillon": "Draft",
       "Commandé": "Ordered",
-      "Reçu": "Received"
+      "Envoyée": "Sent",
+      "Annulée": "Cancelled"
     },
     "navCommandes": "Orders",
     "navARecevoir": "To receive",
@@ -523,7 +524,24 @@
     "recevoirLotOk_one": "{{count}} purchase marked received.",
     "recevoirLotOk_other": "{{count}} purchases marked received.",
     "recevoirLotEchec_one": "{{count}} purchase could not be received.",
-    "recevoirLotEchec_other": "{{count}} purchases could not be received."
+    "recevoirLotEchec_other": "{{count}} purchases could not be received.",
+    "reception": {
+      "en_attente": "Not received",
+      "partiel": "Partially received",
+      "recu": "Received"
+    },
+    "axeCommande": "Order",
+    "axeReception": "Receipt",
+    "colCommandeEtat": "Order",
+    "colReceptionEtat": "Receipt",
+    "envoyerFournisseur": "Send to vendor",
+    "marquerPartiel": "Partially received",
+    "remettreBrouillon": "Set to draft",
+    "confirmAnnuler": "Cancel this order?",
+    "okEnvoye": "Request sent to the vendor.",
+    "okAnnule": "Order cancelled.",
+    "okRemisBrouillon": "Purchase set back to draft.",
+    "okPartiel": "Partial receipt recorded."
   },
   "compta": {
     "totalVentes": "Total sales",

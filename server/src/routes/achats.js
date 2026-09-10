@@ -16,6 +16,7 @@ const router = express.Router();
 const DOCUMENT_COLUMNS = `
   id, numero, module, to_char(date, 'YYYY-MM-DD') AS date, fournisseur_id AS "fournisseurId",
   fournisseur_nom AS "fournisseurNom", notes, total::float8 AS total, statut,
+  etat_reception AS "etatReception",
   date_reception AS "dateReception", created_at AS "createdAt",
   -- Acheteur : même résolution que le vendeur d'un devis. Sous-requête obligatoire ici —
   -- DOCUMENT_COLUMNS sert aussi dans un INSERT ... RETURNING et dans un SELECT aliasé "ad",
@@ -323,12 +324,34 @@ router.delete('/:id', authRequired, async (req, res) => {
 
 // Engage la commande auprès du fournisseur — aucun effet sur le stock ni les finances,
 // juste un marqueur de commitment (miroir du passage Brouillon→Envoyé côté devis).
-router.post('/:id/commander', authRequired, async (req, res) => {
+// ─── Axe COMMANDE : Brouillon → Envoyée → Commandé, et Annulée en sortie ───
+// Repris de purchase.order dans l'ERP de référence (draft → sent → purchase → cancel). L'étape
+// « Envoyée » manquait : rien ne distinguait un achat qu'on prépare d'une demande déjà partie
+// chez le fournisseur. Aucune de ces transitions ne touche au stock ni aux finances — c'est
+// désormais l'axe réception qui s'en charge, plus bas.
+
+router.post('/:id/envoyer', authRequired, async (req, res) => {
   try {
     const check = await pool.query('SELECT statut FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
     if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
     if (check.rows[0].statut !== 'Brouillon') {
-      return res.status(400).json({ error: 'Seul un brouillon peut être commandé.' });
+      return res.status(400).json({ error: 'Seul un brouillon peut être envoyé au fournisseur.' });
+    }
+    await pool.query(`UPDATE achats_documents SET statut = 'Envoyée' WHERE id = $1`, [req.params.id]);
+    const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
+    return res.json({ document });
+  } catch (err) {
+    console.error('[POST /achats/:id/envoyer]', err);
+    return res.status(500).json({ error: 'Erreur lors de l\'envoi au fournisseur.' });
+  }
+});
+
+router.post('/:id/commander', authRequired, async (req, res) => {
+  try {
+    const check = await pool.query('SELECT statut FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
+    if (!['Brouillon', 'Envoyée'].includes(check.rows[0].statut)) {
+      return res.status(400).json({ error: 'Seul un brouillon ou une demande envoyée peut être confirmé en commande.' });
     }
     await pool.query(`UPDATE achats_documents SET statut = 'Commandé' WHERE id = $1`, [req.params.id]);
     const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
@@ -339,21 +362,95 @@ router.post('/:id/commander', authRequired, async (req, res) => {
   }
 });
 
-// Marque la marchandise comme reçue — c'est ce moment-là, pas la création, qui engage
-// réellement le stock et les finances (voir stockSync.js / financeSync.js).
-router.post('/:id/recevoir', authRequired, async (req, res) => {
+// Annuler reste possible tant que rien n'est arrivé. Une commande dont la marchandise est là
+// n'est plus annulable : il faudrait d'abord annuler la réception, donc défaire le stock et
+// l'écriture de finances — le refuser ici évite de rendre ces deux opérations implicites.
+router.post('/:id/annuler', authRequired, async (req, res) => {
   try {
     const check = await pool.query(
-      'SELECT statut, module, total, fournisseur_nom AS "fournisseurNom" FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
+      'SELECT statut, etat_reception AS "etatReception" FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
+    const { statut, etatReception } = check.rows[0];
+    if (statut === 'Annulée') return res.status(400).json({ error: 'Ce document est déjà annulé.' });
+    if (etatReception !== 'en_attente') {
+      return res.status(400).json({ error: 'Annulez d\'abord la réception avant d\'annuler la commande.' });
+    }
+    await pool.query(`UPDATE achats_documents SET statut = 'Annulée' WHERE id = $1`, [req.params.id]);
+    const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
+    return res.json({ document });
+  } catch (err) {
+    console.error('[POST /achats/:id/annuler]', err);
+    return res.status(500).json({ error: 'Erreur lors de l\'annulation.' });
+  }
+});
+
+router.post('/:id/remettre-brouillon', authRequired, async (req, res) => {
+  try {
+    const check = await pool.query('SELECT statut FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
+    if (check.rows[0].statut !== 'Annulée') {
+      return res.status(400).json({ error: 'Seul un document annulé peut revenir en brouillon.' });
+    }
+    await pool.query(`UPDATE achats_documents SET statut = 'Brouillon' WHERE id = $1`, [req.params.id]);
+    const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
+    return res.json({ document });
+  } catch (err) {
+    console.error('[POST /achats/:id/remettre-brouillon]', err);
+    return res.status(500).json({ error: 'Erreur lors du retour en brouillon.' });
+  }
+});
+
+// ─── Axe RÉCEPTION : en_attente → partiel → recu ───
+// Indépendant de l'axe commande, comme receipt_status dans l'ERP de référence. C'est ici, et
+// nulle part ailleurs, que le stock et les finances bougent.
+//
+// « Partiellement reçu » est un CONSTAT, pas un mouvement : sans quantité reçue ligne par ligne,
+// on ne sait pas quoi entrer en stock. L'état sert à l'équipe (« une partie est arrivée, la
+// commande reste ouverte ») ; le stock et les finances attendent la réception complète. Passer
+// aux quantités par ligne lèverait cette limite — c'est le chantier suivant si besoin.
+
+router.post('/:id/reception-partielle', authRequired, async (req, res) => {
+  try {
+    const check = await pool.query(
+      'SELECT statut, etat_reception AS "etatReception" FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
       [req.params.id, req.user.entrepriseId]
     );
     if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
     if (check.rows[0].statut !== 'Commandé') {
-      return res.status(400).json({ error: 'Seul un document commandé peut être marqué comme reçu.' });
+      return res.status(400).json({ error: 'Seule une commande confirmée peut recevoir de la marchandise.' });
+    }
+    if (check.rows[0].etatReception === 'recu') {
+      return res.status(400).json({ error: 'Ce document est déjà entièrement reçu.' });
+    }
+    await pool.query(`UPDATE achats_documents SET etat_reception = 'partiel' WHERE id = $1`, [req.params.id]);
+    const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
+    return res.json({ document });
+  } catch (err) {
+    console.error('[POST /achats/:id/reception-partielle]', err);
+    return res.status(500).json({ error: 'Erreur lors de la réception partielle.' });
+  }
+});
+
+// Réception complète — c'est ce moment-là, pas la création ni la confirmation de commande, qui
+// engage le stock et les finances (voir stockSync.js / financeSync.js).
+router.post('/:id/recevoir', authRequired, async (req, res) => {
+  try {
+    const check = await pool.query(
+      'SELECT statut, etat_reception AS "etatReception", module, total, fournisseur_nom AS "fournisseurNom" FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
+      [req.params.id, req.user.entrepriseId]
+    );
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
+    if (check.rows[0].statut !== 'Commandé') {
+      return res.status(400).json({ error: 'Seule une commande confirmée peut être marquée comme reçue.' });
+    }
+    if (check.rows[0].etatReception === 'recu') {
+      return res.status(400).json({ error: 'Ce document est déjà entièrement reçu.' });
     }
     const { module, total, fournisseurNom } = check.rows[0];
 
-    await pool.query(`UPDATE achats_documents SET statut = 'Reçu', date_reception = NOW() WHERE id = $1`, [req.params.id]);
+    await pool.query(`UPDATE achats_documents SET etat_reception = 'recu', date_reception = NOW() WHERE id = $1`, [req.params.id]);
 
     const lignesResult = await pool.query('SELECT produit, quantite::float8 AS quantite, stock_id AS "stockId", uom_id AS "uomId" FROM achats_lignes WHERE document_id = $1', [req.params.id]);
     await syncAchatDocumentFinance(req.user.entrepriseId, req.user.sub, {
@@ -371,13 +468,17 @@ router.post('/:id/recevoir', authRequired, async (req, res) => {
   }
 });
 
-// Annule une réception déjà enregistrée — retire l'entrée finances et restitue le stock,
-// remet le document en "Commandé" (miroir de POST /devis/:id/remettre-brouillon).
+// Annule une réception déjà enregistrée — retire l'entrée finances et restitue le stock. Le
+// statut de commande, lui, ne bouge pas : la commande reste confirmée, seule la marchandise
+// repart. C'est précisément ce que la séparation des deux axes permet d'exprimer.
 router.post('/:id/annuler-reception', authRequired, async (req, res) => {
   try {
-    const check = await pool.query('SELECT statut, module FROM achats_documents WHERE id = $1 AND entreprise_id = $2', [req.params.id, req.user.entrepriseId]);
+    const check = await pool.query(
+      'SELECT etat_reception AS "etatReception", module FROM achats_documents WHERE id = $1 AND entreprise_id = $2',
+      [req.params.id, req.user.entrepriseId]
+    );
     if (check.rows.length === 0) return res.status(404).json({ error: 'Document d\'achat introuvable.' });
-    if (check.rows[0].statut !== 'Reçu') {
+    if (check.rows[0].etatReception !== 'recu') {
       return res.status(400).json({ error: 'Seul un document reçu peut voir sa réception annulée.' });
     }
     const { module } = check.rows[0];
@@ -388,7 +489,7 @@ router.post('/:id/annuler-reception', authRequired, async (req, res) => {
       userId: req.user.sub, documentType: 'achat', documentId: Number(req.params.id), raison: 'achat_annulation_reception',
     });
 
-    await pool.query(`UPDATE achats_documents SET statut = 'Commandé', date_reception = NULL WHERE id = $1`, [req.params.id]);
+    await pool.query(`UPDATE achats_documents SET etat_reception = 'en_attente', date_reception = NULL WHERE id = $1`, [req.params.id]);
     const document = await getDocumentComplete(req.params.id, req.user.entrepriseId);
     return res.json({ document });
   } catch (err) {

@@ -824,6 +824,24 @@ export async function deleteAchatDocument(id) {
   return request(`/achats/${id}`, { method: 'DELETE' });
 }
 
+// Axe commande (Brouillon → Envoyée → Commandé, Annulée en sortie) et axe réception
+// (en_attente → partiel → recu) : deux cycles séparés côté serveur depuis le 2026-09-10.
+export async function envoyerAchatDocument(id) {
+  return request(`/achats/${id}/envoyer`, { method: 'POST' });
+}
+
+export async function annulerAchatDocument(id) {
+  return request(`/achats/${id}/annuler`, { method: 'POST' });
+}
+
+export async function remettreBrouillonAchatDocument(id) {
+  return request(`/achats/${id}/remettre-brouillon`, { method: 'POST' });
+}
+
+export async function receptionPartielleAchatDocument(id) {
+  return request(`/achats/${id}/reception-partielle`, { method: 'POST' });
+}
+
 export async function commanderAchatDocument(id) {
   return request(`/achats/${id}/commander`, { method: 'POST' });
 }
