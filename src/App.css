@@ -63,24 +63,29 @@
      soulignement. Un soulignement n'est pas le « rectangle » retiré à la demande de
      l'utilisateur en août — les deux tiennent ensemble. Couleurs prises dans notre palette,
      seul écart assumé avec la référence. */
-  border: 1px solid #DAD6C4;
+  border: 1px solid #888E81; /* COLORS.inputLine */
   border-width: 0 0 1px 0;
   border-radius: 0;
-  background: transparent;
+  /* Fond léger : c'est lui qui fait lire le champ comme une ZONE à remplir, pas seulement
+     comme un trait. Le seul soulignement ne suffisait pas — signalé à l'usage. */
+  background: #F4F2E8; /* COLORS.surfaceAlt */
   padding: 2px 4px;
   font-size: 13px;
   font-family: 'Inter', sans-serif;
   color: #22271D;
   outline: none;
-  transition: border-color 0.1s ease;
+  transition: border-color 0.1s ease, background-color 0.1s ease;
 }
 .flat-input::placeholder {
   color: #9AA093;
 }
 .flat-input:hover {
-  border-bottom-color: #9AA093;
+  background: #EDEBDD;
 }
 .flat-input:focus {
+  /* Au focus, le champ passe au blanc et son trait au vert : la zone active se détache de
+     toutes les autres, comme le fait la référence en changeant --o-input-border-color. */
+  background: #FFFFFF;
   border-bottom-color: #3F6B3B; /* $o-action, ici le vert d'action de la palette */
 }
 

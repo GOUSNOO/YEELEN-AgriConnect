@@ -32,6 +32,12 @@ export const COLORS = {
   red: '#B23B2E',         // alerte, erreur — 5,64:1
   redSoft: '#F6E2DE',
   violet: '#6B5B8E',      // catégorie RH de la navigation — 5,72:1
+  // Trait sous un champ de saisie. Le beige des bordures (#DAD6C4) n'atteint que 1,46:1 sur
+  // blanc — un cheveu, invisible en pratique ; la valeur de la référence elle-même (#ccc)
+  // plafonne à 1,61:1. Celle-ci tient 3,37:1 sur blanc et 3,00:1 sur le fond du champ, soit
+  // le seuil WCAG pour un élément d'interface. Écart assumé avec la référence, sur un point
+  // où elle n'est pas accessible.
+  inputLine: '#888E81',
 };
 
 // Bordure basse de la navbar : le vert d'action assombri, pour détacher la barre du contenu

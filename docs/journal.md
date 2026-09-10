@@ -4390,3 +4390,26 @@ seule écriture de finances**, celle du reçu. Puis « Marquer reçu » depuis l
 écriture, −7 000 F CFA au total) et « Annuler réception » (retour à une écriture, commande
 toujours confirmée, date effacée, réapparition dans « À recevoir »). Entreprise nettoyée, images
 backend et frontend reconstruites.
+
+### 2026-09-10 — Champs de saisie : le soulignement seul ne suffisait pas
+
+Signalé à l'usage après la première correction : les champs restaient difficiles à repérer.
+Mesuré plutôt que discuté — le trait posé la veille valait `#DAD6C4`, soit **1,46:1 sur blanc**.
+Un cheveu. Et la valeur de la référence elle-même (`$o-form-lightsecondary` = `#ccc`) ne dépasse
+pas 1,61:1 : sur ce point précis, la référence n'atteint pas le seuil WCAG 1.4.11, qui demande
+**3:1 pour la limite d'un élément d'interface**.
+
+Deux changements, tous deux dans la palette et non dans la structure :
+- **Un fond léger** (`COLORS.surfaceAlt`) : c'est lui qui fait lire le champ comme une *zone* à
+  remplir, et non comme un trait. C'est le mot employé par l'utilisateur — « les rectangles qui
+  servent de remplissement » — et le soulignement seul n'y répondait pas.
+- **Un trait à `#888E81`** (nouveau jeton `COLORS.inputLine`) : 3,37:1 sur blanc, 3,00:1 sur le
+  fond du champ. Le seuil est tenu dans les deux contextes.
+
+Au focus, le champ passe au blanc et son trait au vert d'action : la zone active se détache de
+toutes les autres, ce que la référence obtient en changeant `--o-input-border-color`.
+
+Le « rectangle » retiré à la demande de l'utilisateur en août ne revient pas : il n'y a toujours
+ni encadré ni coins arrondis, seulement un fond et une base. **Écart assumé avec la référence sur
+la valeur du trait**, sur un point où elle est en dessous du seuil d'accessibilité — et
+l'utilisateur avait posé « tout respecter sauf la couleur ».
