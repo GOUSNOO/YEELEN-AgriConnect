@@ -99,11 +99,6 @@ const NAV_CATEGORIES = [
   { id: 'rh', labelKey: 'navGroup.rh', color: COLORS.violet },
 ];
 
-const DEFAULT_PARCELLES = [
-  { id: 1, nom: 'Parcelle A', culture: 'Maïs', humidite: 46, temperature: 27, mode: 'auto', vanneOuverte: false, seuil: 35, x: 20, y: 25 },
-  { id: 2, nom: 'Parcelle B', culture: 'Manioc', humidite: 26, temperature: 30, mode: 'auto', vanneOuverte: true, seuil: 30, x: 55, y: 30 },
-  { id: 3, nom: 'Parcelle C', culture: 'Tomates', humidite: 54, temperature: 25, mode: 'manuel', vanneOuverte: false, seuil: 40, x: 35, y: 65 },
-];
 
 function ParcelMapTab({ parcelles }) {
   const { t } = useTranslation();
@@ -121,6 +116,11 @@ function ParcelMapTab({ parcelles }) {
       <Card style={{ padding: SPACE.md }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('cultures.map.title')}</div>
         <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
+          {parcelles.length === 0 && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: SPACE.lg, color: COLORS.inkSoft, fontSize: TEXT.base }}>
+              {t('cultures.aucuneParcelleCarte')}
+            </div>
+          )}
           {parcelles.map(p => {
             const status = statusOf(p);
             const dotColor = status.tone === 'red' ? COLORS.red : status.tone === 'blue' ? COLORS.blue : COLORS.green;
@@ -4709,20 +4709,18 @@ function CulturesModule({ farmId, highlightProduitId }) {
   useEffect(() => {
     if (highlightProduitId) setTab('stocks');
   }, [highlightProduitId]);
-  // L'état initial était DEFAULT_PARCELLES — trois parcelles fictives portant les identifiants
-  // 1, 2 et 3. Elles n'ont jamais été affichées (le rendu court-circuite tant que `loaded` est
-  // faux), mais la simulation d'irrigation ci-dessous, elle, tournait dessus dès la première
-  // seconde et écrivait au serveur sur ces identifiants. `parcelles.id` étant une séquence
-  // globale, l'identifiant 3 appartient à une vraie parcelle d'une vraie entreprise : tant que
-  // le chargement n'avait pas répondu, un ordre de vanne pouvait partir vers elle. Démarrer à
-  // vide supprime le problème à la racine.
+  // Démarre vide, et rien n'est créé automatiquement. Jusqu'au 2026-09-10, l'état initial
+  // portait trois parcelles fictives d'identifiants 1, 2 et 3 : jamais affichées (le rendu
+  // attend `loaded`), mais la simulation d'irrigation plus bas tournait dessus et écrivait au
+  // serveur sur ces identifiants — or `parcelles.id` est une séquence globale, donc le 3
+  // désigne une vraie parcelle d'une vraie entreprise.
   const [parcelles, setParcelles] = useState([]);
   const [historique, setHistorique] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  // Garde de concurrence : sans elle, deux exécutions rapprochées de l'effet de chargement
-  // (React en mode strict les double en développement, un remontage rapide fait de même)
-  // trouvent toutes deux une liste vide et amorcent chacune les parcelles par défaut — d'où
-  // six parcelles au lieu de trois, constaté en vérification.
+  // Garde de concurrence sur l'effet de chargement. Elle protégeait l'amorçage des parcelles
+  // par défaut (deux exécutions rapprochées trouvaient chacune une liste vide et créaient
+  // chacune trois parcelles) ; l'amorçage a disparu, mais la garde reste utile — elle évite un
+  // double aller-retour réseau au montage, que React double en mode strict.
   const chargementRef = useRef(false);
 
   const normalizeParcelle = useCallback((p) => ({
@@ -4734,34 +4732,18 @@ function CulturesModule({ farmId, highlightProduitId }) {
     y: Number(p.y),
   }), []);
 
-  const seedDefaultParcelles = useCallback(async () => {
-    const created = [];
-    for (const p of DEFAULT_PARCELLES) {
-      try {
-        const { parcelle } = await createParcelle({
-          nom: p.nom, culture: p.culture, humidite: p.humidite, temperature: p.temperature,
-          mode: p.mode, vanneOuverte: p.vanneOuverte, seuil: p.seuil, x: p.x, y: p.y,
-        });
-        if (parcelle) created.push(normalizeParcelle(parcelle));
-      } catch (err) {
-        console.error('[seedDefaultParcelles]', err);
-      }
-    }
-    return created;
-  }, [normalizeParcelle]);
-
   useEffect(() => {
     if (chargementRef.current) return;
     chargementRef.current = true;
     (async () => {
       try {
+        // Aucune parcelle de démonstration n'est créée : une exploitation qui s'inscrit part
+        // d'une base vide et saisit ses vraies parcelles. C'était d'ailleurs déjà l'intention
+        // affichée ailleurs dans ce fichier (« Cultures démarre volontairement vide plutôt que
+        // d'inventer des données agricoles », au-dessus de DEFAULT_STOCKS), que l'amorçage
+        // contredisait.
         const { parcelles: fetched } = await getParcelles();
-        if (fetched.length === 0) {
-          const seeded = await seedDefaultParcelles();
-          setParcelles(seeded);
-        } else {
-          setParcelles(fetched.map(normalizeParcelle));
-        }
+        setParcelles(fetched.map(normalizeParcelle));
         const { historique: fetchedHistorique } = await getParcellesHistorique();
         setHistorique(fetchedHistorique);
       } catch (err) {
@@ -4771,7 +4753,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
         chargementRef.current = false;
       }
     })();
-  }, [farmId, seedDefaultParcelles]);
+  }, [farmId, normalizeParcelle]);
 
   const pushHistorique = useCallback(async (entry) => {
     setHistorique(h => [{ id: `local-${Date.now()}`, date: new Date().toISOString(), parcelle: entry.parcelle, action: entry.action }, ...h].slice(0, 40));
@@ -4938,6 +4920,18 @@ function CulturesModule({ farmId, highlightProduitId }) {
           <Button variant="green" type="submit" disabled={addingParcelle}><Plus size={15} /> {addingParcelle ? t('cultures.adding') : t('common.add')}</Button>
         </form>
       </Card>
+      {/* Une exploitation neuve n'a plus de parcelles de démonstration : sans message, elle
+          verrait un écran vide sous le formulaire sans savoir que c'est normal. */}
+      {parcelles.length === 0 && (
+        <Card>
+          <div style={{ textAlign: 'center', padding: `${SPACE.xl}px 0`, color: COLORS.inkSoft }}>
+            <Sprout size={28} color={COLORS.inkFaint} />
+            <div style={{ fontWeight: 600, color: COLORS.ink, marginTop: SPACE.sm }}>{t('cultures.aucuneParcelle')}</div>
+            <div style={{ fontSize: TEXT.base, marginTop: SPACE.xs }}>{t('cultures.aucuneParcelleAide')}</div>
+          </div>
+        </Card>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: SPACE.lg }}>
         {parcelles.map(p => {
           const needsWater = p.humidite < p.seuil;

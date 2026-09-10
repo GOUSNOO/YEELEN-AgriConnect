@@ -4188,3 +4188,35 @@ Entreprise nettoyée, image frontend reconstruite.
 parcelles de démonstration (« Parcelle A / Maïs / 46 % ») écrites dans sa base ? C'est un choix
 d'accueil, pas un défaut — mais un nouvel utilisateur doit aujourd'hui les supprimer avant de
 saisir les siennes.
+
+### 2026-09-10 — Plus de parcelles de démonstration à l'inscription
+
+Suite de la correction précédente, sur décision de l'utilisateur. `CulturesModule` créait trois
+parcelles (« Parcelle A / Maïs », etc.) dans la base de toute entreprise arrivant avec une liste
+vide. Un nouvel utilisateur devait les supprimer avant de saisir les siennes.
+
+Le code se contredisait d'ailleurs déjà : le commentaire au-dessus de `DEFAULT_STOCKS` affirme
+que « Cultures démarre volontairement vide plutôt que d'inventer des données agricoles », juste
+au-dessus de stocks de démonstration pour le Poulailler. L'amorçage des parcelles disait
+l'inverse. Retiré : `DEFAULT_PARCELLES`, `seedDefaultParcelles` et la branche de chargement qui
+l'appelait. Le chargement se contente désormais de lire ce que le serveur renvoie.
+
+**Deux états vides ajoutés**, sans quoi une exploitation neuve verrait deux écrans muets :
+l'onglet Parcelles affiche une carte « Aucune parcelle enregistrée / Ajoutez votre première
+parcelle avec le formulaire ci-dessus », et le fond de la Carte porte « La carte affichera vos
+parcelles dès que vous en aurez ajouté une ». `ParcelMapTab` gérait déjà l'absence de parcelle
+sans planter (`{selected && …}`), il lui manquait seulement de le dire.
+
+**Les entreprises existantes gardent leurs parcelles.** Ce sont leurs données maintenant,
+possiblement modifiées ; rien n'a été supprimé en base. Elles peuvent les retirer depuis l'écran
+si elles le souhaitent.
+
+**Vérification** — build, `oxlint` et 130/130 tests verts. Sur une entreprise jetable neuve :
+aucune parcelle créée (0 en base, confirmé), les deux états vides affichés, puis ajout manuel
+d'une parcelle « Parcelle Nord / Sorgho » — l'état vide disparaît, la parcelle apparaît, une
+seule ligne en base. Contrôle final : les trois entreprises réelles ont toujours leur compte de
+parcelles inchangé. Entreprise nettoyée, image frontend reconstruite.
+
+**Non traité, à décider séparément** : Poulailler et Pisciculture amorcent eux aussi des stocks
+de démonstration (`DEFAULT_STOCKS`, `DEFAULT_STOCKS_PISCICULTURE` — aliment, œufs, alevins…).
+La demande portait sur les parcelles ; le même raisonnement leur est applicable si voulu.

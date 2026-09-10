@@ -338,7 +338,10 @@
       "statusHighTemp": "Température élevée",
       "statusToWater": "À arroser",
       "statusNormal": "Normale"
-    }
+    },
+    "aucuneParcelle": "Aucune parcelle enregistrée",
+    "aucuneParcelleAide": "Ajoutez votre première parcelle avec le formulaire ci-dessus.",
+    "aucuneParcelleCarte": "La carte affichera vos parcelles dès que vous en aurez ajouté une."
   },
   "stocks": {
     "loading": "Chargement des stocks…",

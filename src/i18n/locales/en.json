@@ -338,7 +338,10 @@
       "statusHighTemp": "High temperature",
       "statusToWater": "Needs watering",
       "statusNormal": "Normal"
-    }
+    },
+    "aucuneParcelle": "No plot recorded",
+    "aucuneParcelleAide": "Add your first plot using the form above.",
+    "aucuneParcelleCarte": "The map will show your plots as soon as you add one."
   },
   "stocks": {
     "loading": "Loading stock…",
