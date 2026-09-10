@@ -82,7 +82,11 @@ describe('Devis — préparation du message WhatsApp', () => {
     expect(res.status).toBe(200);
     expect(res.body.estFacture).toBe(true);
     // Le mot compte : le client reçoit une facture, l'annoncer comme un devis ferait douter.
-    expect(res.body.message).toContain(`facture ${avant.numero}`);
+    // Le numéro cité est celui de la FACTURE, pas celui du devis : c'est ce que le client lira
+    // sur sa pièce, et citer l'autre le renverrait à une référence introuvable.
+    expect(avant.move.name).toMatch(/^FAC\/\d{4}\/\d{4}$/);
+    expect(res.body.message).toContain(`facture ${avant.move.name}`);
+    expect(res.body.message).not.toContain(avant.numero);
     expect(res.body.message).not.toContain('votre devis');
 
     // Le taux d'une pièce facturée est figé à l'émission : la facture comptable a été postée à

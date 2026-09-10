@@ -84,3 +84,39 @@ describe('formatMontant / libelleDevise', () => {
     expect(formatMontant(null, 'XOF')).toBe('0');
   });
 });
+
+// Identité du document (2026-09-11) : un devis facturé porte le numéro de sa facture.
+describe('identiteDocument', () => {
+  it('sans facture liée : c’est un devis, avec son propre numéro', () => {
+    const id = devisPdf.identiteDocument({ numero: 'DEV-2026-0001', statut: 'Envoyé' });
+    expect(id).toEqual({ estFacture: false, titre: 'DEVIS', numero: 'DEV-2026-0001', reference: null });
+  });
+
+  it('avec facture liée : titre FACTURE, numéro de la facture, devis en référence', () => {
+    const id = devisPdf.identiteDocument({ numero: 'DEV-2026-0001', statut: 'Facturé', move: { name: 'FAC/2026/0007' } });
+    expect(id).toEqual({ estFacture: true, titre: 'FACTURE', numero: 'FAC/2026/0007', reference: 'DEV-2026-0001' });
+  });
+
+  it('accepte factureNom, la forme que renvoient les routes publiques', () => {
+    const id = devisPdf.identiteDocument({ numero: 'DEV-2026-0002', factureNom: 'FAC/2026/0008' });
+    expect(id.numero).toBe('FAC/2026/0008');
+  });
+
+  it('se fie à la facture liée et non au statut : une facture PAYÉE reste une facture', () => {
+    // Le code d'origine testait `statut === 'Facturé'`, ce qui imprimait « DEVIS » sur une
+    // facture déjà payée — « Payé » est un statut distinct.
+    const id = devisPdf.identiteDocument({ numero: 'DEV-2026-0003', statut: 'Payé', move: { name: 'FAC/2026/0009' } });
+    expect(id.titre).toBe('FACTURE');
+  });
+});
+
+describe('nomFichier', () => {
+  it('remplace les « / » d’un numéro de pièce : ils casseraient le téléchargement', () => {
+    expect(devisPdf.nomFichier('FAC/2026/0001')).toBe('FAC-2026-0001');
+  });
+
+  it('laisse intact un numéro de devis, et supporte l’absence de numéro', () => {
+    expect(devisPdf.nomFichier('DEV-2026-0001')).toBe('DEV-2026-0001');
+    expect(devisPdf.nomFichier(null)).toBe('document');
+  });
+});

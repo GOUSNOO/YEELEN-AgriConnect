@@ -4921,3 +4921,44 @@ entreprise jetable : facture comptable créée en `FAC/2026/0001`, bouton « Env
 WhatsApp » présent sur la pièce facturée, et lien produit capturé sans rien envoyer
 (`window.open` intercepté) — message et numéro conformes. Écrans voisins rouverts (liste Ventes,
 écran Factures). Entreprise jetable purgée, images Docker backend et frontend reconstruites.
+
+### 2026-09-11 — La pièce facturée porte enfin un numéro de facture
+
+Suite immédiate du renommage INV → FAC : le numéro comptable existait bien, mais **le client ne
+le voyait jamais**. Le PDF, la page publique et le message WhatsApp citaient tous
+`devis.numero` — une facture arrivait donc chez le client sous le numéro `DEV-2026-0001`.
+
+**Principe retenu : deux pièces, deux numéros.** Le devis garde le sien, la facture affiche le
+sien, et le numéro du devis reste imprimé en « Référence devis » — l'équivalent d'`invoice_origin`
+dans l'ERP de référence, où un bon de commande et sa facture ne partagent jamais leur
+numérotation. Renommer `devis.numero` à la facturation aurait cassé la traçabilité du devis pour
+un résultat moins juste.
+
+Un helper exporté (donc testable) porte la décision : `identiteDocument(devis)` renvoie titre,
+numéro et référence. **Il se fie à la facture liée, pas au statut** — et c'est un défaut réel
+corrigé au passage : l'ancien test `statut === 'Facturé'` imprimait « DEVIS » sur une facture
+déjà payée, puisque « Payé » est un statut distinct. Un test le garde explicitement.
+
+#### Le piège du nom de fichier
+
+`FAC/2026/0001` contient des `/`, interdits dans un nom de fichier : l'en-tête
+`Content-Disposition: filename="FAC/2026/0001.pdf"` aurait cassé le téléchargement. D'où
+`nomFichier()`, testé, qui produit `FAC-2026-0001.pdf` sans toucher au numéro affiché. Vérifié en
+conditions réelles sur les trois routes PDF.
+
+#### Trois surfaces à aligner, pas une
+
+La route PDF publique et la route de consultation publique construisent **leur propre SELECT**
+au lieu de passer par `getDevisComplet` : sans y joindre `account_move`, le client aurait reçu
+« DEVIS » par le lien qu'on venait de lui envoyer, pendant que le propriétaire voyait « FACTURE ».
+Les deux jointures ont été ajoutées, et la page publique affiche désormais le numéro de facture.
+Le message WhatsApp cite le même numéro que la pièce — les trois surfaces disent enfin la même
+chose.
+
+**Vérification** — 6 tests unitaires ajoutés (identité du document, nom de fichier), **439/439**
+tests d'intégration, build et 130/130 frontend. En conditions réelles sur une entreprise jetable :
+PDF propriétaire, PDF public et page publique d'une pièce facturée portent tous `FAC/2026/0001`
+avec `filename="FAC-2026-0001.pdf"`, tandis qu'un devis non facturé de la même entreprise reste
+`DEV-2026-0001`. Message WhatsApp conforme. Écran Ventes rouvert — la liste des commandes garde
+les numéros de devis, ce qui est sa nature. Entreprise jetable purgée, images Docker
+reconstruites.

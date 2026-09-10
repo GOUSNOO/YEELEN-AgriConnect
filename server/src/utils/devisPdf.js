@@ -33,6 +33,27 @@ export function formatMontant(n, devise) {
 }
 
 // Génère le PDF d'un devis/facture et l'envoie directement dans la réponse HTTP (streaming).
+// Identité du document : un devis facturé N'EST PLUS un devis. Il porte alors le numéro de sa
+// facture comptable (FAC/2026/0001) et non celui du devis (DEV-2026-0001) — deux pièces, deux
+// numéros, comme dans l'ERP de référence où un bon de commande et sa facture ne partagent pas
+// leur numérotation. Le numéro du devis reste cité en référence, comme invoice_origin.
+//
+// La présence d'une facture liée fait foi, PAS le statut : « Facturé » n'est qu'un état parmi
+// « Non payé », « Payé partiellement » et « Payé », et se fier au seul « Facturé » imprimait
+// « DEVIS » sur une facture déjà payée.
+export function identiteDocument(devis) {
+  const numeroFacture = devis.factureNom || (devis.move && devis.move.name) || null;
+  return numeroFacture
+    ? { estFacture: true, titre: 'FACTURE', numero: numeroFacture, reference: devis.numero }
+    : { estFacture: false, titre: 'DEVIS', numero: devis.numero, reference: null };
+}
+
+// Un numéro de pièce comptable contient des « / » (FAC/2026/0001), interdits dans un nom de
+// fichier : le téléchargement casserait. On les remplace, sans toucher au numéro affiché.
+export function nomFichier(numero) {
+  return String(numero || 'document').replace(/[\\/:*?"<>|]/g, '-');
+}
+
 // devis doit contenir : numero, statut, date, clientNom, clientPrenom, entrepriseNom,
 // lignes (produit, quantite, prixUnitaire), total, notes, signataireNom, signatureData (base64 PNG), dateSignature
 export function streamDevisPdf(res, devis) {
@@ -47,7 +68,8 @@ export function streamDevisPdf(res, devis) {
   // `pipe` démarre le flux avant même que tout le contenu ait été décrit ci-dessous —
   // PDFKit écrit au fil de l'eau, la réponse HTTP se termine quand doc.end() est appelé.
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${devis.numero}.pdf"`);
+  const identite = identiteDocument(devis);
+  res.setHeader('Content-Disposition', `inline; filename="${nomFichier(identite.numero)}.pdf"`);
   doc.pipe(res);
 
   // En-tête : société à gauche, informations client à droite. Positionnement par
@@ -57,12 +79,15 @@ export function streamDevisPdf(res, devis) {
   const headerTop = doc.y;
 
   doc.fontSize(18).fillColor('#000').text(devis.entrepriseNom || 'Entreprise', 50, headerTop, { width: 250 });
-  // Le libellé "FACTURE" vs "DEVIS" dépend uniquement du statut — reflète le cycle de
-  // vie Brouillon→Envoyé→Signé→Facturé documenté dans CLAUDE.md, pas un champ dédié.
-  doc.fontSize(13).fillColor('#2d6a4f').text(devis.statut === 'Facturé' ? 'FACTURE' : 'DEVIS', 50, headerTop + 24);
+  doc.fontSize(13).fillColor('#2d6a4f').text(identite.titre, 50, headerTop + 24);
   doc.fillColor('#000').fontSize(10);
-  doc.text(`Numéro : ${devis.numero}`, 50, headerTop + 42);
+  doc.text(`Numéro : ${identite.numero}`, 50, headerTop + 42);
   doc.text(`Date : ${new Date(devis.date).toLocaleDateString('fr-FR')}`, 50, headerTop + 56);
+  // La référence du devis d'origine reste sur la facture : c'est elle que le client a
+  // approuvée, et elle relie les deux pièces de son côté comme du nôtre.
+  if (identite.reference) {
+    doc.text(`Référence devis : ${identite.reference}`, 50, headerTop + 70);
+  }
 
   doc.fontSize(11).text('Client', 350, headerTop, { width: 200, align: 'left' });
   doc.fontSize(10);

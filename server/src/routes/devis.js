@@ -6,7 +6,7 @@ import { pool } from '../db.js';
 import { sendDevisEmail } from '../services/mailer.js';
 import { syncDevisPaiement } from '../utils/financeSync.js';
 import { applyVenteLignesToStock, reverseVenteLignesToStock } from '../utils/stockSync.js';
-import { streamDevisPdf } from '../utils/devisPdf.js';
+import { streamDevisPdf, identiteDocument } from '../utils/devisPdf.js';
 import { logFieldChanges, getJournal } from '../utils/journalModifications.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 import { genererEcheancesDepuisTerme } from './paymentTerms.js';
@@ -625,9 +625,12 @@ router.post('/:id/lien-whatsapp', authRequired, async (req, res) => {
     // WhatsApp par lien click-to-chat ne transporte aucune pièce jointe : c'est un lien vers la
     // pièce, pas le PDF lui-même.
     const nomClient = `${devis.clientPrenom || ''} ${devis.clientNom}`.trim();
-    const message = dejaFacture
-      ? `Bonjour ${nomClient}, voici votre facture ${devis.numero} de ${entrepriseNom} : ${lienConsultation}`
-      : `Bonjour ${nomClient}, voici votre devis ${devis.numero} de ${entrepriseNom} : ${lienConsultation}`;
+    // Le numéro cité est celui que le client lira sur sa pièce (identiteDocument) : citer le
+    // numéro du devis sur une facture le renverrait à une référence introuvable sur son document.
+    const identite = identiteDocument(devis);
+    const message = identite.estFacture
+      ? `Bonjour ${nomClient}, voici votre facture ${identite.numero} de ${entrepriseNom} : ${lienConsultation}`
+      : `Bonjour ${nomClient}, voici votre devis ${identite.numero} de ${entrepriseNom} : ${lienConsultation}`;
 
     return res.json({
       lienConsultation,
@@ -762,10 +765,14 @@ router.get('/public/:token', async (req, res) => {
               d.signature_data AS "signatureData", d.signataire_nom AS "signataireNom",
               to_char(d.date_signature, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "dateSignature",
               c.nom AS "clientNom", c.prenom AS "clientPrenom",
-              e.nom AS "entrepriseNom", e.devise, e.locale
+              e.nom AS "entrepriseNom", e.devise, e.locale,
+              -- Même identité que le PDF : la page que le client ouvre depuis son lien doit
+              -- afficher le numéro de facture, pas celui du devis.
+              m.name AS "factureNom"
        FROM devis d
        LEFT JOIN contacts c ON c.id = d.client_id
        LEFT JOIN entreprises e ON e.id = d.entreprise_id
+       LEFT JOIN account_move m ON m.id = d.move_id
        WHERE d.token_public = $1`,
       [req.params.token]
     );
@@ -1228,10 +1235,15 @@ router.get('/public/:token/pdf', async (req, res) => {
     const devisResult = await pool.query(
       `SELECT d.id, d.numero, d.statut, d.date, d.total::float8 AS total, d.notes,
               d.signature_data AS "signatureData", d.signataire_nom AS "signataireNom", d.date_signature AS "dateSignature",
-              c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom"
+              c.nom AS "clientNom", c.prenom AS "clientPrenom", e.nom AS "entrepriseNom",
+              -- Le PDF public doit porter le même numéro que celui du propriétaire : cette route
+              -- construit son propre SELECT au lieu de passer par getDevisComplet, donc la facture
+              -- liée doit être jointe ici aussi, sans quoi le client recevrait « DEVIS ».
+              m.name AS "factureNom"
        FROM devis d
        LEFT JOIN contacts c ON c.id = d.client_id
        LEFT JOIN entreprises e ON e.id = d.entreprise_id
+       LEFT JOIN account_move m ON m.id = d.move_id
        WHERE d.token_public = $1`,
       [req.params.token]
     );

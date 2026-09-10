@@ -169,7 +169,7 @@ export default function DevisPublicView({ token }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: SPACE.sm }}>
                 <div>
                   <div style={{ fontSize: TEXT.sm, color: C.inkSoft }}>{devis.entrepriseNom}</div>
-                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.xl, color: C.ink }}>{devis.numero}</div>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: TEXT.xl, color: C.ink }}>{devis.factureNom || devis.numero}</div>
                 </div>
                 <Badge tone={devis.statut === 'Signé' || devis.statut === 'Facturé' ? 'green' : devis.statut === 'Annulé' ? 'red' : 'ochre'}>{devis.statut}</Badge>
               </div>
