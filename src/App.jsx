@@ -71,6 +71,7 @@ import RhReferentiels from './components/RhReferentiels';
 import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
+import { useListeOutils, BarreOutilsListe, EnteteTriable, LigneGroupe, PiedListe } from './components/ListeOutils.jsx';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
 const FacturesModule = lazy(() => import('./components/FacturesModule'));
 import ProduitTemplatesPanel from './components/ProduitTemplatesPanel';
@@ -1164,6 +1165,57 @@ function DevisModule({ clientsListe, filtreStatut }) {
   // séparée — mêmes devis, juste restreints au statut concerné.
   const devisAffiches = filtreStatut ? devisListe.filter(d => d.statut === filtreStatut) : devisListe;
 
+  // Filtres nommés repris de la vue de recherche de l'ERP de référence, adaptés à nos statuts :
+  // ce sont les questions qu'on pose vraiment à une liste de devis (« lesquels attendent une
+  // signature ? », « lesquels sont à facturer ? »), pas une case par valeur possible.
+  const outilsDevis = useListeOutils(devisAffiches, useMemo(() => ({
+    rechercheChamps: (d) => [d.numero, d.clientNom, d.clientPrenom, d.total],
+    filtres: [
+      { id: 'brouillon', labelKey: 'devis.statut.Brouillon', test: (d) => ['Brouillon', 'Devis'].includes(d.statut) },
+      { id: 'envoye', labelKey: 'devis.statut.Envoyé', test: (d) => d.statut === 'Envoyé' },
+      { id: 'signe', labelKey: 'devis.statut.Signé', test: (d) => d.statut === 'Signé' },
+      { id: 'facture', labelKey: 'devis.filtreFacture', test: (d) => ['Facturé', 'Non payé', 'Payé partiellement', 'Payé'].includes(d.statut) },
+      { id: 'expire', labelKey: 'devis.expired', test: (d) => Boolean(d.expired) },
+    ],
+    groupes: [
+      { id: 'statut', labelKey: 'common.status', valeur: (d) => d.statut || '—' },
+      { id: 'client', labelKey: 'devis.client', valeur: (d) => `${d.clientPrenom || ''} ${d.clientNom || ''}`.trim() || '—' },
+      { id: 'mois', labelKey: 'listes.groupeMois', valeur: (d) => (d.date || '').slice(0, 7) || '—' },
+    ],
+    colonnes: {
+      numero: (d) => d.numero,
+      date: (d) => d.date,
+      client: (d) => `${d.clientPrenom || ''} ${d.clientNom || ''}`.trim(),
+      total: (d) => Number(d.total) || 0,
+      statut: (d) => d.statut,
+    },
+    triParDefaut: { colonne: 'date', sens: 'desc' },
+  }), []));
+
+  // Rendu d'une ligne, extrait pour servir aux deux cas : liste à plat et liste regroupée.
+  const ligneDevis = (d) => (
+                  <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
+                    <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{d.numero}</td>
+                    <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(d.date)}</td>
+                    <td>{d.clientPrenom} {d.clientNom}</td>
+                    <td style={{ fontWeight: 600 }}>{enDevise(d.total, d.devise)}</td>
+                    <td>
+                      <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
+                      {d.expired && <span style={{ marginLeft: SPACE.sm }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
+                    </td>
+                    <td style={{ textAlign: 'right', paddingRight: SPACE.lg }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
+                        {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
+                          <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
+                        )}
+                        {d.statut === 'Brouillon' && (
+                          <button onClick={() => handleDelete(d.id, d.numero)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <datalist id={catalogDatalistId}>
@@ -1364,6 +1416,11 @@ function DevisModule({ clientsListe, filtreStatut }) {
         </div>
       )}
 
+      {/* Recherche, filtres et regroupement s'appliquent aux deux vues ; en Kanban, seuls la
+          recherche et les filtres ont un effet (ses colonnes regroupent déjà par statut, et
+          il n'y a rien à paginer). */}
+      {!enFormulaire && <BarreOutilsListe etat={outilsDevis} placeholderRecherche={t("devis.rechercher")} />}
+
       {!enFormulaire && (
 
       vueDevis === 'kanban' ? (
@@ -1373,7 +1430,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           </div>
         ) : (
           <DevisKanban
-            devisListe={devisAffiches}
+            devisListe={outilsDevis.filtrees}
             statutTone={statutTone}
             onEnvoyer={handleEnvoyer}
             onValiderManuel={handleValiderManuel}
@@ -1388,50 +1445,41 @@ function DevisModule({ clientsListe, filtreStatut }) {
           <div style={{ padding: SPACE.xl, display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft }}>
             <Loader2 size={16} className="spin" /> {t("common.loading")}
           </div>
-        ) : devisAffiches.length === 0 ? (
+        ) : outilsDevis.nbFiltrees === 0 ? (
           <div style={{ padding: SPACE.xl, color: COLORS.inkSoft, fontSize: TEXT.base }}>
-            {filtreStatut ? t('devis.emptyAFacturer') : t('devis.emptyList')}
+            {outilsDevis.actif
+              ? t('listes.aucunResultat')
+              : (filtreStatut ? t('devis.emptyAFacturer') : t('devis.emptyList'))}
           </div>
         ) : (
+          <>
           <DataTable>
             <thead>
               <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
                 {/* Ordre repris de la liste des devis de l'ERP de référence : numéro, date,
                     client, total, état. La date manquait complètement — une liste de devis
                     sans date ne se lit pas et ne se recoupe avec rien. */}
-                <th>{t("devis.colNumero")}</th>
-                <th>{t("common.date")}</th>
-                <th>{t("devis.client")}</th>
-                <th>{t("common.total")}</th>
-                <th>{t("common.status")}</th>
+                <EnteteTriable etat={outilsDevis} colonne="numero">{t("devis.colNumero")}</EnteteTriable>
+                <EnteteTriable etat={outilsDevis} colonne="date">{t("common.date")}</EnteteTriable>
+                <EnteteTriable etat={outilsDevis} colonne="client">{t("devis.client")}</EnteteTriable>
+                <EnteteTriable etat={outilsDevis} colonne="total">{t("common.total")}</EnteteTriable>
+                <EnteteTriable etat={outilsDevis} colonne="statut">{t("common.status")}</EnteteTriable>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {devisAffiches.map(d => (
-                <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(d.id)}>
-                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{d.numero}</td>
-                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(d.date)}</td>
-                  <td>{d.clientPrenom} {d.clientNom}</td>
-                  <td style={{ fontWeight: 600 }}>{enDevise(d.total, d.devise)}</td>
-                  <td>
-                    <Badge tone={statutTone[d.statut] || 'blue'}>{t(`devis.statut.${d.statut}`, { defaultValue: d.statut })}</Badge>
-                    {d.expired && <span style={{ marginLeft: SPACE.sm }}><Badge tone="red">{t('devis.expired')}</Badge></span>}
-                  </td>
-                  <td style={{ textAlign: 'right', paddingRight: SPACE.lg }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
-                      {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
-                        <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
-                      )}
-                      {d.statut === 'Brouillon' && (
-                        <button onClick={() => handleDelete(d.id, d.numero)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {outilsDevis.groupes
+                ? outilsDevis.groupes.map(groupe => (
+                    <React.Fragment key={groupe.cle}>
+                      <LigneGroupe groupe={groupe} colSpan={6} onToggle={outilsDevis.basculerGroupe} />
+                      {!groupe.replie && groupe.membres.map(ligneDevis)}
+                    </React.Fragment>
+                  ))
+                : outilsDevis.lignesAffichees.map(ligneDevis)}
             </tbody>
           </DataTable>
+          <PiedListe etat={outilsDevis} />
+          </>
         )}
       </Card>
       )
@@ -2351,6 +2399,29 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   const enFiche = Boolean(detailDoc);
   const enFormulaire = creationOuverte || enFiche;
   const retourListe = () => { setCreationOuverte(false); setDetailDoc(null); };
+
+  // Mêmes outils que la liste des devis, avec les questions propres à l'achat.
+  const outilsAchats = useListeOutils(docsAffiches, useMemo(() => ({
+    rechercheChamps: (d) => [d.numero, d.fournisseurNom, d.notes, d.total],
+    filtres: [
+      { id: 'brouillon', labelKey: 'achats.statut.Brouillon', test: (d) => (d.statut || 'Reçu') === 'Brouillon' },
+      { id: 'commande', labelKey: 'achats.statut.Commandé', test: (d) => d.statut === 'Commandé' },
+      { id: 'recu', labelKey: 'achats.statut.Reçu', test: (d) => (d.statut || 'Reçu') === 'Reçu' },
+    ],
+    groupes: [
+      { id: 'statut', labelKey: 'common.status', valeur: (d) => d.statut || 'Reçu' },
+      { id: 'fournisseur', labelKey: 'achats.fournisseur', valeur: (d) => d.fournisseurNom || '—' },
+      { id: 'mois', labelKey: 'listes.groupeMois', valeur: (d) => (d.date || '').slice(0, 7) || '—' },
+    ],
+    colonnes: {
+      numero: (d) => d.numero,
+      date: (d) => d.date,
+      fournisseur: (d) => d.fournisseurNom,
+      total: (d) => Number(d.total) || 0,
+      statut: (d) => d.statut || 'Reçu',
+    },
+    triParDefaut: { colonne: 'date', sens: 'desc' },
+  }), []));
   useEffect(() => {
     (async () => {
       try {
@@ -2657,6 +2728,37 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
     setTimeout(() => printWindow.print(), 250);
   };
 
+  // Extrait pour servir aux deux rendus : liste à plat et liste regroupée.
+  const ligneAchat = (doc) => {
+                const statut = doc.statut || 'Reçu';
+                const modifiable = ['Brouillon', 'Commandé'].includes(statut);
+                return (
+                <tr key={doc.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(doc)}>
+                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{doc.numero || '—'}</td>
+                  <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(doc.date)}</td>
+                  <td>{doc.fournisseurNom}</td>
+                  <td style={{ fontWeight: 600 }}>{fmtMoney(doc.total)}</td>
+                  <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
+                  {/* Les transitions d'état (commander, marquer reçu, annuler la réception) sont
+                      passées dans l'en-tête de la fiche, avec la barre de chevrons — comme pour un
+                      devis, et comme dans l'ERP de référence, où l'action vit sur le document et non
+                      dans la liste. Il ne reste ici que modifier et supprimer, soit exactement les
+                      deux icônes de la liste des devis. Le chevron d'ouverture disparaît : la ligne
+                      entière est cliquable. */}
+                  <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.sm }}>
+                      {modifiable && (
+                        <>
+                          <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
+                          <button onClick={() => removeDoc(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                );
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
       <datalist id={catalogDatalistId}>
@@ -2742,6 +2844,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         </Card>
       )}
       {!enFormulaire && (
+        <BarreOutilsListe etat={outilsAchats} placeholderRecherche={t("achats.rechercher")} />
+      )}
+
+      {!enFormulaire && (
       <Card style={{ padding: 0 }}>
         <DataTable>
           <thead>
@@ -2749,48 +2855,28 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 référence, date, fournisseur, total, état. La référence manquait — un achat
                 n'avait aucun identifiant lisible, impossible à citer face à un fournisseur. */}
             <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>{t('achats.colNumero')}</th>
-              <th>{t('common.date')}</th>
-              <th>{t('achats.fournisseur')}</th>
-              <th>{t('common.total')}</th>
-              <th>{t('common.status')}</th>
+              <EnteteTriable etat={outilsAchats} colonne="numero">{t('achats.colNumero')}</EnteteTriable>
+              <EnteteTriable etat={outilsAchats} colonne="date">{t('common.date')}</EnteteTriable>
+              <EnteteTriable etat={outilsAchats} colonne="fournisseur">{t('achats.fournisseur')}</EnteteTriable>
+              <EnteteTriable etat={outilsAchats} colonne="total">{t('common.total')}</EnteteTriable>
+              <EnteteTriable etat={outilsAchats} colonne="statut">{t('common.status')}</EnteteTriable>
               <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
-            {docsAffiches.length === 0 ? (
-              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>{filtreStatut ? t('achats.emptyARecevoir') : t('achats.emptyTable')}</td></tr>
-            ) : docsAffiches.map(doc => {
-              const statut = doc.statut || 'Reçu';
-              const modifiable = ['Brouillon', 'Commandé'].includes(statut);
-              return (
-              <tr key={doc.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(doc)}>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{doc.numero || '—'}</td>
-                <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base }}>{formatDateFr(doc.date)}</td>
-                <td>{doc.fournisseurNom}</td>
-                <td style={{ fontWeight: 600 }}>{fmtMoney(doc.total)}</td>
-                <td><Badge tone={statut === 'Reçu' ? 'green' : statut === 'Commandé' ? 'blue' : 'ochre'}>{t(`achats.statut.${statut}`, { defaultValue: statut })}</Badge></td>
-                {/* Les transitions d'état (commander, marquer reçu, annuler la réception) sont
-                    passées dans l'en-tête de la fiche, avec la barre de chevrons — comme pour un
-                    devis, et comme dans l'ERP de référence, où l'action vit sur le document et non
-                    dans la liste. Il ne reste ici que modifier et supprimer, soit exactement les
-                    deux icônes de la liste des devis. Le chevron d'ouverture disparaît : la ligne
-                    entière est cliquable. */}
-                <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.sm }}>
-                    {modifiable && (
-                      <>
-                        <button onClick={() => startEdit(doc)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
-                        <button onClick={() => removeDoc(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              );
-            })}
+            {outilsAchats.nbFiltrees === 0 ? (
+              <tr><td colSpan={6} style={{ color: COLORS.inkSoft }}>{outilsAchats.actif ? t('listes.aucunResultat') : (filtreStatut ? t('achats.emptyARecevoir') : t('achats.emptyTable'))}</td></tr>
+            ) : outilsAchats.groupes ? (
+              outilsAchats.groupes.map(groupe => (
+                <React.Fragment key={groupe.cle}>
+                  <LigneGroupe groupe={groupe} colSpan={6} onToggle={outilsAchats.basculerGroupe} />
+                  {!groupe.replie && groupe.membres.map(ligneAchat)}
+                </React.Fragment>
+              ))
+            ) : outilsAchats.lignesAffichees.map(ligneAchat)}
           </tbody>
         </DataTable>
+          <PiedListe etat={outilsAchats} />
       </Card>
       )}
       {detailDoc && (

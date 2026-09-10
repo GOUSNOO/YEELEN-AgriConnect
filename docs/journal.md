@@ -4088,3 +4088,58 @@ chevrons. **Les deux cycles de création menés jusqu'au bout** par saisie réel
 (événements React déclenchés, pas un appel d'API déguisé) : `ACH-2026-0002` et `DEV-2026-0002`
 créés, écran revenu à la liste, documents visibles dedans. Absence de débordement horizontal
 contrôlée. Entreprise nettoyée après coup.
+
+### 2026-09-10 — Fonctions de liste : recherche, filtres, regroupement, tri, pagination
+
+Suite de la comparaison avec l'ERP de référence. Après la structure des écrans, la liste
+elle-même : elle n'avait que ses colonnes. Au-delà d'une vingtaine de pièces, retrouver un devis
+signé de tel client relevait du défilement à l'œil.
+
+**Une brique partagée, `src/components/ListeOutils.jsx`** — le hook `useListeOutils` porte tout
+le calcul (recherche, filtres, tri, regroupement, pagination) et les composants
+`BarreOutilsListe` / `EnteteTriable` / `LigneGroupe` / `PiedListe` le rendu des contrôles. **Le
+rendu des cellules reste dans chaque module** : les deux listes ont des cellules très différentes
+(pastilles d'état, boutons d'action, montants en devise), et les décrire en configuration aurait
+coûté plus de cérémonie que le partage n'en fait gagner pour deux appelants. Le partage porte
+donc sur la logique, pas sur le tableau.
+
+Deux décisions à connaître avant de retoucher :
+
+- **Les filtres se cumulent en OU, pas en ET.** Cocher « Brouillon » et « Signé » montre les
+  deux. En ET, deux statuts exclusifs ne renverraient jamais rien.
+- **Le regroupement désactive la pagination.** Couper un groupe en travers d'une page le rendrait
+  illisible, et regrouper sert précisément à réduire ce qu'on a sous les yeux.
+
+Tout se calcule côté client, sur la liste déjà chargée — cohérent avec le reste de l'application,
+qui charge les documents d'une entreprise en une fois. Une pagination serveur deviendrait
+nécessaire à un volume que ces écrans n'atteignent pas.
+
+En vue Kanban, la recherche et les filtres s'appliquent aussi (ses colonnes regroupent déjà par
+statut, et il n'y a rien à y paginer).
+
+**Une erreur de ma part, trouvée en vérifiant.** L'insertion de la barre d'outils des achats
+s'appuyait sur un motif `</div></Card>)}` qui n'était pas unique : elle a atterri dans
+`ParcelMapTab`, à 2 600 lignes de sa cible. Le build passait — `enFormulaire` et `outilsAchats`
+y sont simplement indéfinis — mais l'onglet Carte aurait planté au premier rendu. Elle n'est
+apparue qu'en cherchant le champ de recherche dans l'écran Achats et en ne le trouvant pas.
+Leçon déjà connue mais reprise ici : ancrer un remplacement sur un motif qui n'apparaît qu'une
+fois, ou vérifier le nombre d'occurrences avant d'écrire.
+
+**Un test creux, corrigé aussi.** La première vérification des filtres portait sur 30 devis tous
+au même statut : filtrer par « Brouillon » renvoyait 30, exactement comme sans filtre. Le test ne
+prouvait rien. Statuts diversifiés (18 brouillons / 7 signés / 5 envoyés), puis chaque
+combinaison recoupée avec les comptes en base : 18, 25 (18+7), 7, 12 (7+5), 30 — tous exacts.
+
+**Vérification** — build et `oxlint` verts, **130/130 tests frontend** (+11 : `ListeOutils.test.jsx`
+couvre tri par défaut, inversion, tri numérique des références, recherche multi-champs, cumul des
+filtres, regroupement et repli, pagination et sa désactivation en mode groupé, retour à la
+première page, liste absente). Un de ces tests est lui-même né faux — un paramètre par défaut
+faisait retomber le cas « liste absente » sur les données normales — et a été corrigé.
+En navigateur, sur une entreprise jetable de 30 devis et 30 achats : pagination (1-25 puis
+26-30), recherche par client et par référence, tri par total croissant puis décroissant,
+regroupement par client (3 groupes de 10) et par fournisseur (7+8+8+7), filtres recoupés en base.
+Onglet Carte revérifié après le correctif. Entreprise nettoyée, image frontend reconstruite.
+
+**Observation, non traitée** : sur cette entreprise de test, un rechargement de page a créé une
+seconde série de parcelles par défaut (6 au lieu de 3), suivie de 404 « Parcelle introuvable ».
+C'est antérieur à ce chantier et sans rapport avec lui — signalé plutôt que corrigé en passant.

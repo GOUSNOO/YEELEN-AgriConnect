@@ -509,7 +509,8 @@
     "aRecevoirSubtitle": "Les commandes passées dont la marchandise n'est pas encore arrivée. Marquez-les reçues pour mettre le stock à jour.",
     "nouveau": "Nouvel achat",
     "retourListe": "Retour à la liste",
-    "filAriane": "Achats"
+    "filAriane": "Achats",
+    "rechercher": "Rechercher un achat…"
   },
   "compta": {
     "totalVentes": "Total ventes",
@@ -954,7 +955,9 @@
     },
     "nouveau": "Nouveau devis",
     "retourListe": "Retour à la liste",
-    "filAriane": "Devis"
+    "filAriane": "Devis",
+    "rechercher": "Rechercher un devis…",
+    "filtreFacture": "Facturé"
   },
   "gabarits": {
     "title": "Gabarits & attributs",
@@ -2138,5 +2141,15 @@
     "mfaCodeSent": "Un code a été envoyé à {{sentTo}}. Saisissez-le ci-dessous :",
     "mfaResend": "Renvoyer le code",
     "mfaResent": "Un nouveau code vous a été envoyé par email."
+  },
+  "listes": {
+    "aucunGroupe": "Aucun regroupement",
+    "groupePar": "Regrouper par {{champ}}",
+    "reinitialiser": "Réinitialiser",
+    "plage": "{{debut}}-{{fin}} sur {{total}}",
+    "surTotal": "{{total}} au total",
+    "compte": "{{affiches}} sur {{total}}",
+    "aucunResultat": "Aucun résultat pour cette recherche.",
+    "groupeMois": "Mois"
   }
 }

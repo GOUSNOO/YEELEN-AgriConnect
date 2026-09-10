@@ -509,7 +509,8 @@
     "aRecevoirSubtitle": "Orders placed whose goods have not arrived yet. Mark them received to update stock.",
     "nouveau": "New purchase",
     "retourListe": "Back to list",
-    "filAriane": "Purchases"
+    "filAriane": "Purchases",
+    "rechercher": "Search a purchase…"
   },
   "compta": {
     "totalVentes": "Total sales",
@@ -954,7 +955,9 @@
     },
     "nouveau": "New quote",
     "retourListe": "Back to list",
-    "filAriane": "Quotes"
+    "filAriane": "Quotes",
+    "rechercher": "Search a quote…",
+    "filtreFacture": "Invoiced"
   },
   "gabarits": {
     "title": "Templates & attributes",
@@ -2138,5 +2141,15 @@
     "mfaCodeSent": "A code has been sent to {{sentTo}}. Enter it below:",
     "mfaResend": "Resend code",
     "mfaResent": "A new code has been sent to your email."
+  },
+  "listes": {
+    "aucunGroupe": "No grouping",
+    "groupePar": "Group by {{champ}}",
+    "reinitialiser": "Reset",
+    "plage": "{{debut}}-{{fin}} of {{total}}",
+    "surTotal": "{{total}} in total",
+    "compte": "{{affiches}} of {{total}}",
+    "aucunResultat": "No result for this search.",
+    "groupeMois": "Month"
   }
 }
