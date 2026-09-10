@@ -888,6 +888,18 @@ export async function getContactPrixEffectifs(contactId) {
 
 // Résolution serveur d'un prix effectif (étape 4 alignement produit/stock Odoo — remplace le
 // calcul purement client qu'était prixPourMatch dans DevisModule).
+// Stock par emplacement et registre des mouvements — la donnée existait en base (stock_quants,
+// stock_moves) sans qu'aucune route ne la lise. Voir routes/produits.js.
+export async function getStockEmplacements(module) {
+  return request(`/produits/stock-emplacements?module=${encodeURIComponent(module)}`);
+}
+
+export async function getStockMouvements(module, limite) {
+  const params = new URLSearchParams({ module });
+  if (limite) params.set('limite', String(limite));
+  return request(`/produits/mouvements?${params.toString()}`);
+}
+
 export async function getPrixEffectif({ stockId, contactId, quantite, date }) {
   const params = new URLSearchParams({ stockId });
   if (contactId) params.set('contactId', contactId);

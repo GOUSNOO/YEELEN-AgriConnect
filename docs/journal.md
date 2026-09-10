@@ -4493,3 +4493,42 @@ en tirer aucune des lectures pour lesquelles on tient une comptabilité :
    comptes réellement utilisé par l'entreprise.
 6. **Transferts et prévisionnel** — à ne considérer qu'une fois le reste en place, et seulement
    si l'usage réel les réclame.
+
+### 2026-09-10 — Le stock par emplacement devient visible (chantier 1 de l'audit)
+
+Premier point du classement de l'audit, et le meilleur rapport valeur/coût : la donnée existait,
+juste et maintenue, il manquait une route et un écran.
+
+**Deux routes de lecture** dans `routes/produits.js` :
+- `GET /produits/stock-emplacements?module=` — une ligne par couple produit × emplacement, avec
+  quantité, réservée et disponible. Liste à plat plutôt que matrice : une matrice devient
+  illisible dès qu'un module a beaucoup d'articles, et la liste se regroupe à l'écran par produit
+  ou par emplacement. Les lignes à zéro sont exclues — un quant retombé à zéro n'apprend rien.
+- `GET /produits/mouvements?module=&limite=` — le registre de `stock_moves`, provenance et
+  destination comprises. À ne pas confondre avec `GET /:id/mouvements`, qui lit `stock_mouvements` :
+  **deux tables de mouvements coexistent** dans ce projet, un journal simple par article (un delta,
+  sans emplacement) et ce registre-ci. Les fusionner est un chantier à part ; les exposer toutes
+  les deux, non.
+
+**Un écran**, `StockEmplacementsPanel.jsx`, monté dans `StocksTab` : deux panneaux pliables,
+« Stock par emplacement » et « Mouvements de stock », l'un et l'autre chargés paresseusement.
+Ils réutilisent les outils de liste partagés — recherche, filtres, regroupement, tri, pagination,
+colonnes masquables : regrouper un inventaire par emplacement ou par article est exactement ce
+qu'on veut en faire. Les emplacements sont colorés par type, et le texte d'aide dit ce que
+l'utilisateur doit savoir : **seul l'emplacement interne est du stock disponible**, le reste est
+chez un tiers, en production ou perdu.
+
+**Constat noté au passage** : l'emplacement « Pertes » existe déjà en base pour chaque
+entreprise. L'infrastructure du rebut est donc là ; il manque l'opération qui y déplace de la
+marchandise — c'est le point 3 du classement, pas celui-ci.
+
+**Une erreur de ma part dans les tests** : `createProduit` renvoie `{ id, categorieId, nom }` et
+non un identifiant nu ; passer l'objet entier comme `stockId` faisait échouer la création d'achat
+en 500. Diagnostiquée en faisant remonter le corps de la réponse plutôt qu'en relisant.
+
+**Vérification** — build, `oxlint`, 130/130 frontend, **398/398 d'intégration** (+5 : stock reçu
+visible sur l'emplacement interne avec sa quantité disponible, lignes à zéro exclues, mouvement
+portant sa provenance et sa destination, module invalide → 400 sur les deux routes, isolation
+entre entreprises). En navigateur sur une entreprise jetable : un achat de 30 sacs reçu apparaît
+en « Emplacement principal | 30 | 30 », et le mouvement « Fournisseurs → Emplacement principal,
+30, achat_reception » s'affiche dans le registre. Entreprise nettoyée, image frontend reconstruite.

@@ -2201,5 +2201,31 @@
     "toutSelectionner": "Select all",
     "colonnes": "Visible columns",
     "totalColonne": "Total"
+  },
+  "stockEmplacements": {
+    "titreStock": "Stock by location",
+    "titreMouvements": "Stock moves",
+    "aideStock": "Quantities held, product by product and location by location. Only the internal location is available stock: the rest sits with a third party, in production, or lost.",
+    "aideMouvements": "Everything that came in, went out or moved, with its source and destination. This is the traceability record.",
+    "resumeStock_one": "{{count}} line",
+    "resumeStock_other": "{{count}} lines",
+    "resumeMouvements_one": "{{count}} move",
+    "resumeMouvements_other": "{{count}} moves",
+    "rechercher": "Search a product or a location…",
+    "rechercherMouvement": "Search a move…",
+    "colProduit": "Product",
+    "colEmplacement": "Location",
+    "colQuantite": "Quantity",
+    "colReservee": "Reserved",
+    "colDisponible": "Available",
+    "colTrajet": "Route",
+    "colRaison": "Reason",
+    "colDocument": "Document",
+    "filtreInterne": "On hand",
+    "filtreProduction": "In production",
+    "filtrePerte": "Losses",
+    "videStock": "No stock recorded for this module.",
+    "videMouvements": "No move recorded for this module.",
+    "erreurChargement": "Could not load the stock data."
   }
 }

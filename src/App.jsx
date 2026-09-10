@@ -80,6 +80,7 @@ import ProduitTemplatesPanel from './components/ProduitTemplatesPanel';
 import ProduitRecettesPanel from './components/ProduitRecettesPanel';
 import OrdresTransformationPanel from './components/OrdresTransformationPanel';
 import HaccpPanel from './components/HaccpPanel';
+import StockEmplacementsPanel from './components/StockEmplacementsPanel.jsx';
 import { taxesLigneCalc as taxesLigneCalcPure } from './lib/taxes.js';
 const MonEspaceRh = lazy(() => import('./components/MonEspaceRh'));
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
@@ -3640,6 +3641,7 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
       <ProduitRecettesPanel module={moduleType} produits={stocks} />
       <OrdresTransformationPanel module={moduleType} />
       <HaccpPanel module={moduleType} />
+      <StockEmplacementsPanel module={moduleType} />
       <Card>
         <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
         <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('stocks.stockEvolutionAide')}</div>

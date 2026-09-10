@@ -2201,5 +2201,31 @@
     "toutSelectionner": "Tout sélectionner",
     "colonnes": "Colonnes affichées",
     "totalColonne": "Total"
+  },
+  "stockEmplacements": {
+    "titreStock": "Stock par emplacement",
+    "titreMouvements": "Mouvements de stock",
+    "aideStock": "Quantités détenues, article par article et emplacement par emplacement. Seul l'emplacement interne est du stock disponible : le reste est chez un tiers, en production ou perdu.",
+    "aideMouvements": "Tout ce qui est entré, sorti ou transité, avec sa provenance et sa destination. C'est le registre de traçabilité.",
+    "resumeStock_one": "{{count}} ligne",
+    "resumeStock_other": "{{count}} lignes",
+    "resumeMouvements_one": "{{count}} mouvement",
+    "resumeMouvements_other": "{{count}} mouvements",
+    "rechercher": "Rechercher un article ou un emplacement…",
+    "rechercherMouvement": "Rechercher un mouvement…",
+    "colProduit": "Article",
+    "colEmplacement": "Emplacement",
+    "colQuantite": "Quantité",
+    "colReservee": "Réservée",
+    "colDisponible": "Disponible",
+    "colTrajet": "Trajet",
+    "colRaison": "Motif",
+    "colDocument": "Pièce",
+    "filtreInterne": "En stock",
+    "filtreProduction": "En production",
+    "filtrePerte": "Pertes",
+    "videStock": "Aucun stock enregistré pour ce module.",
+    "videMouvements": "Aucun mouvement enregistré pour ce module.",
+    "erreurChargement": "Impossible de charger les données de stock."
   }
 }

@@ -202,3 +202,65 @@ describe('Emplacements virtuels — jamais de quant suivi', () => {
     expect(rows[0].n).toBe(0);
   });
 });
+
+// Les deux tables existaient sans être lisibles : stock_quants n'avait aucune route, stock_moves
+// n'était consulté que par le graphique de valeur. Ces routes sont l'écran qui manquait ; ces
+// tests garantissent qu'elles montrent bien ce que le moteur écrit.
+describe('Stock par emplacement et registre des mouvements — routes de lecture', () => {
+  let admin;
+  let produitId;
+
+  beforeAll(async () => {
+    admin = await registerEntreprise();
+    ({ id: produitId } = await createProduit(admin.token, { module: 'Cultures', nom: 'Grain lisible' }));
+    const achat = await request(app).post('/api/achats').set(bearer(admin.token)).send({
+      module: 'Cultures', fournisseurNom: 'Fournisseur lecture',
+      lignes: [{ produit: 'Grain lisible', quantite: 25, prixUnitaire: 100, stockId: produitId }],
+    });
+    const id = achat.body.document.id;
+    await request(app).post(`/api/achats/${id}/commander`).set(bearer(admin.token)).send({});
+    await request(app).post(`/api/achats/${id}/recevoir`).set(bearer(admin.token)).send({});
+  });
+
+  test('le stock reçu apparaît sur l’emplacement interne, avec sa quantité disponible', async () => {
+    const res = await request(app).get('/api/produits/stock-emplacements?module=Cultures').set(bearer(admin.token));
+    expect(res.status).toBe(200);
+    const ligne = res.body.lignes.find(l => l.produitId === produitId);
+    expect(ligne).toBeTruthy();
+    expect(ligne.emplacementType).toBe('interne');
+    expect(ligne.quantite).toBe(25);
+    expect(ligne.disponible).toBe(25 - ligne.quantiteReservee);
+  });
+
+  // Une ligne à zéro n'apprend rien et multiplierait la liste par le nombre d'emplacements.
+  test('les quantités nulles sont exclues de la liste', async () => {
+    const res = await request(app).get('/api/produits/stock-emplacements?module=Cultures').set(bearer(admin.token));
+    expect(res.body.lignes.every(l => l.quantite !== 0)).toBe(true);
+  });
+
+  test('le mouvement porte sa provenance et sa destination', async () => {
+    const res = await request(app).get('/api/produits/mouvements?module=Cultures').set(bearer(admin.token));
+    expect(res.status).toBe(200);
+    const mvt = res.body.mouvements.find(m => m.produitNom === 'Grain lisible');
+    expect(mvt).toBeTruthy();
+    expect(mvt.sourceType).toBe('fournisseur');
+    expect(mvt.destType).toBe('interne');
+    expect(mvt.quantite).toBe(25);
+    expect(mvt.raison).toBe('achat_reception');
+  });
+
+  test('module invalide → 400 sur les deux routes', async () => {
+    for (const url of ['/api/produits/stock-emplacements?module=Nimporte', '/api/produits/mouvements?module=Nimporte']) {
+      const res = await request(app).get(url).set(bearer(admin.token));
+      expect(res.status).toBe(400);
+    }
+  });
+
+  test('isolation : une autre entreprise ne voit ni le stock ni les mouvements du premier', async () => {
+    const autre = await registerEntreprise();
+    const stock = await request(app).get('/api/produits/stock-emplacements?module=Cultures').set(bearer(autre.token));
+    expect(stock.body.lignes.some(l => l.produitNom === 'Grain lisible')).toBe(false);
+    const mvts = await request(app).get('/api/produits/mouvements?module=Cultures').set(bearer(autre.token));
+    expect(mvts.body.mouvements.some(m => m.produitNom === 'Grain lisible')).toBe(false);
+  });
+});

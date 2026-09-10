@@ -328,6 +328,89 @@ router.get('/evolution-stock', authRequired, async (req, res) => {
   }
 });
 
+
+// ─── GET /api/produits/stock-emplacements?module= ───
+// Stock par produit ET par emplacement. Jusqu'ici `stock_quants` était alimentée à chaque
+// mouvement et lue par personne : ni route, ni écran. L'étape « stock multi-emplacements » du
+// 2026-09-04 existait donc en base sans être consultable — même classe de défaut que le module
+// Observations sans point d'entrée ou le lien public de devis sans écran.
+//
+// Équivalent du rapport d'inventaire de l'ERP de référence (liste de `stock.quant` :
+// Produit / Emplacement / Quantité en main / Réservée). On renvoie une ligne à plat plutôt
+// qu'une matrice produit × emplacement : une matrice devient illisible dès qu'un module a
+// beaucoup d'articles, et la liste se regroupe côté écran par produit ou par emplacement.
+//
+// Les lignes à zéro sont exclues : un quant retombé à zéro n'apprend rien et gonflerait la
+// liste d'autant de lignes que de couples produit/emplacement jamais utilisés.
+router.get('/stock-emplacements', authRequired, async (req, res) => {
+  const { module } = req.query;
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) {
+    return res.status(400).json({ error: 'Module invalide (Cultures, Poulailler ou Pisciculture).' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT q.id,
+              q.produit_id AS "produitId", p.nom AS "produitNom",
+              q.emplacement_id AS "emplacementId", e.nom AS "emplacementNom", e.type AS "emplacementType",
+              q.quantite::float8 AS quantite,
+              q.quantite_reservee::float8 AS "quantiteReservee",
+              (q.quantite - q.quantite_reservee)::float8 AS disponible,
+              u.symbole AS "uniteSymbole"
+         FROM stock_quants q
+         JOIN produits p ON p.id = q.produit_id
+         JOIN emplacements_stock e ON e.id = q.emplacement_id
+         LEFT JOIN unites_mesure u ON u.id = p.unite_id
+        WHERE q.entreprise_id = $1 AND p.module = $2 AND q.quantite <> 0
+        ORDER BY p.nom ASC, e.nom ASC`,
+      [req.user.entrepriseId, module]
+    );
+    return res.json({ lignes: result.rows });
+  } catch (err) {
+    console.error('[GET /produits/stock-emplacements]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération du stock par emplacement.' });
+  }
+});
+
+// ─── GET /api/produits/mouvements?module=&limite= ───
+// Registre des mouvements, source et destination comprises. `stock_moves` n'avait qu'un seul
+// lecteur — le graphique « Valeur du stock » — alors que c'est la table de traçabilité.
+//
+// À ne pas confondre avec GET /:id/mouvements, plus bas, qui lit `stock_mouvements` : deux
+// tables parallèles coexistent, un journal simple par article (un delta, sans emplacement) et
+// ce registre-ci, qui sait d'où vient et où va la marchandise. Les fusionner est un chantier à
+// part ; les exposer toutes les deux, non.
+router.get('/mouvements', authRequired, async (req, res) => {
+  const { module } = req.query;
+  const limite = Math.min(500, Math.max(1, Number(req.query.limite) || 200));
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) {
+    return res.status(400).json({ error: 'Module invalide (Cultures, Poulailler ou Pisciculture).' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT m.id, m.quantite::float8 AS quantite, m.state, m.raison,
+              m.document_type AS "documentType", m.document_id AS "documentId",
+              COALESCE(m.date_fait, m.created_at) AS date,
+              p.nom AS "produitNom",
+              src.nom AS "sourceNom", src.type AS "sourceType",
+              dest.nom AS "destNom", dest.type AS "destType",
+              u.symbole AS "uniteSymbole"
+         FROM stock_moves m
+         JOIN produits p ON p.id = m.produit_id
+         JOIN emplacements_stock src ON src.id = m.emplacement_source_id
+         JOIN emplacements_stock dest ON dest.id = m.emplacement_dest_id
+         LEFT JOIN unites_mesure u ON u.id = p.unite_id
+        WHERE m.entreprise_id = $1 AND p.module = $2
+        ORDER BY COALESCE(m.date_fait, m.created_at) DESC, m.id DESC
+        LIMIT $3`,
+      [req.user.entrepriseId, module, limite]
+    );
+    return res.json({ mouvements: result.rows });
+  } catch (err) {
+    console.error('[GET /produits/mouvements]', err);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des mouvements.' });
+  }
+});
+
 router.get('/:id/mouvements', authRequired, async (req, res) => {
   try {
     const result = await pool.query(
