@@ -506,7 +506,10 @@
     "colNumero": "Reference",
     "emptyARecevoir": "No ordered purchase awaiting delivery.",
     "aRecevoirTitle": "Purchases to receive",
-    "aRecevoirSubtitle": "Orders placed whose goods have not arrived yet. Mark them received to update stock."
+    "aRecevoirSubtitle": "Orders placed whose goods have not arrived yet. Mark them received to update stock.",
+    "nouveau": "New purchase",
+    "retourListe": "Back to list",
+    "filAriane": "Purchases"
   },
   "compta": {
     "totalVentes": "Total sales",
@@ -948,7 +951,10 @@
       "Payé partiellement": "Partially paid",
       "Payé": "Paid",
       "Annulé": "Cancelled"
-    }
+    },
+    "nouveau": "New quote",
+    "retourListe": "Back to list",
+    "filAriane": "Quotes"
   },
   "gabarits": {
     "title": "Templates & attributes",

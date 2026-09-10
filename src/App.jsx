@@ -8,7 +8,7 @@ import { normaliserNumeroWhatsapp, lienWhatsapp } from './lib/whatsapp.js';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, ToggleLeft, ToggleRight, Package, TrendingUp,
-  ChevronRight, Check, Lock, Mail, Loader2, Leaf, Bird,
+  ChevronRight, ChevronLeft, Check, Lock, Mail, Loader2, Leaf, Bird,
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
@@ -645,6 +645,20 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const emptyEcheance = { montant: '', dateEcheance: '' };
   const [paiementForm, setPaiementForm] = useState({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ ...emptyEcheance }] });
   const [vueDevis, setVueDevis] = useState('liste');
+  // Modèle liste-puis-formulaire de l'ERP de référence : l'écran est la liste, et créer passe
+  // par un bouton qui l'échange contre le formulaire. Le formulaire de création n'est plus
+  // ouvert en permanence au-dessus de la liste, qui repassait sous la ligne de flottaison.
+  // Un seul état suffit : `detailId` marque déjà qu'une fiche est ouverte.
+  const [creationOuverte, setCreationOuverte] = useState(false);
+  const enFiche = Boolean(detailId);
+  const enFormulaire = creationOuverte || enFiche;
+  const retourListe = () => {
+    setCreationOuverte(false);
+    setDetailId(null);
+    setDetailData(null);
+    setJournal([]);
+    setMessages([]);
+  };
 
   const loadDevis = async () => {
     setLoading(true);
@@ -813,6 +827,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
       await createDevis(payload);
       notifySuccess(t('devis.created'));
       resetForm();
+      // Retour à la liste : le devis créé y apparaît, ce que le formulaire remis à zéro ne
+      // montrait pas. L'ERP de référence reste sur la fiche du document enregistré ; ici le
+      // formulaire de création ne devient pas une fiche, la liste est le repère le plus proche.
+      setCreationOuverte(false);
       await loadDevis();
     } catch (err) {
       setApiError(err.message);
@@ -1154,6 +1172,18 @@ function DevisModule({ clientsListe, filtreStatut }) {
       <datalist id="devis-clients-datalist">
         {(clientsListe || []).map(c => <option key={c.id} value={clientLabel(c)} />)}
       </datalist>
+
+      {/* Fil d'ariane local. L'ERP de référence remonte le nom du document dans le fil
+          d'ariane de l'application ; celui-ci s'arrête à l'onglet (voir TopNavbar), donc la
+          fiche porte le sien plutôt que de laisser l'utilisateur sans repère ni retour. */}
+      {enFormulaire && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
+          <Button variant="ghost" small onClick={retourListe}><ChevronLeft size={14} /> {t("devis.retourListe")}</Button>
+          <span style={{ fontSize: TEXT.sm, color: COLORS.inkFaint }}>
+            {t("devis.filAriane")} / <strong style={{ color: COLORS.inkSoft }}>{enFiche ? (detailData?.numero || '…') : t("devis.nouveau")}</strong>
+          </span>
+        </div>
+      )}
       {apiError && (
         <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '11px 16px', fontSize: TEXT.base, display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
           <AlertTriangle size={15} /> {apiError}
@@ -1172,7 +1202,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
-      {!filtreStatut && (
+      {!filtreStatut && creationOuverte && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t("devis.newTitle")}
@@ -1320,13 +1350,23 @@ function DevisModule({ clientsListe, filtreStatut }) {
       </Card>
       )}
 
-      {/* Liste des devis existants */}
-      <div style={{ display: 'flex', gap: SPACE.sm }}>
-        <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>{t('devis.vueListe')}</Button>
-        <Button variant={vueDevis === 'kanban' ? 'default' : 'ghost'} small onClick={() => setVueDevis('kanban')}>{t('devis.vueKanban')}</Button>
-      </div>
+      {/* Bandeau de contrôle de la liste : création à gauche, bascule de vue à droite — la
+          bascule vivait sous le formulaire, tout en bas de la page. */}
+      {!enFormulaire && (
+        <div style={{ display: 'flex', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+          {!filtreStatut ? (
+            <Button variant="green" onClick={() => setCreationOuverte(true)}><Plus size={14} /> {t("devis.nouveau")}</Button>
+          ) : <span />}
+          <div style={{ display: 'flex', gap: SPACE.sm }}>
+            <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>{t('devis.vueListe')}</Button>
+            <Button variant={vueDevis === 'kanban' ? 'default' : 'ghost'} small onClick={() => setVueDevis('kanban')}>{t('devis.vueKanban')}</Button>
+          </div>
+        </div>
+      )}
 
-      {vueDevis === 'kanban' ? (
+      {!enFormulaire && (
+
+      vueDevis === 'kanban' ? (
         loading ? (
           <div style={{ padding: SPACE.xl, display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft }}>
             <Loader2 size={16} className="spin" /> {t("common.loading")}
@@ -1394,6 +1434,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
           </DataTable>
         )}
       </Card>
+      )
       )}
 
       {/* Popup de détail d'un devis, avec actions (envoyer, facturer) et aperçu de la signature */}
@@ -1416,15 +1457,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
           return s + taxesLigneCalc(brut, l.quantite, l.taxIds).taxe;
         }, 0);
         return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: SPACE.lg }} onClick={closeDetailPopup}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           {/* Disposition à deux colonnes façon fiche d'un ERP de référence (Order Lines + chatter à droite) — voir
               project_erp_devis_visual_alignment : même structure (barre d'action + chevrons en
               haut, en-tête à deux colonnes, tableau, totaux, panneau latéral d'activités/historique),
               couleurs YEELEN conservées. */}
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', maxWidth: 1320, maxHeight: '92vh', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
-            <button onClick={closeDetailPopup} aria-label={t("common.close")} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: RADIUS.control, border: 'none', background: COLORS.surfaceAlt, color: COLORS.inkSoft, cursor: 'pointer', fontSize: TEXT.md, lineHeight: '28px', textAlign: 'center', zIndex: 2 }}>×</button>
-
-            <div style={{ flex: '1 1 900px', minWidth: 0, maxHeight: '92vh', overflowY: 'auto', padding: SPACE.xl, boxSizing: 'border-box' }}>
+          <div style={{ position: 'relative', background: '#fff', borderRadius: RADIUS.card, width: '100%', display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
+            <div style={{ flex: '1 1 900px', minWidth: 0, padding: SPACE.xl, boxSizing: 'border-box' }}>
               {/* Deux rangées volontairement séparées plutôt qu'un seul groupe qui retombe à
                   la ligne au hasard selon la largeur : actions principales (transition de
                   statut) en haut, outils du document (aperçu/téléchargement/annulation) en
@@ -1754,7 +1793,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             </div>
 
             {/* Panneau latéral façon chatter d'un ERP de référence : messages, activités planifiées, journal des modifications */}
-            <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box' }}>
+            <div style={{ flex: '0 0 340px', width: 340, borderLeft: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '22px 18px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, textAlign: 'left', marginBottom: SPACE.lg }}>
                 <div style={{ fontSize: TEXT.sm, fontWeight: 700, color: COLORS.inkSoft }}>{t("devis.messages")}</div>
                 <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'flex-start' }}>
@@ -2306,6 +2345,12 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   // déjà chargée, un second appel réseau n'apporterait rien. 'Reçu' par défaut pour les lignes
   // historiques créées avant l'introduction de la colonne statut.
   const docsAffiches = filtreStatut ? docs.filter(d => (d.statut || 'Reçu') === filtreStatut) : docs;
+  // Même modèle liste-puis-formulaire que DevisModule : la liste est l'écran, la création et
+  // la fiche l'occupent tour à tour. `detailDoc` marque déjà qu'une fiche est ouverte.
+  const [creationOuverte, setCreationOuverte] = useState(false);
+  const enFiche = Boolean(detailDoc);
+  const enFormulaire = creationOuverte || enFiche;
+  const retourListe = () => { setCreationOuverte(false); setDetailDoc(null); };
   useEffect(() => {
     (async () => {
       try {
@@ -2412,6 +2457,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         await createAchatDocument({ module: moduleType, ...payload });
         await loadDocs();
         resetForm();
+        setCreationOuverte(false);
       } catch (err) {
         setError(err.message || t('achats.errSave'));
       }
@@ -2430,6 +2476,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
     setDocs(docs => [doc, ...docs]);
     resetForm();
+    setCreationOuverte(false);
   };
 
   // Ligne d'achat — version formulaire de modification (fenêtre séparée)
@@ -2615,9 +2662,20 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       <datalist id={catalogDatalistId}>
         {catalogItems.map(item => <option key={item.id} value={item.nom} />)}
       </datalist>
+
+      {/* Fil d'ariane local, même rôle que celui de DevisModule. */}
+      {enFormulaire && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
+          <Button variant="ghost" small onClick={retourListe}><ChevronLeft size={14} /> {t('achats.retourListe')}</Button>
+          <span style={{ fontSize: TEXT.sm, color: COLORS.inkFaint }}>
+            {t('achats.filAriane')} / <strong style={{ color: COLORS.inkSoft }}>{enFiche ? (detailDoc?.numero || '…') : t('achats.nouveau')}</strong>
+          </span>
+        </div>
+      )}
+
       {/* Formulaire de création — masqué en vue « À recevoir », comme DevisModule masque le
           sien en vue « À facturer ». */}
-      {!filtreStatut && (
+      {!filtreStatut && creationOuverte && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t('achats.newTitle')}
@@ -2668,15 +2726,22 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
       </Card>
       )}
 
-      <Card>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.md }}>
-          <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{t('achats.historique')}</div>
-          <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
-            <Button small variant="outline" onClick={exportCsv}><Download size={14} /> {t('achats.exportCsv')}</Button>
-            <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> {t('achats.exportPdf')}</Button>
+      {/* Bandeau de contrôle de la liste : création à gauche, exports à droite. La carte
+          « Historique des achats » n'avait pas d'autre contenu que ces deux boutons. */}
+      {!enFormulaire && (
+        <Card>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center' }}>
+            {!filtreStatut ? (
+              <Button variant="green" onClick={() => setCreationOuverte(true)}><Plus size={14} /> {t('achats.nouveau')}</Button>
+            ) : <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{t('achats.historique')}</div>}
+            <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
+              <Button small variant="outline" onClick={exportCsv}><Download size={14} /> {t('achats.exportCsv')}</Button>
+              <Button small variant="outline" onClick={exportPdf}><FileText size={14} /> {t('achats.exportPdf')}</Button>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
+      {!enFormulaire && (
       <Card style={{ padding: 0 }}>
         <DataTable>
           <thead>
@@ -2727,9 +2792,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           </tbody>
         </DataTable>
       </Card>
+      )}
       {detailDoc && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeDetail}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '80vh', overflowY: 'auto', padding: SPACE.xl }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', padding: SPACE.xl }}>
             {/* En-tête aligné sur la fiche d'un devis : la référence en titre, la barre d'état en
                 chevrons, puis les actions de transition — dans l'ERP de référence, ces boutons
                 vivent dans l'en-tête du document, pas dans la liste. */}
@@ -2738,7 +2804,6 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.md, fontWeight: 700 }}>{detailDoc.numero || '—'}</div>
                 <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{detailDoc.fournisseurNom} · {fmtDate(detailDoc.date)}</div>
               </div>
-              <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.lg }}>
@@ -2782,7 +2847,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 </tbody>
               </DataTable>
             </div>
-            <Button variant="ghost" onClick={closeDetail}>{t('common.close')}</Button>
+            <Button variant="ghost" onClick={closeDetail}><ChevronLeft size={14} /> {t('achats.retourListe')}</Button>
           </div>
         </div>
       )}

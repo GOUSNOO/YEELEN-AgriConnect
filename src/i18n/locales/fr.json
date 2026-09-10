@@ -506,7 +506,10 @@
     "colNumero": "Référence",
     "emptyARecevoir": "Aucun achat commandé en attente de réception.",
     "aRecevoirTitle": "Achats à recevoir",
-    "aRecevoirSubtitle": "Les commandes passées dont la marchandise n'est pas encore arrivée. Marquez-les reçues pour mettre le stock à jour."
+    "aRecevoirSubtitle": "Les commandes passées dont la marchandise n'est pas encore arrivée. Marquez-les reçues pour mettre le stock à jour.",
+    "nouveau": "Nouvel achat",
+    "retourListe": "Retour à la liste",
+    "filAriane": "Achats"
   },
   "compta": {
     "totalVentes": "Total ventes",
@@ -948,7 +951,10 @@
       "Payé partiellement": "Payé partiellement",
       "Payé": "Payé",
       "Annulé": "Annulé"
-    }
+    },
+    "nouveau": "Nouveau devis",
+    "retourListe": "Retour à la liste",
+    "filAriane": "Devis"
   },
   "gabarits": {
     "title": "Gabarits & attributs",

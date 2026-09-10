@@ -4038,3 +4038,53 @@ jetable : références `ACH-2026-0001`/`0002` affichées, sous-onglets et « À 
 correctement, fiche d'achat avec chevrons et action « Marquer reçu » dans l'en-tête, référentiels
 présents et fonctionnels sous Configuration, colonne date sur la liste des devis. Entreprise
 nettoyée après coup.
+
+### 2026-09-10 — Modèle liste-puis-formulaire (option C) sur Devis et Achats
+
+Dernier des trois volets demandés sur l'écart de vue avec l'ERP de référence, et le seul qui
+touche au modèle d'interaction : dans la référence, la liste et le formulaire sont deux écrans,
+et créer passe par un bouton « Nouveau ». Chez nous le formulaire de création était ouvert en
+permanence au-dessus de la liste, qui se retrouvait sous la ligne de flottaison — sur Ventes, il
+fallait dépasser le formulaire complet pour voir ne serait-ce qu'un devis existant.
+
+**Ce qui change**
+
+- La liste est l'écran. Un bandeau de contrôle la surmonte : **création à gauche**, bascule
+  Liste/Kanban à droite pour les devis (elle vivait tout en bas, sous le formulaire), exports à
+  droite pour les achats.
+- Le formulaire de création et la fiche d'un document **occupent l'écran à tour de rôle** au lieu
+  de flotter au-dessus. Les deux fiches étaient des modales plein écran : l'overlay `position:
+  fixed` devient un conteneur ordinaire, et les zones de défilement internes (`maxHeight: 92vh` +
+  `overflow-y: auto` sur chaque colonne) disparaissent — c'est la page qui défile. Vérifié dans
+  le navigateur : **zéro zone de défilement imbriquée** après coup, contre deux avant.
+- Un **fil d'ariane local** (« Devis / DEV-2026-0001 », « Achats / ACH-2026-0001 ») avec retour à
+  la liste. Le fil d'ariane de l'application s'arrête à l'onglet (voir `TopNavbar`) ; la
+  référence y remonte le nom du document, mais l'y brancher demanderait de faire remonter un état
+  interne de module jusqu'au shell — la fiche porte donc le sien.
+- Après création, retour à la liste, où le document créé est visible. La référence reste sur la
+  fiche du document enregistré ; ici le formulaire de création ne devient pas une fiche, la liste
+  est le repère le plus proche.
+
+**Coût réel : un seul état par module.** `detailId` (devis) et `detailDoc` (achats) marquaient
+déjà qu'une fiche était ouverte ; il ne manquait qu'un booléen `creationOuverte` et deux dérivés
+(`enFiche`, `enFormulaire`). Aucun changement de routage : l'URL reste au niveau de l'onglet,
+ce qui veut dire qu'un rechargement de page ramène à la liste et qu'une fiche n'est pas
+partageable par lien. Limite assumée — la brancher supposerait d'étendre le routage par onglet
+existant à un niveau document.
+
+**Deux reliquats de modale trouvés en vérifiant, pas en relisant** : la croix de fermeture des
+deux fiches, positionnée en absolu dans l'angle du panneau. Une fois la fiche mise à plat, celle
+du devis se retrouvait posée sur la colonne « Messages ». Retirées toutes les deux — le retour
+passe par le fil d'ariane.
+
+**Hors périmètre, assumé** : la modification d'un devis ou d'un achat reste une modale, lancée
+depuis la fiche. Dans la référence, l'édition se fait dans le formulaire lui-même ; fusionner
+fiche et édition est un chantier distinct, plus profond que le passage modale → écran traité ici.
+
+**Vérification** — build et `oxlint` verts, 119/119 tests frontend. En navigateur, sur une
+entreprise jetable : liste seule à l'arrivée, « Nouveau devis » et « Nouvel achat » ouvrant leur
+écran avec fil d'ariane, retour fonctionnel, fiche rendue en pleine page avec sa barre de
+chevrons. **Les deux cycles de création menés jusqu'au bout** par saisie réelle dans les champs
+(événements React déclenchés, pas un appel d'API déguisé) : `ACH-2026-0002` et `DEV-2026-0002`
+créés, écran revenu à la liste, documents visibles dedans. Absence de débordement horizontal
+contrôlée. Entreprise nettoyée après coup.
