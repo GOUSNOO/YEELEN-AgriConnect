@@ -13,9 +13,9 @@ import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 // Aucun impact stock à cette étape (voir migrate.js) — juste le référentiel produit
 // fini + ingrédients ; l'ordre de transformation qui consomme/produit réellement le stock
 // est une étape différée.
-export default function ProduitRecettesPanel({ module, produits }) {
+export default function ProduitRecettesPanel({ module, produits, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [loaded, setLoaded] = useState(false);
   const [recettes, setRecettes] = useState([]);
   const [expandedId, setExpandedId] = useState(null);

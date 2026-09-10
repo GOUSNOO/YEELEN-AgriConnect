@@ -46,9 +46,9 @@ function EntetePliable({ ouvert, onToggle, icone: Icone, titre, resume }) {
   );
 }
 
-export default function StockEmplacementsPanel({ module }) {
+export default function StockEmplacementsPanel({ module, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [ouvertStock, setOuvertStock] = useState(false);
+  const [ouvertStock, setOuvertStock] = useState(Boolean(ouvertParDefaut));
   const [ouvertMouvements, setOuvertMouvements] = useState(false);
   const [lignes, setLignes] = useState([]);
   const [mouvements, setMouvements] = useState([]);

@@ -10,9 +10,9 @@ import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 // ingrédients + la production de l'article fini sur le stock (server/src/utils/stockSync.js).
 // Pas de workflow brouillon/validé : une exécution = un ordre, annulable (undo complet des
 // mouvements de stock) via la corbeille.
-export default function OrdresTransformationPanel({ module }) {
+export default function OrdresTransformationPanel({ module, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [loaded, setLoaded] = useState(false);
   const [recettes, setRecettes] = useState([]);
   const [ordres, setOrdres] = useState([]);

@@ -2237,6 +2237,21 @@ const VENTES_SOUS_NAV = [
 // « À recevoir » est à l'achat ce que « À facturer » est à la vente, une liste filtrée sur
 // l'étape en cours et non un second point de création. Pas d'onglet Configuration ici : les
 // achats n'ont aucun référentiel qui leur soit propre.
+// L'écran Stocks empilait tout sur une page : formulaire de création, quatre panneaux pliables
+// (gabarits, recettes, ordres de transformation, HACCP), graphique, puis la liste des articles —
+// et deux panneaux de plus depuis l'exposition du stock par emplacement. Six barres grises l'une
+// sous l'autre. La référence sépare Opérations / Produits / Rapports / Configuration ; on reprend
+// ce découpage, avec la même barre de sous-onglets que Ventes et Achats.
+//
+// « Gérer les catégories » reste dans le formulaire de création malgré sa nature de
+// configuration : c'est là qu'on en a besoin, au moment de classer un article qu'on saisit.
+const STOCKS_SOUS_NAV = [
+  { id: 'articles', labelKey: 'stocks.navArticles' },
+  { id: 'inventaire', labelKey: 'stocks.navInventaire' },
+  { id: 'transformation', labelKey: 'stocks.navTransformation' },
+  { id: 'configuration', labelKey: 'stocks.navConfiguration' },
+];
+
 const ACHATS_SOUS_NAV = [
   { id: 'commandes', labelKey: 'achats.navCommandes' },
   { id: 'a_recevoir', labelKey: 'achats.navARecevoir' },
@@ -3573,6 +3588,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
   // Avant, trois des quatre points étaient fabriqués (total actuel moins 120, 80 puis 40)
   // et affichés comme un historique ; l'axe est passé en valeur parce qu'un module mélange
   // des kilos, des litres et des sacs, dont la somme brute ne veut rien dire.
+  // Sous-onglet interne, en état local comme celui de VentesWithDevis : l'URL porte déjà
+  // l'onglet de module (?onglet=stocks), et un troisième niveau dans l'adresse n'apporterait
+  // rien tant qu'aucun de ces écrans n'est un document qu'on partage.
+  const [sousOnglet, setSousOnglet] = useState('articles');
   const [evolution, setEvolution] = useState(null);
   useEffect(() => {
     let vivant = true;
@@ -3594,6 +3613,10 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+      <SousNavOnglets items={STOCKS_SOUS_NAV} actif={sousOnglet} onSelect={setSousOnglet} />
+
+      {sousOnglet === 'articles' && (
+        <>
       <Card>
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: SPACE.sm, alignItems: 'end' }}>
           <Field label={t('stocks.article')} placeholder={t('stocks.articlePlaceholder')} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
@@ -3635,27 +3658,6 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
               </Button>
             </form>
           </div>
-        )}
-      </Card>
-      <ProduitTemplatesPanel module={moduleType} categories={categories} />
-      <ProduitRecettesPanel module={moduleType} produits={stocks} />
-      <OrdresTransformationPanel module={moduleType} />
-      <HaccpPanel module={moduleType} />
-      <StockEmplacementsPanel module={moduleType} />
-      <Card>
-        <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
-        <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('stocks.stockEvolutionAide')}</div>
-        {stockEvolution.length === 0 ? (
-          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('stocks.stockEvolutionVide')}</div>
-        ) : (
-          <>
-            <MiniChart data={stockEvolution} color={COLORS.blue} />
-            {evolution && evolution.sansCout > 0 && (
-              <div style={{ fontSize: TEXT.xs, color: COLORS.ochre, marginTop: SPACE.sm }}>
-                {t('stocks.stockEvolutionSansCout', { count: evolution.sansCout })}
-              </div>
-            )}
-          </>
         )}
       </Card>
       {lotsPerimes.length > 0 && (
@@ -3783,6 +3785,45 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
           </tbody>
         </DataTable>
       </Card>
+        </>
+      )}
+
+      {sousOnglet === 'inventaire' && (
+        <>
+          <StockEmplacementsPanel module={moduleType} ouvertParDefaut />
+      <Card>
+        <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>
+        <div style={{ fontSize: TEXT.xs, color: COLORS.inkSoft, marginBottom: SPACE.sm }}>{t('stocks.stockEvolutionAide')}</div>
+        {stockEvolution.length === 0 ? (
+          <div style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>{t('stocks.stockEvolutionVide')}</div>
+        ) : (
+          <>
+            <MiniChart data={stockEvolution} color={COLORS.blue} />
+            {evolution && evolution.sansCout > 0 && (
+              <div style={{ fontSize: TEXT.xs, color: COLORS.ochre, marginTop: SPACE.sm }}>
+                {t('stocks.stockEvolutionSansCout', { count: evolution.sansCout })}
+              </div>
+            )}
+          </>
+        )}
+      </Card>
+        </>
+      )}
+
+      {sousOnglet === 'transformation' && (
+        <>
+          <OrdresTransformationPanel module={moduleType} ouvertParDefaut />
+          <HaccpPanel module={moduleType} ouvertParDefaut />
+        </>
+      )}
+
+      {sousOnglet === 'configuration' && (
+        <>
+          <ProduitTemplatesPanel module={moduleType} categories={categories} ouvertParDefaut />
+          <ProduitRecettesPanel module={moduleType} produits={stocks} ouvertParDefaut />
+        </>
+      )}
+
 
       {editingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>

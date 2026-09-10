@@ -428,7 +428,11 @@
       "achat_suppression": "Purchase deleted",
       "devis_signature": "Sale (quote signed)",
       "devis_remise_en_brouillon": "Sale cancelled (quote reverted to draft)"
-    }
+    },
+    "navArticles": "Products",
+    "navInventaire": "Inventory",
+    "navTransformation": "Processing",
+    "navConfiguration": "Configuration"
   },
   "registre": {
     "title": "Spray & input application log",
@@ -1065,7 +1069,7 @@
     "ingredientsConsommes": "Ingredients consumed",
     "produitSupprime": "Deleted product",
     "aucunOrdre": "No processing orders yet.",
-    "aucuneRecetteDisponible": "Create a recipe above first to be able to execute a processing order.",
+    "aucuneRecetteDisponible": "Create a recipe in the Configuration tab first, so you can run a processing order.",
     "ordreCreated": "Processing order executed — stock updated.",
     "ordreAddError": "Could not execute the processing order.",
     "ordreDeleted": "Order cancelled — stock restored.",

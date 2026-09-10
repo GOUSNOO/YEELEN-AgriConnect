@@ -428,7 +428,11 @@
       "achat_suppression": "Achat supprimé",
       "devis_signature": "Vente (devis signé)",
       "devis_remise_en_brouillon": "Vente annulée (devis remis en brouillon)"
-    }
+    },
+    "navArticles": "Articles",
+    "navInventaire": "Inventaire",
+    "navTransformation": "Transformation",
+    "navConfiguration": "Configuration"
   },
   "registre": {
     "title": "Registre des traitements et apports d'intrants",
@@ -1065,7 +1069,7 @@
     "ingredientsConsommes": "Ingrédients consommés",
     "produitSupprime": "Produit supprimé",
     "aucunOrdre": "Aucun ordre de transformation pour l'instant.",
-    "aucuneRecetteDisponible": "Créez d'abord une recette ci-dessus pour pouvoir exécuter un ordre de transformation.",
+    "aucuneRecetteDisponible": "Créez d'abord une recette dans l'onglet Configuration pour pouvoir exécuter un ordre de transformation.",
     "ordreCreated": "Ordre de transformation exécuté — stock mis à jour.",
     "ordreAddError": "Impossible d'exécuter l'ordre de transformation.",
     "ordreDeleted": "Ordre annulé — stock restitué.",

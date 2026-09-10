@@ -11,9 +11,9 @@ const TYPES_CONTROLE = ['temperature', 'hygiene', 'tracabilite', 'autre'];
 // liés à un ordre de transformation (panneau juste au-dessus). Conçu sur mesure (aucun module
 // Quality/HACCP réutilisable dans la source ERP de référence). Journal réglementaire, export
 // CSV pour un contrôle sanitaire externe (même patron que ReportsModule).
-export default function HaccpPanel({ module }) {
+export default function HaccpPanel({ module, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [loaded, setLoaded] = useState(false);
   const [ordres, setOrdres] = useState([]);
   const [ordresCharges, setOrdresCharges] = useState(false);

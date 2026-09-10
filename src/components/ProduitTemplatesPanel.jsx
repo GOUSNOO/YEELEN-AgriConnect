@@ -13,9 +13,9 @@ import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 // TaxesPanel/PaymentTermsPanel. Un article créé via le formulaire "Ajout rapide" existant de
 // StocksTab n'apparaît pas ici (il a son propre gabarit à variante unique, créé en silence
 // côté serveur) — ce panneau ne sert qu'à la gestion explicite de variantes multiples.
-export default function ProduitTemplatesPanel({ module, categories }) {
+export default function ProduitTemplatesPanel({ module, categories, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [loaded, setLoaded] = useState(false);
   const [attributs, setAttributs] = useState([]);
   const [templates, setTemplates] = useState([]);

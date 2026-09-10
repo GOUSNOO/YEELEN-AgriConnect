@@ -4532,3 +4532,37 @@ portant sa provenance et sa destination, module invalide → 400 sur les deux ro
 entre entreprises). En navigateur sur une entreprise jetable : un achat de 30 sacs reçu apparaît
 en « Emplacement principal | 30 | 30 », et le mouvement « Fournisseurs → Emplacement principal,
 30, achat_reception » s'affiche dans le registre. Entreprise nettoyée, image frontend reconstruite.
+
+### 2026-09-10 — L'écran Stocks en quatre sous-onglets (chantier 4 de l'audit)
+
+Signalé par l'utilisateur : les panneaux pliables « sont moches comme ça ». Il avait raison, et
+j'y avais contribué la veille — en exposant le stock par emplacement, j'ai porté l'écran à **six
+barres grises empilées** sous le formulaire de création.
+
+Découpage repris de la référence (Opérations / Produits / Rapports / Configuration), avec la même
+`SousNavOnglets` que Ventes et Achats — un troisième écran qui se lit comme les deux autres :
+
+- **Articles** — formulaire de création, filtres par type d'intrant, liste, alerte des lots
+  périmés. Plus aucun panneau replié : c'est l'écran de travail.
+- **Inventaire** — stock par emplacement, mouvements, valeur du stock. Les trois lectures.
+- **Transformation** — ordres de transformation et registre HACCP, l'opération et sa pièce
+  sanitaire.
+- **Configuration** — gabarits & attributs, recettes de transformation.
+
+**Un panneau seul sur son onglet s'ouvre** (nouveau `ouvertParDefaut`) : un onglet dont tout le
+contenu serait une barre repliée n'aurait aucun intérêt. Le repli garde son sens quand deux
+panneaux se partagent l'écran.
+
+**« Gérer les catégories » reste dans le formulaire de création** malgré sa nature de
+configuration : c'est là qu'on en a besoin, au moment de classer un article qu'on saisit. La
+référence fait de même avec ses « créer et modifier » depuis un champ.
+
+**Un texte rendu faux par le déplacement, corrigé** : « Créez d'abord une recette **ci-dessus** »
+ne valait plus rien une fois les recettes passées en Configuration. Il dit maintenant où aller.
+Trouvé en lisant l'écran, pas le code — un renvoi à une position sur la page ne survit pas à une
+réorganisation, et rien ne l'aurait signalé.
+
+**Vérification** — build, `oxlint`, 130/130 tests frontend. Les quatre onglets ouverts en
+navigateur : Articles réduit à son formulaire et sa liste, Inventaire avec le stock ouvert et les
+mouvements repliés, Transformation avec ses deux registres, Configuration avec ses deux
+formulaires. Entreprise jetable nettoyée, image frontend reconstruite.
