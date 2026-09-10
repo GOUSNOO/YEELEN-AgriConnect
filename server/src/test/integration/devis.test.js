@@ -348,7 +348,7 @@ describe('Devis — Étape 3b : facturer produit une facture comptable (account.
     expect(res.status).toBe(200);
     expect(res.body.devis.statut).toBe('Facturé');
     expect(res.body.devis.move).toBeTruthy();
-    expect(res.body.devis.move.name).toMatch(/^INV\/\d{4}\/\d{4}$/);
+    expect(res.body.devis.move.name).toMatch(/^FAC\/\d{4}\/\d{4}$/);
     expect(res.body.devis.move.state).toBe('posted');
     expect(res.body.devis.move.paymentState).toBe('paid');
     expect(res.body.devis.move.amountResidual).toBeCloseTo(0, 2);

@@ -69,6 +69,28 @@ describe('Devis — préparation du message WhatsApp', () => {
     expect(apres.statut).toBe('Brouillon');
   });
 
+  test('une pièce facturée annonce une FACTURE, pas un devis, et garde son taux figé', async () => {
+    const devis = await creerDevis(clientAvecTel);
+    await request(app).post(`/api/devis/${devis.id}/valider-manuel`).set(bearer(admin.token)).send({ confirmePar: 'Client' });
+    const facture = await request(app).post(`/api/devis/${devis.id}/facturer`).set(bearer(admin.token))
+      .send({ modePaiement: 'Espèces', modalitePaiement: 'complet' });
+    expect(facture.status).toBe(200);
+
+    const avant = (await request(app).get(`/api/devis/${devis.id}`).set(bearer(admin.token))).body.devis;
+
+    const res = await request(app).post(`/api/devis/${devis.id}/lien-whatsapp`).set(bearer(admin.token)).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.estFacture).toBe(true);
+    // Le mot compte : le client reçoit une facture, l'annoncer comme un devis ferait douter.
+    expect(res.body.message).toContain(`facture ${avant.numero}`);
+    expect(res.body.message).not.toContain('votre devis');
+
+    // Le taux d'une pièce facturée est figé à l'émission : la facture comptable a été postée à
+    // ce taux-là, le rouvrir désaccorderait le devis de son écriture.
+    const apres = (await request(app).get(`/api/devis/${devis.id}`).set(bearer(admin.token))).body.devis;
+    expect(apres.tauxChange).toBe(avant.tauxChange);
+    expect(apres.statut).toBe(avant.statut);
+  });
   test('isolation multi-tenant', async () => {
     const devis = await creerDevis(clientAvecTel);
     const b = await registerEntreprise();

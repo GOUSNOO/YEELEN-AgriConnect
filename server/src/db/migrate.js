@@ -2997,6 +2997,55 @@ async function seedPiscicultureCategoriesForExistingEntreprises() {
 // entreprise qui n'a aucun journal. Idempotent (garde sur l'absence de account_journal +
 // ON CONFLICT DO NOTHING sur les deux tables). Mêmes listes que routes/auth.js (seed à
 // l'inscription) via utils/comptaDefauts.js.
+// Renommage du journal de vente INV → FAC (2026-09-11) : le code du journal EST le préfixe du
+// numéro de pièce, et l'application est francophone.
+//
+// Deux règles non négociables ici :
+//   1. Les pièces DÉJÀ ÉMISES gardent leur numéro INV/… — jamais renommées. Une pièce émise a
+//      une valeur légale, et son `name` entre dans le hachage d'inaltérabilité
+//      (utils/accountMove.js:chaineIntegriteMove) : les réécrire romprait la chaîne de
+//      sécurisation des journaux verrouillés.
+//   2. Le compteur doit être REPORTÉ. account_journal_sequence est indexée par préfixe : sans
+//      report, la première facture après migration s'appellerait FAC/2026/0001 alors que
+//      INV/2026/0001 existe déjà — deux pièces perçues comme « numéro 1 » du même exercice.
+//
+// Les anciennes lignes INV/… de la séquence sont conservées : plus jamais consultées (le
+// préfixe dérive du code), elles gardent la trace du point d'arrêt.
+async function renommerJournalVenteVersFac() {
+  const { rows: journaux } = await client.query(
+    `SELECT j.id, j.entreprise_id FROM account_journal j
+      WHERE j.code = 'INV' AND j.type = 'sale'
+        AND NOT EXISTS (SELECT 1 FROM account_journal f
+                         WHERE f.entreprise_id = j.entreprise_id AND f.code = 'FAC')`
+  );
+  for (const j of journaux) {
+    await client.query(
+      `INSERT INTO account_journal_sequence (journal_id, prefix, last_number)
+       SELECT s.journal_id, 'FAC/' || split_part(s.prefix, '/', 2) || '/', s.last_number
+         FROM account_journal_sequence s
+        WHERE s.journal_id = $1 AND s.prefix LIKE 'INV/%'
+       ON CONFLICT (journal_id, prefix) DO UPDATE
+         SET last_number = GREATEST(account_journal_sequence.last_number, EXCLUDED.last_number)`,
+      [j.id]
+    );
+    await client.query(
+      `INSERT INTO account_journal_sequence (journal_id, prefix, last_number)
+       SELECT s.journal_id, 'RFAC/' || split_part(s.prefix, '/', 2) || '/', s.last_number
+         FROM account_journal_sequence s
+        WHERE s.journal_id = $1 AND s.prefix LIKE 'RINV/%'
+       ON CONFLICT (journal_id, prefix) DO UPDATE
+         SET last_number = GREATEST(account_journal_sequence.last_number, EXCLUDED.last_number)`,
+      [j.id]
+    );
+    await client.query("UPDATE account_journal SET code = 'FAC' WHERE id = $1", [j.id]);
+  }
+  if (journaux.length > 0) {
+    console.log(`✅ Journal de vente renommé INV → FAC pour ${journaux.length} entreprise(s), compteur reporté.`);
+  } else {
+    console.log('ℹ️  Journal de vente : déjà FAC (ou renommage impossible, un journal FAC existe).');
+  }
+}
+
 async function seedComptaConfigForExistingEntreprises() {
   const { rows: entreprises } = await client.query(
     `SELECT e.id FROM entreprises e
@@ -3414,6 +3463,7 @@ async function migrate() {
     await migrateTaxeDevisVersLignes();
     await migrateTaxeDevisLignesVersAccountTax();
     await seedComptaConfigForExistingEntreprises();
+    await renommerJournalVenteVersFac();
     await seedComptesChangeForExistingEntreprises();
     await seedCongesTypesForExistingEntreprises();
     await seedPaymentTermsForExistingEntreprises();

@@ -1602,9 +1602,14 @@ function DevisModule({ clientsListe, filtreStatut }) {
                         {actionBusy ? <Loader2 size={14} className="spin" /> : null} {t("devis.envoyerClient")}
                       </Button>
                     )}
-                    {['Brouillon', 'Envoyé'].includes(detailData.statut) && detailData.clientTelephone && (
+                    {/* Le bouton vaut aussi une fois la pièce facturée : c'est là qu'on envoie
+                        une facture, et le PDF derrière le lien public s'intitule alors
+                        « FACTURE ». Il s'arrêtait à « Envoyé », donc il disparaissait
+                        exactement au moment où la facture existait. */}
+                    {!["Annulé"].includes(detailData.statut) && detailData.clientTelephone && (
                       <Button variant="outline" onClick={() => handleEnvoyerWhatsapp(detailData.id)} disabled={actionBusy}>
-                        {actionBusy ? <Loader2 size={14} className="spin" /> : <MessageCircle size={14} />} {t("devis.envoyerWhatsapp")}
+                        {actionBusy ? <Loader2 size={14} className="spin" /> : <MessageCircle size={14} />}{' '}
+                        {detailData.move ? t("devis.envoyerFactureWhatsapp") : t("devis.envoyerWhatsapp")}
                       </Button>
                     )}
                     {(detailData.statut === 'Brouillon' || detailData.statut === 'Devis') && (

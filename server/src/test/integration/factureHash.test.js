@@ -12,7 +12,7 @@ describe('Factures — inaltérabilité (étape 4 : hash chaîné + séquence sa
   beforeAll(async () => {
     admin = await registerEntreprise();
     clientId = await createClient(admin.token);
-    invJournalId = (await request(app).get('/api/journals').set(bearer(admin.token))).body.journals.find((j) => j.code === 'INV').id;
+    invJournalId = (await request(app).get('/api/journals').set(bearer(admin.token))).body.journals.find((j) => j.code === 'FAC').id;
   });
 
   const facturePostee = async (prixUnitaire = 1000) => {
@@ -77,7 +77,7 @@ describe('Factures — inaltérabilité (étape 4 : hash chaîné + séquence sa
     const ko = await request(app).get(`/api/factures/verify-hash?journalId=${invJournalId}`).set(bearer(admin.token));
     expect(ko.body.ok).toBe(false);
     expect(ko.body.reason).toBe('hash');
-    expect(ko.body.brokenAt).toMatch(/^INV\//);
+    expect(ko.body.brokenAt).toMatch(/^FAC\//);
   });
 
   test('remettre-brouillon d\'un devis lié à une facture sécurisée → 400', async () => {

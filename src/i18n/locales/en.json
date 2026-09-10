@@ -912,6 +912,7 @@
     "deleteError": "Could not delete.",
     "envoyerClient": "Send to customer",
     "envoyerWhatsapp": "Send via WhatsApp",
+    "envoyerFactureWhatsapp": "Send invoice via WhatsApp",
     "whatsappOuvert": "WhatsApp is opening with the message ready — just press send.",
     "whatsappErreur": "Could not prepare the WhatsApp message.",
     "whatsappNumero": {

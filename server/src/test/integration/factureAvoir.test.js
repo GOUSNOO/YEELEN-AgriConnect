@@ -39,14 +39,14 @@ describe('Factures — avoirs (étape 5 : out_refund + reverse)', () => {
     expect(cn.amountResidual).toBeCloseTo(1200, 2);
   });
 
-  test('reverse méthode "cancel" → RINV/... posté + lettré ; origine reversed, résiduel 0', async () => {
+  test('reverse méthode "cancel" → RFAC/... posté + lettré ; origine reversed, résiduel 0', async () => {
     const f = await facturePostee(1000);
     const res = await request(app).post(`/api/factures/${f.id}/reverse`).set(bearer(admin.token))
       .send({ refundMethod: 'cancel' });
     expect(res.status).toBe(200);
     const cn = res.body.facture;
     expect(cn.state).toBe('posted');
-    expect(cn.name).toMatch(/^RINV\/\d{4}\/\d{4}$/);
+    expect(cn.name).toMatch(/^RFAC\/\d{4}\/\d{4}$/);
     expect(cn.amountResidual).toBeCloseTo(0, 2);
 
     // écriture de l'avoir équilibrée + signes inversés (produit au débit, créance au crédit)
@@ -82,7 +82,7 @@ describe('Factures — avoirs (étape 5 : out_refund + reverse)', () => {
   });
 
   test('reverse sur un journal sécurisé → l\'avoir est haché (la chaîne continue)', async () => {
-    const invJournalId = (await request(app).get('/api/journals').set(bearer(admin.token))).body.journals.find((j) => j.code === 'INV').id;
+    const invJournalId = (await request(app).get('/api/journals').set(bearer(admin.token))).body.journals.find((j) => j.code === 'FAC').id;
     await request(app).put(`/api/journals/${invJournalId}`).set(bearer(admin.token)).send({ restrictModeHashTable: true });
 
     const f = await facturePostee(700); // hachée

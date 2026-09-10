@@ -596,9 +596,13 @@ router.post('/:id/lien-whatsapp', authRequired, async (req, res) => {
     const token = tokenExistant.rows[0]?.token_public || crypto.randomBytes(24).toString('hex');
     const lienConsultation = `${process.env.FRONTEND_URL || 'http://localhost:8090'}/devis/${token}`;
 
-    // Même règle que /envoyer : le taux est refigé au moment où le devis part réellement.
+    // Une pièce déjà facturée porte un taux FIGÉ à l'émission, qu'on ne rouvre jamais (voir la
+    // règle multi-devise dans CLAUDE.md) : la facture comptable a été postée à ce taux-là, et le
+    // recalculer ici désaccorderait le devis de son écriture. On ne refige donc le taux que tant
+    // que la pièce n'est pas facturée — cas d'origine, un devis qui part chez le client.
+    const dejaFacture = Boolean(devis.move);
     let tauxChangeEnvoi = null;
-    if (devis.devise !== entrepriseResult.rows[0].devise) {
+    if (!dejaFacture && devis.devise !== entrepriseResult.rows[0].devise) {
       const { taux } = await convertir(1, devis.devise, entrepriseResult.rows[0].devise);
       tauxChangeEnvoi = taux;
     }
@@ -615,10 +619,21 @@ router.post('/:id/lien-whatsapp', authRequired, async (req, res) => {
         { statut: devis.statut }, { statut: 'Envoyé' }, ['statut']);
     }
 
+    // Le même lien public sert aux deux : la page affiche et le PDF s'intitule « FACTURE » dès
+    // que le devis est facturé (utils/devisPdf.js). Seul le mot du message change — annoncer un
+    // devis alors que le client reçoit une facture serait le genre de détail qui fait douter.
+    // WhatsApp par lien click-to-chat ne transporte aucune pièce jointe : c'est un lien vers la
+    // pièce, pas le PDF lui-même.
+    const nomClient = `${devis.clientPrenom || ''} ${devis.clientNom}`.trim();
+    const message = dejaFacture
+      ? `Bonjour ${nomClient}, voici votre facture ${devis.numero} de ${entrepriseNom} : ${lienConsultation}`
+      : `Bonjour ${nomClient}, voici votre devis ${devis.numero} de ${entrepriseNom} : ${lienConsultation}`;
+
     return res.json({
       lienConsultation,
       telephone: devis.clientTelephone,
-      message: `Bonjour ${`${devis.clientPrenom || ''} ${devis.clientNom}`.trim()}, voici votre devis ${devis.numero} de ${entrepriseNom} : ${lienConsultation}`,
+      estFacture: dejaFacture,
+      message,
     });
   } catch (err) {
     console.error('[POST /devis/:id/lien-whatsapp]', err);

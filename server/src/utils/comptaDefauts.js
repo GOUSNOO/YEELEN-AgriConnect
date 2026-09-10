@@ -23,7 +23,11 @@ export const COMPTES_DEFAUT = [
 // Journaux par défaut (account.journal-like). `defaultAccountCode` référence un COMPTES_DEFAUT
 // ci-dessus, résolu en default_account_id au moment du seed.
 export const JOURNAUX_DEFAUT = [
-  { name: 'Factures clients',    code: 'INV',  type: 'sale',     sequence: 5,  refund_sequence: true,  defaultAccountCode: '400000' },
+  // FAC et non INV depuis le 2026-09-11 : le code du journal devient le préfixe du numéro de
+  // pièce (FAC/2026/0001, RFAC/2026/0001 pour un avoir), et l'application est francophone.
+  // Les entreprises déjà créées sont renommées par migrate.js, compteur reporté — voir
+  // renommerJournalVenteVersFac.
+  { name: 'Factures clients',    code: 'FAC',  type: 'sale',     sequence: 5,  refund_sequence: true,  defaultAccountCode: '400000' },
   { name: 'Factures fournisseurs', code: 'BILL', type: 'purchase', sequence: 6, refund_sequence: true, defaultAccountCode: '500000' },
   { name: 'Banque',              code: 'BNK',  type: 'bank',     sequence: 10, refund_sequence: false, defaultAccountCode: '101401' },
   { name: 'Caisse',              code: 'CSH',  type: 'cash',     sequence: 11, refund_sequence: false, defaultAccountCode: '101402' },

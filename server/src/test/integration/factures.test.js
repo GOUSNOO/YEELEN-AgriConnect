@@ -35,14 +35,14 @@ describe('Factures (account.move) — cycle de vie + double-partie + lettrage', 
     expect(f.lignes[0].taxIds).toEqual([tva.id]);
   });
 
-  test('POST /:id/post : génère une écriture équilibrée, attribue un numéro INV, statut posted/not_paid', async () => {
+  test('POST /:id/post : génère une écriture équilibrée, attribue un numéro FAC, statut posted/not_paid', async () => {
     const tva = await creerTaxe({ name: 'TVA post 20 %', amount: 20, amountType: 'percent' });
     const { body: { facture } } = await creerBrouillon([{ name: 'Blé', quantity: 5, priceUnit: 2000, taxIds: [tva.id] }]);
     const posted = await request(app).post(`/api/factures/${facture.id}/post`).set(bearer(admin.token)).send({});
     expect(posted.status).toBe(200);
     const f = posted.body.facture;
     expect(f.state).toBe('posted');
-    expect(f.name).toMatch(/^INV\/\d{4}\/\d{4}$/);
+    expect(f.name).toMatch(/^FAC\/\d{4}\/\d{4}$/);
     expect(f.paymentState).toBe('not_paid');
     expect(f.amountResidual).toBeCloseTo(12000, 2);
 
@@ -152,7 +152,7 @@ describe('Factures (account.move) — cycle de vie + double-partie + lettrage', 
       .send({ moveType: 'out_refund', partnerId: clientId, lignes: [{ name: 'Retour', quantity: 1, priceUnit: 500 }] });
     const posted = await request(app).post(`/api/factures/${facture.id}/post`).set(bearer(admin.token)).send({});
     expect(posted.status).toBe(200);
-    expect(posted.body.facture.name).toMatch(/^RINV\/\d{4}\/\d{4}$/);
+    expect(posted.body.facture.name).toMatch(/^RFAC\/\d{4}\/\d{4}$/);
     const creance = posted.body.facture.lignes.find((l) => l.displayType === 'payment_term');
     expect(creance.credit).toBeCloseTo(500, 2);
     const produit = posted.body.facture.lignes.find((l) => l.displayType === 'product');

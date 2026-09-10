@@ -13,8 +13,8 @@ describe('Journaux (account.journal-like) — seed, CRUD, rôles, isolation', ()
   test('register a seedé les 5 journaux par défaut', async () => {
     const j = await list(admin.token);
     const codes = j.map((x) => x.code);
-    expect(codes).toEqual(expect.arrayContaining(['INV', 'BILL', 'BNK', 'CSH', 'MISC']));
-    const inv = j.find((x) => x.code === 'INV');
+    expect(codes).toEqual(expect.arrayContaining(['FAC', 'BILL', 'BNK', 'CSH', 'MISC']));
+    const inv = j.find((x) => x.code === 'FAC');
     expect(inv).toMatchObject({ type: 'sale', refundSequence: true });
     expect(inv.defaultAccountId).toBeTruthy(); // relié au compte 400000 seedé
   });
@@ -73,7 +73,7 @@ describe('prochainNumeroJournal — numérotation par journal', () => {
   let invJournalId;
   beforeAll(async () => {
     admin = await registerEntreprise();
-    invJournalId = (await request(app).get('/api/journals').set(bearer(admin.token))).body.journals.find((j) => j.code === 'INV').id;
+    invJournalId = (await request(app).get('/api/journals').set(bearer(admin.token))).body.journals.find((j) => j.code === 'FAC').id;
   });
 
   test('incrémente NNNN, réinitialise par année, préfixe R pour un avoir', async () => {
@@ -81,16 +81,16 @@ describe('prochainNumeroJournal — numérotation par journal', () => {
     try {
       const n1 = await prochainNumeroJournal(client, invJournalId, admin.entrepriseId, '2026-03-01');
       const n2 = await prochainNumeroJournal(client, invJournalId, admin.entrepriseId, '2026-07-15');
-      expect(n1).toBe('INV/2026/0001');
-      expect(n2).toBe('INV/2026/0002');
+      expect(n1).toBe('FAC/2026/0001');
+      expect(n2).toBe('FAC/2026/0002');
 
       // année différente → compteur repart de 1
       const n3 = await prochainNumeroJournal(client, invJournalId, admin.entrepriseId, '2027-01-02');
-      expect(n3).toBe('INV/2027/0001');
+      expect(n3).toBe('FAC/2027/0001');
 
       // avoir sur un journal refund_sequence → préfixe R..., séquence séparée
       const r1 = await prochainNumeroJournal(client, invJournalId, admin.entrepriseId, '2026-04-01', { refund: true });
-      expect(r1).toBe('RINV/2026/0001');
+      expect(r1).toBe('RFAC/2026/0001');
     } finally {
       client.release();
     }
@@ -102,6 +102,46 @@ describe('prochainNumeroJournal — numérotation par journal', () => {
     try {
       await expect(prochainNumeroJournal(client, invJournalId, autre.entrepriseId, '2026-01-01'))
         .rejects.toMatchObject({ code: 'JOURNAL_NOT_FOUND' });
+    } finally {
+      client.release();
+    }
+  });
+});
+
+// Renommage INV → FAC (2026-09-11). La migration elle-même (migrate.js:renommerJournalVenteVersFac)
+// n'est pas rejouable ici — le globalSetup crée déjà les journaux en FAC — mais son invariant
+// critique se teste : après un renommage de code, la numérotation doit CONTINUER et non repartir
+// à 0001, sinon deux pièces du même exercice porteraient le même numéro apparent.
+describe('Renommage du code de journal — continuité de la numérotation', () => {
+  test('le compteur reporté fait continuer la séquence au lieu de la redémarrer', async () => {
+    const admin = await registerEntreprise();
+    const journalId = (await request(app).get('/api/journals').set(bearer(admin.token)))
+      .body.journals.find((j) => j.code === 'FAC').id;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const n1 = await prochainNumeroJournal(client, journalId, admin.entrepriseId, '2026-05-01');
+      const n2 = await prochainNumeroJournal(client, journalId, admin.entrepriseId, '2026-05-02');
+      expect([n1, n2]).toEqual(['FAC/2026/0001', 'FAC/2026/0002']);
+
+      // On rejoue exactement ce que fait la migration : reporter le compteur sur le nouveau
+      // préfixe, puis renommer le code.
+      await client.query(
+        `INSERT INTO account_journal_sequence (journal_id, prefix, last_number)
+         SELECT s.journal_id, 'VTE/' || split_part(s.prefix, '/', 2) || '/', s.last_number
+           FROM account_journal_sequence s
+          WHERE s.journal_id = $1 AND s.prefix LIKE 'FAC/%'
+         ON CONFLICT (journal_id, prefix) DO UPDATE
+           SET last_number = GREATEST(account_journal_sequence.last_number, EXCLUDED.last_number)`,
+        [journalId]
+      );
+      await client.query("UPDATE account_journal SET code = 'VTE' WHERE id = $1", [journalId]);
+
+      const n3 = await prochainNumeroJournal(client, journalId, admin.entrepriseId, '2026-05-03');
+      // 0003 et non 0001 : c'est tout l'objet du report.
+      expect(n3).toBe('VTE/2026/0003');
+      await client.query('ROLLBACK');
     } finally {
       client.release();
     }

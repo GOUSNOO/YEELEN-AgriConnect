@@ -4855,3 +4855,69 @@ arrivant au bon endroit. Écrans voisins rouverts (Articles, Transformation, Con
 Poulailler, qui partage `StocksTab`). Entreprise jetable purgée, images reconstruites.
 
 **L'audit Stocks/Comptabilité du 2026-09-10 est terminé : ses six chantiers sont livrés.**
+
+### 2026-09-11 — Numéro de facture FAC, et WhatsApp sur une pièce facturée
+
+Deux demandes de l'utilisateur : remplacer « INV » par « FAC » dans les numéros de facture, et
+pouvoir envoyer une facture par WhatsApp.
+
+#### INV → FAC
+
+Le préfixe n'était écrit nulle part : c'est le **code du journal de vente** qui le devient
+(`CODE/AAAA/NNNN`, `RCODE/…` pour un avoir). Un seul point à changer dans le code de production
+(`comptaDefauts.js`), plus une migration pour les entreprises existantes.
+
+**Deux règles non négociables, et la seconde est un piège.**
+
+1. Les pièces **déjà émises gardent leur numéro `INV/…`**, jamais renommées. Une pièce émise a
+   une valeur légale, et son `name` entre dans le hachage d'inaltérabilité
+   (`chaineIntegriteMove`) : les réécrire romprait la chaîne de sécurisation d'un journal
+   verrouillé. Vérifié après migration : la facture existante s'appelle toujours `INV/2026/0001`.
+2. **Le compteur devait être reporté.** `account_journal_sequence` est indexée par préfixe : sans
+   report, la première facture après migration se serait appelée `FAC/2026/0001` alors que
+   `INV/2026/0001` existait déjà — deux pièces perçues comme « numéro 1 » du même exercice. La
+   migration recopie le compteur sur le nouveau préfixe avant de renommer le code, `RINV/` →
+   `RFAC/` compris. Vérifié en base : l'entreprise 1 avait `INV/2026/` à 1, elle a désormais
+   `FAC/2026/` à 1 — sa prochaine facture sera `0002`. Un test le garde en rejouant l'opération
+   sur un troisième code.
+
+Les anciennes lignes `INV/…` de la séquence sont conservées : plus jamais consultées puisque le
+préfixe dérive du code, elles gardent la trace du point d'arrêt.
+
+#### WhatsApp sur une pièce facturée
+
+Tout existait déjà, sauf le lien entre les deux : le PDF s'intitule « FACTURE » dès que le devis
+est facturé (`devisPdf.js`), le lien public fonctionne, et la route `lien-whatsapp` n'a aucune
+restriction de statut. **C'est le bouton qui s'arrêtait à « Envoyé »** — il disparaissait
+exactement au moment où la facture existait. Il est désormais visible sur toute pièce non annulée,
+et son libellé devient « Envoyer la facture par WhatsApp » quand un `account_move` est lié.
+
+**Un vrai défaut trouvé en étendant.** La route refigeait le taux de change à chaque appel. Sur
+une pièce facturée, c'est interdit : le taux est figé à l'émission et la facture comptable a été
+postée à ce taux-là — le rouvrir aurait désaccordé le devis de son écriture. Le refigeage est
+maintenant conditionné à l'absence de facture liée, et un test vérifie que le taux et le statut
+d'une pièce facturée ne bougent pas après l'appel.
+
+**Le mot compte aussi** : le message annonçait « voici votre devis » quel que soit l'état. Il dit
+maintenant « votre facture » le cas échéant.
+
+#### Ce qui n'a pas changé, et pourquoi
+
+**WhatsApp par lien click-to-chat ne transporte aucune pièce jointe** — c'était déjà le constat du
+chantier devis. On envoie un lien vers la pièce, que le client ouvre pour consulter et télécharger
+le PDF ; joindre un vrai fichier exigerait la Cloud API de Meta (compte Business vérifié, numéro
+dédié, modèles pré-approuvés, facturation par message).
+
+**Le message cite `DEV-2026-0001`, pas `FAC/2026/0001`, et c'est délibéré** : le PDF imprime
+`devis.numero`, donc citer le numéro comptable renverrait le client à une référence introuvable
+sur son document. Cela révèle une incohérence de fond, préexistante et hors périmètre : une pièce
+facturée porte un numéro commençant par « DEV- ». Signalée à l'utilisateur plutôt que corrigée en
+passant — changer le numéro imprimé sur des pièces déjà envoyées relève de la même prudence que
+le point 1 ci-dessus.
+
+**Vérification** — 2 tests d'intégration ajoutés, **439/439** ; build, `oxlint`, 130/130 frontend.
+Migration rejouée deux fois (7 entreprises renommées, puis « déjà FAC »). En navigateur sur une
+entreprise jetable : facture comptable créée en `FAC/2026/0001`, bouton « Envoyer la facture par
+WhatsApp » présent sur la pièce facturée, et lien produit capturé sans rien envoyer
+(`window.open` intercepté) — message et numéro conformes. Écrans voisins rouverts (liste Ventes,
+écran Factures). Entreprise jetable purgée, images Docker backend et frontend reconstruites.
