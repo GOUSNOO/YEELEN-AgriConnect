@@ -239,9 +239,9 @@ router.post('/register', async (req, res) => {
     // utils/emplacementsStockDefaut.js).
     for (const e of EMPLACEMENTS_STOCK_DEFAUT) {
       await client.query(
-        `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
+        `INSERT INTO emplacements_stock (entreprise_id, nom, type, par_defaut) VALUES ($1, $2, $3, $4)
          ON CONFLICT (entreprise_id, nom) DO NOTHING`,
-        [entreprise.id, e.nom, e.type]
+        [entreprise.id, e.nom, e.type, e.type === 'interne']
       );
     }
 

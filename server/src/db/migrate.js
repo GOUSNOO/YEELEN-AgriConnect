@@ -1563,6 +1563,15 @@ CREATE TABLE IF NOT EXISTS emplacements_stock (
 );
 CREATE INDEX IF NOT EXISTS idx_emplacements_stock_entreprise_id ON emplacements_stock(entreprise_id);
 
+-- Transferts entre emplacements (2026-09-10) : dès qu'une entreprise peut créer un second
+-- emplacement interne, « l'emplacement interne » ne veut plus rien dire. Sans ce drapeau,
+-- stockSync.js:resoudreEmplacements prendrait celui que la requête renvoie en premier — une
+-- réception d'achat atterrirait dans un emplacement au hasard, sans erreur ni trace. Un seul
+-- défaut par entreprise, garanti par l'index unique partiel plutôt que par du code applicatif.
+ALTER TABLE emplacements_stock ADD COLUMN IF NOT EXISTS par_defaut BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_emplacements_stock_defaut_unique
+  ON emplacements_stock(entreprise_id) WHERE par_defaut;
+
 -- « Combien il y a où » — un seul quant par (produit, emplacement) : pas de dimension lot_id
 -- ici (contrairement à stock.quant réel), stockSync.js ne consomme jamais un lot précis — le
 -- suivi de lot (stock_lots, étape B élargissement stock) reste un registre parallèle
@@ -3163,9 +3172,9 @@ async function seedEmplacementsStockForExistingEntreprises() {
   for (const { id } of entreprises) {
     for (const e of EMPLACEMENTS_STOCK_DEFAUT) {
       await client.query(
-        `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
+        `INSERT INTO emplacements_stock (entreprise_id, nom, type, par_defaut) VALUES ($1, $2, $3, $4)
          ON CONFLICT (entreprise_id, nom) DO NOTHING`,
-        [id, e.nom, e.type]
+        [id, e.nom, e.type, e.type === 'interne']
       );
     }
   }
@@ -3179,6 +3188,24 @@ async function seedEmplacementsStockForExistingEntreprises() {
 // seedEmplacementsStockForExistingEntreprises ci-dessus (NOT EXISTS *aucun* emplacement) ne se
 // redéclenche jamais pour une entreprise déjà seedée, donc virtuellement toutes. Même idiome que
 // seedComptesChangeForExistingEntreprises (multi-devise étape 4).
+// Transferts (2026-09-10) : marque l'emplacement interne existant comme défaut. Les
+// entreprises créées avant cette étape n'en ont qu'un — c'est donc lui, sans ambiguïté.
+async function backfillEmplacementInterneParDefaut() {
+  const { rowCount } = await client.query(
+    `UPDATE emplacements_stock e SET par_defaut = TRUE
+      WHERE e.type = 'interne' AND NOT e.par_defaut
+        AND NOT EXISTS (SELECT 1 FROM emplacements_stock d
+                         WHERE d.entreprise_id = e.entreprise_id AND d.par_defaut)
+        AND e.id = (SELECT MIN(x.id) FROM emplacements_stock x
+                     WHERE x.entreprise_id = e.entreprise_id AND x.type = 'interne')`
+  );
+  if (rowCount > 0) {
+    console.log(`✅ Emplacement interne par défaut marqué pour ${rowCount} entreprise(s).`);
+  } else {
+    console.log('ℹ️  Emplacement interne par défaut : déjà défini partout.');
+  }
+}
+
 async function seedEmplacementTypePourEntreprisesExistantes(type) {
   const modele = EMPLACEMENTS_STOCK_DEFAUT.find((e) => e.type === type);
   const { rows: entreprises } = await client.query(
@@ -3188,9 +3215,9 @@ async function seedEmplacementTypePourEntreprisesExistantes(type) {
   );
   for (const { id } of entreprises) {
     await client.query(
-      `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
+      `INSERT INTO emplacements_stock (entreprise_id, nom, type, par_defaut) VALUES ($1, $2, $3, $4)
        ON CONFLICT (entreprise_id, nom) DO NOTHING`,
-      [id, modele.nom, modele.type]
+      [id, modele.nom, modele.type, modele.type === 'interne']
     );
   }
   if (entreprises.length > 0) {
@@ -3397,6 +3424,7 @@ async function migrate() {
     await seedEmplacementsStockForExistingEntreprises();
     await seedEmplacementTypePourEntreprisesExistantes('production');
     await seedEmplacementTypePourEntreprisesExistantes('inventaire');
+    await backfillEmplacementInterneParDefaut();
     await backfillStockQuants();
     await seedAbonnementBackfill();
     await seedModulesActifsBackfill();

@@ -4790,3 +4790,68 @@ côtés, TVA 18 720 collectée − 5 400 déductible = 13 320 nets. Période dé
 écriture : le compte de résultat se vide, le bilan garde son actif et bascule les 74 000 en
 report à nouveau sans rompre l'équilibre. Écrans voisins rouverts (Factures, Configuration),
 aucune requête en échec. Entreprise jetable purgée, images reconstruites.
+
+### 2026-09-10 — Transferts entre emplacements et stock prévisionnel (chantier 6, audit COMPLET)
+
+Dernier item de l'audit du matin. Il a commencé par un constat qui a redéfini le chantier :
+**une entreprise n'avait qu'un seul emplacement interne**, seedé à l'inscription, et
+`emplacements_stock` n'avait aucune route. Un « transfert entre emplacements » n'avait donc
+aucune destination possible. Créer des emplacements était le préalable, pas un supplément.
+
+- `/api/emplacements-stock` : CRUD des **internes** seulement. Les virtuels (client, fournisseur,
+  perte, production, inventaire) sont structurels — `stockSync.js` les résout par type pour
+  qualifier chaque mouvement, en créer ou en supprimer casserait la traçabilité. Écriture réservée
+  à admin/directeur : c'est de la configuration, pas une opération de terrain.
+- `POST /api/produits/transferts` : **le seul mouvement de l'application qui ne change pas
+  `produits.quantite`**. Il ne peut donc pas passer par `mouvementStock`, qui l'ajuste
+  systématiquement — d'où un chemin dédié qui n'écrit que les deux quants et le mouvement. Un
+  test l'affirme explicitement, pour le jour où quelqu'un voudra « unifier » les chemins.
+- `GET /api/produits/previsionnel` : disponible + entrant. Panneau dans **Stocks → Inventaire**,
+  après le stock par emplacement — on constate où est la marchandise, puis on la déplace.
+
+#### Le piège central, et la preuve qu'il est gardé
+
+`resoudreEmplacements` faisait `parType[type] = id` : **un seul identifiant par type, la dernière
+ligne l'emportant**. Dès qu'une entreprise a deux entrepôts, c'est l'ordre de la requête qui
+décide où atterrit une réception d'achat — sans erreur, sans trace, la pire forme de défaut.
+Nouvelle colonne `emplacements_stock.par_defaut`, un seul par entreprise garanti par un **index
+unique partiel** plutôt que par du code applicatif, tri explicite, et la boucle garde désormais la
+première ligne.
+
+Prouvé en retirant le tri : le test « une réception entre dans l'emplacement PAR DÉFAUT » tombe
+seul (`attendu 25, reçu undefined`), les douze autres restent verts. Vérifié aussi en conditions
+réelles — Silo Nord promu par défaut alors qu'il a l'identifiant le plus grand, puis une commande
+reçue : les 150 unités y sont bien allées.
+
+#### Trois dépendances que ce changement a ouvertes
+
+1. La sous-requête du réservé (`chargerProduitPourMouvement`) prenait le quant du **premier**
+   interne : passée en `SUM`, sans quoi un comptage aurait inventé un manquant.
+2. L'ajustement d'inventaire livré le matin même **pose** le quant interne : il accepte désormais
+   un `emplacementId` (défaut : l'emplacement par défaut) et compte cet emplacement-là.
+3. **Un test a rattrapé une règle trop fragile.** J'avais écrit « le théorique est le quant de
+   l'emplacement, sauf si aucun quant n'existe ». Or un article créé avec un stock initial n'a
+   jamais de quant, et une vente signée peut y poser une *réservation* sans jamais créer la
+   quantité physique : le quant existe alors à `(0, 15)` et ma règle renvoyait 0 au lieu de 115.
+   État parfaitement réel, pas artificiel. Départage désormais explicite par la **somme des quants
+   internes** : nulle, c'est `produits.quantite` qui dit le vrai et le défaut porte tout ; non
+   nulle, les quants font foi emplacement par emplacement.
+
+#### L'entrant, et ce qu'on refuse de faire dire aux chiffres
+
+La référence sépare `free_qty` (en main − réservé) de `virtual_available` (en main − sortant +
+entrant) ; notre seule sortie planifiée étant la réservation d'un devis signé, c'est elle qui
+tient lieu de sortant. Pour l'entrant, le cycle d'achat à deux axes marque « partiellement reçu »
+**sans stocker les quantités reçues ligne à ligne** : compter un partiel en entier gonfle le
+prévisionnel, l'exclure le sous-estime. Il est donc exclu du chiffre et **son nombre est affiché
+à côté**, en clair. Un test vérifie que l'entrant reste à zéro et que le compteur passe à un.
+
+**Vérification** — 13 tests d'intégration, **437/437** ; build, `oxlint`, 130/130 frontend.
+Migration rejouée deux fois (7 entreprises marquées, puis « déjà défini partout »), et exactement
+un défaut par entreprise en base. En navigateur : création de « Silo Nord », transfert de 180 kg
+avec le disponible de la source affiché avant validation, répartition 320/180 pendant que la
+quantité détenue reste à 500 — le point du chantier —, bascule du défaut, puis réception d'achat
+arrivant au bon endroit. Écrans voisins rouverts (Articles, Transformation, Configuration, et
+Poulailler, qui partage `StocksTab`). Entreprise jetable purgée, images reconstruites.
+
+**L'audit Stocks/Comptabilité du 2026-09-10 est terminé : ses six chantiers sont livrés.**

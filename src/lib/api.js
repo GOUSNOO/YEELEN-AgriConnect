@@ -952,6 +952,34 @@ export async function creerRebut(produitId, quantite, motif) {
   return request('/produits/rebuts', { method: 'POST', body: JSON.stringify({ produitId, quantite, motif }) });
 }
 
+// Emplacements de stock : seuls les internes sont manipulables, les virtuels sont structurels
+// (voir routes/emplacementsStock.js).
+export async function getEmplacementsStock() {
+  return request('/emplacements-stock');
+}
+
+export async function creerEmplacementStock(nom) {
+  return request('/emplacements-stock', { method: 'POST', body: JSON.stringify({ nom }) });
+}
+
+export async function majEmplacementStock(id, payload) {
+  return request(`/emplacements-stock/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function supprimerEmplacementStock(id) {
+  return request(`/emplacements-stock/${id}`, { method: 'DELETE' });
+}
+
+// Un transfert ne change pas la quantité détenue : il déplace, il ne sort pas. Comme le rebut
+// et le comptage, il ne passe jamais par la file hors ligne.
+export async function creerTransfertStock(payload) {
+  return request('/produits/transferts', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getStockPrevisionnel(module) {
+  return request(`/produits/previsionnel?module=${encodeURIComponent(module)}`);
+}
+
 export async function getPrixEffectif({ stockId, contactId, quantite, date }) {
   const params = new URLSearchParams({ stockId });
   if (contactId) params.set('contactId', contactId);

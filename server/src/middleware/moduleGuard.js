@@ -47,6 +47,7 @@ const AU_MOINS_UN_MODULE = [
   /^\/api\/factures(\/|$)/,
   /^\/api\/paiements(\/|$)/,
   /^\/api\/produits(\/|$)/,
+  /^\/api\/emplacements-stock(\/|$)/,
   /^\/api\/produit-categories(\/|$)/,
   /^\/api\/produit-templates(\/|$)/,
   /^\/api\/unites-mesure-categories(\/|$)/,

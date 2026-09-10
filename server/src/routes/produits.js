@@ -430,16 +430,53 @@ router.get('/mouvements', authRequired, async (req, res) => {
 // La validation du produit est faite ICI et pas dans stockSync : mouvementStock est écrit pour
 // une synchronisation en arrière-plan, il avale ses erreurs et ne fait rien si le produit est
 // introuvable. Pour un bouton, cela donnerait un clic sans effet et sans message.
+// SUM et non un scalaire : depuis les transferts (2026-09-10) une entreprise peut avoir
+// plusieurs emplacements internes, et une sous-requête sans agrégat aurait renvoyé le réservé du
+// premier venu — sous-estimant le théorique d'un comptage, donc inventant un manquant.
 async function chargerProduitPourMouvement(entrepriseId, produitId) {
   const { rows } = await pool.query(
     `SELECT p.id, p.nom, p.module, p.unite_id AS "uniteId", p.quantite::float8 AS quantite,
-            COALESCE((SELECT q.quantite_reservee FROM stock_quants q
+            COALESCE((SELECT SUM(q.quantite_reservee) FROM stock_quants q
                        JOIN emplacements_stock e ON e.id = q.emplacement_id AND e.type = 'interne'
                       WHERE q.produit_id = p.id AND q.entreprise_id = p.entreprise_id), 0)::float8 AS "reservee"
        FROM produits p WHERE p.id = $1 AND p.entreprise_id = $2`,
     [produitId, entrepriseId]
   );
   return rows[0] || null;
+}
+
+// Le comptage porte sur UN emplacement (par défaut : celui marqué par_defaut).
+//
+// Deux régimes, et il faut savoir dans lequel on est. Quand les quants sont renseignés, ils font
+// foi emplacement par emplacement — c'est tout l'objet d'un stock multi-emplacements, et après un
+// transfert le défaut ne détient plus la totalité. Mais un article créé avec un stock initial n'a
+// JAMAIS eu de quant (ni POST ni PUT /produits n'en écrivent) : ses quants internes somment à
+// zéro pendant que produits.quantite affiche des centaines de kilos, et une vente signée peut
+// même y avoir posé une réservation sans jamais créer la quantité physique. Dans ce régime-là,
+// c'est produits.quantite plus le réservé qui dit le vrai, et le défaut porte le tout.
+//
+// La somme des quants internes départage les deux sans deviner. Tant qu'une entreprise n'a qu'un
+// emplacement interne, le résultat est identique à celui d'avant les transferts.
+async function theoriqueEmplacement(entrepriseId, produit, emplacementId) {
+  const { rows } = await pool.query(
+    `SELECT e.id, e.par_defaut AS "parDefaut",
+            COALESCE((SELECT q.quantite::float8 FROM stock_quants q
+                       WHERE q.produit_id = $2 AND q.emplacement_id = e.id), 0) AS quant,
+            COALESCE((SELECT SUM(q.quantite)::float8 FROM stock_quants q
+                       JOIN emplacements_stock i ON i.id = q.emplacement_id AND i.type = 'interne'
+                      WHERE q.produit_id = $2 AND q.entreprise_id = $1), 0) AS "sommeInterne"
+       FROM emplacements_stock e
+      WHERE e.entreprise_id = $1 AND e.type = 'interne'
+        AND (($3::int IS NULL AND e.par_defaut) OR e.id = $3::int)
+      ORDER BY e.par_defaut DESC, e.id ASC LIMIT 1`,
+    [entrepriseId, produit.id, emplacementId || null]
+  );
+  if (rows.length === 0) return null;
+  const e = rows[0];
+  const quantsInitialises = Math.abs(e.sommeInterne) > 0.0001;
+  const theorique = quantsInitialises ? e.quant
+    : (e.parDefaut ? produit.quantite + produit.reservee : 0);
+  return { emplacementId: e.id, theorique: Number(theorique.toFixed(4)) };
 }
 
 async function relireQuantite(entrepriseId, produitId) {
@@ -460,10 +497,12 @@ router.post('/inventaire', authRequired, async (req, res) => {
     const produit = await chargerProduitPourMouvement(req.user.entrepriseId, produitId);
     if (!produit) return res.status(404).json({ error: 'Produit introuvable.' });
 
-    // Le théorique, c'est ce qu'on s'attend à trouver en rayon : le disponible plus ce qui est
-    // réservé par un devis signé mais toujours physiquement là. produits.quantite seul aurait
-    // fait passer chaque réservation en cours pour un manquant.
-    const theorique = produit.quantite + produit.reservee;
+    // Le théorique, c'est ce qu'on s'attend à trouver en rayon : ce qui est réservé par un devis
+    // signé est toujours physiquement là. Le disponible seul aurait fait passer chaque
+    // réservation en cours pour un manquant.
+    const cible = await theoriqueEmplacement(req.user.entrepriseId, produit, Number(req.body.emplacementId) || null);
+    if (!cible) return res.status(404).json({ error: 'Emplacement interne introuvable.' });
+    const theorique = cible.theorique;
     const ecart = Number((quantiteComptee - theorique).toFixed(4));
     // Appelé même à écart nul : il n'y a alors aucun mouvement à tracer (delta zéro), mais le
     // comptage fait quand même autorité sur le quant, ce qui réaligne un article dont le stock
@@ -472,7 +511,7 @@ router.post('/inventaire', authRequired, async (req, res) => {
     // le genre de chiffre qui trompe sans jamais lever d'erreur.
     await ajusterInventaire(req.user.entrepriseId, {
       stockId: produit.id, produitNom: produit.nom, stockModule: produit.module,
-      delta: ecart, quantiteComptee, uomId: produit.uniteId,
+      delta: ecart, quantiteComptee, emplacementId: cible.emplacementId, uomId: produit.uniteId,
     }, {
       userId: req.user.sub,
       raison: (req.body.motif || '').trim() || "Ajustement d'inventaire",
@@ -518,6 +557,164 @@ router.post('/rebuts', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[POST /produits/rebuts]', err);
     return res.status(500).json({ error: 'Erreur lors de la mise au rebut.' });
+  }
+});
+
+
+// ─── Transfert entre emplacements et stock prévisionnel (2026-09-10) ───
+//
+// Un transfert est le seul mouvement de l'application qui ne change PAS la quantité détenue :
+// la marchandise passe d'un emplacement interne à un autre, le total est le même avant et après.
+// Il ne peut donc pas passer par stockSync.js:mouvementStock, qui ajuste systématiquement
+// produits.quantite — d'où ce chemin dédié, qui n'écrit que les deux quants et le mouvement.
+//
+// Déclarées AVANT GET /:id/mouvements, comme stock-emplacements.
+async function ajusterQuantTransfert(client, entrepriseId, produitId, emplacementId, delta) {
+  await client.query(
+    `INSERT INTO stock_quants (entreprise_id, produit_id, emplacement_id, quantite)
+     VALUES ($1, $2, $3, GREATEST($4, 0))
+     ON CONFLICT (produit_id, emplacement_id) DO UPDATE SET quantite = GREATEST(stock_quants.quantite + $4, 0)`,
+    [entrepriseId, produitId, emplacementId, delta]
+  );
+}
+
+router.post('/transferts', authRequired, async (req, res) => {
+  const produitId = Number(req.body.produitId);
+  const sourceId = Number(req.body.sourceId);
+  const destinationId = Number(req.body.destinationId);
+  const quantite = Number(req.body.quantite);
+  if (!produitId || !sourceId || !destinationId || !Number.isFinite(quantite) || quantite <= 0) {
+    return res.status(400).json({ error: 'produitId, sourceId, destinationId et quantite (positive) sont requis.' });
+  }
+  if (sourceId === destinationId) {
+    return res.status(400).json({ error: 'La source et la destination doivent être différentes.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const produit = await client.query(
+      'SELECT id, nom, module FROM produits WHERE id = $1 AND entreprise_id = $2',
+      [produitId, req.user.entrepriseId]
+    );
+    if (produit.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Produit introuvable.' });
+    }
+
+    // Les deux emplacements doivent être internes ET appartenir à l'entreprise : transférer vers
+    // « Clients » ou « Pertes » contournerait la vente et le rebut, qui eux tiennent la
+    // comptabilité de stock et le total détenu.
+    const emplacements = await client.query(
+      "SELECT id, nom, type FROM emplacements_stock WHERE id = ANY($1::int[]) AND entreprise_id = $2",
+      [[sourceId, destinationId], req.user.entrepriseId]
+    );
+    if (emplacements.rows.length !== 2) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Emplacement introuvable.' });
+    }
+    if (emplacements.rows.some((e) => e.type !== 'interne')) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Un transfert ne peut relier que deux emplacements internes.' });
+    }
+
+    // Le disponible de la SOURCE, pas le stock total du produit : c'est tout l'objet d'un stock
+    // par emplacement. Refuser plutôt qu'écrêter, comme pour le rebut — sinon le registre
+    // enregistrerait un transfert de 30 là où 10 seulement ont bougé.
+    const quant = await client.query(
+      `SELECT (quantite - quantite_reservee)::float8 AS disponible
+         FROM stock_quants WHERE produit_id = $1 AND emplacement_id = $2`,
+      [produitId, sourceId]
+    );
+    const disponible = quant.rows[0] ? quant.rows[0].disponible : 0;
+    if (quantite > disponible) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Quantité supérieure au disponible de l'emplacement source (${disponible}).` });
+    }
+
+    await ajusterQuantTransfert(client, req.user.entrepriseId, produitId, sourceId, -quantite);
+    await ajusterQuantTransfert(client, req.user.entrepriseId, produitId, destinationId, quantite);
+
+    await client.query(
+      `INSERT INTO stock_moves (entreprise_id, user_id, produit_id, quantite, emplacement_source_id, emplacement_dest_id,
+                                state, document_type, raison, date_fait)
+       VALUES ($1, $2, $3, $4, $5, $6, 'fait', 'transfert', $7, now())`,
+      [req.user.entrepriseId, req.user.sub, produitId, quantite, sourceId, destinationId,
+       (req.body.motif || '').trim() || 'Transfert interne']
+    );
+
+    // Volontairement AUCUN UPDATE sur produits.quantite : la marchandise n'a pas quitté
+    // l'entreprise. C'est ce qui distingue un transfert de tous les autres mouvements, et c'est
+    // ce qu'un test vérifie explicitement.
+    await client.query('COMMIT');
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /produits/transferts]', err);
+    return res.status(500).json({ error: 'Erreur lors du transfert.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── GET /api/produits/previsionnel?module= ───
+// L'ERP de référence distingue deux notions que l'on ne mélange pas (product.py) :
+//   free_qty          = en main - réservé          → ce dont je dispose maintenant
+//   virtual_available = en main - sortant + entrant → le prévisionnel
+// Notre seule sortie planifiée étant la réservation d'un devis signé (il n'existe pas de bon de
+// livraison distinct), c'est elle qui tient lieu de sortant.
+//
+// Le théorique s'appuie sur produits.quantite (le disponible, toujours renseigné) plutôt que sur
+// stock_quants : un article créé avec un stock initial n'a pas forcément de quant — ni POST ni
+// PUT /produits n'en écrivent — et bâtir le prévisionnel dessus donnerait zéro pour ces articles.
+//
+// L'ENTRANT ne compte que les commandes en attente de réception. Une commande « partiellement
+// reçue » ne dit pas combien il reste à recevoir : le cycle à deux axes n'enregistre pas les
+// quantités reçues ligne à ligne. La compter en entier gonflerait le prévisionnel, l'exclure le
+// sous-estime — on l'exclut du chiffre et on renvoie leur nombre à part, pour que l'écran le
+// dise au lieu d'afficher un total faux dans un sens ou dans l'autre.
+router.get('/previsionnel', authRequired, async (req, res) => {
+  const { module } = req.query;
+  if (!module || !['Cultures', 'Poulailler', 'Pisciculture'].includes(module)) {
+    return res.status(400).json({ error: 'Module invalide (Cultures, Poulailler ou Pisciculture).' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT p.id AS "produitId", p.nom AS "produitNom",
+              p.quantite::float8 AS disponible,
+              u.symbole AS "uniteSymbole",
+              COALESCE((SELECT SUM(q.quantite_reservee) FROM stock_quants q
+                         JOIN emplacements_stock e ON e.id = q.emplacement_id AND e.type = 'interne'
+                        WHERE q.produit_id = p.id AND q.entreprise_id = p.entreprise_id), 0)::float8 AS reserve,
+              COALESCE((SELECT SUM(al.quantite) FROM achats_lignes al
+                         JOIN achats_documents ad ON ad.id = al.document_id
+                        WHERE al.stock_id = p.id AND ad.entreprise_id = p.entreprise_id
+                          AND ad.statut = 'Commandé' AND ad.etat_reception = 'en_attente'), 0)::float8 AS entrant
+         FROM produits p
+         LEFT JOIN unites_mesure u ON u.id = p.unite_id
+        WHERE p.entreprise_id = $1 AND p.module = $2
+        ORDER BY p.nom ASC`,
+      [req.user.entrepriseId, module]
+    );
+
+    const lignes = result.rows.map((r) => ({
+      ...r,
+      // Le physique inclut le réservé : la marchandise promise est toujours là.
+      physique: Number((r.disponible + r.reserve).toFixed(3)),
+      previsionnel: Number((r.disponible + r.entrant).toFixed(3)),
+    }));
+
+    const partiels = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM achats_documents
+        WHERE entreprise_id = $1 AND module = $2 AND statut = 'Commandé' AND etat_reception = 'partiel'`,
+      [req.user.entrepriseId, module]
+    );
+
+    return res.json({ lignes, commandesPartielles: partiels.rows[0].n });
+  } catch (err) {
+    console.error('[GET /produits/previsionnel]', err);
+    return res.status(500).json({ error: 'Erreur lors du calcul du stock prévisionnel.' });
   }
 });
 

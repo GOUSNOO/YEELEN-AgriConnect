@@ -86,13 +86,20 @@ async function logMouvement({ entrepriseId, stockModule, stockId, stockNom, delt
 
 // Emplacements de stock seedés d'une entreprise (utils/emplacementsStockDefaut.js), résolus à
 // chaque appel (pas de cache global entre requêtes) — { interne, client, fournisseur, perte }.
+// Depuis les transferts (2026-09-10), une entreprise peut avoir PLUSIEURS emplacements internes.
+// L'ordre du tri n'est donc pas cosmétique : il décide où atterrit une réception d'achat.
+// par_defaut d'abord, id ensuite (départage stable si le drapeau venait à manquer), et on garde
+// la PREMIÈRE ligne de chaque type — la boucle d'origine gardait la dernière. Sans cela, une
+// entreprise à deux entrepôts verrait son stock entrer au hasard, sans erreur ni trace.
 async function resoudreEmplacements(entrepriseId) {
   const { rows } = await pool.query(
-    `SELECT id, type FROM emplacements_stock WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte', 'production', 'inventaire')`,
+    `SELECT id, type FROM emplacements_stock
+      WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte', 'production', 'inventaire')
+      ORDER BY par_defaut DESC, id ASC`,
     [entrepriseId]
   );
   const parType = {};
-  for (const r of rows) parType[r.type] = r.id;
+  for (const r of rows) if (parType[r.type] === undefined) parType[r.type] = r.id;
   return parType;
 }
 
@@ -269,7 +276,7 @@ export async function retirerSortieTransformation(entrepriseId, { stockId, produ
 // Contrairement aux autres appelants de ce module, la route ne peut pas se permettre le no-op
 // silencieux de mouvementStock : un bouton qui ne fait rien sans rien dire n'est pas acceptable.
 // Elle valide donc le produit en amont, ce qui garantit que findStockRow trouvera sa ligne.
-export async function ajusterInventaire(entrepriseId, { stockId, produitNom, stockModule, delta, quantiteComptee, uomId }, ctx) {
+export async function ajusterInventaire(entrepriseId, { stockId, produitNom, stockModule, delta, quantiteComptee, emplacementId, uomId }, ctx) {
   const kind = delta > 0 ? 'inventaire_entree' : 'inventaire_sortie';
   await mouvementStock(kind, stockModule || null, entrepriseId, stockId, produitNom, delta, ctx, uomId);
 
@@ -283,13 +290,16 @@ export async function ajusterInventaire(entrepriseId, { stockId, produitNom, sto
   if (quantiteComptee != null) {
     try {
       const row = await findStockRow(entrepriseId, stockModule || null, stockId, produitNom);
+      // L'emplacement compté est passé par la route (défaut : celui marqué par_defaut, résolu
+      // là-bas). Depuis les transferts, retomber sur « l'emplacement interne » ne suffit plus.
       const emplacements = await resoudreEmplacements(entrepriseId);
-      if (row && emplacements.interne) {
+      const cible = emplacementId || emplacements.interne;
+      if (row && cible) {
         await pool.query(
           `INSERT INTO stock_quants (entreprise_id, produit_id, emplacement_id, quantite)
            VALUES ($1, $2, $3, GREATEST($4, 0))
            ON CONFLICT (produit_id, emplacement_id) DO UPDATE SET quantite = GREATEST($4, 0)`,
-          [entrepriseId, row.id, emplacements.interne, quantiteComptee]
+          [entrepriseId, row.id, cible, quantiteComptee]
         );
       }
     } catch (err) {
