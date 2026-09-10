@@ -907,6 +907,28 @@ export async function getBalanceGenerale({ dateDebut, dateFin } = {}) {
   return request(`/factures/balance${q ? `?${q}` : ''}`);
 }
 
+// Compte de résultat, bilan et déclaration de TVA — les trois états qui se lisent sur le grand
+// livre et la balance ci-dessus. Même signature de période pour les trois.
+function periodeQuery({ dateDebut, dateFin } = {}) {
+  const params = new URLSearchParams();
+  if (dateDebut) params.set('dateDebut', dateDebut);
+  if (dateFin) params.set('dateFin', dateFin);
+  const q = params.toString();
+  return q ? `?${q}` : '';
+}
+
+export async function getCompteResultat(periode) {
+  return request(`/factures/compte-resultat${periodeQuery(periode)}`);
+}
+
+export async function getBilan(periode) {
+  return request(`/factures/bilan${periodeQuery(periode)}`);
+}
+
+export async function getDeclarationTva(periode) {
+  return request(`/factures/declaration-tva${periodeQuery(periode)}`);
+}
+
 // Stock par emplacement et registre des mouvements — la donnée existait en base (stock_quants,
 // stock_moves) sans qu'aucune route ne la lise. Voir routes/produits.js.
 export async function getStockEmplacements(module) {

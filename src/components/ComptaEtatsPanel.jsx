@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, BookOpen, Scale, AlertTriangle, Loader2 } from 'lucide-react';
-import { getGrandLivre, getBalanceGenerale } from '../lib/api.js';
-import { Card, Button, Badge, DataTable, notifyError } from './ui.jsx';
+import { ChevronDown, ChevronRight, BookOpen, Scale, AlertTriangle, Loader2, TrendingUp, Landmark, Receipt } from 'lucide-react';
+import { getGrandLivre, getBalanceGenerale, getCompteResultat, getBilan, getDeclarationTva } from '../lib/api.js';
+import { Card, Badge, DataTable, notifyError } from './ui.jsx';
 import { useLocale } from '../lib/locale.jsx';
 import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
-// Grand livre et balance générale — les deux états dont tout le reste découle.
+// Les états comptables — grand livre, balance, puis compte de résultat, bilan et TVA, qui se
+// lisent tous sur les deux premiers.
 //
 // La comptabilité en partie double était complète (écritures, journaux, plan de comptes,
 // lettrage, avoirs, écart de change) mais aucun état n'en sortait : on saisissait juste, on ne
@@ -40,26 +41,91 @@ function Section({ titre, icone: Icone, ouvertParDefaut, children, resume }) {
   );
 }
 
+function Bandeau({ ton = 'red', children }) {
+  const couleurs = ton === 'red'
+    ? { bg: COLORS.redSoft, fg: COLORS.red }
+    : { bg: COLORS.ochreSoft, fg: COLORS.ochre };
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.md,
+      padding: `${SPACE.sm}px ${SPACE.md}px`, borderRadius: RADIUS.card,
+      background: couleurs.bg, color: couleurs.fg, fontSize: TEXT.base, fontWeight: 600,
+    }}>
+      <AlertTriangle size={15} /> {children}
+    </div>
+  );
+}
+
+function Aide({ children }) {
+  return <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft, marginBottom: SPACE.md }}>{children}</div>;
+}
+
+// Un bloc « libellé / montant » à deux colonnes : sert aux trois nouveaux états, qui n'ont pas
+// besoin d'un tableau complet là où ils n'alignent que des comptes et des soldes.
+function TableauSoldes({ titre, lignes, total, libelleTotal, fmtMoney, extras = [] }) {
+  return (
+    <DataTable>
+      <thead>
+        <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+          <th colSpan={2}>{titre}</th>
+          <th style={{ textAlign: 'right' }} />
+        </tr>
+      </thead>
+      <tbody>
+        {lignes.map(l => (
+          <tr key={l.compteId}>
+            <td style={{ fontFamily: "'JetBrains Mono', monospace", width: 90 }}>{l.code}</td>
+            <td>{l.nom}</td>
+            <td style={{ textAlign: 'right' }}>{fmtMoney(l.montant ?? l.solde)}</td>
+          </tr>
+        ))}
+        {extras.map(e => (
+          <tr key={e.cle}>
+            <td />
+            <td style={{ fontStyle: 'italic', color: COLORS.inkSoft }}>{e.libelle}</td>
+            <td style={{ textAlign: 'right', fontStyle: 'italic' }}>{fmtMoney(e.montant)}</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr style={{ fontWeight: 700, borderTop: `2px solid ${COLORS.border}` }}>
+          <td colSpan={2}>{libelleTotal}</td>
+          <td style={{ textAlign: 'right' }}>{fmtMoney(total)}</td>
+        </tr>
+      </tfoot>
+    </DataTable>
+  );
+}
+
 export default function ComptaEtatsPanel() {
   const { t } = useTranslation();
   const { fmtMoney, fmtDate } = useLocale();
   const [periode, setPeriode] = useState({ dateDebut: '', dateFin: '' });
   const [balance, setBalance] = useState(null);
   const [livre, setLivre] = useState(null);
+  const [resultat, setResultat] = useState(null);
+  const [bilan, setBilan] = useState(null);
+  const [tva, setTva] = useState(null);
   const [chargement, setChargement] = useState(false);
   const [comptePlie, setComptePlie] = useState([]);
 
-  // Les deux états partagent la même période : les consulter sur des bornes différentes serait
+  // Les cinq états partagent la même période : les consulter sur des bornes différentes serait
   // le meilleur moyen de comparer deux choses qui ne se comparent pas.
   const charger = useCallback(async () => {
     setChargement(true);
     try {
-      const [b, gl] = await Promise.all([
+      const [b, gl, cr, bl, dv] = await Promise.all([
         getBalanceGenerale(periode),
         getGrandLivre(periode),
+        getCompteResultat(periode),
+        getBilan(periode),
+        getDeclarationTva(periode),
       ]);
       setBalance(b);
       setLivre(gl);
+      setResultat(cr);
+      setBilan(bl);
+      setTva(dv);
     } catch (err) {
       notifyError(err, t('comptaEtats.erreurChargement'));
     } finally {
@@ -98,6 +164,9 @@ export default function ComptaEtatsPanel() {
 
   const lignesBalance = useMemo(() => balance?.comptes || [], [balance]);
 
+  const nbComptesResultat = (resultat?.produits?.length || 0) + (resultat?.charges?.length || 0);
+  const nbComptesBilan = (bilan?.actif?.length || 0) + (bilan?.passif?.length || 0);
+
   return (
     <>
       <Section
@@ -111,15 +180,7 @@ export default function ComptaEtatsPanel() {
         {/* L'égalité débit = crédit est LA vérification d'une comptabilité en partie double.
             On la montre au lieu de la laisser deviner : un écart signale une écriture
             déséquilibrée, pas un défaut d'affichage. */}
-        {totaux && !totaux.equilibre && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.md,
-            padding: `${SPACE.sm}px ${SPACE.md}px`, borderRadius: RADIUS.card,
-            background: COLORS.redSoft, color: COLORS.red, fontSize: TEXT.base, fontWeight: 600,
-          }}>
-            <AlertTriangle size={15} /> {t('comptaEtats.desequilibre')}
-          </div>
-        )}
+        {totaux && !totaux.equilibre && <Bandeau>{t('comptaEtats.desequilibre')}</Bandeau>}
 
         {lignesBalance.length === 0 ? (
           <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('comptaEtats.videBalance')}</div>
@@ -157,6 +218,139 @@ export default function ComptaEtatsPanel() {
               </tr>
             </tfoot>
           </DataTable>
+        )}
+      </Section>
+
+      <Section
+        titre={t('comptaEtats.titreResultat')}
+        icone={TrendingUp}
+        resume={resultat ? t('comptaEtats.resumeResultat', { count: nbComptesResultat }) : null}
+      >
+        {enTetePeriode}
+        <Aide>{t('comptaEtats.resultatAide')}</Aide>
+
+        {nbComptesResultat === 0 ? (
+          <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('comptaEtats.videResultat')}</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: SPACE.lg }}>
+              <TableauSoldes
+                titre={t('comptaEtats.produits')} lignes={resultat.produits}
+                total={resultat.totaux.produits} libelleTotal={t('comptaEtats.totalProduits')} fmtMoney={fmtMoney}
+              />
+              <TableauSoldes
+                titre={t('comptaEtats.charges')} lignes={resultat.charges}
+                total={resultat.totaux.charges} libelleTotal={t('comptaEtats.totalCharges')} fmtMoney={fmtMoney}
+              />
+            </div>
+            <div style={{
+              marginTop: SPACE.lg, padding: `${SPACE.md}px ${SPACE.lg}px`, borderRadius: RADIUS.card,
+              background: COLORS.surfaceAlt, display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', gap: SPACE.md, flexWrap: 'wrap',
+            }}>
+              <span style={{ fontSize: TEXT.md, fontWeight: 600 }}>{t('comptaEtats.resultat')}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE.sm }}>
+                <Badge tone={resultat.totaux.resultat >= 0 ? 'green' : 'red'}>
+                  {resultat.totaux.resultat >= 0 ? t('comptaEtats.benefice') : t('comptaEtats.perte')}
+                </Badge>
+                <span style={{ fontSize: TEXT.lg, fontWeight: 700 }}>{fmtMoney(resultat.totaux.resultat)}</span>
+              </span>
+            </div>
+          </>
+        )}
+      </Section>
+
+      <Section
+        titre={t('comptaEtats.titreBilan')}
+        icone={Landmark}
+        resume={bilan ? t('comptaEtats.resumeBilan', { count: nbComptesBilan }) : null}
+      >
+        {enTetePeriode}
+        <Aide>{t('comptaEtats.bilanAide')}</Aide>
+
+        {/* Même principe que l'égalité de la balance : l'actif doit égaler le passif, on le
+            vérifie à l'écran plutôt que de laisser l'utilisateur additionner lui-même. */}
+        {bilan && !bilan.totaux.equilibre && <Bandeau>{t('comptaEtats.bilanDesequilibre')}</Bandeau>}
+
+        {nbComptesBilan === 0 ? (
+          <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('comptaEtats.videBilan')}</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: SPACE.lg }}>
+            <TableauSoldes
+              titre={t('comptaEtats.actif')} lignes={bilan.actif}
+              total={bilan.totaux.actif} libelleTotal={t('comptaEtats.totalActif')} fmtMoney={fmtMoney}
+            />
+            <TableauSoldes
+              titre={t('comptaEtats.passif')} lignes={bilan.passif}
+              total={bilan.totaux.passif} libelleTotal={t('comptaEtats.totalPassif')} fmtMoney={fmtMoney}
+              extras={[
+                { cle: 'report', libelle: t('comptaEtats.reportANouveau'), montant: bilan.reportANouveau },
+                { cle: 'resultat', libelle: t('comptaEtats.resultatPeriode'), montant: bilan.resultatPeriode },
+              ]}
+            />
+          </div>
+        )}
+      </Section>
+
+      <Section
+        titre={t('comptaEtats.titreTva')}
+        icone={Receipt}
+        resume={tva ? t('comptaEtats.resumeTva', { count: (tva.lignes || []).length }) : null}
+      >
+        {enTetePeriode}
+        <Aide>{t('comptaEtats.tvaAide')}</Aide>
+
+        {/* Une limite réelle, écrite sur l'état lui-même : les achats du module Achats ne
+            produisent aucune écriture comptable, donc la TVA déductible est partielle. Un
+            chiffre partiel présenté comme complet serait pire que pas de chiffre du tout. */}
+        <Bandeau ton="ochre">{t('comptaEtats.tvaLimite')}</Bandeau>
+
+        {(tva?.lignes || []).length === 0 ? (
+          <div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{t('comptaEtats.videTva')}</div>
+        ) : (
+          <>
+            <DataTable>
+              <thead>
+                <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+                  <th>{t('comptaEtats.colTaxe')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('comptaEtats.colBaseCollectee')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('comptaEtats.colTvaCollectee')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('comptaEtats.colBaseDeductible')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('comptaEtats.colTvaDeductible')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tva.lignes.map(l => (
+                  <tr key={l.taxeId}>
+                    <td>{l.nom}</td>
+                    <td style={{ textAlign: 'right', color: COLORS.inkSoft }}>{l.collectee.base ? fmtMoney(l.collectee.base) : '—'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{l.collectee.montant ? fmtMoney(l.collectee.montant) : '—'}</td>
+                    <td style={{ textAlign: 'right', color: COLORS.inkSoft }}>{l.deductible.base ? fmtMoney(l.deductible.base) : '—'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{l.deductible.montant ? fmtMoney(l.deductible.montant) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+
+            <div style={{
+              marginTop: SPACE.lg, padding: `${SPACE.md}px ${SPACE.lg}px`, borderRadius: RADIUS.card,
+              background: COLORS.surfaceAlt, display: 'flex', flexDirection: 'column', gap: SPACE.sm,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base }}>
+                <span>{t('comptaEtats.tvaCollectee')}</span><span>{fmtMoney(tva.totaux.collectee)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TEXT.base, color: COLORS.inkSoft }}>
+                <span>{t('comptaEtats.tvaDeductible')}</span><span>{fmtMoney(tva.totaux.deductible)}</span>
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                borderTop: `2px solid ${COLORS.border}`, paddingTop: SPACE.sm, fontWeight: 700, fontSize: TEXT.md,
+              }}>
+                <span>{tva.totaux.net >= 0 ? t('comptaEtats.tvaNet') : t('comptaEtats.tvaCredit')}</span>
+                <span>{fmtMoney(Math.abs(tva.totaux.net))}</span>
+              </div>
+            </div>
+          </>
         )}
       </Section>
 

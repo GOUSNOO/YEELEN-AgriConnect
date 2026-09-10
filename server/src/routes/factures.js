@@ -516,6 +516,254 @@ router.get('/balance', authRequired, async (req, res) => {
 });
 
 
+
+// ─── Compte de résultat, bilan, déclaration de TVA ───
+//
+// Les trois états qui se lisent sur le grand livre et la balance construits plus haut. Comme le
+// registre HACCP ou la météo, ils sont conçus ici : la source communautaire de l'ERP de référence
+// ne contient aucun module de rapport comptable. Ce qu'on lui reprend, ce sont les règles portées
+// par account_type (account_account.py) :
+//
+//   1. internal_group = le préfixe d'account_type avant le premier « _ » (_get_internal_group) :
+//      asset_receivable → asset, income_other → income. income/expense font le compte de
+//      résultat, asset/liability/equity font le bilan, off_balance n'entre dans aucun des deux.
+//   2. include_initial_balance est faux pour income/expense (_compute_include_initial_balance) :
+//      un compte de résultat repart de zéro à chaque exercice, un compte de bilan cumule depuis
+//      toujours. D'où la différence de forme entre les deux états — le compte de résultat se lit
+//      SUR une période, le bilan À une date.
+//
+// Déclarées AVANT GET /:id, comme grand-livre et balance.
+
+const GROUPES_RESULTAT = ['income', 'expense'];
+
+// Le préfixe d'account_type avant le premier « _ ». En SQL plutôt qu'en JS parce que c'est ce qui
+// regroupe les lignes, et qu'un GROUP BY sait le faire sans rapatrier le détail.
+const EXPR_GROUPE = "split_part(a.account_type, '_', 1)";
+
+router.get('/compte-resultat', authRequired, async (req, res) => {
+  try {
+    const { debut, fin } = await resoudrePeriode(req.user.entrepriseId, req.query);
+
+    // Produits au crédit, charges au débit : on renvoie chaque solde dans le sens où il se lit
+    // (un produit positif est un produit), pas en débit-crédit brut qui rendrait tous les
+    // produits négatifs à l'écran.
+    const { rows } = await pool.query(
+      `SELECT a.id AS "compteId", a.code, a.name AS nom, a.account_type AS type,
+              ${EXPR_GROUPE} AS groupe,
+              COALESCE(SUM(l.credit - l.debit), 0)::float8 AS montant
+         FROM account_account a
+         JOIN account_move_line l ON l.account_id = a.id AND l.entreprise_id = $1
+         JOIN account_move m ON m.id = l.move_id AND m.state = 'posted'
+        WHERE a.entreprise_id = $1 AND ${EXPR_GROUPE} = ANY($4::text[])
+          AND m.date >= $2 AND m.date <= $3
+        GROUP BY a.id, a.code, a.name, a.account_type
+       HAVING COALESCE(SUM(l.credit - l.debit), 0) <> 0
+        ORDER BY a.code ASC`,
+      [req.user.entrepriseId, debut, fin, GROUPES_RESULTAT]
+    );
+
+    // Une charge est au débit : credit - debit la rend négative. On la republie en positif pour
+    // qu'elle s'additionne comme une charge, et le résultat reste produits - charges.
+    const produits = rows.filter((r) => r.groupe === 'income')
+      .map((r) => ({ ...r, montant: Number(r.montant.toFixed(2)) }));
+    const charges = rows.filter((r) => r.groupe === 'expense')
+      .map((r) => ({ ...r, montant: Number((-r.montant).toFixed(2)) }));
+
+    const totalProduits = Number(produits.reduce((s, r) => s + r.montant, 0).toFixed(2));
+    const totalCharges = Number(charges.reduce((s, r) => s + r.montant, 0).toFixed(2));
+
+    return res.json({
+      periode: { debut, fin },
+      produits, charges,
+      totaux: {
+        produits: totalProduits,
+        charges: totalCharges,
+        resultat: Number((totalProduits - totalCharges).toFixed(2)),
+      },
+    });
+  } catch (err) {
+    console.error('[GET /factures/compte-resultat]', err);
+    return res.status(500).json({ error: 'Erreur lors de la construction du compte de résultat.' });
+  }
+});
+
+// Produits - charges sur un intervalle de dates ouvert à gauche : sert au résultat de la période
+// ET au report à nouveau du bilan (tout ce qui précède), qui sont la même somme sur deux bornes.
+async function resultatEntre(entrepriseId, dateMin, dateMax) {
+  const conditions = ['l.entreprise_id = $1', "m.state = 'posted'", `${EXPR_GROUPE} = ANY($2::text[])`];
+  const params = [entrepriseId, GROUPES_RESULTAT];
+  if (dateMin) { params.push(dateMin); conditions.push(`m.date >= $${params.length}`); }
+  if (dateMax) { params.push(dateMax); conditions.push(`m.date <= $${params.length}`); }
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(l.credit - l.debit), 0)::float8 AS resultat
+       FROM account_move_line l
+       JOIN account_move m ON m.id = l.move_id
+       JOIN account_account a ON a.id = l.account_id
+      WHERE ${conditions.join(' AND ')}`,
+    params
+  );
+  return Number(rows[0].resultat.toFixed(2));
+}
+
+router.get('/bilan', authRequired, async (req, res) => {
+  try {
+    const { debut, fin } = await resoudrePeriode(req.user.entrepriseId, req.query);
+
+    // Un bilan se lit À une date : pas de borne basse, on cumule depuis la première écriture
+    // (include_initial_balance vaut vrai pour tous ces comptes).
+    const { rows } = await pool.query(
+      `SELECT a.id AS "compteId", a.code, a.name AS nom, a.account_type AS type,
+              ${EXPR_GROUPE} AS groupe,
+              COALESCE(SUM(l.debit - l.credit), 0)::float8 AS solde
+         FROM account_account a
+         JOIN account_move_line l ON l.account_id = a.id AND l.entreprise_id = $1
+         JOIN account_move m ON m.id = l.move_id AND m.state = 'posted'
+        WHERE a.entreprise_id = $1 AND ${EXPR_GROUPE} = ANY($3::text[])
+          AND m.date <= $2
+        GROUP BY a.id, a.code, a.name, a.account_type
+       HAVING COALESCE(SUM(l.debit - l.credit), 0) <> 0
+        ORDER BY a.code ASC`,
+      [req.user.entrepriseId, fin, ['asset', 'liability', 'equity']]
+    );
+
+    const actif = rows.filter((r) => r.groupe === 'asset')
+      .map((r) => ({ ...r, solde: Number(r.solde.toFixed(2)) }));
+    // Passif et capitaux propres sont créditeurs : on inverse le signe pour qu'ils se lisent
+    // positifs, comme les produits du compte de résultat.
+    const passif = rows.filter((r) => r.groupe !== 'asset')
+      .map((r) => ({ ...r, solde: Number((-r.solde).toFixed(2)) }));
+
+    // Le plan de comptes par défaut n'a ni capitaux propres ni compte de résultat de l'exercice
+    // (equity_unaffected), et l'application ne passe aucune écriture de clôture : sans ces deux
+    // lignes calculées, l'actif ne serait pas égal au passif dès la première facture. C'est
+    // aussi ce qu'affiche un bilan tant que la clôture n'est pas passée — le résultat de la
+    // période d'un côté, ce qui la précède en report à nouveau de l'autre.
+    const resultatPeriode = await resultatEntre(req.user.entrepriseId, debut, fin);
+    const reportANouveau = await resultatEntre(req.user.entrepriseId, null, debut ? veille(debut) : null);
+
+    const totalActif = Number(actif.reduce((s, r) => s + r.solde, 0).toFixed(2));
+    const totalPassifComptes = Number(passif.reduce((s, r) => s + r.solde, 0).toFixed(2));
+    const totalPassif = Number((totalPassifComptes + resultatPeriode + reportANouveau).toFixed(2));
+
+    return res.json({
+      periode: { debut, fin },
+      actif, passif,
+      resultatPeriode, reportANouveau,
+      totaux: {
+        actif: totalActif,
+        passif: totalPassif,
+        equilibre: Math.abs(totalActif - totalPassif) < 0.01,
+      },
+    });
+  } catch (err) {
+    console.error('[GET /factures/bilan]', err);
+    return res.status(500).json({ error: 'Erreur lors de la construction du bilan.' });
+  }
+});
+
+// La veille d'une date ISO, en texte : le report à nouveau s'arrête où la période commence.
+function veille(dateIso) {
+  const d = new Date(`${dateIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+router.get('/declaration-tva', authRequired, async (req, res) => {
+  try {
+    const { debut, fin } = await resoudrePeriode(req.user.entrepriseId, req.query);
+
+    // Deux mesures par taxe, prises à deux endroits différents du même move :
+    //   le MONTANT vient des lignes de taxe (celles qui portent tax_line_id) ;
+    //   la BASE vient des lignes de produit rattachées à cette taxe par la table de liaison.
+    // Les additionner depuis une seule requête donnerait un produit cartésien dès qu'une ligne
+    // porte deux taxes — d'où deux agrégats séparés, recollés par taxe.
+    const sensVente = ['out_invoice', 'out_refund'];
+    const sensAchat = ['in_invoice', 'in_refund'];
+
+    const montants = await pool.query(
+      `SELECT l.tax_line_id AS "taxeId",
+              m.move_type AS "moveType",
+              COALESCE(SUM(l.credit - l.debit), 0)::float8 AS montant
+         FROM account_move_line l
+         JOIN account_move m ON m.id = l.move_id AND m.state = 'posted'
+        WHERE l.entreprise_id = $1 AND l.tax_line_id IS NOT NULL
+          AND m.date >= $2 AND m.date <= $3
+        GROUP BY l.tax_line_id, m.move_type`,
+      [req.user.entrepriseId, debut, fin]
+    );
+
+    const bases = await pool.query(
+      `SELECT lt.tax_id AS "taxeId",
+              m.move_type AS "moveType",
+              COALESCE(SUM(l.credit - l.debit), 0)::float8 AS base
+         FROM account_move_line_taxes lt
+         JOIN account_move_line l ON l.id = lt.move_line_id
+         JOIN account_move m ON m.id = l.move_id AND m.state = 'posted'
+        WHERE l.entreprise_id = $1 AND l.display_type = 'product'
+          AND m.date >= $2 AND m.date <= $3
+        GROUP BY lt.tax_id, m.move_type`,
+      [req.user.entrepriseId, debut, fin]
+    );
+
+    const taxes = await pool.query(
+      'SELECT id, name AS nom, amount::float8 AS taux, amount_type AS "typeMontant" FROM account_tax WHERE entreprise_id = $1 ORDER BY name ASC',
+      [req.user.entrepriseId]
+    );
+
+    const parTaxe = new Map();
+    for (const t of taxes.rows) {
+      parTaxe.set(t.id, {
+        taxeId: t.id, nom: t.nom, taux: t.taux, typeMontant: t.typeMontant,
+        collectee: { base: 0, montant: 0 }, deductible: { base: 0, montant: 0 },
+      });
+    }
+    const cible = (id, moveType) => {
+      const entree = parTaxe.get(id);
+      if (!entree) return null;
+      if (sensVente.includes(moveType)) return entree.collectee;
+      if (sensAchat.includes(moveType)) return entree.deductible;
+      return null;
+    };
+    // Un signe unique pour les deux mesures : credit - debit rend positive une TVA collectée sur
+    // facture de vente, et négative sur avoir — un avoir vient donc bien en déduction.
+    for (const r of montants.rows) {
+      const c = cible(r.taxeId, r.moveType);
+      if (c) c.montant += r.montant;
+    }
+    for (const r of bases.rows) {
+      const c = cible(r.taxeId, r.moveType);
+      if (c) c.base += r.base;
+    }
+
+    // Une facture fournisseur est débitrice : credit - debit rend sa base et sa taxe négatives.
+    // On les republie positives — un montant à récupérer se lit positif, et une charge utile qui
+    // exigerait du lecteur qu'il connaisse l'astuce du signe serait un piège pour la suite.
+    const lignes = [...parTaxe.values()]
+      .filter((t) => t.collectee.montant || t.collectee.base || t.deductible.montant || t.deductible.base)
+      .map((t) => ({
+        ...t,
+        collectee: { base: Number(t.collectee.base.toFixed(2)), montant: Number(t.collectee.montant.toFixed(2)) },
+        deductible: { base: Number((-t.deductible.base).toFixed(2)), montant: Number((-t.deductible.montant).toFixed(2)) },
+      }));
+
+    const collectee = Number(lignes.reduce((s, t) => s + t.collectee.montant, 0).toFixed(2));
+    const deductible = Number(lignes.reduce((s, t) => s + t.deductible.montant, 0).toFixed(2));
+
+    return res.json({
+      periode: { debut, fin },
+      lignes,
+      totaux: {
+        collectee,
+        deductible,
+        net: Number((collectee - deductible).toFixed(2)),
+      },
+    });
+  } catch (err) {
+    console.error('[GET /factures/declaration-tva]', err);
+    return res.status(500).json({ error: 'Erreur lors de la construction de la déclaration de TVA.' });
+  }
+});
+
 // ─── GET /api/factures/:id ─────────────────────────────────────────────────
 router.get('/:id', authRequired, async (req, res) => {
   try {

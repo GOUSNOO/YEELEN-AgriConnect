@@ -4724,3 +4724,69 @@ les articles **en double** (constaté en base : trois articles, six lignes). Le 
 `if (fetched.length === 0 && seedList)` n'a aucun garde-fou contre un double montage — le même
 défaut que celui déjà corrigé pour les parcelles de démonstration de Cultures. Hors périmètre, et
 une décision de l'utilisateur est déjà en attente sur ces stocks de démonstration.
+
+### 2026-09-10 — Compte de résultat, bilan et déclaration de TVA (chantier 5 de l'audit)
+
+Les trois états qui se lisent sur le grand livre et la balance livrés le matin même. Comme la
+météo ou le registre HACCP, ils sont conçus ici : **la source communautaire de l'ERP de
+référence ne contient aucun module de rapport comptable**. Ce qu'on lui reprend, ce sont les deux
+règles portées par `account_type` (`account_account.py`), et elles décident de toute la forme :
+
+1. `_get_internal_group` = le préfixe d'`account_type` avant le premier `_`. income/expense font
+   le compte de résultat, asset/liability/equity font le bilan, `off_balance` n'entre dans aucun
+   des deux.
+2. `_compute_include_initial_balance` est faux pour income/expense : un compte de résultat repart
+   de zéro à chaque exercice, un compte de bilan cumule depuis toujours. D'où la différence de
+   forme — **le compte de résultat se lit sur une période, le bilan à une date**.
+
+Trois routes dans `factures.js`, déclarées avant `/:id` comme leurs aînées, et trois sections
+dans `ComptaEtatsPanel` qui réutilisent la période déjà partagée.
+
+#### Le bilan ne pouvait pas s'équilibrer, et c'était structurel
+
+Le plan de comptes par défaut n'a **ni capitaux propres ni compte de résultat de l'exercice**
+(`equity_unaffected`), et l'application ne passe aucune écriture de clôture. Dès la première
+facture, l'actif portait la créance client face à un passif vide. Plutôt que d'exiger une
+clôture qui n'existe nulle part, le bilan porte deux lignes calculées au passif : **résultat de
+l'exercice** (produits − charges de la période) et **report à nouveau** (ce qui précède). C'est
+ce qu'affiche un bilan tant que la clôture n'est pas passée, et l'égalité est vérifiée à l'écran
+comme celle de la balance — pas laissée à l'addition mentale du lecteur.
+
+Le test qui compte n'est pas « le total vaut 128 120 » mais « l'actif égale le passif, y compris
+quand la période exclut les écritures » : le résultat bascule alors du résultat de l'exercice
+vers le report à nouveau, et un découpage bâclé se verrait immédiatement. Vérifié aux deux
+niveaux, test et navigateur.
+
+#### Le piège du `$`, repris par un autre chemin
+
+`resultatEntre` construisait `m.date >= $${params.length}` — et l'insertion du bloc dans
+`factures.js` via `String.prototype.replace` a **mangé le `$`**, produisant `m.date >= 3` et un
+`operator does not exist: date >= integer`. C'est exactement le défaut déjà rencontré sur le
+filtre par compte du grand livre, arrivé cette fois par le script d'insertion et non par le code
+lui-même. Trouvé par les tests, pas en relisant : quatre d'entre eux sont tombés d'un coup.
+
+#### Deux décisions d'honnêteté
+
+- **La TVA déductible est partielle, et l'écran le dit.** Les achats du module Achats ne
+  produisent aucune écriture comptable — `achats_documents` n'est relié à aucun `account_move` —
+  donc seules les factures fournisseurs saisies dans Finance → Factures y entrent. Un bandeau le
+  déclare sur l'état lui-même : un chiffre partiel présenté comme complet est pire que pas de
+  chiffre.
+- **La charge utile de la TVA a été normalisée en positif.** La première version publiait la base
+  et la taxe déductibles en négatif (`credit - debit` sur une facture fournisseur) et l'écran les
+  ré-inversait. Une API dont il faut connaître l'astuce du signe est un piège pour le prochain
+  lecteur ; le signe se corrige à la source, avec un test qui le garde.
+
+Deux pièges connus visés au passage : le calcul de base par taxe passe par **deux agrégats
+séparés** — les montants viennent des lignes portant `tax_line_id`, les bases des lignes produit
+liées par `account_move_line_taxes` — car une seule requête aurait donné un produit cartésien dès
+qu'une ligne porte deux taxes ; un test le vérifie explicitement. Et `fmtMoney` partout, jamais
+`enDevise` : `debit`/`credit` sont en devise de l'entreprise.
+
+**Vérification** — 11 tests d'intégration, **424/424** ; build, `oxlint`, 130/130 frontend. En
+navigateur sur une entreprise jetable à deux factures de vente et une facture fournisseur :
+résultat 104 000 − 30 000 = 74 000 avec le badge « Bénéfice », bilan équilibré à 128 120 des deux
+côtés, TVA 18 720 collectée − 5 400 déductible = 13 320 nets. Période déplacée après la dernière
+écriture : le compte de résultat se vide, le bilan garde son actif et bascule les 74 000 en
+report à nouveau sans rompre l'équilibre. Écrans voisins rouverts (Factures, Configuration),
+aucune requête en échec. Entreprise jetable purgée, images reconstruites.
