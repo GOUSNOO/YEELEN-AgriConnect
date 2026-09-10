@@ -4413,3 +4413,83 @@ Le « rectangle » retiré à la demande de l'utilisateur en août ne revient pa
 ni encadré ni coins arrondis, seulement un fond et une base. **Écart assumé avec la référence sur
 la valeur du trait**, sur un point où elle est en dessous du seuil d'accessibilité — et
 l'utilisateur avait posé « tout respecter sauf la couleur ».
+
+### 2026-09-10 — Audit Stocks et Comptabilité face à l'ERP de référence (sans modification)
+
+Demandé après l'alignement de Ventes et Achats. Lecture croisée du clone local (menus et vues des
+modules `stock` et `account`) et de nos deux écrans, ouverts dans le navigateur. **Aucun code
+touché** : ce qui suit est un constat, classé par valeur.
+
+#### Stocks
+
+**Le constat qui domine tous les autres : une machinerie entière est construite et invisible.**
+- `stock_quants` (quantité par produit ET par emplacement) : 7 lignes en base, alimentées à
+  chaque mouvement — **aucune route ne les lit, aucun écran ne les affiche**.
+- `emplacements_stock` : 5 emplacements par entreprise (dont « production », ajouté pour la
+  transformation), 40 lignes en base — jamais montrés.
+- `stock_moves` : lu par **un seul** consommateur, le graphique « Valeur du stock »
+  (`produits.js`). Aucune liste de mouvements, alors que la table est le registre de traçabilité.
+
+Autrement dit, l'étape « stock multi-emplacements » livrée le 2026-09-04 n'a pas d'interface.
+Même classe de défaut que le module Observations sans point d'entrée, ou le lien public de devis
+sans écran : construit, testé, maintenu — et hors de portée de l'utilisateur.
+
+**Écart de structure.** La référence sépare Opérations / Produits / Rapports / Configuration.
+Notre onglet empile sur une seule page : formulaire de création, puis quatre panneaux de
+configuration (Gabarits, Recettes, Ordres de transformation, HACCP), puis un graphique, puis la
+liste des articles. C'est le défaut déjà corrigé sur Ventes — la configuration posée sur l'écran
+de travail — à plus grande échelle.
+
+**Fonctions absentes**, de la plus utile à la plus discutable pour une exploitation :
+1. **Ajustement d'inventaire.** Corriger un écart entre stock théorique et stock compté est
+   aujourd'hui impossible autrement qu'en modifiant la quantité de l'article à la main, ce qui
+   contourne le registre de mouvements. Un stock qui ne peut pas être recompté dérive.
+2. **Rebut / perte.** Aucune façon d'enregistrer une avarie, une casse ou une péremption. Sur des
+   denrées agricoles, c'est le mouvement de stock le plus banal après l'achat et la vente.
+3. **Règles de réapprovisionnement.** Nous avons un seuil d'alerte ; la référence en tire une
+   proposition de commande (min/max par emplacement).
+4. **Transferts (`stock.picking`)** — l'objet central de la référence : réception, livraison et
+   transfert interne sont des documents à part entière, avec leur cycle. Chez nous le mouvement
+   de stock n'est qu'un effet de bord d'un achat ou d'un devis. C'est le plus gros écart, et le
+   plus discutable : sur une exploitation mono-site, sa valeur reste à démontrer.
+5. **Prévisionnel** (entrées/sorties à venir).
+
+#### Comptabilité
+
+**Un problème de nommage, d'abord.** L'onglet « Comptabilité » d'un module (Cultures, Poulailler,
+Pisciculture) affiche trois totaux — ventes, achats, solde — et la liste des transactions du
+module. C'est un relevé, pas de la comptabilité. La vraie comptabilité vit ailleurs, sous
+Finance → Factures. Deux endroits portent donc des noms qui invitent à les confondre.
+
+**Les fondations sont solides**, et il faut le dire avant la liste des manques : `account_move` /
+`account_move_line` en partie double, journaux et séquences, plan de comptes, taxes, conditions
+de paiement, lettrage partiel et total, avoirs, écart de change, chaîne d'inaltérabilité par
+hachage, balance âgée, paiements autonomes. C'est plus profond que ce qu'on trouve dans la
+plupart des applications de gestion agricole.
+
+**Ce qui manque tient en un mot : les états.** On saisit des écritures correctes, mais on ne peut
+en tirer aucune des lectures pour lesquelles on tient une comptabilité :
+- **Grand livre** (mouvements par compte) — absent.
+- **Balance générale** (soldes de tous les comptes, contrôle débit = crédit) — absent.
+- **Compte de résultat** et **bilan** — absents.
+- **Déclaration de TVA** (taxes collectées / déductibles sur une période) — absent, alors que
+  `account_move_line_taxes` porte déjà la donnée.
+- **Écritures diverses** : les pièces de type `entry` sont exclues de la liste des factures (fix
+  du 2026-09-01) et aucun autre écran ne les montre — elles sont saisissables par l'API,
+  invisibles à l'écran.
+- **Date de clôture / verrouillage d'exercice** — absent (la chaîne de hachage protège une pièce,
+  pas une période).
+
+#### Classement proposé
+
+1. **Rendre visible le stock par emplacement** — la donnée existe, est juste et est maintenue ;
+   il manque une route et un écran. Rapport valeur/coût le plus élevé des deux modules.
+2. **Grand livre + balance générale** — les deux états dont tout le reste découle, et les données
+   sont déjà là. Sans eux, la profondeur comptable existante ne sert à personne.
+3. **Ajustement d'inventaire et rebut** — les deux mouvements qui manquent pour qu'un stock reste
+   juste dans la durée.
+4. **Séparer configuration et travail** sur l'écran Stocks, comme fait sur Ventes.
+5. **Compte de résultat, bilan, déclaration de TVA** — plus lourds, et dépendants du plan de
+   comptes réellement utilisé par l'entreprise.
+6. **Transferts et prévisionnel** — à ne considérer qu'une fois le reste en place, et seulement
+   si l'usage réel les réclame.
