@@ -981,7 +981,8 @@
     "supprimerLotOk_one": "{{count}} devis supprimé.",
     "supprimerLotOk_other": "{{count}} devis supprimés.",
     "supprimerLotEchec_one": "{{count}} devis n'a pas pu être supprimé.",
-    "supprimerLotEchec_other": "{{count}} devis n'ont pas pu être supprimés."
+    "supprimerLotEchec_other": "{{count}} devis n'ont pas pu être supprimés.",
+    "modeEdition": "en modification"
   },
   "gabarits": {
     "title": "Gabarits & attributs",

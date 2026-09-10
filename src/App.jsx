@@ -72,6 +72,7 @@ import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
 import { useListeOutils, BarreOutilsListe, EnteteTriable, LigneGroupe, PiedListe, TableauListe, MenuColonnes } from './components/ListeOutils.jsx';
+import { useParametreUrl } from './lib/urlParams.js';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
 const FacturesModule = lazy(() => import('./components/FacturesModule'));
 import ProduitTemplatesPanel from './components/ProduitTemplatesPanel';
@@ -647,19 +648,28 @@ function DevisModule({ clientsListe, filtreStatut }) {
   const [paiementForm, setPaiementForm] = useState({ modePaiement: 'Espèces', modalitePaiement: 'complet', echeances: [{ ...emptyEcheance }] });
   const [vueDevis, setVueDevis] = useState('liste');
   // Modèle liste-puis-formulaire de l'ERP de référence : l'écran est la liste, et créer passe
-  // par un bouton qui l'échange contre le formulaire. Le formulaire de création n'est plus
-  // ouvert en permanence au-dessus de la liste, qui repassait sous la ligne de flottaison.
-  // Un seul état suffit : `detailId` marque déjà qu'une fiche est ouverte.
-  const [creationOuverte, setCreationOuverte] = useState(false);
+  // par un bouton qui l'échange contre le formulaire.
+  //
+  // Le document ouvert vit dans l'URL (?devis=12, ?devis=nouveau), pas dans un état local :
+  // un rechargement rouvre la même fiche, le bouton retour du navigateur referme, et un lien
+  // se partage. C'est le principe déjà appliqué à l'écran et à l'onglet dans le shell.
+  const [devisUrl, setDevisUrl] = useParametreUrl('devis');
+  const creationOuverte = devisUrl === 'nouveau';
   const enFiche = Boolean(detailId);
-  const enFormulaire = creationOuverte || enFiche;
-  const retourListe = () => {
-    setCreationOuverte(false);
-    setDetailId(null);
-    setDetailData(null);
-    setJournal([]);
-    setMessages([]);
-  };
+  const enFormulaire = creationOuverte || enFiche || Boolean(editingId);
+  const retourListe = () => { cancelEditDevis(); setDevisUrl(null); };
+
+  // L'URL commande, la fiche suit. Un seul sens de dépendance : sans cela, ouvrir une fiche
+  // écrirait dans deux endroits qui pourraient diverger.
+  useEffect(() => {
+    if (!devisUrl || devisUrl === 'nouveau') {
+      if (detailId) { setDetailId(null); setDetailData(null); setJournal([]); setMessages([]); }
+      return;
+    }
+    const id = Number(devisUrl);
+    if (id && id !== detailId) openDetail(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devisUrl]);
 
   const loadDevis = async () => {
     setLoading(true);
@@ -831,7 +841,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       // Retour à la liste : le devis créé y apparaît, ce que le formulaire remis à zéro ne
       // montrait pas. L'ERP de référence reste sur la fiche du document enregistré ; ici le
       // formulaire de création ne devient pas une fiche, la liste est le repère le plus proche.
-      setCreationOuverte(false);
+      setDevisUrl(null);
       await loadDevis();
     } catch (err) {
       setApiError(err.message);
@@ -1230,7 +1240,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       rendu: (d) => (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }} onClick={e => e.stopPropagation()}>
           {['Brouillon', 'Devis', 'Signé'].includes(d.statut) && (
-            <button onClick={() => startEditDevis(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
+            <button onClick={() => { setDevisUrl(d.id, { remplacer: false }); startEditDevis(d); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
           )}
           {d.statut === 'Brouillon' && (
             <button onClick={() => handleDelete(d.id, d.numero)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft }}><Trash2 size={15} /></button>
@@ -1276,7 +1286,10 @@ function DevisModule({ clientsListe, filtreStatut }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
           <Button variant="ghost" small onClick={retourListe}><ChevronLeft size={14} /> {t("devis.retourListe")}</Button>
           <span style={{ fontSize: TEXT.sm, color: COLORS.inkFaint }}>
-            {t("devis.filAriane")} / <strong style={{ color: COLORS.inkSoft }}>{enFiche ? (detailData?.numero || '…') : t("devis.nouveau")}</strong>
+            {t("devis.filAriane")} / <strong style={{ color: COLORS.inkSoft }}>
+              {editingId ? (editForm.numero || detailData?.numero || t('devis.editTitle')) : (enFiche ? (detailData?.numero || '…') : t('devis.nouveau'))}
+            </strong>
+            {editingId && <span style={{ marginLeft: SPACE.sm, color: COLORS.ochre }}>· {t('devis.modeEdition')}</span>}
           </span>
         </div>
       )}
@@ -1451,7 +1464,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
       {!enFormulaire && (
         <div style={{ display: 'flex', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
           {!filtreStatut ? (
-            <Button variant="green" onClick={() => setCreationOuverte(true)}><Plus size={14} /> {t("devis.nouveau")}</Button>
+            <Button variant="green" onClick={() => setDevisUrl('nouveau', { remplacer: false })}><Plus size={14} /> {t("devis.nouveau")}</Button>
           ) : <span />}
           <div style={{ display: 'flex', gap: SPACE.sm }}>
             <Button variant={vueDevis === 'liste' ? 'default' : 'ghost'} small onClick={() => setVueDevis('liste')}>{t('devis.vueListe')}</Button>
@@ -1502,7 +1515,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
             etat={outilsDevis}
             colonnes={colonnesDevis}
             cle={(d) => d.id}
-            onLigneClic={(d) => openDetail(d.id)}
+            onLigneClic={(d) => setDevisUrl(d.id, { remplacer: false })}
             ligneAttenuee={(d) => d.statut === 'Annulé'}
             selectionActive
             actionsGroupees={(selection) => {
@@ -1533,9 +1546,9 @@ function DevisModule({ clientsListe, filtreStatut }) {
       )}
 
       {/* Popup de détail d'un devis, avec actions (envoyer, facturer) et aperçu de la signature */}
-      {detailId && detailData && (() => {
+      {detailId && detailData && !editingId && (() => {
         const margeInfo = computeMarge(detailData, catalogItems);
-        const closeDetailPopup = () => { setDetailId(null); setDetailData(null); setJournal([]); setMessages([]); };
+        const closeDetailPopup = () => setDevisUrl(null);
         const modifiable = ['Brouillon', 'Devis', 'Signé'].includes(detailData.statut);
         const nbLignesProduit = detailData.lignes.filter(l => l.type !== 'section').length;
         const nbEcheances = (detailData.echeances || []).length;
@@ -1588,7 +1601,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                       </Button>
                     )}
                     {modifiable && (
-                      <Button variant="outline" onClick={() => { startEditDevis(detailData); closeDetailPopup(); }}>
+                      <Button variant="outline" onClick={() => startEditDevis(detailData)}>
                         <Settings2 size={14} /> {t("devis.modifierLignes")}
                       </Button>
                     )}
@@ -2035,10 +2048,13 @@ function DevisModule({ clientsListe, filtreStatut }) {
           </div>
         </div>
       )}
-      {/* Fenêtre de modification d'un devis existant, séparée du formulaire de création */}
+      {/* Édition DANS le formulaire, et non dans une fenêtre par-dessus : dans l'ERP de
+          référence, la fiche EST l'éditeur — on modifie les champs sur place et une paire
+          Enregistrer / Annuler apparaît. Le contenu du formulaire est celui qui vivait
+          auparavant dans la modale ; seule son enveloppe change. */}
       {editingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEditDevis}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: SPACE.xl }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', padding: SPACE.xl }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t("devis.editTitle")}</div>
               <button onClick={cancelEditDevis} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
@@ -2440,12 +2456,25 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
   // déjà chargée, un second appel réseau n'apporterait rien. 'Reçu' par défaut pour les lignes
   // historiques créées avant l'introduction de la colonne statut.
   const docsAffiches = filtreStatut ? docs.filter(d => (d.statut || 'Reçu') === filtreStatut) : docs;
-  // Même modèle liste-puis-formulaire que DevisModule : la liste est l'écran, la création et
-  // la fiche l'occupent tour à tour. `detailDoc` marque déjà qu'une fiche est ouverte.
-  const [creationOuverte, setCreationOuverte] = useState(false);
+  // Même modèle que DevisModule, URL comprise : le document ouvert vit dans ?achat=.
+  const [achatUrl, setAchatUrl] = useParametreUrl('achat');
+  const creationOuverte = achatUrl === 'nouveau';
   const enFiche = Boolean(detailDoc);
-  const enFormulaire = creationOuverte || enFiche;
-  const retourListe = () => { setCreationOuverte(false); setDetailDoc(null); };
+  const enFormulaire = creationOuverte || enFiche || Boolean(editingId);
+  const retourListe = () => { cancelEdit(); setAchatUrl(null); };
+
+  useEffect(() => {
+    if (!achatUrl || achatUrl === 'nouveau') {
+      if (detailDoc) setDetailDoc(null);
+      return;
+    }
+    const id = Number(achatUrl);
+    if (id && (!detailDoc || detailDoc.id !== id)) {
+      const doc = docs.find(d => d.id === id);
+      if (doc) openDetail(doc);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [achatUrl, docs]);
 
   // Mêmes outils que la liste des devis, avec les questions propres à l'achat.
   const outilsAchats = useListeOutils(docsAffiches, useMemo(() => ({
@@ -2575,7 +2604,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         await createAchatDocument({ module: moduleType, ...payload });
         await loadDocs();
         resetForm();
-        setCreationOuverte(false);
+        setAchatUrl(null);
       } catch (err) {
         setError(err.message || t('achats.errSave'));
       }
@@ -2594,7 +2623,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
 
     setDocs(docs => [doc, ...docs]);
     resetForm();
-    setCreationOuverte(false);
+    setAchatUrl(null);
   };
 
   // Ligne d'achat — version formulaire de modification (fenêtre séparée)
@@ -2739,9 +2768,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
     setDetailDoc(doc);
   };
 
-  const closeDetail = () => {
-    setDetailDoc(null);
-  };
+  const closeDetail = () => setAchatUrl(null);
 
   const exportCsv = () => {
     const header = [t('common.date'), t('achats.fournisseur'), t('achats.notes'), t('common.total'), t('achats.detailLignes')];
@@ -2809,7 +2836,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         if (!modifiable) return null;
         return (
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: SPACE.sm }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => startEdit(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
+            <button onClick={() => { setAchatUrl(d.id, { remplacer: false }); startEdit(d); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue }}><Settings2 size={15} /></button>
             <button onClick={() => removeDoc(d.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red }}><Trash2 size={15} /></button>
           </div>
         );
@@ -2848,7 +2875,9 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' }}>
           <Button variant="ghost" small onClick={retourListe}><ChevronLeft size={14} /> {t('achats.retourListe')}</Button>
           <span style={{ fontSize: TEXT.sm, color: COLORS.inkFaint }}>
-            {t('achats.filAriane')} / <strong style={{ color: COLORS.inkSoft }}>{enFiche ? (detailDoc?.numero || '…') : t('achats.nouveau')}</strong>
+            {t('achats.filAriane')} / <strong style={{ color: COLORS.inkSoft }}>
+              {editingId ? t('achats.editTitle') : (enFiche ? (detailDoc?.numero || '…') : t('achats.nouveau'))}
+            </strong>
           </span>
         </div>
       )}
@@ -2912,7 +2941,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <Card>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'space-between', alignItems: 'center' }}>
             {!filtreStatut ? (
-              <Button variant="green" onClick={() => setCreationOuverte(true)}><Plus size={14} /> {t('achats.nouveau')}</Button>
+              <Button variant="green" onClick={() => setAchatUrl('nouveau', { remplacer: false })}><Plus size={14} /> {t('achats.nouveau')}</Button>
             ) : <div style={{ fontWeight: 600, fontSize: TEXT.base }}>{t('achats.historique')}</div>}
             <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap' }}>
               <Button small variant="outline" onClick={exportCsv}><Download size={14} /> {t('achats.exportCsv')}</Button>
@@ -2936,7 +2965,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           etat={outilsAchats}
           colonnes={colonnesAchats}
           cle={(d) => d.id}
-          onLigneClic={(d) => openDetail(d)}
+          onLigneClic={(d) => setAchatUrl(d.id, { remplacer: false })}
           selectionActive
           actionsGroupees={(selection) => {
             const recevables = docs.filter(d => selection.includes(d.id) && d.statut === 'Commandé');
@@ -2956,7 +2985,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
         <PiedListe etat={outilsAchats} />
       </Card>
       )}
-      {detailDoc && (
+      {detailDoc && !editingId && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           <div style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', padding: SPACE.xl }}>
             {/* En-tête aligné sur la fiche d'un devis : la référence en titre, la barre d'état en
@@ -3014,10 +3043,10 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           </div>
         </div>
       )}
-      {/* Fenêtre de modification d'un achat existant, séparée du formulaire d'ajout */}
+      {/* Édition dans le formulaire, même traitement que la fiche d'un devis. */}
       {editingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelEdit}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: RADIUS.card, width: '90%', maxWidth: 800, maxHeight: '85vh', overflowY: 'auto', padding: SPACE.xl }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+          <div style={{ background: '#fff', borderRadius: RADIUS.card, width: '100%', padding: SPACE.xl }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.lg }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md }}>{t('achats.editTitle')}</div>
               <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, fontSize: TEXT.lg }}>×</button>
@@ -4777,7 +4806,12 @@ function ParcellePrecisionSection({ parcelle }) {
 
 function CulturesModule({ farmId, highlightProduitId }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState('parcelles');
+  // Onglet interne repris de l'URL (?onglet=), pour qu'un lien vers un document ouvre le
+  // bon onglet et qu'un rechargement y revienne. Même principe que l'onglet de premier
+  // niveau dans le shell, une strate plus bas.
+  const [ongletUrl, setOngletUrl] = useParametreUrl('onglet');
+  const tab = ongletUrl || 'parcelles';
+  const setTab = setOngletUrl;
   const renderAction = (action) => (VANNE_ACTION_CODES.includes(action) ? t(`cultures.vanneAction.${action}`) : action);
 
   // Atterrissage depuis la recherche globale (Ctrl+K) sur un produit Cultures :
@@ -5153,7 +5187,9 @@ function CulturesModule({ farmId, highlightProduitId }) {
 
 function PoulaillerModule({ farmId, highlightProduitId }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState('environnement');
+  const [ongletUrl, setOngletUrl] = useParametreUrl('onglet');
+  const tab = ongletUrl || 'environnement';
+  const setTab = setOngletUrl;
 
   // Voir le commentaire équivalent dans CulturesModule.
   useEffect(() => {
@@ -5193,7 +5229,9 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
 // auditer (ce ledger, côté Poulailler, est un vestige de l'ancien système).
 function PiscicultureModule({ farmId, highlightProduitId }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState('environnement');
+  const [ongletUrl, setOngletUrl] = useParametreUrl('onglet');
+  const tab = ongletUrl || 'environnement';
+  const setTab = setOngletUrl;
 
   useEffect(() => {
     if (highlightProduitId) setTab('stocks');

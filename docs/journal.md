@@ -4282,3 +4282,48 @@ en base, et 6 devis supprimés sur 8 sélectionnés — les 2 annulés, non supp
 **Ce qui reste hors d'atteinte sans inventer des données** : la priorité en étoile et l'« arrivée
 prévue » d'un bon de commande supposent des champs que nous ne collectons pas. Les ajouter est
 une décision produit, pas une finition.
+
+### 2026-09-10 — Édition dans le formulaire, et routage par document
+
+Les deux derniers écarts structurels que j'avais déclarés sur Devis et Achats.
+
+**Routage par document.** L'URL s'arrêtait à l'onglet : un rechargement ramenait à la liste et
+une fiche ne se partageait pas. Nouveau `src/lib/urlParams.js` — `useParametreUrl(nom)` lit et
+écrit un paramètre de requête comme un état, prolongeant le principe déjà posé dans `App.jsx`
+pour l'écran et l'onglet (« dérivés de l'URL plutôt que stockés en state »). Trois strates y
+passent : `?onglet=` pour l'onglet interne d'un module, `?devis=` et `?achat=` pour le document
+ouvert, avec la valeur `nouveau` pour l'écran de création.
+
+**Le sens de dépendance est unique : l'URL commande, la fiche suit.** Un effet observe le
+paramètre et charge le document ; les gestionnaires n'écrivent que dans l'URL. Écrire dans les
+deux endroits les aurait laissés diverger.
+
+**Un réglage corrigé après l'avoir vu échouer.** Le hook remplaçait l'entrée d'historique par
+défaut, y compris à l'ouverture — j'avais raisonné « ouvrir puis fermer ne doit pas empiler deux
+entrées ». Résultat mesuré : le bouton retour du navigateur quittait le module au lieu de
+refermer la fiche. Ouvrir empile désormais explicitement, fermer remplace ; retour depuis une
+fiche revient à la liste, ce qui est le contrat web habituel et le comportement de la référence.
+
+**Écart assumé** : la référence route ses enregistrements par un segment de chemin
+(`/odoo/sales/12`), nous par une chaîne de requête. Un chemin par document supposerait de
+refaire le routage par onglet d'`App.jsx`, alors que le bénéfice recherché — rechargement
+fidèle, lien partageable, retour navigateur — est déjà obtenu.
+
+**Édition dans le formulaire.** Modifier un devis ou un achat ouvrait une fenêtre par-dessus la
+fiche, qui se fermait au passage : on quittait le document pour l'éditer. Dans la référence, la
+fiche EST l'éditeur. Les deux enveloppes modales deviennent des panneaux rendus dans l'écran du
+document ; le contenu des formulaires est inchangé, seule leur enveloppe bouge. La fiche en
+lecture cède la place au formulaire (`{detailId && detailData && !editingId}`), le fil d'ariane
+signale « · en modification », et l'icône crayon de la liste ouvre maintenant le document
+**puis** son édition, au lieu d'une fenêtre détachée de tout contexte.
+
+**Vérification** — build, `oxlint`, 130/130 tests frontend, 389/389 tests d'intégration. En
+navigateur, sur une entreprise jetable : un lien direct `?onglet=ventes&devis=110` ouvre à froid
+le bon onglet et la bonne fiche ; un clic sur une ligne écrit `?devis=110` ; le retour navigateur
+ramène à la liste ; le crayon depuis la liste ouvre le document en édition ; et une modification
+de quantité enregistrée depuis le formulaire est retrouvée en base (10 → 25, total recalculé à
+12 500). Même chaîne vérifiée côté achats. Entreprise nettoyée, image frontend reconstruite.
+
+**Fausse alerte, notée pour mémoire** : ma sonde de vérification cherchait le texte « Rechercher
+un devis » dans `innerText` pour conclure que la liste était revenue — c'est un `placeholder`,
+qui n'y figure pas. La liste était bien là. La sonde était fausse, pas l'application.

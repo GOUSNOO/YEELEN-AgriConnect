@@ -981,7 +981,8 @@
     "supprimerLotOk_one": "{{count}} quote deleted.",
     "supprimerLotOk_other": "{{count}} quotes deleted.",
     "supprimerLotEchec_one": "{{count}} quote could not be deleted.",
-    "supprimerLotEchec_other": "{{count}} quotes could not be deleted."
+    "supprimerLotEchec_other": "{{count}} quotes could not be deleted.",
+    "modeEdition": "editing"
   },
   "gabarits": {
     "title": "Templates & attributes",
