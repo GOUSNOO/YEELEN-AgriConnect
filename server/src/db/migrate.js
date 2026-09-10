@@ -1754,7 +1754,7 @@ CREATE INDEX IF NOT EXISTS idx_produit_recettes_lignes_recette_id ON produit_rec
 -- réglementaire de traçabilité doit survivre à la suppression de la recette/du produit en amont.
 ALTER TABLE emplacements_stock DROP CONSTRAINT IF EXISTS emplacements_stock_type_check;
 ALTER TABLE emplacements_stock ADD CONSTRAINT emplacements_stock_type_check
-  CHECK (type IN ('interne', 'client', 'fournisseur', 'perte', 'production'));
+  CHECK (type IN ('interne', 'client', 'fournisseur', 'perte', 'production', 'inventaire'));
 
 CREATE TABLE IF NOT EXISTS ordres_transformation (
   id                  SERIAL PRIMARY KEY,
@@ -3174,28 +3174,29 @@ async function seedEmplacementsStockForExistingEntreprises() {
   }
 }
 
-// Transformation agroalimentaire, étape 2 (2026-09-06) : backfill dédié pour l'emplacement
-// « Production » — le garde-fou de seedEmplacementsStockForExistingEntreprises ci-dessus
-// (NOT EXISTS *aucun* emplacement) ne se redéclenche jamais pour une entreprise déjà seedée
-// avant cette étape, donc virtuellement toutes. Même idiome que
+// Backfill d'un emplacement virtuel ajouté après coup, appelé une fois par type concerné
+// (« Production » 2026-09-06, « Ajustements d'inventaire » 2026-09-10). Le garde-fou de
+// seedEmplacementsStockForExistingEntreprises ci-dessus (NOT EXISTS *aucun* emplacement) ne se
+// redéclenche jamais pour une entreprise déjà seedée, donc virtuellement toutes. Même idiome que
 // seedComptesChangeForExistingEntreprises (multi-devise étape 4).
-async function seedEmplacementProductionPourEntreprisesExistantes() {
-  const production = EMPLACEMENTS_STOCK_DEFAUT.find((e) => e.type === 'production');
+async function seedEmplacementTypePourEntreprisesExistantes(type) {
+  const modele = EMPLACEMENTS_STOCK_DEFAUT.find((e) => e.type === type);
   const { rows: entreprises } = await client.query(
     `SELECT e.id FROM entreprises e
-     WHERE NOT EXISTS (SELECT 1 FROM emplacements_stock es WHERE es.entreprise_id = e.id AND es.type = 'production')`
+     WHERE NOT EXISTS (SELECT 1 FROM emplacements_stock es WHERE es.entreprise_id = e.id AND es.type = $1)`,
+    [type]
   );
   for (const { id } of entreprises) {
     await client.query(
       `INSERT INTO emplacements_stock (entreprise_id, nom, type) VALUES ($1, $2, $3)
        ON CONFLICT (entreprise_id, nom) DO NOTHING`,
-      [id, production.nom, production.type]
+      [id, modele.nom, modele.type]
     );
   }
   if (entreprises.length > 0) {
-    console.log(`✅ Emplacement « Production » créé pour ${entreprises.length} entreprise(s).`);
+    console.log(`✅ Emplacement « ${modele.nom} » créé pour ${entreprises.length} entreprise(s).`);
   } else {
-    console.log('ℹ️  Emplacement « Production » : déjà présent partout.');
+    console.log(`ℹ️  Emplacement « ${modele.nom} » : déjà présent partout.`);
   }
 }
 
@@ -3394,7 +3395,8 @@ async function migrate() {
     await backfillProduitsUniteId();
     await backfillProduitsTemplates();
     await seedEmplacementsStockForExistingEntreprises();
-    await seedEmplacementProductionPourEntreprisesExistantes();
+    await seedEmplacementTypePourEntreprisesExistantes('production');
+    await seedEmplacementTypePourEntreprisesExistantes('inventaire');
     await backfillStockQuants();
     await seedAbonnementBackfill();
     await seedModulesActifsBackfill();

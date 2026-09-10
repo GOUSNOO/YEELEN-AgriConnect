@@ -81,6 +81,7 @@ import ProduitRecettesPanel from './components/ProduitRecettesPanel';
 import OrdresTransformationPanel from './components/OrdresTransformationPanel';
 import HaccpPanel from './components/HaccpPanel';
 import StockEmplacementsPanel from './components/StockEmplacementsPanel.jsx';
+import InventaireRebutPanel from './components/InventaireRebutPanel.jsx';
 import { taxesLigneCalc as taxesLigneCalcPure } from './lib/taxes.js';
 const MonEspaceRh = lazy(() => import('./components/MonEspaceRh'));
 import { ROLE_DEFINITIONS, mapBackendRoleToUi } from './components/roles.js';
@@ -3766,6 +3767,12 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
       {sousOnglet === 'inventaire' && (
         <>
+          <InventaireRebutPanel
+            module={moduleType}
+            produits={stocks}
+            ouvertParDefaut
+            onQuantiteChangee={(id, quantite) => setStocks(liste => liste.map(p => (p.id === id ? { ...p, quantite } : p)))}
+          />
           <StockEmplacementsPanel module={moduleType} ouvertParDefaut />
       <Card>
         <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: 2 }}>{t('stocks.stockEvolution')}</div>

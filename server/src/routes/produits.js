@@ -11,6 +11,7 @@
 import express from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import { ajusterInventaire, mettreAuRebut } from '../utils/stockSync.js';
 
 const router = express.Router();
 
@@ -408,6 +409,115 @@ router.get('/mouvements', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[GET /produits/mouvements]', err);
     return res.status(500).json({ error: 'Erreur lors de la récupération des mouvements.' });
+  }
+});
+
+
+// ─── Ajustement d'inventaire et mise au rebut (2026-09-10) ───
+//
+// Les deux seules opérations de stock que l'utilisateur déclenchait jusqu'ici sans intermédiaire
+// n'existaient pas : tout mouvement passait par un achat, une vente, un intrant ou une
+// transformation. Compter ses articles et constater un écart, ou déclarer une marchandise
+// perdue, n'avait aucun point d'entrée — c'était le troisième manque de l'audit du 2026-09-10.
+//
+// Déclarées AVANT GET /:id/mouvements et les routes /:id/lots, comme stock-emplacements.
+//
+// Aucune des deux n'est réversible, et c'est délibéré : l'ERP de référence interdit de
+// supprimer un rebut validé (stock_scrap.py, _unlink_except_done), et une erreur de comptage se
+// corrige par un nouveau comptage. Une opération annulable aurait demandé une table et un cycle
+// de vie pour une valeur nulle — le mouvement inverse dit déjà tout.
+//
+// La validation du produit est faite ICI et pas dans stockSync : mouvementStock est écrit pour
+// une synchronisation en arrière-plan, il avale ses erreurs et ne fait rien si le produit est
+// introuvable. Pour un bouton, cela donnerait un clic sans effet et sans message.
+async function chargerProduitPourMouvement(entrepriseId, produitId) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.nom, p.module, p.unite_id AS "uniteId", p.quantite::float8 AS quantite,
+            COALESCE((SELECT q.quantite_reservee FROM stock_quants q
+                       JOIN emplacements_stock e ON e.id = q.emplacement_id AND e.type = 'interne'
+                      WHERE q.produit_id = p.id AND q.entreprise_id = p.entreprise_id), 0)::float8 AS "reservee"
+       FROM produits p WHERE p.id = $1 AND p.entreprise_id = $2`,
+    [produitId, entrepriseId]
+  );
+  return rows[0] || null;
+}
+
+async function relireQuantite(entrepriseId, produitId) {
+  const { rows } = await pool.query(
+    'SELECT quantite::float8 AS quantite FROM produits WHERE id = $1 AND entreprise_id = $2',
+    [produitId, entrepriseId]
+  );
+  return rows[0] ? rows[0].quantite : null;
+}
+
+router.post('/inventaire', authRequired, async (req, res) => {
+  const produitId = Number(req.body.produitId);
+  const quantiteComptee = Number(req.body.quantiteComptee);
+  if (!produitId || !Number.isFinite(quantiteComptee) || quantiteComptee < 0) {
+    return res.status(400).json({ error: 'produitId et quantiteComptee (positive) sont requis.' });
+  }
+  try {
+    const produit = await chargerProduitPourMouvement(req.user.entrepriseId, produitId);
+    if (!produit) return res.status(404).json({ error: 'Produit introuvable.' });
+
+    // Le théorique, c'est ce qu'on s'attend à trouver en rayon : le disponible plus ce qui est
+    // réservé par un devis signé mais toujours physiquement là. produits.quantite seul aurait
+    // fait passer chaque réservation en cours pour un manquant.
+    const theorique = produit.quantite + produit.reservee;
+    const ecart = Number((quantiteComptee - theorique).toFixed(4));
+    // Appelé même à écart nul : il n'y a alors aucun mouvement à tracer (delta zéro), mais le
+    // comptage fait quand même autorité sur le quant, ce qui réaligne un article dont le stock
+    // initial n'en avait jamais créé — ni POST ni PUT /produits n'écrivent de stock_quants. Un
+    // stock juste dans la liste des articles mais absent du stock par emplacement est exactement
+    // le genre de chiffre qui trompe sans jamais lever d'erreur.
+    await ajusterInventaire(req.user.entrepriseId, {
+      stockId: produit.id, produitNom: produit.nom, stockModule: produit.module,
+      delta: ecart, quantiteComptee, uomId: produit.uniteId,
+    }, {
+      userId: req.user.sub,
+      raison: (req.body.motif || '').trim() || "Ajustement d'inventaire",
+      documentType: 'inventaire', documentId: null,
+    });
+
+    return res.json({
+      ecart, theorique,
+      quantite: await relireQuantite(req.user.entrepriseId, produitId),
+      ...(ecart === 0 ? { message: 'Aucun écart : le stock était juste.' } : {}),
+    });
+  } catch (err) {
+    console.error('[POST /produits/inventaire]', err);
+    return res.status(500).json({ error: "Erreur lors de l'ajustement d'inventaire." });
+  }
+});
+
+router.post('/rebuts', authRequired, async (req, res) => {
+  const produitId = Number(req.body.produitId);
+  const quantite = Number(req.body.quantite);
+  if (!produitId || !Number.isFinite(quantite) || quantite <= 0) {
+    return res.status(400).json({ error: 'produitId et quantite (strictement positive) sont requis.' });
+  }
+  try {
+    const produit = await chargerProduitPourMouvement(req.user.entrepriseId, produitId);
+    if (!produit) return res.status(404).json({ error: 'Produit introuvable.' });
+    // Refuser plutôt que d'écrêter : GREATEST(...,0) plus bas empêcherait le négatif, mais
+    // enregistrerait un rebut de 30 là où 10 seulement sont sortis du stock — le registre
+    // mentirait sans que personne ne le voie.
+    if (quantite > produit.quantite) {
+      return res.status(400).json({ error: `Quantité supérieure au stock disponible (${produit.quantite}).` });
+    }
+
+    await mettreAuRebut(req.user.entrepriseId, {
+      stockId: produit.id, produitNom: produit.nom, stockModule: produit.module, quantite, uomId: produit.uniteId,
+    }, {
+      userId: req.user.sub,
+      raison: (req.body.motif || '').trim() || 'Mise au rebut',
+      documentType: 'rebut', documentId: null,
+    });
+
+    return res.status(201).json({ quantite: await relireQuantite(req.user.entrepriseId, produitId) });
+  } catch (err) {
+    console.error('[POST /produits/rebuts]', err);
+    return res.status(500).json({ error: 'Erreur lors de la mise au rebut.' });
   }
 });
 

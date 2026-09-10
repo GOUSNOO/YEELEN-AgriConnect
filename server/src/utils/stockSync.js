@@ -88,7 +88,7 @@ async function logMouvement({ entrepriseId, stockModule, stockId, stockNom, delt
 // chaque appel (pas de cache global entre requêtes) — { interne, client, fournisseur, perte }.
 async function resoudreEmplacements(entrepriseId) {
   const { rows } = await pool.query(
-    `SELECT id, type FROM emplacements_stock WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte', 'production')`,
+    `SELECT id, type FROM emplacements_stock WHERE entreprise_id = $1 AND type IN ('interne', 'client', 'fournisseur', 'perte', 'production', 'inventaire')`,
     [entrepriseId]
   );
   const parType = {};
@@ -144,6 +144,17 @@ const CONFIG_MOUVEMENT = {
   transformation_restitution: { champ: 'quantite', source: 'production', dest: 'interne', state: 'annule', champDelta: (d) => d },
   transformation_prod: { champ: 'quantite', source: 'production', dest: 'interne', state: 'fait', champDelta: (d) => d },
   transformation_retrait: { champ: 'quantite', source: 'interne', dest: 'production', state: 'annule', champDelta: (d) => d },
+  // Ajustement d'inventaire et rebut (2026-09-10). L'écart de comptage a son propre
+  // emplacement : un écart n'est pas une perte identifiée, et les mélanger rendrait le
+  // registre des mouvements inexploitable pour « combien ai-je jeté ? ».
+  //   inventaire_entree : comptage supérieur au théorique. quantite += n (inventaire → interne)
+  //   inventaire_sortie : comptage inférieur au théorique.  quantite -= n (interne → inventaire)
+  //   rebut             : marchandise déclarée perdue.      quantite -= n (interne → perte)
+  // Aucun inverse : l'ERP de référence interdit de supprimer un rebut validé, et une erreur de
+  // comptage se corrige par un nouveau comptage, pas par un retour en arrière.
+  inventaire_entree: { champ: 'quantite', source: 'inventaire', dest: 'interne', state: 'fait', champDelta: (d) => d },
+  inventaire_sortie: { champ: 'quantite', source: 'interne', dest: 'inventaire', state: 'fait', champDelta: (d) => d },
+  rebut: { champ: 'quantite', source: 'interne', dest: 'perte', state: 'fait', champDelta: (d) => d },
 };
 
 // Ajuste le produit correspondant (disponible, colonne pont) + le quant interne sous-jacent +
@@ -249,4 +260,46 @@ export async function produireSortieTransformation(entrepriseId, { stockId, prod
 
 export async function retirerSortieTransformation(entrepriseId, { stockId, produitNom, quantite, uomId }, ctx) {
   await mouvementStock('transformation_retrait', null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx, uomId);
+}
+
+// Ajustement d'inventaire (2026-09-10) : `delta` est l'écart signé entre la quantité comptée et
+// la quantité théorique, déjà calculé par la route — elle seule sait ce qui a été compté, et
+// c'est aussi elle qui a validé le produit. Le sens du mouvement suit le signe de l'écart.
+//
+// Contrairement aux autres appelants de ce module, la route ne peut pas se permettre le no-op
+// silencieux de mouvementStock : un bouton qui ne fait rien sans rien dire n'est pas acceptable.
+// Elle valide donc le produit en amont, ce qui garantit que findStockRow trouvera sa ligne.
+export async function ajusterInventaire(entrepriseId, { stockId, produitNom, stockModule, delta, quantiteComptee, uomId }, ctx) {
+  const kind = delta > 0 ? 'inventaire_entree' : 'inventaire_sortie';
+  await mouvementStock(kind, stockModule || null, entrepriseId, stockId, produitNom, delta, ctx, uomId);
+
+  // Un comptage POSE la quantité, il ne l'incrémente pas — c'est la sémantique de l'opération
+  // (l'ERP de référence stocke une valeur absolue, inventory_quantity), et c'est ce qui rend
+  // cet écran capable de réaligner le stock. Sans cela il ne réalignerait rien : un article
+  // créé avec un stock initial ou corrigé via PUT /produits n'a jamais eu de stock_quants —
+  // ni POST ni PUT n'en écrivent — donc appliquer un simple delta laisserait le quant à 0
+  // pendant que produits.quantite affiche des centaines de kilos. Le comptage fait autorité :
+  // le physique compté inclut le réservé, la colonne réservée du quant reste intacte.
+  if (quantiteComptee != null) {
+    try {
+      const row = await findStockRow(entrepriseId, stockModule || null, stockId, produitNom);
+      const emplacements = await resoudreEmplacements(entrepriseId);
+      if (row && emplacements.interne) {
+        await pool.query(
+          `INSERT INTO stock_quants (entreprise_id, produit_id, emplacement_id, quantite)
+           VALUES ($1, $2, $3, GREATEST($4, 0))
+           ON CONFLICT (produit_id, emplacement_id) DO UPDATE SET quantite = GREATEST($4, 0)`,
+          [entrepriseId, row.id, emplacements.interne, quantiteComptee]
+        );
+      }
+    } catch (err) {
+      console.error('[stockSync:inventaire]', err);
+    }
+  }
+}
+
+// Mise au rebut : sortie définitive vers l'emplacement « Pertes ». `quantite` est positive,
+// le delta appliqué est négatif — même convention que consommerProduit.
+export async function mettreAuRebut(entrepriseId, { stockId, produitNom, stockModule, quantite, uomId }, ctx) {
+  await mouvementStock('rebut', stockModule || null, entrepriseId, stockId, produitNom, -(Number(quantite) || 0), ctx, uomId);
 }

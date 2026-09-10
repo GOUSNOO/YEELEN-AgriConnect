@@ -919,6 +919,17 @@ export async function getStockMouvements(module, limite) {
   return request(`/produits/mouvements?${params.toString()}`);
 }
 
+// Ajustement d'inventaire et rebut : deux opérations sans retour en arrière (voir
+// routes/produits.js), donc jamais mises en file hors ligne — rejouer un comptage ou un rebut
+// à la reconnexion, sur un stock qui a bougé entre-temps, ferait plus de dégâts que l'échec.
+export async function ajusterInventaire(produitId, quantiteComptee, motif) {
+  return request('/produits/inventaire', { method: 'POST', body: JSON.stringify({ produitId, quantiteComptee, motif }) });
+}
+
+export async function creerRebut(produitId, quantite, motif) {
+  return request('/produits/rebuts', { method: 'POST', body: JSON.stringify({ produitId, quantite, motif }) });
+}
+
 export async function getPrixEffectif({ stockId, contactId, quantite, date }) {
   const params = new URLSearchParams({ stockId });
   if (contactId) params.set('contactId', contactId);

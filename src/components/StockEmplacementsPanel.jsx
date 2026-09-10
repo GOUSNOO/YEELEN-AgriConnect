@@ -24,10 +24,13 @@ const TON_EMPLACEMENT = {
   fournisseur: 'blue',
   client: 'blue',
   production: 'ochre',
+  // Ochre comme production : deux emplacements virtuels internes, à distinguer du bleu des
+  // tiers (client/fournisseur) et du rouge des pertes réelles.
+  inventaire: 'ochre',
   perte: 'red',
 };
 
-function EntetePliable({ ouvert, onToggle, icone: Icone, titre, resume }) {
+export function EntetePliable({ ouvert, onToggle, icone: Icone, titre, resume }) {
   return (
     <button
       type="button"

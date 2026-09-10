@@ -4658,3 +4658,69 @@ frontend. En navigateur sur une entreprise jetable à deux factures postées : b
 une période déplacée après la dernière écriture qui reporte correctement le à-nouveau sans
 afficher un seul mouvement. Onglets voisins (Factures, Configuration) rouverts — le garde que je
 m'étais donné la veille. Entreprise jetable purgée, image frontend reconstruite.
+
+### 2026-09-10 — Ajustement d'inventaire et rebut (chantier 3 de l'audit)
+
+Jusqu'ici, aucun mouvement de stock ne partait de l'utilisateur : tout passait par un achat, une
+vente, un intrant ou une transformation. Compter ses articles et constater un écart, ou déclarer
+une marchandise perdue, n'avait aucun point d'entrée. Deux routes (`POST /api/produits/inventaire`
+et `/rebuts`, déclarées avant `/:id/…`) et un panneau dans **Stocks → Inventaire**.
+
+Aucune table nouvelle : `stock_moves` porte déjà date, quantité, trajet, motif et
+`document_type`, et le registre des mouvements livré le matin même en est l'historique. Aucune
+des deux opérations n'est réversible — l'ERP de référence interdit de supprimer un rebut validé
+(`stock_scrap.py`, `_unlink_except_done`) et une erreur de comptage se corrige par un nouveau
+comptage. Une opération annulable aurait coûté une table et un cycle de vie pour rien.
+
+**Un sixième emplacement virtuel, `inventaire`.** `perte` sert déjà aux intrants consommés ; y
+verser aussi les écarts de comptage rendrait impossible de répondre à « combien ai-je jeté ce
+mois-ci ? ». Un écart n'est pas une perte identifiée, et la référence les sépare pour cette
+raison. Le backfill jumeau de celui de `production` a été généralisé en une fonction paramétrée
+plutôt que copié : `seedEmplacementTypePourEntreprisesExistantes(type)`. 7 entreprises au premier
+passage, 0 au second.
+
+#### Le piège visé, et la preuve qu'il est gardé
+
+`resoudreEmplacements` (`stockSync.js`) filtre sur une liste `type IN (...)` **codée en dur**.
+C'est elle qui avait fait échouer `production` à l'étape 2 de la transformation :
+`produits.quantite` restait juste, `stock_quants` et `stock_moves` restaient silencieusement
+vides. Le nouveau type y a été ajouté en même temps que la migration — et surtout, les tests
+assèrent le **quant et le mouvement**, pas seulement la colonne pont. Vérifié en le prouvant :
+le type retiré de la liste, deux tests tombent (`quant attendu 120, reçu 0`) pendant que
+l'assertion sur `produits.quantite` passe toujours. Un test qui n'aurait regardé que cette
+colonne n'aurait rien vu.
+
+#### Un chiffre faux, trouvé en vérifiant la base après coup
+
+Après un ajustement, `produits.quantite` valait 780 et le quant interne 0 — donc « Stock par
+emplacement » affichait **0 ligne** pour une entreprise détenant 940 kg d'articles. Cause
+préexistante : ni `POST` ni `PUT /api/produits` n'écrivent de `stock_quants`, si bien qu'un
+article créé avec un stock initial n'en a jamais eu. Le chantier 1 avait exposé le défaut, le
+chantier 3 le rendait criant.
+
+Le correctif tenait dans la sémantique de l'opération : un comptage **pose** la quantité, il ne
+l'incrémente pas — c'est ce que fait la référence (`inventory_quantity` est une valeur absolue).
+`ajusterInventaire` écrit donc le quant interne à la quantité comptée, ce qui fait de cet écran
+l'outil qui réaligne réellement le stock. Corollaire trouvé dans la foulée : l'appel doit avoir
+lieu **même à écart nul**, sinon un article compté et trouvé juste resterait invisible du stock
+par emplacement. Trois comptages sans écart plus tard, les trois quants concordent avec la liste
+des articles et aucun mouvement parasite n'a été créé.
+
+Le théorique, enfin, est le disponible **plus** le réservé, à l'écran comme au serveur : ce
+qu'on s'attend à trouver en rayon inclut la marchandise promise par un devis signé mais toujours
+là. Le disponible seul aurait fait passer chaque réservation en cours pour un manquant.
+
+**Vérification** — 9 tests d'intégration, **413/413** (`stockQuants.test.js` passe de « 5
+emplacements » à 6, cassure attendue, même mise à jour qu'à l'arrivée de `production`) ; build,
+`oxlint`, 130/130 frontend. En navigateur : comptage à 780 sur 800 avec l'écart affiché avant
+validation, rebut refusé au-delà du stock (« Quantité supérieure au stock disponible (45) », la
+saisie conservée), rebut de 5 accepté, mouvements tracés vers deux emplacements distincts, liste
+des articles à jour sans rechargement. Écrans voisins rouverts : Articles, Transformation,
+Configuration, et le même panneau sous Poulailler — `StocksTab` est partagé par les trois
+modules.
+
+**Signalé sans corriger** : le seed de stocks de démonstration de Poulailler/Pisciculture crée
+les articles **en double** (constaté en base : trois articles, six lignes). Le bloc
+`if (fetched.length === 0 && seedList)` n'a aucun garde-fou contre un double montage — le même
+défaut que celui déjà corrigé pour les parcelles de démonstration de Cultures. Hors périmètre, et
+une décision de l'utilisateur est déjà en attente sur ces stocks de démonstration.
