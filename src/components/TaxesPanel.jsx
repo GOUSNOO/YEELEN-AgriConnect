@@ -8,9 +8,9 @@ import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 // Référentiel compact des taxes réutilisables (account.tax-like), rendu dans DevisModule.
 // Étape 1 : on expose amount_type 'percent' et 'fixed' (à l'unité) + price_include. Les
 // écritures sont réservées admin/directeur côté API — une 403 remonte en toast.
-export default function TaxesPanel({ taxes, onChange }) {
+export default function TaxesPanel({ taxes, onChange, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [form, setForm] = useState({ name: '', amountType: 'percent', amount: 20, priceInclude: false });
   const [busy, setBusy] = useState(false);
 

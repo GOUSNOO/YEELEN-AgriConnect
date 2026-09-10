@@ -481,3 +481,31 @@ export function MenuColonnes({ etat, colonnes }) {
     </span>
   );
 }
+
+// Déplacée depuis App.jsx : FacturesModule en a besoin, et un composant ne peut pas importer
+// App.jsx sans créer un cycle (App importe les composants). Même raison que pour la palette,
+// sortie dans lib/theme.js pour la même impossibilité.
+// Barre de sous-onglets partagée par Ventes et Achats — un seul rendu, pour que les deux
+// écrans ne puissent pas diverger visuellement au fil des retouches.
+export function SousNavOnglets({ items, actif, onSelect }) {
+  const { t } = useTranslation();
+  return (
+    <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}` }}>
+      {items.map(item => (
+        <button
+          key={item.id}
+          onClick={() => onSelect(item.id)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '10px 14px', fontSize: TEXT.base, fontWeight: 600,
+            color: actif === item.id ? COLORS.green : COLORS.inkSoft,
+            borderBottom: actif === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
+            marginBottom: -1,
+          }}
+        >
+          {t(item.labelKey)}
+        </button>
+      ))}
+    </div>
+  );
+}

@@ -72,7 +72,7 @@ import RhReferentiels from './components/RhReferentiels';
 import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
-import { useListeOutils, BarreOutilsListe, EnteteTriable, LigneGroupe, PiedListe, TableauListe, MenuColonnes } from './components/ListeOutils.jsx';
+import { useListeOutils, BarreOutilsListe, EnteteTriable, LigneGroupe, PiedListe, TableauListe, MenuColonnes, SousNavOnglets } from './components/ListeOutils.jsx';
 import { useParametreUrl } from './lib/urlParams.js';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
 const FacturesModule = lazy(() => import('./components/FacturesModule'));
@@ -1326,7 +1326,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
 
       {/* Formulaire de création d'un devis — masqué en vue "À facturer" (menu d'un ERP de référence
           équivalent : une liste filtrée, pas un point de création) */}
-      {!filtreReception && creationOuverte && (
+      {!filtreStatut && creationOuverte && (
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>
           {t("devis.newTitle")}
@@ -2258,31 +2258,6 @@ const ACHATS_SOUS_NAV = [
   { id: 'produits', labelKey: 'achats.navProduits' },
 ];
 
-// Barre de sous-onglets partagée par Ventes et Achats — un seul rendu, pour que les deux
-// écrans ne puissent pas diverger visuellement au fil des retouches.
-function SousNavOnglets({ items, actif, onSelect }) {
-  const { t } = useTranslation();
-  return (
-    <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}` }}>
-      {items.map(item => (
-        <button
-          key={item.id}
-          onClick={() => onSelect(item.id)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '10px 14px', fontSize: TEXT.base, fontWeight: 600,
-            color: actif === item.id ? COLORS.green : COLORS.inkSoft,
-            borderBottom: actif === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
-            marginBottom: -1,
-          }}
-        >
-          {t(item.labelKey)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // Grand livre des ventes (devis signés/facturés), en lecture seule — équivalent
 // minimal d'un menu "Analyse" de référence. Réutilise getVentesLedger, déjà la source de
 // vérité de ComptabiliteTab pour les mêmes données.
@@ -2418,9 +2393,10 @@ function VentesWithDevis({ farmId, moduleType = 'Cultures' }) {
             </div>
             <ListesPrixManager />
           </Card>
-          <PaymentTermsPanel terms={paymentTerms} onChange={rechargerPaymentTerms} />
-          <TaxesPanel taxes={taxes} onChange={rechargerTaxes} />
-          <ComptaConfigPanel />
+          {/* Conditions de paiement, taxes, journaux et plan de comptes sont partis sous
+              Finance → Factures → Configuration : dans l'ERP de référence, seules les listes de
+              prix relèvent des ventes, les trois autres sont de la configuration comptable.
+              Ils étaient ici parce que c'est là qu'ils ont été construits. */}
         </>
       )}
     </div>

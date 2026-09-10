@@ -20,9 +20,9 @@ const ACCOUNT_TYPES = [
   'expense_other', 'expense_depreciation', 'expense_direct_cost', 'off_balance',
 ];
 
-export default function ComptaConfigPanel() {
+export default function ComptaConfigPanel({ ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [journals, setJournals] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [jForm, setJForm] = useState({ name: '', code: '', type: 'sale' });

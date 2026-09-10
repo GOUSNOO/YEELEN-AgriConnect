@@ -8,9 +8,9 @@ import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 // Référentiel compact des conditions de paiement (account.payment.term-like), rendu dans
 // DevisModule. Écritures gérées côté API par requireRole('admin','directeur') — un rôle
 // non autorisé reçoit une 403 remontée en toast.
-export default function PaymentTermsPanel({ terms, onChange }) {
+export default function PaymentTermsPanel({ terms, onChange, ouvertParDefaut }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(ouvertParDefaut));
   const [form, setForm] = useState({ name: '', shape: 'once', nbDays: 30, acomptePct: 30 });
   const [busy, setBusy] = useState(false);
 

@@ -1249,7 +1249,10 @@
       "line_section": "Section",
       "line_note": "Note",
       "rounding": "Rounding"
-    }
+    },
+    "navFactures": "Invoices",
+    "navRapports": "Reports",
+    "navConfiguration": "Configuration"
   },
   "comptaReports": {
     "title": "Customer follow-up",

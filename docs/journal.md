@@ -4566,3 +4566,48 @@ réorganisation, et rien ne l'aurait signalé.
 navigateur : Articles réduit à son formulaire et sa liste, Inventaire avec le stock ouvert et les
 mouvements repliés, Transformation avec ses deux registres, Configuration avec ses deux
 formulaires. Entreprise jetable nettoyée, image frontend reconstruite.
+
+### 2026-09-10 — Ventes rangé, et une régression que j'avais laissée passer
+
+Même demande que pour Stocks. Mais la lecture de la source a déplacé le sujet : sous Ventes →
+Configuration, **seules les listes de prix relèvent des ventes**. Conditions de paiement, taxes,
+journaux et plan de comptes sont, dans l'ERP de référence, sous Comptabilité → Configuration
+(`account/views/account_menuitem.xml`). Ils étaient chez Ventes parce que c'est là qu'ils ont
+été construits, pas parce que c'est leur place.
+
+- **Ventes → Configuration** ne garde que les listes de prix.
+- **Finance → Factures** gagne une barre de sous-onglets — **Factures | Rapports |
+  Configuration** — et accueille les trois référentiels comptables. C'est cet écran qui EST notre
+  comptabilité ; `ComptaReportsPanel`, jusqu'ici posé en permanence au-dessus de la liste des
+  factures, prend l'onglet Rapports.
+- `SousNavOnglets` **quitte `App.jsx` pour `ListeOutils.jsx`** : `FacturesModule` en a besoin, et
+  un composant ne peut pas importer `App.jsx` sans créer un cycle. Exactement la raison qui avait
+  fait sortir la palette dans `lib/theme.js`.
+
+#### La régression
+
+L'onglet Ventes rendait un **écran blanc**, et depuis le commit du cycle de vie des achats
+(5aacd52) — soit plusieurs heures pendant lesquelles l'utilisateur a testé l'application.
+
+Cause : en renommant `filtreStatut` en `filtreReception` dans `AchatModule`, j'ai utilisé un
+remplacement de chaîne **global** sur tout `App.jsx`. Le motif
+`{!filtreStatut && creationOuverte && (` existait aussi dans `DevisModule`, à 1 100 lignes de là.
+Renommée, cette garde lisait une variable jamais déclarée dans ce composant — et lire un
+identifiant non déclaré lève une `ReferenceError` en module strict, ce qui fait tomber tout
+l'arbre React.
+
+Ni le build, ni `oxlint`, ni les 130 tests frontend ne l'ont vue : le fichier reste
+syntaxiquement valide, et aucun test ne monte `DevisModule`. Je ne l'ai vue qu'en rouvrant
+l'onglet Ventes — que je n'avais pas rouvert après le changement des achats, ayant vérifié
+seulement l'écran que je modifiais.
+
+**Ce qu'il faut en retenir**, et qui vaut au-delà de ce cas : un remplacement global dans un
+fichier de 9 000 lignes doit être borné à la portée visée, ou compté avant d'être appliqué. Et
+après une modification qui touche un motif partagé, rouvrir les écrans **voisins**, pas seulement
+celui qu'on visait — c'est la deuxième fois de la journée qu'une ancre non unique casse quelque
+chose à distance (voir la barre d'outils atterrie dans `ParcelMapTab`).
+
+**Vérification** — build, `oxlint`, 130/130 tests. En navigateur : Ventes → Commandes rend de
+nouveau sa liste, Ventes → Configuration ne montre plus que les listes de prix, et Finance →
+Factures affiche ses trois onglets, Configuration comprise avec ses quatre conditions de paiement
+et ses cinq journaux. Entreprise jetable nettoyée, image frontend reconstruite.

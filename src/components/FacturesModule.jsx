@@ -4,14 +4,28 @@ import { Plus, Trash2, Loader2, X, Lock } from 'lucide-react';
 import {
   getFactures, getFacture, createFacture, deleteFacture,
   postFacture, factureRetourBrouillon, annulerFacture, enregistrerPaiementFacture,
-  verifyFactureHash, reverseFacture, getContacts, getTaxes,
+  verifyFactureHash, reverseFacture, getContacts, getTaxes, getPaymentTerms,
 } from '../lib/api.js';
 import { taxesLigneCalc } from '../lib/taxes.js';
 import { useLocale, fmtMoneyWith, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { Card, Button, Select, Badge, notifyError, notifySuccess } from './ui.jsx';
 import TaxSelect from './TaxSelect';
 import ComptaReportsPanel from './ComptaReportsPanel';
+import ComptaConfigPanel from './ComptaConfigPanel';
+import PaymentTermsPanel from './PaymentTermsPanel';
+import TaxesPanel from './TaxesPanel';
+import { SousNavOnglets } from './ListeOutils.jsx';
 import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
+
+// Les référentiels comptables — conditions de paiement, taxes, journaux et plan de comptes —
+// vivaient sous Ventes → Configuration parce que c'est là qu'ils ont été construits. Dans l'ERP
+// de référence, seules les listes de prix relèvent des ventes ; les trois autres sont sous
+// Comptabilité → Configuration. Ils rejoignent donc cet écran, qui EST notre comptabilité.
+const FACTURES_SOUS_NAV = [
+  { id: 'factures', labelKey: 'factures.navFactures' },
+  { id: 'rapports', labelKey: 'factures.navRapports' },
+  { id: 'configuration', labelKey: 'factures.navConfiguration' },
+];
 
 const STATE_TONE = { draft: 'blue', posted: 'green', cancel: 'red' };
 const PAY_TONE = { not_paid: 'ochre', partial: 'ochre', paid: 'green', in_payment: 'ochre', reversed: 'red' };
@@ -67,6 +81,8 @@ export default function FacturesModule() {
   const [filtreType, setFiltreType] = useState('');
   const [clients, setClients] = useState([]);
   const [taxes, setTaxes] = useState([]);
+  const [paymentTerms, setPaymentTerms] = useState([]);
+  const [sousOnglet, setSousOnglet] = useState('factures');
   const taxById = useMemo(() => new Map((taxes || []).map((x) => [x.id, x])), [taxes]);
 
   const emptyLigne = { name: '', quantity: '', priceUnit: '', discount: '', taxIds: [] };
@@ -92,9 +108,13 @@ export default function FacturesModule() {
       .finally(() => setLoading(false));
   };
   useEffect(charger, [filtreState, filtreType]);
+  const rechargerTaxes = () => getTaxes().then((d) => setTaxes(d.taxes || [])).catch(() => {});
+  const rechargerPaymentTerms = () => getPaymentTerms().then((d) => setPaymentTerms(d.paymentTerms || [])).catch(() => {});
   useEffect(() => {
     getContacts('client').then((d) => setClients(d.contacts || [])).catch(() => {});
-    getTaxes().then((d) => setTaxes(d.taxes || [])).catch(() => {});
+    rechargerTaxes();
+    rechargerPaymentTerms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const clientLabel = (c) => [c.prenom, c.nom].filter(Boolean).join(' ') || c.nom || `#${c.id}`;
@@ -219,7 +239,20 @@ export default function FacturesModule() {
 
   return (
     <div style={{ display: 'grid', gap: SPACE.lg }}>
-      <ComptaReportsPanel onChange={charger} />
+      <SousNavOnglets items={FACTURES_SOUS_NAV} actif={sousOnglet} onSelect={setSousOnglet} />
+
+      {sousOnglet === 'rapports' && <ComptaReportsPanel onChange={charger} />}
+
+      {sousOnglet === 'configuration' && (
+        <>
+          <PaymentTermsPanel terms={paymentTerms} onChange={rechargerPaymentTerms} ouvertParDefaut />
+          <TaxesPanel taxes={taxes} onChange={rechargerTaxes} ouvertParDefaut />
+          <ComptaConfigPanel ouvertParDefaut />
+        </>
+      )}
+
+      {sousOnglet === 'factures' && (
+        <>
 
       {/* ─── Liste des factures (colonnes dans l'ordre du tree Odoo) ─── */}
       <Card>
@@ -518,6 +551,8 @@ export default function FacturesModule() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

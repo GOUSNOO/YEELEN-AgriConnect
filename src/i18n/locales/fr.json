@@ -1249,7 +1249,10 @@
       "line_section": "Section",
       "line_note": "Note",
       "rounding": "Arrondi"
-    }
+    },
+    "navFactures": "Factures",
+    "navRapports": "Rapports",
+    "navConfiguration": "Configuration"
   },
   "comptaReports": {
     "title": "Suivi client",
