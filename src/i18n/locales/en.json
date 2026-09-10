@@ -513,7 +513,17 @@
     "nouveau": "New purchase",
     "retourListe": "Back to list",
     "filAriane": "Purchases",
-    "rechercher": "Search a purchase…"
+    "rechercher": "Search a purchase…",
+    "colAcheteur": "Buyer",
+    "colReception": "Received on",
+    "recevoirLot_one": "Mark {{count}} purchase received",
+    "recevoirLot_other": "Mark {{count}} purchases received",
+    "confirmRecevoirLot_one": "Mark {{count}} purchase as received? Stock and finances will be updated.",
+    "confirmRecevoirLot_other": "Mark {{count}} purchases as received? Stock and finances will be updated.",
+    "recevoirLotOk_one": "{{count}} purchase marked received.",
+    "recevoirLotOk_other": "{{count}} purchases marked received.",
+    "recevoirLotEchec_one": "{{count}} purchase could not be received.",
+    "recevoirLotEchec_other": "{{count}} purchases could not be received."
   },
   "compta": {
     "totalVentes": "Total sales",
@@ -960,7 +970,18 @@
     "retourListe": "Back to list",
     "filAriane": "Quotes",
     "rechercher": "Search a quote…",
-    "filtreFacture": "Invoiced"
+    "filtreFacture": "Invoiced",
+    "colVendeur": "Salesperson",
+    "colValidite": "Valid until",
+    "colEtatFacturation": "Invoicing",
+    "supprimerLot_one": "Delete {{count}} quote",
+    "supprimerLot_other": "Delete {{count}} quotes",
+    "confirmSupprimerLot_one": "Delete {{count}} draft quote?",
+    "confirmSupprimerLot_other": "Delete {{count}} draft quotes?",
+    "supprimerLotOk_one": "{{count}} quote deleted.",
+    "supprimerLotOk_other": "{{count}} quotes deleted.",
+    "supprimerLotEchec_one": "{{count}} quote could not be deleted.",
+    "supprimerLotEchec_other": "{{count}} quotes could not be deleted."
   },
   "gabarits": {
     "title": "Templates & attributes",
@@ -2153,6 +2174,13 @@
     "surTotal": "{{total}} in total",
     "compte": "{{affiches}} of {{total}}",
     "aucunResultat": "No result for this search.",
-    "groupeMois": "Month"
+    "groupeMois": "Month",
+    "selectionnes_one": "{{count}} selected",
+    "selectionnes_other": "{{count}} selected",
+    "deselectionner": "Clear selection",
+    "selectionnerLigne": "Select this row",
+    "toutSelectionner": "Select all",
+    "colonnes": "Visible columns",
+    "totalColonne": "Total"
   }
 }

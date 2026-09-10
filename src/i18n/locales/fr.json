@@ -513,7 +513,17 @@
     "nouveau": "Nouvel achat",
     "retourListe": "Retour à la liste",
     "filAriane": "Achats",
-    "rechercher": "Rechercher un achat…"
+    "rechercher": "Rechercher un achat…",
+    "colAcheteur": "Acheteur",
+    "colReception": "Reçu le",
+    "recevoirLot_one": "Marquer {{count}} achat reçu",
+    "recevoirLot_other": "Marquer {{count}} achats reçus",
+    "confirmRecevoirLot_one": "Marquer {{count}} achat comme reçu ? Le stock et les finances seront mis à jour.",
+    "confirmRecevoirLot_other": "Marquer {{count}} achats comme reçus ? Le stock et les finances seront mis à jour.",
+    "recevoirLotOk_one": "{{count}} achat marqué reçu.",
+    "recevoirLotOk_other": "{{count}} achats marqués reçus.",
+    "recevoirLotEchec_one": "{{count}} achat n'a pas pu être reçu.",
+    "recevoirLotEchec_other": "{{count}} achats n'ont pas pu être reçus."
   },
   "compta": {
     "totalVentes": "Total ventes",
@@ -960,7 +970,18 @@
     "retourListe": "Retour à la liste",
     "filAriane": "Devis",
     "rechercher": "Rechercher un devis…",
-    "filtreFacture": "Facturé"
+    "filtreFacture": "Facturé",
+    "colVendeur": "Vendeur",
+    "colValidite": "Valable jusqu'au",
+    "colEtatFacturation": "Facturation",
+    "supprimerLot_one": "Supprimer {{count}} devis",
+    "supprimerLot_other": "Supprimer {{count}} devis",
+    "confirmSupprimerLot_one": "Supprimer {{count}} devis brouillon ?",
+    "confirmSupprimerLot_other": "Supprimer {{count}} devis brouillons ?",
+    "supprimerLotOk_one": "{{count}} devis supprimé.",
+    "supprimerLotOk_other": "{{count}} devis supprimés.",
+    "supprimerLotEchec_one": "{{count}} devis n'a pas pu être supprimé.",
+    "supprimerLotEchec_other": "{{count}} devis n'ont pas pu être supprimés."
   },
   "gabarits": {
     "title": "Gabarits & attributs",
@@ -2153,6 +2174,13 @@
     "surTotal": "{{total}} au total",
     "compte": "{{affiches}} sur {{total}}",
     "aucunResultat": "Aucun résultat pour cette recherche.",
-    "groupeMois": "Mois"
+    "groupeMois": "Mois",
+    "selectionnes_one": "{{count}} sélectionné",
+    "selectionnes_other": "{{count}} sélectionnés",
+    "deselectionner": "Tout désélectionner",
+    "selectionnerLigne": "Sélectionner cette ligne",
+    "toutSelectionner": "Tout sélectionner",
+    "colonnes": "Colonnes affichées",
+    "totalColonne": "Total"
   }
 }

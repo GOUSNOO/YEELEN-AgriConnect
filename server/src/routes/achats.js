@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Sans préfixe d'alias : réutilisée telle quelle dans un INSERT ... RETURNING
 // (POST) et un SELECT ... FROM achats_documents sans alias (GET liste), en plus
-// des requêtes aliasées "ad" de getDocumentComplete — un préfixe "ad." cassait
+// getDocumentComplete (dont l'alias "ad" a été retiré, voir plus bas) — un préfixe "ad." cassait
 // les deux premières (colonne introuvable, "ad" hors de portée).
 // `date` est une colonne DATE : renvoyée brute, node-postgres la transforme en Date JS
 // interprétée dans le fuseau du serveur, ce qui décale l'affichage d'un jour côté client.
@@ -16,7 +16,14 @@ const router = express.Router();
 const DOCUMENT_COLUMNS = `
   id, numero, module, to_char(date, 'YYYY-MM-DD') AS date, fournisseur_id AS "fournisseurId",
   fournisseur_nom AS "fournisseurNom", notes, total::float8 AS total, statut,
-  date_reception AS "dateReception", created_at AS "createdAt"
+  date_reception AS "dateReception", created_at AS "createdAt",
+  -- Acheteur : même résolution que le vendeur d'un devis. Sous-requête obligatoire ici —
+  -- DOCUMENT_COLUMNS sert aussi dans un INSERT ... RETURNING et dans un SELECT aliasé "ad",
+  -- et n'est pas qualifiée : une jointure rendrait "id" et "entreprise_id" ambigus.
+  (SELECT COALESCE(NULLIF(btrim(s.prenom || ' ' || s.nom), ''), u.email)
+     FROM users u
+     LEFT JOIN salaries s ON s.user_id = u.id AND s.entreprise_id = achats_documents.entreprise_id
+    WHERE u.id = achats_documents.user_id) AS "acheteurNom"
 `;
 
 // Référence lisible d'un achat (ACH-2026-0007). Contrairement à genererNumero() dans
@@ -80,7 +87,7 @@ async function resolveUomId(client, entrepriseId, uomId, produitUniteId) {
 
 async function getDocumentComplete(documentId, entrepriseId) {
   const documentResult = await pool.query(
-    `SELECT ${DOCUMENT_COLUMNS} FROM achats_documents ad WHERE ad.id = $1 AND ad.entreprise_id = $2`,
+    `SELECT ${DOCUMENT_COLUMNS} FROM achats_documents WHERE id = $1 AND entreprise_id = $2`,
     [documentId, entrepriseId]
   );
   if (documentResult.rows.length === 0) return null;

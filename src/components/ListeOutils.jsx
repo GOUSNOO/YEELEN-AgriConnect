@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, ChevronDown, ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, ChevronLeft, X, SlidersHorizontal } from 'lucide-react';
 import { Button } from './ui.jsx';
 import { COLORS, RADIUS, SPACE, TEXT } from '../lib/theme.js';
 
@@ -36,6 +36,22 @@ export function useListeOutils(lignes, config) {
   const [tri, setTri] = useState(config.triParDefaut || null);
   const [page, setPage] = useState(0);
   const [groupesReplies, setGroupesReplies] = useState([]);
+  // Colonnes masquées et lignes sélectionnées — deux fonctions de la liste de référence :
+  // le menu qui masque une colonne (`optional="hide"`) et les cases à cocher qui ouvrent
+  // une barre d'actions groupées.
+  // Les colonnes ne sont pas connues du hook : elles vivent dans le module appelant, où elles
+  // ont besoin de `t` et des gestionnaires d'action. TableauListe les lui transmet au premier
+  // rendu, une seule fois — sinon un masquage fait par l'utilisateur serait réécrasé par le
+  // défaut à chaque rendu.
+  const [colonnesMasquees, setColonnesMasquees] = useState([]);
+  const colonnesInitialisees = useRef(false);
+  const initialiserColonnes = (colonnes) => {
+    if (colonnesInitialisees.current) return;
+    colonnesInitialisees.current = true;
+    const parDefaut = colonnes.filter(c => c.masqueeParDefaut).map(c => c.id);
+    if (parDefaut.length > 0) setColonnesMasquees(parDefaut);
+  };
+  const [selection, setSelection] = useState([]);
 
   const basculerFiltre = (id) => {
     setPage(0);
@@ -93,6 +109,10 @@ export function useListeOutils(lignes, config) {
     return out;
   }, [lignes, recherche, filtresActifs, tri, config]);
 
+  useEffect(() => {
+    setSelection(prev => (prev.length === 0 ? prev : []));
+  }, [recherche, filtresActifs, lignes]);
+
   const definitionGroupe = (config.groupes || []).find(g => g.id === groupePar) || null;
 
   const groupes = useMemo(() => {
@@ -136,6 +156,13 @@ export function useListeOutils(lignes, config) {
     basculerGroupe: (cle) => setGroupesReplies(prev => (prev.includes(cle) ? prev.filter(c => c !== cle) : [...prev, cle])),
     actif: Boolean(recherche.trim() || filtresActifs.length > 0 || groupePar),
     reinitialiser,
+    colonnesMasquees,
+    initialiserColonnes,
+    basculerColonne: (id) => setColonnesMasquees(prev => (prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])),
+    selection,
+    basculerSelection: (cle) => setSelection(prev => (prev.includes(cle) ? prev.filter(c => c !== cle) : [...prev, cle])),
+    remplacerSelection: setSelection,
+    viderSelection: () => setSelection([]),
     config,
   };
 }
@@ -276,5 +303,181 @@ export function PiedListe({ etat }) {
         </span>
       )}
     </div>
+  );
+}
+
+// Tableau générique piloté par une liste de colonnes déclarées. Il remplace les deux tableaux
+// écrits à la main : sommes en pied, colonnes masquables et sélection multiple supposent toutes
+// de savoir quelles colonnes existent, ce qu'un balisage figé ne dit pas.
+//
+// Forme d'une colonne :
+//   { id, labelKey, rendu(ligne), triable?, optionnelle?, masqueeParDefaut?,
+//     somme?(ligne) -> nombre, formatSomme?(total) -> texte, alignement?, style? }
+export function TableauListe({
+  etat, colonnes, cle, onLigneClic, ligneAttenuee, selectionActive, actionsGroupees, vide,
+}) {
+  const { t } = useTranslation();
+  useEffect(() => { etat.initialiserColonnes(colonnes); }, [etat, colonnes]);
+  const visibles = colonnes.filter(c => !etat.colonnesMasquees.includes(c.id));
+  const nbColonnes = visibles.length + (selectionActive ? 1 : 0);
+  const sommes = visibles.filter(c => c.somme);
+
+  const clesAffichees = (etat.groupes
+    ? etat.groupes.filter(g => !g.replie).flatMap(g => g.membres)
+    : etat.lignesAffichees).map(cle);
+  const toutSelectionne = clesAffichees.length > 0 && clesAffichees.every(k => etat.selection.includes(k));
+
+  const rendreLigne = (ligne) => {
+    const k = cle(ligne);
+    const selectionnee = etat.selection.includes(k);
+    return (
+      <tr
+        key={k}
+        onClick={onLigneClic ? () => onLigneClic(ligne) : undefined}
+        style={{
+          cursor: onLigneClic ? 'pointer' : 'default',
+          // `decoration-muted` de la référence : un document annulé reste lisible mais recule.
+          opacity: ligneAttenuee && ligneAttenuee(ligne) ? 0.45 : 1,
+          background: selectionnee ? COLORS.greenSoft : undefined,
+        }}
+      >
+        {selectionActive && (
+          <td style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selectionnee}
+              onChange={() => etat.basculerSelection(k)}
+              aria-label={t('listes.selectionnerLigne')}
+              style={{ cursor: 'pointer' }}
+            />
+          </td>
+        )}
+        {visibles.map(c => (
+          <td key={c.id} style={{ textAlign: c.alignement || 'left', ...c.style }}>{c.rendu(ligne)}</td>
+        ))}
+      </tr>
+    );
+  };
+
+  if (etat.nbFiltrees === 0) return vide || null;
+
+  return (
+    <>
+      {selectionActive && etat.selection.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: SPACE.md, flexWrap: 'wrap',
+          padding: `${SPACE.sm}px ${SPACE.lg}px`, background: COLORS.greenSoft,
+          borderBottom: `1px solid ${COLORS.border}`,
+        }}>
+          <span style={{ fontSize: TEXT.base, fontWeight: 600, color: COLORS.green }}>
+            {t('listes.selectionnes', { count: etat.selection.length })}
+          </span>
+          {actionsGroupees && actionsGroupees(etat.selection)}
+          <Button variant="ghost" small onClick={etat.viderSelection}><X size={13} /> {t('listes.deselectionner')}</Button>
+        </div>
+      )}
+
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table">
+          <thead>
+            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
+              {selectionActive && (
+                <th style={{ width: 32 }}>
+                  <input
+                    type="checkbox"
+                    checked={toutSelectionne}
+                    onChange={() => etat.remplacerSelection(toutSelectionne ? [] : clesAffichees)}
+                    aria-label={t('listes.toutSelectionner')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
+              )}
+              {visibles.map(c => (
+                c.triable
+                  ? <EnteteTriable key={c.id} etat={etat} colonne={c.id} style={{ textAlign: c.alignement || 'left' }}>{t(c.labelKey)}</EnteteTriable>
+                  : <th key={c.id} style={{ textAlign: c.alignement || 'left' }}>{t(c.labelKey)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {etat.groupes
+              ? etat.groupes.map(groupe => (
+                <React.Fragment key={groupe.cle}>
+                  <LigneGroupe groupe={groupe} colSpan={nbColonnes} onToggle={etat.basculerGroupe} />
+                  {!groupe.replie && groupe.membres.map(rendreLigne)}
+                </React.Fragment>
+              ))
+              : etat.lignesAffichees.map(rendreLigne)}
+          </tbody>
+          {sommes.length > 0 && (
+            // `sum=` de la référence. Le total porte sur l'ensemble filtré, pas sur la seule page
+            // affichée : additionner une page n'aurait aucun sens comptable.
+            <tfoot>
+              <tr style={{ fontWeight: 700, borderTop: `2px solid ${COLORS.border}` }}>
+                {selectionActive && <td />}
+                {visibles.map((c, index) => {
+                  if (!c.somme) {
+                    return <td key={c.id}>{index === 0 ? t('listes.totalColonne') : ''}</td>;
+                  }
+                  const total = etat.filtrees.reduce((acc, ligne) => acc + (Number(c.somme(ligne)) || 0), 0);
+                  return (
+                    <td key={c.id} style={{ textAlign: c.alignement || 'left' }}>
+                      {c.formatSomme ? c.formatSomme(total) : total}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </>
+  );
+}
+
+// Menu de visibilité des colonnes — équivalent du sélecteur `optional` de la liste de référence.
+export function MenuColonnes({ etat, colonnes }) {
+  const { t } = useTranslation();
+  const [ouvert, setOuvert] = useState(false);
+  const optionnelles = colonnes.filter(c => c.optionnelle);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!ouvert) return undefined;
+    const surClic = (e) => { if (ref.current && !ref.current.contains(e.target)) setOuvert(false); };
+    document.addEventListener('mousedown', surClic);
+    return () => document.removeEventListener('mousedown', surClic);
+  }, [ouvert]);
+
+  if (optionnelles.length === 0) return null;
+
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <Button variant="ghost" small onClick={() => setOuvert(v => !v)} title={t('listes.colonnes')}>
+        <SlidersHorizontal size={14} />
+      </Button>
+      {ouvert && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 40, minWidth: 190,
+          background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: `${SPACE.xs}px 0`,
+        }}>
+          {optionnelles.map(c => (
+            <label
+              key={c.id}
+              style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, padding: `${SPACE.xs}px ${SPACE.md}px`, cursor: 'pointer', fontSize: TEXT.base }}
+            >
+              <input
+                type="checkbox"
+                checked={!etat.colonnesMasquees.includes(c.id)}
+                onChange={() => etat.basculerColonne(c.id)}
+                style={{ cursor: 'pointer' }}
+              />
+              {t(c.labelKey)}
+            </label>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }

@@ -40,6 +40,24 @@ const DEVIS_COLUMNS = `
   d.created_at AS "createdAt"
 `;
 
+// Colonnes réservées à la LISTE. Elles ne rejoignent pas DEVIS_COLUMNS, qui est relue par
+// getDevisComplet — lui-même appelé DEPUIS des transactions ouvertes (facturer,
+// remettre-brouillon) qui écrivent dans account_move. Une sous-requête vers cette table
+// depuis la constante partagée a fait expirer la suite de tests du cycle de vie : trois
+// exécutions vertes sans elle, échecs avec. Même leçon que DOCUMENT_COLUMNS dans achats.js —
+// une constante de colonnes lue dans plusieurs contextes doit rester simple.
+const DEVIS_LISTE_COLUMNS = `
+  ${DEVIS_COLUMNS},
+  -- Vendeur : l'auteur du devis. users ne stocke qu'un e-mail ; quand le compte est rattaché
+  -- à un salarié, son nom est ce qu'un utilisateur reconnaît.
+  (SELECT COALESCE(NULLIF(btrim(s.prenom || ' ' || s.nom), ''), u.email)
+     FROM users u
+     LEFT JOIN salaries s ON s.user_id = u.id AND s.entreprise_id = d.entreprise_id
+    WHERE u.id = d.user_id) AS "vendeurNom",
+  -- État de facturation, axe distinct du statut commercial (patron invoice_status).
+  (SELECT mv.payment_state FROM account_move mv WHERE mv.id = d.move_id) AS "etatFacturation"
+`;
+
 // Ne garde qu'un recolte_id qui appartient réellement à l'entreprise appelante (isolation multi-tenant)
 async function validerRecolteIds(dbClient, lignes, entrepriseId) {
   const ids = [...new Set(lignes.map(l => l.recolteId).filter(Boolean))];
@@ -294,12 +312,12 @@ router.get('/', authRequired, async (req, res) => {
     // sous-ensemble filtré.
     const result = clientId
       ? await pool.query(
-          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
+          `SELECT ${DEVIS_LISTE_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
            WHERE d.entreprise_id = $1 AND d.client_id = $2 ORDER BY d.id DESC`,
           [req.user.entrepriseId, clientId]
         )
       : await pool.query(
-          `SELECT ${DEVIS_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
+          `SELECT ${DEVIS_LISTE_COLUMNS} FROM devis d LEFT JOIN contacts c ON c.id = d.client_id JOIN entreprises e ON e.id = d.entreprise_id
            WHERE d.entreprise_id = $1 ORDER BY d.id DESC`,
           [req.user.entrepriseId]
         );

@@ -4220,3 +4220,65 @@ parcelles inchangé. Entreprise nettoyée, image frontend reconstruite.
 **Non traité, à décider séparément** : Poulailler et Pisciculture amorcent eux aussi des stocks
 de démonstration (`DEFAULT_STOCKS`, `DEFAULT_STOCKS_PISCICULTURE` — aliment, œufs, alevins…).
 La demande portait sur les parcelles ; le même raisonnement leur est applicable si voulu.
+
+### 2026-09-10 — Finitions de liste, et les champs de saisie enfin visibles
+
+Deux demandes en une : terminer les fonctions de liste, et traiter des champs de formulaire
+qu'on ne voyait qu'en cliquant dedans.
+
+**Les champs de saisie.** `.flat-input` posait `border: 1px solid transparent` au repos, révélée
+au survol ou au focus : sur fond blanc, un champ vide était indiscernable du fond. Relevé dans
+le SCSS de la référence (`views/fields/fields.scss`, `.o_input`) : `border-width: 0 0 1px 0` —
+**un soulignement seul, visible en permanence**, `--o-input-border-color` valant
+`$o-form-lightsecondary` au repos et `$o-action` au focus, padding `2px 4px`. Repris à
+l'identique, couleurs de notre palette. Un soulignement n'est pas le « rectangle » retiré à la
+demande de l'utilisateur en août : les deux exigences tiennent ensemble. Le halo de focus
+maison est restreint aux champs bruts — autour d'un simple trait, il donnait une auréole
+flottante.
+
+**Les finitions de liste.** Elles supposaient toutes de savoir quelles colonnes existent, ce
+qu'un tableau écrit à la main ne dit pas. Les deux tableaux passent donc à des **colonnes
+déclarées** rendues par un `TableauListe` générique, ce qui fait tomber d'un coup :
+
+- **Sommes en pied** (`sum=`), portant sur l'ensemble filtré et non sur la page affichée —
+  additionner une page n'aurait aucun sens comptable. Vérifié : 36 000 F CFA sans filtre,
+  33 000 une fois les annulés écartés.
+- **Sélection multiple** avec case « tout cocher » et barre d'actions groupées. Les actions se
+  limitent à ce qui existe déjà à l'unité — suppression des brouillons côté devis, réception
+  côté achats — et chaque document passe par la route unitaire : rien de neuf côté serveur,
+  donc rien qui puisse se comporter autrement en lot qu'à l'unité.
+- **Colonnes masquables** (`optional`), avec le mode `hide` pour celles cachées par défaut.
+- **Colonnes ajoutées** : Vendeur et Facturation côté devis, Acheteur et « Reçu le » côté
+  achats, plus « Valable jusqu'au » et Notes. Vendeur/Acheteur résolvent le nom du salarié
+  quand le compte y est rattaché, sinon l'e-mail — `users` ne stocke rien d'autre.
+- **Documents annulés atténués** (`decoration-muted`).
+- **Montants alignés à droite**, comme toute colonne monétaire de la référence : les chiffres
+  et leur somme tombent sur le même axe.
+
+**Un défaut que j'ai introduit, trouvé par les tests.** La sous-requête donnant l'état de
+facturation avait d'abord été ajoutée à `DEVIS_COLUMNS`. Or cette constante est relue par
+`getDevisComplet`, lui-même appelé **depuis des transactions ouvertes** qui écrivent dans
+`account_move` (`facturer`, `remettre-brouillon`) : la suite du cycle de vie s'est mise à
+expirer, sur un test différent à chaque exécution. J'ai d'abord cru à l'instabilité déjà
+documentée de ce fichier ; trois exécutions vertes après avoir mis mon changement de côté ont
+montré que non, c'était bien moi. Isolé en neutralisant une sous-requête à la fois. Corrigé par
+un `DEVIS_LISTE_COLUMNS` réservé à la route de liste — exactement la leçon déjà écrite pour
+`DOCUMENT_COLUMNS` dans `achats.js` : une constante de colonnes lue dans plusieurs contextes
+doit rester simple.
+
+**Et un piège pour la troisième fois** : des backticks dans un commentaire SQL, à l'intérieur
+d'un template literal JS. L'erreur remonte sous la forme d'un `SyntaxError: Unexpected
+identifier` dans un fichier sans rapport. Voir la mémoire dédiée.
+
+**Vérification** — build, `oxlint`, 130/130 tests frontend et **389/389 tests d'intégration**
+(la suite devis rejouée trois fois de suite après correction). En navigateur, sur une entreprise
+jetable de 8 devis et 8 achats : sommes recoupées à la main, sélection et désélection, menu des
+colonnes basculant réellement les en-têtes, annulés grisés, soulignement des champs mesuré
+(`border-width` 0/0/0/1, couleur au repos non transparente, padding 2px 4px). **Les deux actions
+groupées exécutées jusqu'au bout** : 4 achats reçus → 4 écritures de finances pour −40 000 F CFA
+en base, et 6 devis supprimés sur 8 sélectionnés — les 2 annulés, non supprimables, correctement
+écartés de l'action. Entreprise nettoyée, images backend et frontend reconstruites.
+
+**Ce qui reste hors d'atteinte sans inventer des données** : la priorité en étoile et l'« arrivée
+prévue » d'un bon de commande supposent des champs que nous ne collectons pas. Les ajouter est
+une décision produit, pas une finition.

@@ -52,23 +52,36 @@
 .flat-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid transparent;
+  /* Soulignement seul, visible au repos — valeurs relevées dans le SCSS de la référence
+     (addons/web/static/src/views/fields/fields.scss, `.o_input`) :
+       border-width: 0 0 $input-border-width 0   (uniquement le bas)
+       --o-input-border-color: $o-form-lightsecondary  au repos, $o-action au focus
+       padding: $o-input-padding-y $o-input-padding-x = 2px 4px
+     La version précédente posait une bordure ENTIÈREMENT TRANSPARENTE au repos, révélée au
+     survol ou au focus : sur fond blanc, un champ vide était indiscernable du fond, et on ne
+     découvrait son existence qu'en cliquant dedans. La référence, elle, montre toujours le
+     soulignement. Un soulignement n'est pas le « rectangle » retiré à la demande de
+     l'utilisateur en août — les deux tiennent ensemble. Couleurs prises dans notre palette,
+     seul écart assumé avec la référence. */
+  border: 1px solid #DAD6C4;
+  border-width: 0 0 1px 0;
+  border-radius: 0;
   background: transparent;
-  border-radius: 4px;
-  padding: 5px 6px;
-  font-size: 13.5px;
+  padding: 2px 4px;
+  font-size: 13px;
   font-family: 'Inter', sans-serif;
   color: #22271D;
   outline: none;
-  transition: border-color 0.1s ease, background-color 0.1s ease;
+  transition: border-color 0.1s ease;
 }
 .flat-input::placeholder {
   color: #9AA093;
 }
-.flat-input:hover,
+.flat-input:hover {
+  border-bottom-color: #9AA093;
+}
 .flat-input:focus {
-  border-color: #DAD6C4;
-  background: #fff;
+  border-bottom-color: #3F6B3B; /* $o-action, ici le vert d'action de la palette */
 }
 
 /* Groupe étiquette/valeur façon ERP (un groupe étiquette/valeur de référence : grid-template-columns:
