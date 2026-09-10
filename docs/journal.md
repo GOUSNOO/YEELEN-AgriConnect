@@ -4143,3 +4143,48 @@ Onglet Carte revérifié après le correctif. Entreprise nettoyée, image fronte
 **Observation, non traitée** : sur cette entreprise de test, un rechargement de page a créé une
 seconde série de parcelles par défaut (6 au lieu de 3), suivie de 404 « Parcelle introuvable ».
 C'est antérieur à ce chantier et sans rapport avec lui — signalé plutôt que corrigé en passant.
+
+### 2026-09-10 — Parcelles dupliquées : la simulation tournait sur des données fictives
+
+Observation signalée en fin du chantier précédent : sur une entreprise de test, un rechargement
+de page créait une seconde série de parcelles par défaut (6 au lieu de 3), suivie de 404
+« Parcelle introuvable ». Deux défauts distincts derrière, dont le second est le plus sérieux.
+
+**Le symptôme visible : double amorçage.** `CulturesModule` charge les parcelles, et si le
+serveur en renvoie zéro, il crée les trois parcelles par défaut. L'effet n'avait aucune garde de
+concurrence : deux exécutions rapprochées trouvent toutes deux une liste vide et amorcent
+chacune. React double les effets en mode strict *en développement* — d'où les 6 parcelles
+constatées sur le serveur de dev. En production, `StrictMode` ne double pas les effets, mais un
+remontage rapide produirait le même résultat. Corrigé par un `chargementRef` qui bloque une
+seconde exécution tant que la première est en vol. Vérifié en base : aucune entreprise réelle
+n'a de doublon, le problème était resté confiné aux entreprises de test.
+
+**Le défaut de fond : l'état initial était `DEFAULT_PARCELLES`.** Trois parcelles fictives
+portant les identifiants **1, 2 et 3**. Elles n'ont jamais été affichées — le rendu court-circuite
+sur un écran de chargement tant que `loaded` est faux — mais la simulation d'irrigation, elle,
+démarre immédiatement : toutes les 6 secondes elle fait varier humidité et température, et dès
+qu'un seuil est franchi en mode automatique elle **écrit au serveur** (`updateParcelle`,
+`createParcelleHistorique`).
+
+`parcelles.id` est une séquence globale. En base, l'identifiant 3 appartient à une vraie parcelle
+de l'entreprise 1. Autrement dit : tant que le chargement n'avait pas répondu, un ordre de vanne
+calculé sur une humidité aléatoire pouvait partir vers une parcelle réelle. La fenêtre est
+étroite (il faut que le chargement dépasse 6 secondes) et la portée limitée à l'entreprise dont
+les identifiants coïncident — mais c'est une écriture sur des données réelles à partir de données
+inventées, pas un simple bruit dans la console. Les 404 observés étaient la même cause vue de
+l'autre côté : les identifiants 1 et 2 n'existent pas.
+
+Corrigé en deux temps : l'état initial démarre **vide** (le placeholder ne servait à rien, le
+rendu ne l'affichait jamais), et la simulation est **conditionnée à `loaded`** — elle ne peut
+plus écrire avant que les vraies parcelles soient là.
+
+**Vérification** — build, `oxlint` et 130/130 tests verts. Reproduction du scénario exact sur une
+entreprise jetable neuve : premier chargement → 3 parcelles et exactement trois `POST
+/cultures/parcelles` dans le journal réseau ; trois rechargements successifs → toujours 3
+parcelles, uniquement des `GET`. Auparavant, un seul rechargement suffisait à en produire 6.
+Entreprise nettoyée, image frontend reconstruite.
+
+**Question laissée à l'utilisateur** : faut-il qu'une entreprise qui s'inscrit reçoive trois
+parcelles de démonstration (« Parcelle A / Maïs / 46 % ») écrites dans sa base ? C'est un choix
+d'accueil, pas un défaut — mais un nouvel utilisateur doit aujourd'hui les supprimer avant de
+saisir les siennes.

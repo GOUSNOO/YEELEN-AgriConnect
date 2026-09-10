@@ -4709,10 +4709,21 @@ function CulturesModule({ farmId, highlightProduitId }) {
   useEffect(() => {
     if (highlightProduitId) setTab('stocks');
   }, [highlightProduitId]);
-  const [parcelles, setParcelles] = useState(DEFAULT_PARCELLES);
+  // L'état initial était DEFAULT_PARCELLES — trois parcelles fictives portant les identifiants
+  // 1, 2 et 3. Elles n'ont jamais été affichées (le rendu court-circuite tant que `loaded` est
+  // faux), mais la simulation d'irrigation ci-dessous, elle, tournait dessus dès la première
+  // seconde et écrivait au serveur sur ces identifiants. `parcelles.id` étant une séquence
+  // globale, l'identifiant 3 appartient à une vraie parcelle d'une vraie entreprise : tant que
+  // le chargement n'avait pas répondu, un ordre de vanne pouvait partir vers elle. Démarrer à
+  // vide supprime le problème à la racine.
+  const [parcelles, setParcelles] = useState([]);
   const [historique, setHistorique] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const loadedRef = useRef(false);
+  // Garde de concurrence : sans elle, deux exécutions rapprochées de l'effet de chargement
+  // (React en mode strict les double en développement, un remontage rapide fait de même)
+  // trouvent toutes deux une liste vide et amorcent chacune les parcelles par défaut — d'où
+  // six parcelles au lieu de trois, constaté en vérification.
+  const chargementRef = useRef(false);
 
   const normalizeParcelle = useCallback((p) => ({
     ...p,
@@ -4740,6 +4751,8 @@ function CulturesModule({ farmId, highlightProduitId }) {
   }, [normalizeParcelle]);
 
   useEffect(() => {
+    if (chargementRef.current) return;
+    chargementRef.current = true;
     (async () => {
       try {
         const { parcelles: fetched } = await getParcelles();
@@ -4755,7 +4768,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
         console.error('[CulturesModule load]', err);
       } finally {
         setLoaded(true);
-        loadedRef.current = true;
+        chargementRef.current = false;
       }
     })();
   }, [farmId, seedDefaultParcelles]);
@@ -4771,7 +4784,10 @@ function CulturesModule({ farmId, highlightProduitId }) {
     }
   }, [t]);
 
+  // La simulation écrit au serveur (vanne, journal) : elle ne doit pas démarrer avant que les
+  // vraies parcelles soient là, sans quoi elle écrit sur ce qu'elle trouve dans l'état.
   useEffect(() => {
+    if (!loaded) return undefined;
     const t = setInterval(() => {
       setParcelles(prev => prev.map(p => {
         const humidite = Math.max(10, Math.min(85, p.humidite + (Math.random() - 0.5) * 6));
@@ -4789,7 +4805,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
       }));
     }, 6000);
     return () => clearInterval(t);
-  }, [pushHistorique]);
+  }, [pushHistorique, loaded]);
 
   const toggleMode = (id) => {
     setParcelles(prev => prev.map(p => {
