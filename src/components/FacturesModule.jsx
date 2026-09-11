@@ -15,7 +15,7 @@ import ComptaEtatsPanel from './ComptaEtatsPanel.jsx';
 import ComptaConfigPanel from './ComptaConfigPanel';
 import PaymentTermsPanel from './PaymentTermsPanel';
 import TaxesPanel from './TaxesPanel';
-import { SousNavOnglets } from './ListeOutils.jsx';
+import { SousNavOnglets, useListeOutils, BarreOutilsListe, TableauListe, PiedListe } from './ListeOutils.jsx';
 import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
 // Les référentiels comptables — conditions de paiement, taxes, journaux et plan de comptes —
@@ -109,6 +109,50 @@ export default function FacturesModule() {
       .finally(() => setLoading(false));
   };
   useEffect(charger, [filtreState, filtreType]);
+  // Les outils de liste partagés (recherche, tri, regroupement, pagination, colonnes
+  // masquables) par-dessus les filtres Type/Statut, qui restent CÔTÉ SERVEUR : ils pilotent
+  // la requête, les remplacer par un filtre client changerait ce que la liste contient.
+  const outils = useListeOutils(factures, useMemo(() => ({
+    rechercheChamps: (f) => [f.name, f.partnerName, f.invoiceOrigin],
+    filtres: [
+      { id: 'impayees', labelKey: 'factures.pay.not_paid', test: (f) => f.state === 'posted' && f.paymentState !== 'paid' },
+      { id: 'payees', labelKey: 'factures.pay.paid', test: (f) => f.paymentState === 'paid' },
+    ],
+    groupes: [
+      { id: 'partenaire', labelKey: 'factures.colPartner', valeur: (f) => f.partnerName || '—' },
+      { id: 'etat', labelKey: 'factures.colState', valeur: (f) => f.state },
+    ],
+    colonnes: {
+      numero: (f) => f.name || '',
+      partenaire: (f) => f.partnerName || '',
+      date: (f) => f.invoiceDate,
+      echeance: (f) => f.invoiceDateDue,
+      totalHt: (f) => f.amountUntaxed,
+      total: (f) => f.amountTotal,
+    },
+    triParDefaut: { colonne: 'date', sens: 'desc' },
+  }), []));
+
+  const colonnesFactures = useMemo(() => [
+    { id: 'numero', labelKey: 'factures.colNumber', triable: true, principale: true,
+      rendu: (f) => <strong>{f.name || t('factures.draftPlaceholder')}</strong> },
+    { id: 'partenaire', labelKey: 'factures.colPartner', triable: true, rendu: (f) => f.partnerName || '—' },
+    { id: 'date', labelKey: 'factures.colDate', triable: true, rendu: (f) => (f.invoiceDate ? fmtDate(f.invoiceDate) : '—') },
+    { id: 'echeance', labelKey: 'factures.invoiceDateDue', triable: true,
+      rendu: (f) => (f.invoiceDateDue ? (
+        <span style={{ color: f.state === 'posted' && f.paymentState !== 'paid' && new Date(f.invoiceDateDue) < new Date() ? COLORS.red : INK_SOFT }}>
+          {`${fmtDate(f.invoiceDateDue)} · ${echeanceLabel(f.invoiceDateDue, t)}`}
+        </span>) : '—') },
+    { id: 'totalHt', labelKey: 'factures.amountUntaxed', triable: true, alignement: 'right', optionnelle: true,
+      rendu: (f) => montantAffiche({ devise: f.devise, amountTotal: f.amountUntaxed }) },
+    { id: 'total', labelKey: 'factures.colTotal', triable: true, alignement: 'right', style: { fontWeight: 600 },
+      somme: (f) => f.amountTotal, formatSomme: (n) => fmtMoney(n), rendu: (f) => montantAffiche(f) },
+    { id: 'paiement', labelKey: 'factures.colPayment',
+      rendu: (f) => (f.state === 'posted' ? <Badge tone={PAY_TONE[f.paymentState]}>{t(`factures.pay.${f.paymentState}`)}</Badge> : null) },
+    { id: 'etat', labelKey: 'factures.colState', rendu: (f) => <Badge tone={STATE_TONE[f.state]}>{t(`factures.state.${f.state}`)}</Badge> },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, fmtDate, fmtMoney]);
+
   const rechargerTaxes = () => getTaxes().then((d) => setTaxes(d.taxes || [])).catch(() => {});
   const rechargerPaymentTerms = () => getPaymentTerms().then((d) => setPaymentTerms(d.paymentTerms || [])).catch(() => {});
   useEffect(() => {
@@ -279,40 +323,28 @@ export default function FacturesModule() {
 
         {apiError && <div style={{ color: COLORS.red, fontSize: TEXT.base, marginBottom: SPACE.sm }}>{apiError}</div>}
 
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr style={{ color: INK_SOFT }}>
-                <th style={{ width: '15%' }}>{t('factures.colNumber')}</th>
-                <th style={{ width: '24%' }}>{t('factures.colPartner')}</th>
-                <th style={{ width: '12%' }}>{t('factures.colDate')}</th>
-                <th style={{ width: '15%' }}>{t('factures.invoiceDateDue')}</th>
-                <th style={{ width: '12%', textAlign: 'right' }}>{t('factures.amountUntaxed')}</th>
-                <th style={{ width: '12%', textAlign: 'right' }}>{t('factures.colTotal')}</th>
-                <th style={{ width: '5%' }}>{t('factures.colPayment')}</th>
-                <th style={{ width: '5%' }}>{t('factures.colState')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={8}><Loader2 size={14} className="spin" /></td></tr>}
-              {!loading && factures.length === 0 && <tr><td colSpan={8} style={{ color: COLORS.inkFaint }}>{t('factures.empty')}</td></tr>}
-              {factures.map((f) => (
-                <tr key={f.id} onClick={() => ouvrirDetail(f.id)} style={{ cursor: 'pointer' }}>
-                  <td><strong>{f.name || t('factures.draftPlaceholder')}</strong></td>
-                  <td>{f.partnerName || '—'}</td>
-                  <td>{f.invoiceDate ? fmtDate(f.invoiceDate) : '—'}</td>
-                  <td style={{ color: f.invoiceDateDue && f.state === 'posted' && f.paymentState !== 'paid' && new Date(f.invoiceDateDue) < new Date() ? COLORS.red : INK_SOFT }}>
-                    {f.invoiceDateDue ? `${fmtDate(f.invoiceDateDue)} · ${echeanceLabel(f.invoiceDateDue, t)}` : '—'}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{montantAffiche({ devise: f.devise, amountTotal: f.amountUntaxed })}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{montantAffiche(f)}</td>
-                  <td>{f.state === 'posted' && <Badge tone={PAY_TONE[f.paymentState]}>{t(`factures.pay.${f.paymentState}`)}</Badge>}</td>
-                  <td><Badge tone={STATE_TONE[f.state]}>{t(`factures.state.${f.state}`)}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div style={{ padding: SPACE.lg, color: INK_SOFT }}><Loader2 size={14} className="spin" /></div>
+        ) : (
+          <>
+            <BarreOutilsListe etat={outils} placeholderRecherche={t('factures.rechercher')} />
+            <div style={{ marginTop: SPACE.sm }}>
+              <TableauListe
+                etat={outils}
+                colonnes={colonnesFactures}
+                cle={(f) => f.id}
+                onLigneClic={(f) => ouvrirDetail(f.id)}
+                ligneAttenuee={(f) => f.state === 'cancel'}
+                vide={(
+                  <div style={{ padding: SPACE.lg, color: COLORS.inkFaint, fontSize: TEXT.base }}>
+                    {outils.actif ? t('listes.aucunResultat') : t('factures.empty')}
+                  </div>
+                )}
+              />
+              <PiedListe etat={outils} />
+            </div>
+          </>
+        )}
       </Card>
 
       {/* ─── Formulaire de création (brouillon) ─── */}

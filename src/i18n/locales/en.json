@@ -1149,6 +1149,7 @@
     "title": "Invoices",
     "newTitle": "New invoice (draft)",
     "empty": "No invoices.",
+    "rechercher": "Search an invoice…",
     "draftPlaceholder": "Draft",
     "filterType": "Type",
     "filterState": "Status",
