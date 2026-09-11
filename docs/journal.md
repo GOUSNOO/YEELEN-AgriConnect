@@ -5008,3 +5008,52 @@ numéro. Entreprise purgée, images Docker reconstruites.
 **Ce qui reste non vérifiable ici** : l'ouverture réelle de la feuille de partage et l'arrivée du
 PDF dans WhatsApp, qui demandent un vrai téléphone. Le chemin de code est exercé, le rendu final
 ne l'est pas.
+
+### 2026-09-11 — Harmonisation des listes, étape 1
+
+Demande de l'utilisateur : « harmoniser l'appli » et viser le niveau des ERP agricoles matures,
+avant l'hébergement. Le constat a été mesuré, pas supposé.
+
+**Ce que la mesure a montré.** `App.jsx` fait 9 915 lignes et 63 composants — 55 % du frontend.
+Les outils de liste construits la veille (recherche, filtres, tri, regroupement, pagination,
+colonnes masquables) ne servaient que sur **2 écrans** ; treize autres fichiers gardaient des
+tableaux bruts. Et sur un écran de 375 px, la liste des devis réclamait **802 px dans une fenêtre
+de 329**, avec 88 px par ligne : trois devis illisibles remplissaient l'écran.
+
+**Le rendu carte, dans le composant partagé.** Sous 700 px, chaque ligne devient une carte — la
+colonne `principale` fait le titre, celle qui porte une `somme` passe à droite, le reste s'empile
+en paires ; `masqueeSurCarte` écarte ce qui n'a pas de sens hors tableau. Les écrans appelants
+n'ont **rien** à déclarer de plus : c'est ce qui permet d'harmoniser sans reprendre chaque liste
+à la main, et c'est aussi ce qui servira à une future application mobile, qui réutilisera ce même
+code. Groupes, sélection et totaux sont conservés dans les deux formes.
+
+`matchMedia` plutôt qu'un écouteur de redimensionnement, avec un garde-fou sur son absence :
+jsdom ne le fournit pas, et sans lui **toute** la suite de tests tomberait. Un test couvre
+précisément ce garde-fou.
+
+**Trois listes converties**, chacune vérifiée en largeur bureau ET téléphone :
+- **Factures** — avait deux filtres serveur et rien d'autre. Les filtres Type/Statut restent côté
+  serveur (ils pilotent la requête) ; le reste vient des outils partagés. Gagne un total TTC
+  qui n'existait pas.
+- **Équipements** — gagne un total du parc, qui n'était calculé nulle part, et qui suit le
+  filtre : vérifié, 12 665 000 sur quatre équipements, 8 120 000 sur les deux indisponibles.
+- **Registre des intrants** — deux filtres à conséquence réelle (délai avant récolte en cours,
+  ZNT non respectée). Le style de cellule et la constante de bordure devenus morts ont été
+  retirés, le lint les signalait.
+
+**Deux corrections à mon propre plan, issues de la mesure :**
+1. J'avais annoncé que les écrans avaient « des tableaux bruts ». Faux pour les **Contacts**, déjà
+   en cartes avec panneau de détail : leur défaut est ailleurs — une grille figée à deux colonnes,
+   soit **deux colonnes de 160 px sur un téléphone**.
+2. La liste des **Articles/Stocks** n'a pas été convertie : elle porte des **lignes dépliables**
+   (les lots), que `TableauListe` ne sait pas rendre. La convertir demande d'abord d'ajouter ce
+   mécanisme au composant partagé — un vrai ajout, pas une conversion mécanique. Laissé de côté
+   sciemment plutôt que bâclé en fin de chantier.
+
+**Vérification** — 142/142 tests frontend (6 nouveaux sur la bascule et le garde-fou), build et
+`oxlint` verts. Entreprise jetable purgée, image frontend reconstruite. Poussé en quatre commits
+séparés (`b9a0d0e`, `49755f6`, `a7dd06a`, `3541a75`) pour que chaque écran soit testable seul.
+
+**Reste à faire sur cette étape** : lignes dépliables dans le composant puis Articles/Stocks, la
+grille responsive des Contacts et du RH, les référentiels comptables, et le manifeste PWA qui
+porte encore l'ancienne palette (`#38A169` alors que le thème est à `#3F6B3B`).
