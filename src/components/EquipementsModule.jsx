@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Settings2, Wrench } from 'lucide-react';
 import {
   getEquipements, createEquipement, updateEquipement, deleteEquipement,
   getEquipementMaintenance, createEquipementMaintenance, deleteEquipementMaintenance,
 } from '../lib/api.js';
-import { Badge, Button, Card, DataTable, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { Badge, Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { useListeOutils, BarreOutilsListe, TableauListe, PiedListe } from './ListeOutils.jsx';
 import { useLocale } from '../lib/locale.jsx';
 import { COLORS, RADIUS, TEXT, SPACE } from '../lib/theme.js';
 
@@ -24,6 +25,59 @@ export function EquipementsModule({ canManage = false }) {
   const [equipements, setEquipements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Mêmes outils que Devis, Achats et Factures : un parc de matériel se cherche par nom, se
+  // regroupe par catégorie ou par état, et se trie — c'est exactement ce qui manquait ici.
+  const outils = useListeOutils(equipements, useMemo(() => ({
+    rechercheChamps: (eq) => [eq.nom, eq.categorie, eq.notes],
+    filtres: [
+      // Le filtre qui compte pour un parc : ce qui ne marche pas. « Hors service » est exclu,
+      // c'est du matériel réformé, pas une panne à traiter.
+      { id: 'indisponible', labelKey: 'equipements.filtreIndisponible', test: (eq) => eq.etat === 'En panne' || eq.etat === 'En maintenance' },
+      { id: 'fonctionnel', labelKey: 'equipements.filtreFonctionnel', test: (eq) => eq.etat === 'Fonctionnel' },
+    ],
+    groupes: [
+      { id: 'categorie', labelKey: 'equipements.categorie', valeur: (eq) => eq.categorie },
+      { id: 'etat', labelKey: 'equipements.etat', valeur: (eq) => eq.etat },
+    ],
+    colonnes: {
+      nom: (eq) => eq.nom,
+      categorie: (eq) => eq.categorie,
+      etat: (eq) => eq.etat,
+      valeur: (eq) => eq.valeur,
+    },
+    triParDefaut: { colonne: 'nom', sens: 'asc' },
+  }), []));
+
+  const colonnesEquipements = useMemo(() => [
+    { id: 'nom', labelKey: 'equipements.colEquipement', triable: true, principale: true, style: { fontWeight: 500 }, rendu: (eq) => eq.nom },
+    { id: 'categorie', labelKey: 'equipements.categorie', triable: true, rendu: (eq) => catLabel(eq.categorie) },
+    { id: 'etat', labelKey: 'equipements.etat', triable: true, rendu: (eq) => <Badge tone={ETAT_TONE[eq.etat] || 'blue'}>{etatLabel(eq.etat)}</Badge> },
+    // La valeur du parc n'était totalisée nulle part, alors que c'est le chiffre qu'on cherche
+    // quand on regarde un inventaire de matériel.
+    { id: 'valeur', labelKey: 'equipements.colValeur', triable: true, alignement: 'right',
+      somme: (eq) => eq.valeur, formatSomme: (n) => fmtMoney(n),
+      rendu: (eq) => (eq.valeur != null ? fmtMoney(eq.valeur) : '—') },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (eq) => (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
+          <button onClick={() => openDetail(eq)} title={t('equipements.maintenanceTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+            <Wrench size={15} />
+          </button>
+          {canManage && (
+            <>
+              <button onClick={() => startEdit(eq)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
+                <Settings2 size={15} />
+              </button>
+              <button onClick={() => remove(eq.id, eq.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
+        </div>
+      ) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, canManage, fmtMoney]);
 
   const [form, setForm] = useState(emptyForm);
 
@@ -195,46 +249,20 @@ export function EquipementsModule({ canManage = false }) {
       )}
 
       <Card style={{ padding: 0 }}>
-        <DataTable>
-          <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>{t('equipements.colEquipement')}</th>
-              <th>{t('equipements.categorie')}</th>
-              <th>{t('equipements.etat')}</th>
-              <th>{t('equipements.colValeur')}</th>
-              <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {equipements.length === 0 ? (
-              <tr><td colSpan={5} style={{ color: COLORS.inkSoft }}>{t('equipements.emptyTable')}</td></tr>
-            ) : equipements.map(eq => (
-              <tr key={eq.id}>
-                <td style={{ fontWeight: 500 }}>{eq.nom}</td>
-                <td>{catLabel(eq.categorie)}</td>
-                <td><Badge tone={ETAT_TONE[eq.etat] || 'blue'}>{etatLabel(eq.etat)}</Badge></td>
-                <td>{eq.valeur != null ? fmtMoney(eq.valeur) : '—'}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
-                    <button onClick={() => openDetail(eq)} title={t("equipements.maintenanceTitle")} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
-                      <Wrench size={15} />
-                    </button>
-                    {canManage && (
-                      <>
-                        <button onClick={() => startEdit(eq)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
-                          <Settings2 size={15} />
-                        </button>
-                        <button onClick={() => remove(eq.id, eq.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}>
-                          <Trash2 size={15} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
+        <div style={{ padding: `${SPACE.md}px ${SPACE.lg}px 0` }}>
+          <BarreOutilsListe etat={outils} placeholderRecherche={t('equipements.rechercher')} />
+        </div>
+        <TableauListe
+          etat={outils}
+          colonnes={colonnesEquipements}
+          cle={(eq) => eq.id}
+          vide={(
+            <div style={{ padding: SPACE.lg, color: COLORS.inkSoft, fontSize: TEXT.base }}>
+              {outils.actif ? t('listes.aucunResultat') : t('equipements.emptyTable')}
+            </div>
+          )}
+        />
+        <PiedListe etat={outils} />
       </Card>
 
       {editingId && (

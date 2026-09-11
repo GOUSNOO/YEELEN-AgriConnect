@@ -1592,7 +1592,10 @@
       "En panne": "En panne",
       "En maintenance": "En maintenance",
       "Hors service": "Hors service"
-    }
+    },
+    "rechercher": "Rechercher un équipement…",
+    "filtreIndisponible": "Indisponible",
+    "filtreFonctionnel": "Fonctionnel"
   },
   "feedback": {
     "formTitle": "Donnez votre avis",

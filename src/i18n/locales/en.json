@@ -1592,7 +1592,10 @@
       "En panne": "Broken down",
       "En maintenance": "Under maintenance",
       "Hors service": "Out of service"
-    }
+    },
+    "rechercher": "Search equipment…",
+    "filtreIndisponible": "Unavailable",
+    "filtreFonctionnel": "Working"
   },
   "feedback": {
     "formTitle": "Give your feedback",
