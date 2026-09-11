@@ -459,7 +459,10 @@
     "errRequired": "Sélectionnez un produit ou renseignez une note.",
     "empty": "Aucune application enregistrée.",
     "darActifsTitle": "Délai avant récolte en cours",
-    "recolteInterditeAvant": "récolte déconseillée avant le {{date}}"
+    "recolteInterditeAvant": "récolte déconseillée avant le {{date}}",
+    "rechercher": "Rechercher dans le registre…",
+    "filtreDarActif": "Délai avant récolte en cours",
+    "filtreZntNon": "ZNT non respectée"
   },
   "achats": {
     "newTitle": "Nouvel achat multi-lignes",

@@ -459,7 +459,10 @@
     "errRequired": "Select a product or add a note.",
     "empty": "No application recorded.",
     "darActifsTitle": "Active pre-harvest intervals",
-    "recolteInterditeAvant": "harvest not advised before {{date}}"
+    "recolteInterditeAvant": "harvest not advised before {{date}}",
+    "rechercher": "Search the register…",
+    "filtreDarActif": "Pre-harvest interval active",
+    "filtreZntNon": "Buffer zone breached"
   },
   "achats": {
     "newTitle": "New multi-line purchase",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import {
@@ -6,11 +6,11 @@ import {
   getParcelles, getProduits,
 } from '../lib/api.js';
 import { Button, Card, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { useListeOutils, BarreOutilsListe, TableauListe, PiedListe } from './ListeOutils.jsx';
 import { useLocale, aujourdhuiEntreprise } from '../lib/locale.jsx';
 import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 const INK_SOFT = COLORS.inkSoft;
-const BORDER = COLORS.border;
 const OCHRE = COLORS.ochre;
 const OCHRE_SOFT = COLORS.ochreSoft;
 const RED = COLORS.red;
@@ -103,7 +103,61 @@ export function RegistreIntrantsView({ farmId }) {
   }
   const darActifs = [...darParParcelle.values()];
 
-  const cell = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontSize: TEXT.sm };
+  // Un registre réglementaire se consulte en cherchant : quelle parcelle, quel produit, quel
+  // opérateur, à quelle date. Il n'avait aucun de ces gestes — c'est pourtant la pièce qu'on
+  // ouvre pour répondre à une question précise, pas pour la lire en entier.
+  const outils = useListeOutils(apps, useMemo(() => ({
+    rechercheChamps: (a) => [
+      a.parcelleNomActuel || a.parcelleNom, a.produitNomActuel || a.produitNom, a.cible, a.operateur,
+    ],
+    filtres: [
+      // Le filtre qui a une conséquence réelle : une parcelle sous délai avant récolte ne doit
+      // pas être récoltée. Le bandeau au-dessus alerte, ce filtre permet de retrouver lesquelles.
+      { id: 'darActif', labelKey: 'registre.filtreDarActif', test: (a) => dansLeFutur(a.darCalcule) },
+      { id: 'zntNonRespectee', labelKey: 'registre.filtreZntNon', test: (a) => a.zntRespectee === false },
+    ],
+    groupes: [
+      { id: 'parcelle', labelKey: 'registre.parcelle', valeur: (a) => a.parcelleNomActuel || a.parcelleNom || '—' },
+      { id: 'produit', labelKey: 'registre.produit', valeur: (a) => a.produitNomActuel || a.produitNom || '—' },
+    ],
+    colonnes: {
+      date: (a) => a.dateApplication,
+      parcelle: (a) => a.parcelleNomActuel || a.parcelleNom || '',
+      produit: (a) => a.produitNomActuel || a.produitNom || '',
+      dar: (a) => a.darCalcule,
+    },
+    triParDefaut: { colonne: 'date', sens: 'desc' },
+  }), []));
+
+  const colonnesRegistre = useMemo(() => [
+    { id: 'date', labelKey: 'registre.date', triable: true, rendu: (a) => fmtDate(a.dateApplication) },
+    { id: 'parcelle', labelKey: 'registre.parcelle', triable: true, principale: true,
+      rendu: (a) => a.parcelleNomActuel || a.parcelleNom || '—' },
+    { id: 'produit', labelKey: 'registre.produit', triable: true, rendu: (a) => a.produitNomActuel || a.produitNom || '—' },
+    { id: 'dose', labelKey: 'registre.dose',
+      rendu: (a) => (
+        <>
+          {a.dose != null ? `${a.dose} ${a.doseUnite || ''}` : '—'}
+          {a.quantiteUtilisee > 0 ? <span style={{ color: INK_SOFT }}> · −{a.quantiteUtilisee}</span> : null}
+        </>
+      ) },
+    { id: 'cible', labelKey: 'registre.cible', optionnelle: true, rendu: (a) => a.cible || '—' },
+    { id: 'operateur', labelKey: 'registre.operateur', optionnelle: true, rendu: (a) => a.operateur || '—' },
+    { id: 'dar', labelKey: 'registre.dar', triable: true,
+      rendu: (a) => (
+        <span style={{ color: dansLeFutur(a.darCalcule) ? RED : INK_SOFT, fontWeight: dansLeFutur(a.darCalcule) ? 600 : 400 }}>
+          {a.darCalcule ? fmtDate(a.darCalcule) : '—'}
+        </span>
+      ) },
+    { id: 'znt', labelKey: 'registre.znt', rendu: (a) => (a.zntRespectee == null ? '—' : (a.zntRespectee ? '✓' : '✗')) },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (a) => (
+        <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: INK_SOFT, display: 'flex', marginLeft: 'auto' }}>
+          <Trash2 size={14} />
+        </button>
+      ) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [fmtDate]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
@@ -148,44 +202,26 @@ export function RegistreIntrantsView({ farmId }) {
         </Card>
       )}
 
-      <Card style={{ padding: 0, overflowX: 'auto' }}>
+      <Card style={{ padding: 0 }}>
         {loading ? (
           <div style={{ padding: SPACE.lg, color: INK_SOFT }}><Loader2 size={14} className="spin" /></div>
-        ) : apps.length === 0 ? (
-          <div style={{ padding: SPACE.lg, color: INK_SOFT, fontSize: TEXT.base }}>{t('registre.empty')}</div>
         ) : (
-          <table className="data-table">
-            <thead><tr style={{ textAlign: 'left', color: INK_SOFT }}>
-              <th style={cell}>{t('registre.date')}</th>
-              <th style={cell}>{t('registre.parcelle')}</th>
-              <th style={cell}>{t('registre.produit')}</th>
-              <th style={cell}>{t('registre.dose')}</th>
-              <th style={cell}>{t('registre.cible')}</th>
-              <th style={cell}>{t('registre.operateur')}</th>
-              <th style={cell}>{t('registre.dar')}</th>
-              <th style={cell}>{t('registre.znt')}</th>
-              <th style={cell} />
-            </tr></thead>
-            <tbody>
-              {apps.map((a) => (
-                <tr key={a.id}>
-                  <td style={cell}>{fmtDate(a.dateApplication)}</td>
-                  <td style={cell}>{a.parcelleNomActuel || a.parcelleNom || '—'}</td>
-                  <td style={cell}>{a.produitNomActuel || a.produitNom || '—'}</td>
-                  <td style={cell}>{a.dose != null ? `${a.dose} ${a.doseUnite || ''}` : '—'}{a.quantiteUtilisee > 0 ? <span style={{ color: INK_SOFT }}> · −{a.quantiteUtilisee}</span> : null}</td>
-                  <td style={cell}>{a.cible || '—'}</td>
-                  <td style={cell}>{a.operateur || '—'}</td>
-                  <td style={{ ...cell, color: dansLeFutur(a.darCalcule) ? RED : INK_SOFT, fontWeight: dansLeFutur(a.darCalcule) ? 600 : 400 }}>
-                    {a.darCalcule ? fmtDate(a.darCalcule) : '—'}
-                  </td>
-                  <td style={cell}>{a.zntRespectee == null ? '—' : (a.zntRespectee ? '✓' : '✗')}</td>
-                  <td style={{ ...cell, textAlign: 'right' }}>
-                    <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: INK_SOFT, display: 'flex' }}><Trash2 size={14} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <div style={{ padding: `${SPACE.md}px ${SPACE.lg}px 0` }}>
+              <BarreOutilsListe etat={outils} placeholderRecherche={t('registre.rechercher')} />
+            </div>
+            <TableauListe
+              etat={outils}
+              colonnes={colonnesRegistre}
+              cle={(a) => a.id}
+              vide={(
+                <div style={{ padding: SPACE.lg, color: INK_SOFT, fontSize: TEXT.base }}>
+                  {outils.actif ? t('listes.aucunResultat') : t('registre.empty')}
+                </div>
+              )}
+            />
+            <PiedListe etat={outils} />
+          </>
         )}
       </Card>
     </div>
