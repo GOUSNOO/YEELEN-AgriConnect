@@ -343,7 +343,7 @@ export function useAffichageEtroit(seuil = SEUIL_CARTES) {
 // parce que c'est ce qu'on cherche du regard dans une liste. Le reste s'empile en paires
 // libellé/valeur, `masqueeSurCarte` permettant d'écarter ce qui n'a pas de sens hors tableau.
 function CarteLigne({
-  ligne, colonnes, cle: k, t, onLigneClic, attenuee, selectionActive, selectionnee, basculerSelection,
+  ligne, colonnes, cle: k, t, onLigneClic, attenuee, selectionActive, selectionnee, basculerSelection, depli,
 }) {
   const titre = colonnes.find(c => c.principale) || colonnes[0];
   const montant = colonnes.find(c => c.somme && c.id !== titre?.id);
@@ -379,6 +379,8 @@ function CarteLigne({
           <span style={{ fontWeight: 700, fontSize: TEXT.base, whiteSpace: 'nowrap' }}>{montant.rendu(ligne)}</span>
         )}
       </div>
+      {/* Le dépli suit la carte : sur un téléphone il n'y a pas de colonne où l'étendre, il
+          se pose simplement dessous, dans la largeur disponible. */}
       {details.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: `${SPACE.xs}px ${SPACE.md}px` }}>
           {details.map(c => {
@@ -394,12 +396,13 @@ function CarteLigne({
           })}
         </div>
       )}
+      {depli && <div style={{ marginTop: SPACE.sm }}>{depli}</div>}
     </div>
   );
 }
 
 export function TableauListe({
-  etat, colonnes, cle, onLigneClic, ligneAttenuee, selectionActive, actionsGroupees, vide,
+  etat, colonnes, cle, onLigneClic, ligneAttenuee, selectionActive, actionsGroupees, vide, rendreDepli,
 }) {
   const { t } = useTranslation();
   const etroit = useAffichageEtroit();
@@ -416,7 +419,8 @@ export function TableauListe({
   const rendreLigne = (ligne) => {
     const k = cle(ligne);
     const selectionnee = etat.selection.includes(k);
-    return (
+    const depli = rendreDepli && rendreDepli(ligne);
+    const corps = (
       <tr
         key={k}
         onClick={onLigneClic ? () => onLigneClic(ligne) : undefined}
@@ -442,6 +446,19 @@ export function TableauListe({
           <td key={c.id} style={{ textAlign: c.alignement || 'left', ...c.style }}>{c.rendu(ligne)}</td>
         ))}
       </tr>
+    );
+
+    // Ligne dépliable : l'écran garde la main sur QUI est déplié et sur ce que le dépli contient
+    // — le composant ne fait que lui ménager la place. `rendreDepli` renvoyant une valeur fausse,
+    // rien n'est rendu et le tableau reste exactement ce qu'il était.
+    if (!depli) return corps;
+    return (
+      <React.Fragment key={k}>
+        {corps}
+        <tr>
+          <td colSpan={nbColonnes} style={{ background: COLORS.bg, padding: `${SPACE.sm}px ${SPACE.md}px` }}>{depli}</td>
+        </tr>
+      </React.Fragment>
     );
   };
 
@@ -491,6 +508,7 @@ export function TableauListe({
                     selectionActive={selectionActive}
                     selectionnee={etat.selection.includes(cle(ligne))}
                     basculerSelection={etat.basculerSelection}
+                    depli={rendreDepli && rendreDepli(ligne)}
                   />
                 ))}
               </React.Fragment>
@@ -503,6 +521,7 @@ export function TableauListe({
                 selectionActive={selectionActive}
                 selectionnee={etat.selection.includes(cle(ligne))}
                 basculerSelection={etat.basculerSelection}
+                depli={rendreDepli && rendreDepli(ligne)}
               />
             ))}
 

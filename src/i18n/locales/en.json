@@ -432,7 +432,9 @@
     "navArticles": "Products",
     "navInventaire": "Inventory",
     "navTransformation": "Processing",
-    "navConfiguration": "Configuration"
+    "navConfiguration": "Configuration",
+    "rechercher": "Search an item…",
+    "filtreSousSeuil": "Below threshold"
   },
   "registre": {
     "title": "Spray & input application log",

@@ -3375,7 +3375,6 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
 
   const [stocks, setStocks] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [filtreType, setFiltreType] = useState('');
   const [unites, setUnites] = useState([]);
   const [form, setForm] = useState({ nom: '', categorieId: '', quantite: '', uniteId: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
 
@@ -3575,6 +3574,129 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
     setEditingId(null);
     setEditForm({ nom: '', categorieId: defaultCategorieId, quantite: '', uniteId: '', seuil: '', prixDefaut: '', cout: '', ...INTRANT_FORM_DEFAULTS });
   };
+
+  // Les outils de liste partagés. Le filtre par type d'intrant remplace la rangée de pastilles
+  // maison : deux mécanismes de filtrage côte à côte sur le même écran, c'était précisément le
+  // genre de disparate que cette harmonisation vise.
+  const outilsArticles = useListeOutils(stocks, useMemo(() => ({
+    rechercheChamps: (a) => [a.nom, a.categorie, a.variete, a.matiereActive, a.numeroAmm],
+    filtres: [
+      // Le filtre qui déclenche une action : ce qu'il faut racheter. Les six types d'intrants
+      // suivent, cumulables entre eux comme partout ailleurs.
+      { id: 'sousSeuil', labelKey: 'stocks.filtreSousSeuil', test: (a) => a.quantite <= a.seuil },
+      ...TYPES_INTRANT.map((x) => ({ id: x, labelKey: `stocks.intrant.${x}`, test: (a) => a.typeIntrant === x })),
+    ],
+    groupes: [
+      { id: 'categorie', labelKey: 'stocks.categorie', valeur: (a) => a.categorie || '—' },
+      { id: 'typeIntrant', labelKey: 'stocks.typeIntrant', valeur: (a) => a.typeIntrant || '—' },
+    ],
+    colonnes: {
+      nom: (a) => a.nom,
+      categorie: (a) => a.categorie,
+      typeIntrant: (a) => a.typeIntrant,
+      quantite: (a) => a.quantite,
+      seuil: (a) => a.seuil,
+      prixDefaut: (a) => a.prixDefaut,
+    },
+    triParDefaut: { colonne: 'nom', sens: 'asc' },
+  }), []));
+
+  const colonnesArticles = useMemo(() => [
+    { id: 'nom', labelKey: 'stocks.article', triable: true, principale: true, style: { fontWeight: 500 },
+      rendu: (a) => (
+        <>
+          {a.nom}
+          {a.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: SPACE.sm, color: COLORS.green, fontSize: TEXT.xs }}>bio</span> : null}
+        </>
+      ) },
+    { id: 'categorie', labelKey: 'stocks.categorie', triable: true, rendu: (a) => <Badge tone="ochre">{a.categorie}</Badge> },
+    { id: 'typeIntrant', labelKey: 'stocks.typeIntrant', triable: true, optionnelle: true,
+      rendu: (a) => (
+        <span style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>
+          {a.typeIntrant ? t(`stocks.intrant.${a.typeIntrant}`) : '—'}
+          {a.typeIntrant === 'phytosanitaire' && a.darJours != null
+            ? <span style={{ color: COLORS.ochre }}> · {t('stocks.darShort', { n: a.darJours })}</span> : null}
+        </span>
+      ) },
+    { id: 'quantite', labelKey: 'stocks.quantite', triable: true, rendu: (a) => `${a.quantite} ${a.unite || ''}` },
+    { id: 'seuil', labelKey: 'stocks.seuil', triable: true,
+      rendu: (a) => (a.quantite <= a.seuil
+        ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontWeight: 600 }}><AlertTriangle size={13} /> {t('stocks.stockLow', { seuil: a.seuil })}</span>
+        : <span style={{ color: COLORS.inkSoft }}>{a.seuil}</span>) },
+    { id: 'prixDefaut', labelKey: 'stocks.prixDefaut', triable: true, optionnelle: true,
+      rendu: (a) => <span style={{ color: COLORS.inkSoft }}>{a.prixDefaut != null ? fmtMoney(a.prixDefaut) : '—'}</span> },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (a) => (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
+          <button onClick={() => toggleLots(a.id)} title={t('stocks.lotsTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: lotsFor === a.id ? COLORS.ochre : COLORS.inkSoft, display: 'flex' }}>
+            <Package size={15} />
+          </button>
+          <button onClick={() => openHistorique(a)} title={t('stocks.historiqueTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+            <History size={15} />
+          </button>
+          <button onClick={() => startEdit(a)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
+            <Settings2 size={15} />
+          </button>
+          <button onClick={() => remove(a.id, a.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, lotsFor, fmtMoney]);
+
+  // Le dépli des lots : extrait tel quel de la ligne supplémentaire qu'il occupait dans le
+  // tableau. Le composant partagé ne fait que lui ménager la place — sous la ligne en tableau,
+  // sous la carte sur un téléphone, où il n'y a pas de colonne à étendre.
+  const rendreLotsArticle = () => (
+    <>
+      <div style={{ fontSize: TEXT.sm, fontWeight: 600, marginBottom: SPACE.sm }}>{t('stocks.lotsTitle')}</div>
+      {lots.length === 0 ? (
+        <div style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>{t('stocks.lotsEmpty')}</div>
+      ) : (
+        <DataTable style={{ marginBottom: SPACE.sm }}>
+          <thead><tr style={{ color: COLORS.inkSoft }}>
+            <th>{t('stocks.lotNumero')}</th>
+            <th>{t('stocks.lotDateEntree')}</th>
+            <th>{t('stocks.lotPeremption')}</th>
+            <th>{t('stocks.lotRestant')}</th>
+            <th>{t('stocks.coutRevient', { devise })}</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            {lots.map(l => (
+              <tr key={l.id} style={lotPerimeSoon(l.datePeremption) ? { background: COLORS.redSoft } : undefined}>
+                <td style={{ fontWeight: 500 }}>{l.numeroLot}</td>
+                <td style={{ color: COLORS.inkSoft }}>{l.dateEntree}</td>
+                <td style={{ color: lotPerimeSoon(l.datePeremption) ? COLORS.red : COLORS.inkSoft, fontWeight: lotPerimeSoon(l.datePeremption) ? 600 : 400 }}>{l.datePeremption || '—'}</td>
+                <td>
+                  <input type="number" defaultValue={l.quantiteRestante}
+                    onBlur={e => { if (Number(e.target.value) !== l.quantiteRestante) saveLotQte(l, e.target.value); }}
+                    style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, padding: '2px 6px', fontSize: TEXT.sm }} />
+                  <span style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}> / {l.quantiteInitiale}</span>
+                </td>
+                <td style={{ color: COLORS.inkSoft }}>{l.coutUnitaire != null ? fmtMoney(l.coutUnitaire) : '—'}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <button onClick={() => removeLot(l.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><Trash2 size={14} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      )}
+      <form onSubmit={addLot} style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', alignItems: 'end' }}>
+        <Field label={t('stocks.lotNumero')} value={lotForm.numeroLot} onChange={e => setLotForm({ ...lotForm, numeroLot: e.target.value })} />
+        <Field label={t('stocks.lotPeremption')} type="date" value={lotForm.datePeremption} onChange={e => setLotForm({ ...lotForm, datePeremption: e.target.value })} />
+        <Field label={t('stocks.lotQuantiteInitiale')} type="number" value={lotForm.quantiteInitiale} onChange={e => setLotForm({ ...lotForm, quantiteInitiale: e.target.value })} />
+        <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={lotForm.coutUnitaire} onChange={e => setLotForm({ ...lotForm, coutUnitaire: e.target.value })} />
+        <Button type="submit" disabled={lotBusy} style={{ whiteSpace: 'nowrap' }}>
+          {lotBusy ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t('stocks.lotAdd')}
+        </Button>
+      </form>
+    </>
+  );
+
+
   const saveEdit = async (e) => {
     e.preventDefault();
     if (!editForm.nom || editForm.quantite === '') return;
@@ -3687,118 +3809,21 @@ function StocksTab({ farmId, moduleType = 'Poulailler', highlightId }) {
         </Card>
       )}
       <Card style={{ padding: 0 }}>
-        <div style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', padding: '10px 12px 0' }}>
-          {['', ...TYPES_INTRANT].map(x => (
-            <button key={x || 'all'} type="button" onClick={() => setFiltreType(x)}
-              style={{ border: `1px solid ${filtreType === x ? COLORS.ochre : COLORS.border}`, background: filtreType === x ? COLORS.ochreSoft : '#fff', color: COLORS.ink, borderRadius: RADIUS.pill, padding: '3px 10px', fontSize: TEXT.sm, cursor: 'pointer' }}>
-              {x ? t(`stocks.intrant.${x}`) : t('common.all')}
-            </button>
-          ))}
+        <div style={{ padding: `${SPACE.md}px ${SPACE.lg}px 0` }}>
+          <BarreOutilsListe etat={outilsArticles} placeholderRecherche={t('stocks.rechercher')} />
         </div>
-        <DataTable>
-          <thead>
-            <tr style={{ textAlign: 'left', color: COLORS.inkSoft }}>
-              <th>{t('stocks.article')}</th>
-              <th>{t('stocks.categorie')}</th>
-              <th>{t('stocks.typeIntrant')}</th>
-              <th>{t('stocks.quantite')}</th>
-              <th>{t('stocks.seuil')}</th>
-              <th>{t('stocks.prixDefaut')}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {(() => {
-              const rows = filtreType ? stocks.filter(s => s.typeIntrant === filtreType) : stocks;
-              return rows.length === 0 ? (
-              <tr><td colSpan={7} style={{ color: COLORS.inkSoft }}>{t('stocks.emptyTable')}</td></tr>
-            ) : rows.map(s => (
-              <React.Fragment key={s.id}>
-              <tr>
-                <td style={{ fontWeight: 500 }}>{s.nom}{s.bioAutorise ? <span title={t('stocks.bioAutorise')} style={{ marginLeft: SPACE.sm, color: COLORS.green, fontSize: TEXT.xs }}>bio</span> : null}</td>
-                <td><Badge tone="ochre">{s.categorie}</Badge></td>
-                <td style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>
-                  {s.typeIntrant ? t(`stocks.intrant.${s.typeIntrant}`) : '—'}
-                  {s.typeIntrant === 'phytosanitaire' && s.darJours != null ? <span style={{ color: COLORS.ochre }}> · {t('stocks.darShort', { n: s.darJours })}</span> : null}
-                </td>
-                <td>{s.quantite} {s.unite}</td>
-                <td>
-                  {s.quantite <= s.seuil
-                    ? <span style={{ color: COLORS.red, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontWeight: 600 }}><AlertTriangle size={13} /> {t('stocks.stockLow', { seuil: s.seuil })}</span>
-                    : <span style={{ color: COLORS.inkSoft }}>{s.seuil}</span>}
-                </td>
-                <td style={{ color: COLORS.inkSoft }}>{s.prixDefaut != null ? fmtMoney(s.prixDefaut) : '—'}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACE.sm }}>
-                    <button onClick={() => toggleLots(s.id)} title={t('stocks.lotsTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: lotsFor === s.id ? COLORS.ochre : COLORS.inkSoft, display: 'flex' }}>
-                      <Package size={15} />
-                    </button>
-                    <button onClick={() => openHistorique(s)} title={t('stocks.historiqueTitle')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
-                      <History size={15} />
-                    </button>
-                    <button onClick={() => startEdit(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.blue, display: 'flex' }}>
-                      <Settings2 size={15} />
-                    </button>
-                    <button onClick={() => remove(s.id, s.nom)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              {lotsFor === s.id && (
-                <tr>
-                  <td colSpan={7} style={{ background: COLORS.bg, padding: '10px 14px' }}>
-                    <div style={{ fontSize: TEXT.sm, fontWeight: 600, marginBottom: SPACE.sm }}>{t('stocks.lotsTitle')}</div>
-                    {lots.length === 0 ? (
-                      <div style={{ color: COLORS.inkSoft, fontSize: TEXT.sm }}>{t('stocks.lotsEmpty')}</div>
-                    ) : (
-                      <DataTable style={{ marginBottom: SPACE.sm }}>
-                        <thead><tr style={{ color: COLORS.inkSoft }}>
-                          <th>{t('stocks.lotNumero')}</th>
-                          <th>{t('stocks.lotDateEntree')}</th>
-                          <th>{t('stocks.lotPeremption')}</th>
-                          <th>{t('stocks.lotRestant')}</th>
-                          <th>{t('stocks.coutRevient', { devise })}</th>
-                          <th></th>
-                        </tr></thead>
-                        <tbody>
-                          {lots.map(l => (
-                            <tr key={l.id} style={lotPerimeSoon(l.datePeremption) ? { background: COLORS.redSoft } : undefined}>
-                              <td style={{ fontWeight: 500 }}>{l.numeroLot}</td>
-                              <td style={{ color: COLORS.inkSoft }}>{l.dateEntree}</td>
-                              <td style={{ color: lotPerimeSoon(l.datePeremption) ? COLORS.red : COLORS.inkSoft, fontWeight: lotPerimeSoon(l.datePeremption) ? 600 : 400 }}>{l.datePeremption || '—'}</td>
-                              <td>
-                                <input type="number" defaultValue={l.quantiteRestante}
-                                  onBlur={e => { if (Number(e.target.value) !== l.quantiteRestante) saveLotQte(l, e.target.value); }}
-                                  style={{ width: 70, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.control, padding: '2px 6px', fontSize: TEXT.sm }} />
-                                <span style={{ color: COLORS.inkSoft, fontSize: TEXT.xs }}> / {l.quantiteInitiale}</span>
-                              </td>
-                              <td style={{ color: COLORS.inkSoft }}>{l.coutUnitaire != null ? fmtMoney(l.coutUnitaire) : '—'}</td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button onClick={() => removeLot(l.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.inkSoft, display: 'flex' }}><Trash2 size={14} /></button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </DataTable>
-                    )}
-                    <form onSubmit={addLot} style={{ display: 'flex', gap: SPACE.sm, flexWrap: 'wrap', alignItems: 'end' }}>
-                      <Field label={t('stocks.lotNumero')} value={lotForm.numeroLot} onChange={e => setLotForm({ ...lotForm, numeroLot: e.target.value })} />
-                      <Field label={t('stocks.lotPeremption')} type="date" value={lotForm.datePeremption} onChange={e => setLotForm({ ...lotForm, datePeremption: e.target.value })} />
-                      <Field label={t('stocks.lotQuantiteInitiale')} type="number" value={lotForm.quantiteInitiale} onChange={e => setLotForm({ ...lotForm, quantiteInitiale: e.target.value })} />
-                      <Field label={t('stocks.coutRevient', { devise })} type="number" placeholder={t('stocks.optionalPlaceholder')} value={lotForm.coutUnitaire} onChange={e => setLotForm({ ...lotForm, coutUnitaire: e.target.value })} />
-                      <Button type="submit" disabled={lotBusy} style={{ whiteSpace: 'nowrap' }}>
-                        {lotBusy ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t('stocks.lotAdd')}
-                      </Button>
-                    </form>
-                  </td>
-                </tr>
-              )}
-              </React.Fragment>
-            ));
-            })()}
-          </tbody>
-        </DataTable>
+        <TableauListe
+          etat={outilsArticles}
+          colonnes={colonnesArticles}
+          cle={(a) => a.id}
+          rendreDepli={(a) => (lotsFor === a.id ? rendreLotsArticle() : null)}
+          vide={(
+            <div style={{ padding: SPACE.lg, color: COLORS.inkSoft, fontSize: TEXT.base }}>
+              {outilsArticles.actif ? t('listes.aucunResultat') : t('stocks.emptyTable')}
+            </div>
+          )}
+        />
+        <PiedListe etat={outilsArticles} />
       </Card>
         </>
       )}

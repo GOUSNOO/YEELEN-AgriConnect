@@ -5057,3 +5057,36 @@ séparés (`b9a0d0e`, `49755f6`, `a7dd06a`, `3541a75`) pour que chaque écran so
 **Reste à faire sur cette étape** : lignes dépliables dans le composant puis Articles/Stocks, la
 grille responsive des Contacts et du RH, les référentiels comptables, et le manifeste PWA qui
 porte encore l'ancienne palette (`#38A169` alors que le thème est à `#3F6B3B`).
+
+### 2026-09-11 — Lignes dépliables, et les articles rejoignent les outils
+
+Suite directe de l'étape 1, qui s'était arrêtée devant la liste des articles : elle porte des
+**lignes dépliables** (les lots), que `TableauListe` ne savait pas rendre. Le mécanisme manquait
+au composant, ce n'était pas une conversion mécanique — d'où l'arrêt plutôt que l'improvisation.
+
+**Le dépli dans le composant partagé.** Une prop `rendreDepli(ligne)` : l'écran garde la main sur
+qui est déplié et sur ce que le dépli contient, le composant ne fait que lui ménager la place —
+une ligne de tableau en pleine largeur sur écran large, un bloc sous la carte sur téléphone, où
+il n'y a aucune colonne à étendre. Renvoyer une valeur fausse ne change rien au rendu existant.
+
+**Les articles.** La rangée de pastilles maison qui filtrait par type d'intrant est remplacée par
+les filtres de la barre d'outils : deux mécanismes de filtrage côte à côte sur le même écran,
+c'était exactement le genre de disparate que cette harmonisation vise. S'y ajoute un filtre qui
+déclenche une action — les articles sous leur seuil d'alerte — plus la recherche (nom, variété,
+matière active, numéro AMM), le tri, le regroupement et la pagination.
+
+`filtreType`, devenu sans lecteur, a été retiré plutôt que laissé en état mort.
+
+**Le piège des ancres, une fois de plus.** Le premier remplacement a été refusé par ma propre
+garde d'unicité : le motif de fermeture `</tbody></DataTable></Card>` existe **ailleurs** dans un
+fichier de 9 900 lignes. C'est précisément ce qui avait cassé l'onglet Ventes la veille. L'ancre
+longue, incluant les fermetures de fragment, était unique — vérifiée avant d'écrire.
+
+**Vérification** — 142/142 frontend, build et `oxlint` verts. En navigateur : filtres et alertes
+de stock bas conservés, dépliage des lots exercé (lot proche péremption surligné, quantité
+restante éditable), et le même dépli rendu sous la carte en 375 px sans faire déborder la page.
+Entreprise jetable purgée, image frontend reconstruite.
+
+**Limite connue et signalée** : le tableau des lots *à l'intérieur* du dépli reste dense sur
+téléphone (six colonnes dans 329 px). Il possède son propre défilement et ne casse pas la mise en
+page, mais il n'a pas été converti — il n'utilise pas `TableauListe` et porte un champ éditable.

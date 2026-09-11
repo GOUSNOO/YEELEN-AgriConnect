@@ -432,7 +432,9 @@
     "navArticles": "Articles",
     "navInventaire": "Inventaire",
     "navTransformation": "Transformation",
-    "navConfiguration": "Configuration"
+    "navConfiguration": "Configuration",
+    "rechercher": "Rechercher un article…",
+    "filtreSousSeuil": "Sous le seuil"
   },
   "registre": {
     "title": "Registre des traitements et apports d'intrants",
