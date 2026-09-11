@@ -107,6 +107,7 @@ const NAV_CATEGORIES = [
 
 
 function ParcelMapTab({ parcelles }) {
+  const etroitCarte = useAffichageEtroit();
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState(parcelles[0]?.id ?? null);
   const selected = parcelles.find(p => p.id === selectedId) || parcelles[0] || null;
@@ -118,7 +119,7 @@ function ParcelMapTab({ parcelles }) {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: SPACE.lg, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: etroitCarte ? '1fr' : '1.4fr 1fr', gap: SPACE.lg, alignItems: 'start' }}>
       <Card style={{ padding: SPACE.md }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('cultures.map.title')}</div>
         <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
@@ -304,6 +305,7 @@ const DEVIS_KANBAN_COLUMNS = [
 ];
 
 function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFacturer, onRemettreBrouillon, onOpenDetail }) {
+  const etroitKanban = useAffichageEtroit();
   const { t } = useTranslation();
   const { fmtMoney, locale, devise: deviseEntreprise } = useLocale();
   const [draggedId, setDraggedId] = useState(null);
@@ -318,7 +320,7 @@ function DevisKanban({ devisListe, statutTone, onEnvoyer, onValiderManuel, onFac
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: SPACE.md, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: etroitKanban ? 'repeat(4, 78vw)' : 'repeat(4, 1fr)', gap: SPACE.md, alignItems: 'start', overflowX: etroitKanban ? 'auto' : 'visible', maxWidth: '100%' }}>
       {DEVIS_KANBAN_COLUMNS.map(col => {
         const items = devisListe.filter(d => col.statuts.includes(d.statut));
         const isValidTarget = draggedDevis && isValidDevisTransition(draggedDevis.statut, col.key);
@@ -600,6 +602,9 @@ function ActivitesSection({ ressourceType, ressourceId }) {
 }
 
 function DevisModule({ clientsListe, filtreStatut }) {
+  // Les grilles de la fiche et des formulaires sont figées à deux colonnes : sur un téléphone,
+  // cela donne deux colonnes de 160 px où un champ de date ou un montant ne tient pas.
+  const etroitDevis = useAffichageEtroit();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { fmtMoney, fmtDate, locale, devise: deviseEntreprise } = useLocale();
@@ -1732,7 +1737,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.xxl, marginBottom: SPACE.xl, fontSize: TEXT.base }}>
+              <div style={{ display: 'grid', gridTemplateColumns: etroitDevis ? '1fr' : '1fr 1fr', gap: SPACE.xxl, marginBottom: SPACE.xl, fontSize: TEXT.base }}>
                 <div>
                   <div style={{ fontSize: TEXT.xs, textTransform: 'uppercase', letterSpacing: 0.4, color: COLORS.inkSoft, marginBottom: SPACE.xs }}>{t("devis.client")}</div>
                   <div style={{ fontWeight: 600 }}>{detailData.clientPrenom} {detailData.clientNom}</div>
@@ -2032,7 +2037,7 @@ function DevisModule({ clientsListe, filtreStatut }) {
                   {resumeTerme(paymentTerms.find(pt => String(pt.id) === String(paiementForm.paymentTermId)) || { lignes: [] })}
                 </div>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600, marginBottom: SPACE.sm }}>{t("devis.acompte")}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.sm }}>
+                <div style={{ display: 'grid', gridTemplateColumns: etroitDevis ? '1fr' : '1fr 1fr', gap: SPACE.sm }}>
                   <Select value={paiementForm.acompteMethod} onChange={e => setPaiementForm({ ...paiementForm, acompteMethod: e.target.value })}>
                     <option value="">{t("devis.acompteAucun")}</option>
                     <option value="percentage">%</option>
@@ -2079,6 +2084,8 @@ function DevisModule({ clientsListe, filtreStatut }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, marginBottom: SPACE.md }}>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t("devis.echeances")}</div>
                 {paiementForm.echeances.map((e, i) => (
+                  // Montant, date et bouton : trois éléments courts qui tiennent encore sur une
+                  // ligne en 375 px. Les empiler allongerait la saisie sans rien gagner.
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
                     <Field label={i === 0 ? t('devis.montant') : ''} type="text" inputMode="decimal" placeholder="0" value={e.montant} onChange={ev => updateEcheance(i, 'montant', ev.target.value.replace(/[^\d]/g, ''))} />
                     <Field label={i === 0 ? t('common.date') : ''} type="date" value={e.dateEcheance} onChange={ev => updateEcheance(i, 'dateEcheance', ev.target.value)} />
@@ -2478,6 +2485,7 @@ function AchatsAvecSousNav({ farmId, storageKey, moduleType }) {
 // « À recevoir ». Comme la vue « À facturer » d'un devis : une liste filtrée, pas un second
 // point de saisie.
 function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cultures', filtreReception }) {
+  const etroitAchats = useAffichageEtroit();
   const { t } = useTranslation();
   const { fmtMoney, fmtDate } = useLocale();
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -2979,7 +2987,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
             {form.lignes.map((ligne, index) => (
-              <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
+              <div key={index} style={{ display: 'grid', gridTemplateColumns: etroitAchats ? '1fr' : '2fr 1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
                 <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                   const value = e.target.value;
                   updateLigne(index, 'produit', value);
@@ -3117,7 +3125,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
                 )}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.md, marginBottom: SPACE.md }}>
+            <div style={{ display: 'grid', gridTemplateColumns: etroitAchats ? '1fr' : '1fr 1fr', gap: SPACE.md, marginBottom: SPACE.md }}>
               <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('common.total')}</strong><div style={{ fontWeight: 700, marginTop: SPACE.sm }}>{fmtMoney(detailDoc.total)}</div></div>
               <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}><strong>{t('achats.notes')}</strong><div style={{ marginTop: SPACE.sm }}>{detailDoc.notes || t('achats.detailNoNote')}</div></div>
             </div>
@@ -3172,7 +3180,7 @@ function AchatModule({ farmId, storageKey = 'achats-documents', moduleType = 'Cu
               <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
                 <div style={{ fontSize: TEXT.base, fontWeight: 600 }}>{t('achats.lignesAchat')}</div>
                 {editForm.lignes.map((ligne, index) => (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: etroitAchats ? '1fr' : '2fr 1fr 1fr auto', gap: SPACE.sm, alignItems: 'end' }}>
                     <Field placeholder={t('achats.produit')} list={catalogDatalistId} value={ligne.produit} onChange={e => {
                       const value = e.target.value;
                       updateEditLigne(index, 'produit', value);
@@ -8521,7 +8529,7 @@ function ContactsTab({ type, highlightId }) {
                 )}
                 <span style={{ fontSize: TEXT.xs, color: COLORS.border }}>{tr("contacts.detailId", { value: selectedContact.id })}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: SPACE.sm }}>
+              <div style={{ display: 'grid', gridTemplateColumns: etroitContacts ? '1fr' : 'repeat(2, 1fr)', gap: SPACE.sm }}>
                 <Card style={{ background: COLORS.greenSoft, border: 'none' }}>
                   <div style={{ fontSize: TEXT.sm, color: COLORS.green, fontWeight: 600 }}>{tr("contacts.enregistreLe")}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: TEXT.base, fontWeight: 700, color: COLORS.green }}>

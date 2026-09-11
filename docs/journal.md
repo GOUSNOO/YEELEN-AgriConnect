@@ -5170,3 +5170,47 @@ captures d'écran.
 Équipements, Registre des intrants, Articles, Contacts, RH, plus les quatre référentiels
 comptables. Reste, pour aller vers l'application mobile : le tableau des lots imbriqué dans un
 dépli (dense sur téléphone), et le choix d'une technologie d'empaquetage.
+
+### 2026-09-11 — Étape 2 : les mises en page, et un défaut qui traînait sur tous les écrans
+
+Les listes réglées, l'inventaire des **grilles figées** a donné onze emplacements, tous dans
+`App.jsx`. La carte a changé l'ordre des priorités — toutes ne devaient pas être traitées pareil :
+
+- **Devis et Achats** (fiches et formulaires de lignes) : empilés sous le seuil. Ce sont les
+  écrans les plus utilisés, et `2fr 1fr 1fr auto` dans 375 px ne laisse pas la place à un montant.
+- **Carte des parcelles** : le panneau passe sous la carte.
+- **Sous-contacts** : empilés.
+- **Calendrier (`repeat(7, 1fr)`) : laissé tel quel.** C'est la semaine — tout calendrier mobile
+  garde ses sept colonnes, les empiler détruirait l'objet même de l'écran.
+- **Kanban (`repeat(4, 1fr)`) : mis à défiler, pas empilé.** Empiler ferait perdre la lecture en
+  colonnes qui EST l'intérêt d'un kanban ; quatre colonnes de 78 vw défilent latéralement, comme
+  le fait n'importe quel kanban sur téléphone.
+
+#### Le défaut trouvé en vérifiant le kanban n'était pas le kanban
+
+Première tentative : le kanban défilait bien, mais **toute la page glissait vers la droite**,
+onglets et boutons coupés à gauche. Les mesures disaient pourtant « aucun débordement » sur
+`document.documentElement` — parce que le coupable était ailleurs : `.dashboard-shell`, qui porte
+`overflow-x: auto`, avait défilé de 117 px.
+
+En cherchant l'élément fautif, ce n'était **ni le kanban ni ma modification** : c'était le bouton
+« Configuration » de `SousNavOnglets`. Cinq onglets ne tiennent pas dans 375 px, la barre poussait
+le conteneur, et la page entière glissait — **sur tous les écrans à sous-onglets**, Ventes,
+Stocks, Factures compris. Un défaut préexistant que seule cette vérification a mis au jour.
+
+Corrigé dans le composant partagé : la barre défile sur elle-même (`overflowX`, `maxWidth: 100%`)
+et `flexShrink: 0` empêche les libellés d'être écrasés. Mesure après correction : le conteneur
+fait exactement 375 px pour 375 px de viewport, plus aucun décalage.
+
+Le kanban avait besoin du même `maxWidth: '100%'` : sans contrainte de largeur, `overflow-x` sur
+une grille ne l'empêche pas de pousser son parent.
+
+**Deux erreurs de ma part, rattrapées par les outils.** Un commentaire JSX inséré dans une
+fonction fléchée à retour implicite — deux expressions là où une seule est permise, le build l'a
+refusé. Et un ternaire dont les deux branches étaient identiques, écrit puis retiré : un code qui
+prétend décider quelque chose sans rien décider est pire que pas de code.
+
+**Vérification** — 142/142 frontend, build et `oxlint` verts. En navigateur, en 375 px : carte
+empilée, kanban défilant sur lui-même avec la page en place, sous-onglets défilants. En largeur
+bureau, kanban à quatre colonnes et onglets alignés, aucune régression. Entreprise jetable purgée,
+image frontend reconstruite.

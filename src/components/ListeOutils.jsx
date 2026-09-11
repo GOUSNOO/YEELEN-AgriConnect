@@ -657,7 +657,14 @@ export function MenuColonnes({ etat, colonnes }) {
 export function SousNavOnglets({ items, actif, onSelect }) {
   const { t } = useTranslation();
   return (
-    <div style={{ display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}` }}>
+    // Cinq onglets ne tiennent pas dans 375 px. Sans ces trois propriétés, la barre poussait
+    // `.dashboard-shell` — qui porte overflow-x: auto — et c'est la PAGE ENTIÈRE qui glissait vers
+    // la droite : onglets et boutons coupés à gauche, sur tous les écrans à sous-onglets. Elle
+    // défile désormais sur elle-même, et `flexShrink: 0` empêche les libellés d'être écrasés.
+    <div style={{
+      display: 'flex', gap: SPACE.xs, borderBottom: `1px solid ${COLORS.border}`,
+      overflowX: 'auto', maxWidth: '100%',
+    }}>
       {items.map(item => (
         <button
           key={item.id}
@@ -667,7 +674,7 @@ export function SousNavOnglets({ items, actif, onSelect }) {
             padding: '10px 14px', fontSize: TEXT.base, fontWeight: 600,
             color: actif === item.id ? COLORS.green : COLORS.inkSoft,
             borderBottom: actif === item.id ? `2px solid ${COLORS.green}` : '2px solid transparent',
-            marginBottom: -1,
+            marginBottom: -1, flexShrink: 0, whiteSpace: 'nowrap',
           }}
         >
           {t(item.labelKey)}
