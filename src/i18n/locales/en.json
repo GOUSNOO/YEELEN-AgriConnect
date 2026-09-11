@@ -1547,7 +1547,10 @@
       "confirmDelete": "Delete tag “{{nom}}”? It will be removed from all contacts using it.",
       "deleted": "Tag deleted.",
       "deleteError": "Could not delete the tag."
-    }
+    },
+    "filtreSocietes": "Companies",
+    "filtreParticuliers": "Individuals",
+    "filtreSansTelephone": "No phone"
   },
   "equipements": {
     "loading": "Loading equipment…",

@@ -1547,7 +1547,10 @@
       "confirmDelete": "Supprimer le tag « {{nom}} » ? Il sera retiré de tous les contacts qui l'utilisent.",
       "deleted": "Tag supprimé.",
       "deleteError": "Impossible de supprimer le tag."
-    }
+    },
+    "filtreSocietes": "Sociétés",
+    "filtreParticuliers": "Particuliers",
+    "filtreSansTelephone": "Sans téléphone"
   },
   "equipements": {
     "loading": "Chargement des équipements…",

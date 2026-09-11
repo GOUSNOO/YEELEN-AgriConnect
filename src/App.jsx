@@ -73,7 +73,7 @@ import RhReferentiels from './components/RhReferentiels';
 import PaymentTermsPanel from './components/PaymentTermsPanel';
 import TaxesPanel from './components/TaxesPanel';
 import TaxSelect from './components/TaxSelect';
-import { useListeOutils, BarreOutilsListe, EnteteTriable, LigneGroupe, PiedListe, TableauListe, MenuColonnes, SousNavOnglets } from './components/ListeOutils.jsx';
+import { useListeOutils, BarreOutilsListe, EnteteTriable, LigneGroupe, PiedListe, TableauListe, MenuColonnes, SousNavOnglets, useAffichageEtroit } from './components/ListeOutils.jsx';
 import { useParametreUrl } from './lib/urlParams.js';
 import ComptaConfigPanel from './components/ComptaConfigPanel';
 const FacturesModule = lazy(() => import('./components/FacturesModule'));
@@ -7985,7 +7985,6 @@ function ContactsTab({ type, highlightId }) {
     isCompany: false, photo: null, fonction: '', notes: '', parentId: null, tagIds: [], deviseFacturation: null,
   };
   const [form, setForm]         = useState(emptyForm);
-  const [query, setQuery]       = useState('');
 
   const [editingId, setEditingId] = useState(null); // null = fenêtre de modification fermée, sinon id du contact en cours d'édition
   const [editForm, setEditForm] = useState(emptyForm);
@@ -8233,9 +8232,27 @@ function ContactsTab({ type, highlightId }) {
     }
   };
 
-  const filtered = contacts.filter(c =>
-    `${c.nom} ${c.prenom || ''} ${c.telephone || ''} ${c.adresse || ''}`.toLowerCase().includes(query.toLowerCase())
-  );
+  // Les outils partagés, mais PAS TableauListe : cet écran est une liste-détail, pas un
+  // tableau. Le hook apporte ce qui manquait — filtres, tri, regroupement, pagination — et le
+  // rendu en cartes reste celui qui convient ici.
+  const etroitContacts = useAffichageEtroit();
+  const outilsContacts = useListeOutils(contacts, useMemo(() => ({
+    rechercheChamps: (c) => [c.nom, c.prenom, c.telephone, c.adresse, c.email, c.fonction],
+    filtres: [
+      { id: 'societes', labelKey: 'contacts.filtreSocietes', test: (c) => c.isCompany },
+      { id: 'particuliers', labelKey: 'contacts.filtreParticuliers', test: (c) => !c.isCompany },
+      { id: 'sansTelephone', labelKey: 'contacts.filtreSansTelephone', test: (c) => !c.telephone },
+    ],
+    groupes: [
+      { id: 'societe', labelKey: 'contacts.filtreSocietes', valeur: (c) => (c.isCompany ? c.nom : (c.parentNom || '—')) },
+    ],
+    colonnes: {
+      nom: (c) => `${c.nom} ${c.prenom || ''}`.trim(),
+      telephone: (c) => c.telephone,
+    },
+    triParDefaut: { colonne: 'nom', sens: 'asc' },
+  }), []));
+  const filtered = outilsContacts.lignesAffichees;
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, color: COLORS.inkSoft, padding: SPACE.huge }}>
@@ -8253,7 +8270,7 @@ function ContactsTab({ type, highlightId }) {
     const companies = contacts.filter(c => c.isCompany && c.id !== excludeCompanyId);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
-        <div style={{ display: 'flex', gap: SPACE.lg }}>
+        <div style={{ display: 'flex', gap: SPACE.lg, flexDirection: etroitContacts ? 'column' : 'row' }}>
           <ContactAvatar photo={f.photo} nom={f.nom} prenom={f.prenom} isCompany={f.isCompany} onChange={photo => setF({ ...f, photo })} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm, flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', gap: SPACE.lg }}>
@@ -8294,7 +8311,7 @@ function ContactsTab({ type, highlightId }) {
             individuellement — juste une bordure discrète au survol/focus (classe
             .flat-input, voir App.css) et une étiquette à gauche sur la même ligne
             que la valeur, comme dans la fiche contact d'un ERP de référence. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACE.xxl }}>
+        <div style={{ display: 'grid', gridTemplateColumns: etroitContacts ? '1fr' : '1fr 1fr', gap: SPACE.xxl }}>
           <div className="field-group">
             {!f.isCompany && (
               <>
@@ -8398,14 +8415,11 @@ function ContactsTab({ type, highlightId }) {
         </form>
       </Card>
       {type === 'client' && <ListesPrixManager />}
-      <label style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.pill, padding: '8px 14px', background: COLORS.surfaceAlt, fontSize: TEXT.base }}>
-        <Search size={14} color={COLORS.inkSoft} />
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr("contacts.searchPlaceholder", { type: L.s })} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: TEXT.base, flex: 1, color: COLORS.ink }} />
-      </label>
+      <BarreOutilsListe etat={outilsContacts} placeholderRecherche={tr("contacts.searchPlaceholder", { type: L.s })} />
       {filtered.length === 0 ? (
         <Card><div style={{ color: COLORS.inkSoft, fontSize: TEXT.base }}>{tr("contacts.noneFound", { type: L.s })}</div></Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: SPACE.lg, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: etroitContacts ? '1fr' : '1.1fr 0.9fr', gap: SPACE.lg, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
             {filtered.map(contact => (
               <Card
