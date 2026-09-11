@@ -3,6 +3,59 @@
 Historique daté des correctifs, décisions techniques et chantiers livrés.
 Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque session.
 
+---
+
+### Aide — bulle flottante et FAQ contextuelle — 2026-09-11
+
+L'utilisateur, juste après la livraison de la FAQ : « c'est mieux que ça soit une icône flottante
+sur le côté droit en bas non ? ». Oui, et pas pour la raison évidente : l'aide ne sert que là où
+le problème se pose. Aller lire pourquoi le stock n'a pas bougé obligeait à quitter l'écran des
+stocks.
+
+`FaqSection` sort de `HelpModule.jsx` dans son propre fichier : la page Aide et la bulle
+montrent **le même composant**, le contenu ne peut pas diverger entre l'endroit où l'on cherche
+et l'endroit où l'on est bloqué. Deux nouvelles props : `avecEntete` (le panneau a son propre
+en-tête) et `groupePrioritaire`.
+
+**`AideFlottante.jsx`** — bouton rond de 44 px (la cible tactile minimale) en bas à droite ; le
+coin était libre, les notifications sortant en haut à droite (`ui.jsx`). Monté dans le shell,
+chargé paresseusement, et conditionné à `screen === 'dashboard' && tab !== 'aide'` : ni sur la
+connexion, ni sur l'onboarding, ni sur la page Aide où il ouvrirait le contenu déjà affiché
+en dessous.
+
+Le panneau s'ancre au même coin plutôt que d'occuper l'écran : on garde sous les yeux ce qu'on
+cherche à comprendre. **Pas de fermeture au clic extérieur**, contrairement aux menus de la
+navbar — le refermer au premier clic sur la page reviendrait à le refermer à chaque
+vérification. Échap et le bouton suffisent. `z-index` 200 : une modale (1000) le recouvre,
+vérifié par `elementFromPoint` sur le centre du bouton, pas au jugé.
+
+**Le contexte est un réordonnancement, pas un filtre.** `GROUPE_PAR_ONGLET` remonte un groupe
+en tête selon l'onglet courant. Limite assumée : le routage ne connaît que le premier niveau
+(`/app/<onglet>`), jamais le sous-onglet d'un module — ouverte depuis Poulailler, la bulle ne
+sait pas si l'on regarde ses Stocks ou ses Ventes. C'est précisément pourquoi elle ordonne au
+lieu de masquer : une mauvaise approximation qui cache coûte bien plus cher qu'une mauvaise
+approximation qui ordonne.
+
+**Bug réel trouvé en mesurant, pas en regardant** : le panneau faisait 363 px de large au lieu
+des 343 attendus. `SPACE` expose des **nombres** — React les suffixe en px pour une propriété
+seule (`right: SPACE.md`), mais interpolés dans une chaîne ils produisent du CSS invalide,
+silencieusement ignoré : `calc(100vw - 12 - 12)`, `padding: '8 12'`. Le panneau remplissait
+donc la largeur disponible au lieu de respecter sa règle. Quatre occurrences, toutes dans les
+fichiers neufs — le reste du dépôt écrit correctement `${SPACE.x}px` — dont **une déjà en
+production** depuis le commit précédent : la marge sous l'intro de la FAQ ne s'appliquait pas.
+Corrigées, plus un balayage de `src/` confirmant qu'il n'en reste aucune.
+
+Vérifié en navigateur réel sur une entreprise jetable, nettoyée ensuite : bulle absente de la
+connexion, de `/modules`, de l'onboarding et de la page Aide ; présente ailleurs ; couleur,
+taille et `z-index` relevés dans le DOM ; réordonnancement correct depuis Cultures (groupe
+Cultures en tête) et depuis Poulailler (groupe Stocks) ; Échap ferme ; « Ouvrir l'aide
+complète » navigue et ferme ; recouverte par une modale ; à 375 px, panneau dans les marges,
+zéro débordement horizontal et **aucun élément interactif sous le bouton** (mesuré par
+intersection de rectangles). `npm test` (142/142) et `npx vite build` verts ; image Docker
+frontend reconstruite.
+
+---
+
 ### Aide — garde-fou de l'assistant + foire aux questions — 2026-09-11
 
 L'utilisateur a posé la question autrement qu'en demandant une page : « l'IA qui est intégrée

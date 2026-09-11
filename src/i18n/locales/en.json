@@ -1984,7 +1984,9 @@
         }
       ],
       "rechercher": "Search the questions…",
-      "aucun": "No question matches. Leave yours in Feedback."
+      "aucun": "No question matches. Leave yours in Feedback.",
+      "bulle": "Help: frequently asked questions",
+      "ouvrirAide": "Open the full help →"
     }
   },
   "observations": {

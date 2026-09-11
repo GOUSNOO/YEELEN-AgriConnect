@@ -66,6 +66,7 @@ const ObservationListView = lazy(() => import('./components/ObservationListView'
 const RegistreIntrantsView = lazy(() => import('./components/RegistreIntrantsView').then((m) => ({ default: m.RegistreIntrantsView })));
 const FeedbackModule = lazy(() => import('./components/FeedbackModule').then((m) => ({ default: m.FeedbackModule })));
 const HelpModule = lazy(() => import('./components/HelpModule').then((m) => ({ default: m.HelpModule })));
+const AideFlottante = lazy(() => import('./components/AideFlottante'));
 const EquipementsModule = lazy(() => import('./components/EquipementsModule').then((m) => ({ default: m.EquipementsModule })));
 import { GlobalSearch } from './components/GlobalSearch';
 import { EmployeeRhModal } from './components/EmployeeRhModal';
@@ -9573,6 +9574,12 @@ export default function App() {
       )}
 
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />}
+
+      {screen === 'dashboard' && tab !== 'aide' && (
+        <Suspense fallback={null}>
+          <AideFlottante tab={tab} onOuvrirAide={() => navigate('/app/aide')} />
+        </Suspense>
+      )}
     </div>
   );
 }

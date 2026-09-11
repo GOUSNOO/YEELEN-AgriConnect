@@ -1984,7 +1984,9 @@
         }
       ],
       "rechercher": "Rechercher une question…",
-      "aucun": "Aucune question ne correspond. Laissez la vôtre dans Feedback."
+      "aucun": "Aucune question ne correspond. Laissez la vôtre dans Feedback.",
+      "bulle": "Aide : foire aux questions",
+      "ouvrirAide": "Ouvrir l'aide complète →"
     }
   },
   "observations": {
