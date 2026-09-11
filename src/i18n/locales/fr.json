@@ -1775,6 +1775,216 @@
         "title": "Mes préférences & sécurité",
         "text": "Vos informations de compte, et l'activation de la double authentification (MFA) pour sécuriser votre connexion avec un code en plus de votre mot de passe."
       }
+    },
+    "faq": {
+      "titre": "Foire aux questions",
+      "intro": "Les réponses aux questions qui reviennent. Le détail de chaque module est plus bas.",
+      "groupes": [
+        {
+          "id": "demarrage",
+          "titre": "Démarrage et compte",
+          "questions": [
+            [
+              "Je viens de m'inscrire et tout est barré « À activer ». Pourquoi ?",
+              "Les modules Cultures, Poulailler et Pisciculture sont payants et désactivés au départ. Cliquez sur une tuile grisée depuis l'accueil : elle s'active et vous y emmène dans le même geste. Les fonctions transverses — contacts, devis, factures, stocks, RH — s'ouvrent dès qu'au moins un de ces trois modules est actif."
+            ],
+            [
+              "Que se passe-t-il à la fin de la période d'essai de 45 jours ?",
+              "L'application passe en lecture seule pendant 30 jours : vous consultez toutes vos données mais ne pouvez plus en créer ni en modifier. Passé ce délai, l'accès est suspendu jusqu'à l'activation de l'abonnement. Dans les deux cas, rien n'est supprimé."
+            ],
+            [
+              "Je n'ai pas reçu le code de confirmation à l'inscription.",
+              "Vous pouvez demander un renvoi depuis l'écran de confirmation. Si vous vous reconnectez sans avoir confirmé, l'application vous ramène automatiquement à cet écran."
+            ],
+            [
+              "Comment changer la devise ou la langue ?",
+              "La devise et le format des dates se règlent dans Mes préférences, pour toute l'entreprise. La langue de l'interface est propre à chaque utilisateur et se choisit au même endroit."
+            ]
+          ]
+        },
+        {
+          "id": "ventes",
+          "titre": "Devis et ventes",
+          "questions": [
+            [
+              "J'ai créé un devis mais mon stock n'a pas bougé. Est-ce normal ?",
+              "Oui. Le stock est réservé à la SIGNATURE du devis, pas à sa création : un devis non signé n'engage aucune marchandise. Après signature, la quantité passe en « réservée » — elle reste physiquement chez vous mais n'est plus disponible à la vente."
+            ],
+            [
+              "Ma facture porte un numéro qui commence par DEV-. Pourquoi ?",
+              "C'est le numéro du devis d'origine, et il apparaît en « Référence devis ». Le numéro de la facture, lui, commence par FAC et figure en haut du document. Deux pièces, deux numéros : le devis garde le sien pour la traçabilité."
+            ],
+            [
+              "La vue « Par étape », c'est quoi ?",
+              "Le même contenu que la liste, présenté en colonnes selon l'avancement : Brouillon, Envoyé, Signé, Facturé. Vous pouvez faire glisser un devis d'une colonne à l'autre quand la transition est permise."
+            ],
+            [
+              "Puis-je modifier un devis déjà signé ?",
+              "Vous pouvez ajuster les quantités des lignes, ce qui met le stock réservé à jour. Pour un changement de fond, remettez le devis en brouillon : la réservation de stock est alors libérée."
+            ],
+            [
+              "Mon client n'a pas d'adresse e-mail.",
+              "L'envoi par e-mail devient impossible, mais le bouton WhatsApp reste disponible dès que le contact a un numéro de téléphone au format international."
+            ]
+          ]
+        },
+        {
+          "id": "whatsapp",
+          "titre": "Envoi par WhatsApp",
+          "questions": [
+            [
+              "Le bouton WhatsApp ouvre un menu de partage au lieu d'envoyer. Est-ce un bug ?",
+              "Non. WhatsApp n'accepte aucune pièce jointe par un simple lien : pour que le PDF parte vraiment, l'application passe par le partage de votre téléphone. Vous touchez WhatsApp dans la liste, puis vous choisissez le destinataire."
+            ],
+            [
+              "Sur mon ordinateur, le bouton ouvre WhatsApp avec un message mais sans le PDF.",
+              "Le partage de fichiers n'existe pas sur la plupart des navigateurs de bureau. L'application retombe alors sur un message contenant le lien vers la pièce, que votre client ouvre pour la consulter et la télécharger."
+            ],
+            [
+              "Pourquoi dois-je choisir le contact moi-même ?",
+              "Le partage du téléphone joint le fichier mais ne peut pas viser un numéro ; le lien direct vise le numéro mais ne transporte aucun fichier. Aucun des deux mécanismes ne fait les deux — nous avons privilégié la pièce jointe."
+            ]
+          ]
+        },
+        {
+          "id": "achats",
+          "titre": "Achats",
+          "questions": [
+            [
+              "J'ai enregistré un achat mais rien n'est entré en stock.",
+              "Une commande d'achat suit deux axes indépendants : son état commercial (Brouillon, Envoyée, Commandé) et son état de réception. Le stock n'entre — et la dépense n'est enregistrée — qu'au moment où vous marquez la commande comme reçue."
+            ],
+            [
+              "Que fait « Réception partielle » ?",
+              "Elle signale que la marchandise arrive en plusieurs fois. Attention : l'application n'enregistre pas les quantités déjà reçues, ligne par ligne. Une commande partielle est donc exclue du stock prévisionnel, et leur nombre vous est indiqué à part."
+            ],
+            [
+              "Puis-je annuler une réception ?",
+              "Oui, et le stock ainsi que l'écriture financière sont défaits. En revanche, une commande déjà reçue ne peut plus être annulée commercialement tant que la réception n'est pas défaite."
+            ]
+          ]
+        },
+        {
+          "id": "stocks",
+          "titre": "Stocks",
+          "questions": [
+            [
+              "Mon article affiche une quantité, mais « Stock par emplacement » ne le montre pas.",
+              "Un article créé avec une quantité initiale n'a pas encore de répartition par emplacement. Faites un comptage d'inventaire sur cet article : la quantité comptée est alors enregistrée sur l'emplacement, même si elle est identique."
+            ],
+            [
+              "Quelle différence entre un ajustement d'inventaire et un rebut ?",
+              "Le rebut sort une marchandise que vous avez perdue, cassée ou jetée : elle part vers « Pertes ». L'ajustement corrige un écart de comptage, sans cause identifiée : il part vers « Ajustements d'inventaire ». Les séparer permet de savoir ce que vous avez réellement jeté."
+            ],
+            [
+              "Puis-je annuler un rebut ou un comptage ?",
+              "Non, ni l'un ni l'autre. Une erreur de comptage se corrige par un nouveau comptage. C'est un choix délibéré : un registre de stock qu'on peut défaire ne prouve plus rien."
+            ],
+            [
+              "À quoi sert un second emplacement interne ?",
+              "À distinguer où se trouve physiquement la marchandise — un silo, un local, une remise. Un transfert la déplace sans changer la quantité que vous détenez au total. L'emplacement marqué « par défaut » reçoit les achats et sert de base aux comptages."
+            ],
+            [
+              "Que signifie le « stock prévisionnel » ?",
+              "Ce que vous aurez une fois les commandes en cours reçues : disponible plus entrant. Les commandes partiellement reçues en sont exclues, faute de savoir ce qui reste à livrer."
+            ],
+            [
+              "Pourquoi une quantité est-elle « réservée » ?",
+              "Elle est promise par un devis signé mais pas encore livrée. Elle est toujours chez vous — c'est pourquoi elle compte dans le stock théorique lors d'un comptage — mais elle n'est plus disponible pour une autre vente."
+            ]
+          ]
+        },
+        {
+          "id": "comptabilite",
+          "titre": "Factures et comptabilité",
+          "questions": [
+            [
+              "Comment corriger une facture déjà validée ?",
+              "On ne modifie pas une facture validée : on crée un avoir. Deux méthodes — « remboursement » crée un brouillon que vous ajustez, « annulation » solde immédiatement la facture d'origine."
+            ],
+            [
+              "Qu'est-ce que le grand livre et la balance ?",
+              "La balance donne, pour chaque compte, le report, les mouvements de la période et le solde ; le grand livre déroule les écritures ligne par ligne. Seules les pièces validées y figurent — un brouillon n'est pas une écriture comptable."
+            ],
+            [
+              "Mon bilan n'affiche pas de capitaux propres.",
+              "Le plan de comptes par défaut n'en contient pas, et l'application ne passe pas d'écriture de clôture. Le bilan calcule donc deux lignes au passif — résultat de l'exercice et report à nouveau — qui garantissent l'égalité entre actif et passif."
+            ],
+            [
+              "La TVA déductible me paraît trop faible.",
+              "Elle ne compte que les factures fournisseurs saisies dans Finance → Factures. Les achats du module Achats ne produisent pas d'écriture comptable : ils n'y entrent donc pas. Un bandeau le rappelle sur l'état."
+            ],
+            [
+              "À quoi sert de « sécuriser » un journal ?",
+              "Les pièces validées y deviennent inaltérables : chaînées par empreinte, impossibles à supprimer ou à remettre en brouillon. C'est irréversible, à n'activer que si votre réglementation l'exige."
+            ]
+          ]
+        },
+        {
+          "id": "cultures",
+          "titre": "Cultures et parcelles",
+          "questions": [
+            [
+              "D'où viennent l'humidité et la température de mes parcelles ?",
+              "Ce sont des valeurs simulées, pas des capteurs réels : l'application n'est reliée à aucun matériel de terrain. Elles servent à illustrer le suivi, pas à décider d'un arrosage."
+            ],
+            [
+              "La météo affichée est-elle celle de ma parcelle ?",
+              "Elle vient d'un service météo réel. Par défaut c'est la localisation de l'exploitation ; si vous renseignez des coordonnées sur une parcelle, c'est la sienne qui prend le dessus."
+            ],
+            [
+              "Qu'est-ce que le « plan d'intervention » ?",
+              "Un calendrier de jalons agronomiques calculé pour la culture de la parcelle, à partir de sa date de semis. Les jalons sont enregistrés comme activités ; les régénérer en ajoute de nouveaux sans supprimer les anciens."
+            ],
+            [
+              "Que veut dire « délai avant récolte » dans le registre ?",
+              "C'est la date avant laquelle la parcelle traitée ne doit pas être récoltée, calculée à la saisie depuis le délai du produit. Un bandeau signale les parcelles concernées, et un filtre permet de les retrouver."
+            ]
+          ]
+        },
+        {
+          "id": "rh",
+          "titre": "Salariés",
+          "questions": [
+            [
+              "Quelle différence entre un salarié et un utilisateur ?",
+              "Un salarié est une fiche de personnel. Vous pouvez en plus lui créer un accès de connexion : il reçoit alors ses identifiants et accède à l'application selon son rôle."
+            ],
+            [
+              "Un employé peut-il valider son propre congé ?",
+              "Non. Il dépose sa demande depuis Mon espace RH ; seul un administrateur ou un directeur l'approuve, et c'est cette approbation qui décompte le solde."
+            ],
+            [
+              "Que se passe-t-il si je supprime un salarié disposant d'un accès ?",
+              "Son accès est désactivé en même temps et l'opération est tracée dans le journal d'audit."
+            ]
+          ]
+        },
+        {
+          "id": "general",
+          "titre": "Questions générales",
+          "questions": [
+            [
+              "L'assistant ne répond pas à mes questions sur le logiciel.",
+              "C'est normal : il répond sur vos données — bénéfice, stocks, parcelles à arroser, meilleur client, dépenses à prévoir. Pour le fonctionnement de l'application, c'est cette page qu'il faut consulter."
+            ],
+            [
+              "Que se passe-t-il si je perds la connexion ?",
+              "Les modifications faites hors ligne sont mises en attente et rejouées au retour du réseau. Certaines opérations en sont volontairement exclues — comptage d'inventaire, rebut, partage WhatsApp — car les rejouer plus tard, sur un stock qui a bougé entre-temps, ferait plus de dégâts que l'échec."
+            ],
+            [
+              "Comment activer la double authentification ?",
+              "Dans Mes préférences, section Sécurité. Deux méthodes au choix : une application d'authentification, ou un code envoyé par e-mail à chaque connexion."
+            ],
+            [
+              "Ma question n'est pas ici.",
+              "Laissez-la dans Feedback. Les questions qui reviennent seront ajoutées à cette page."
+            ]
+          ]
+        }
+      ],
+      "rechercher": "Rechercher une question…",
+      "aucun": "Aucune question ne correspond. Laissez la vôtre dans Feedback."
     }
   },
   "observations": {
@@ -1821,7 +2031,8 @@
     "answerBestClient": "{{name}} est le client qui a le plus dépensé avec {{total}}.",
     "answerNoClient": "Aucun client n'a encore d'historique d'achat enregistré.",
     "answerForecast": "Sur la base des dépenses du mois actuel, je prévois environ {{amount}} de dépenses pour le mois prochain.",
-    "answerFallback": "Je peux répondre à des questions sur votre bénéfice, les stocks d'aliments, les parcelles à arroser, le client le plus acheteur ou les dépenses à prévoir."
+    "answerFallback": "Je peux répondre à des questions sur votre bénéfice, les stocks d'aliments, les parcelles à arroser, le client le plus acheteur ou les dépenses à prévoir.",
+    "answerFonctionnement": "Cette question porte sur le fonctionnement de l'application, et non sur vos données : je ne sais pas y répondre. La page Aide contient une foire aux questions qui traite ces cas. Moi, je réponds sur votre bénéfice, vos stocks d'aliments, les parcelles à arroser, votre meilleur client et vos dépenses à prévoir."
   },
   "forecast": {
     "loading": "Préparation des prévisions…",

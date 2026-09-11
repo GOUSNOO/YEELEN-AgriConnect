@@ -3,6 +3,52 @@
 Historique daté des correctifs, décisions techniques et chantiers livrés.
 Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque session.
 
+### Aide — garde-fou de l'assistant + foire aux questions — 2026-09-11
+
+L'utilisateur a posé la question autrement qu'en demandant une page : « l'IA qui est intégrée
+dans l'appli peut jouer le rôle de FAQ ? ». La réponse honnête est non, et le vérifier a montré
+pourquoi — l'assistant ne cherche pas, il teste des mots-clés sur la question puis répond avec
+les données de l'entreprise. « Pourquoi mon stock n'a pas bougé ? » contient « stock » : il
+répondait donc le tonnage en magasin, avec aplomb, à quelqu'un qui demandait une explication de
+fonctionnement. Une réponse fausse mais plausible, jamais rattrapée par le repli. Décision de
+l'utilisateur : les deux moitiés — le garde-fou **et** une FAQ complète.
+
+**Garde-fou** (`AIAssistantModule`, `askAssistant`). Un test placé **avant** les tests par
+mots-clés — c'est tout l'intérêt, en aval il n'aurait jamais été atteint : les tournures qui
+portent sur le fonctionnement (`pourquoi`, `comment`, `à quoi sert`, `c'est quoi`, `je n'arrive
+pas`, `impossible de`, et leurs équivalents anglais) renvoient `assistant.answerFonctionnement`,
+qui dit ce que l'assistant sait faire et renvoie vers l'Aide. Il abandonne quelques questions
+qu'il aurait su traiter ; il cesse surtout d'en inventer.
+
+**FAQ** (`help.faq` dans les deux catalogues, rendue par `FaqSection` dans `HelpModule.jsx`) :
+9 groupes, 37 questions, fr et en. Placée **avant** le glossaire des modules — on arrive dans
+l'Aide avec un problème précis, pas avec l'envie de lire une définition. Chaque question est
+une ligne dépliable ; un champ de recherche filtre sur la question **et** sur la réponse (le mot
+qu'on a en tête — « réservé », « avoir », « rebut » — est souvent dans la réponse), insensible
+à la casse comme aux accents, sans quoi un clavier sans accents ne trouve rien.
+
+**Le contenu a été vérifié dans le code, pas rédigé de mémoire** — une FAQ fausse est pire que
+pas de FAQ. Deux réponses étaient inexactes au moment de les écrire :
+- La fin d'essai n'est pas « lecture seule » tout court : `subscriptionGuard` accorde 30 jours de
+  grâce en lecture seule (`GRACE_DAYS`), **puis** bloque tout (`locked`). Ne dire que la première
+  moitié aurait laissé croire que les données restent consultables indéfiniment.
+- Annuler une réception : la FAQ anglaise omettait qu'une commande dont la marchandise est
+  arrivée n'est plus annulable commercialement tant que la réception n'est pas défaite
+  (`POST /achats/:id/annuler`).
+
+Le reste a été confirmé à la source : réservation à la signature et non à la création
+(`applyVenteLignesToStock`), commandes partiellement reçues exclues du prévisionnel faute de
+quantités ligne à ligne (`GET /produits/previsionnel`), inventaire/rebut/transfert jamais mis en
+file hors ligne (`api.js`), capitaux propres absents du plan par défaut d'où les deux lignes
+calculées au passif (`GET /factures/bilan`), TVA déductible limitée aux factures fournisseurs
+(`in_invoice`/`in_refund`), colonnes de la vue « Par étape » (`DEVIS_KANBAN_COLUMNS`), partage
+natif contre lien wa.me (`lib/whatsapp.js`).
+
+Vérifié en navigateur réel sur une entreprise jetable, nettoyée ensuite : rendu fr et en,
+dépliage d'une question, filtre accentué (« reserve » trouve « réservée », 3 questions dans 2
+groupes), cas sans résultat, et 375 px sans débordement horizontal (mesuré, pas supposé).
+`npm test` (142/142) et `npx vite build` verts ; image Docker frontend reconstruite.
+
 ---
 
 ### ERP « Comptabilité » — Fiche facture : valeurs SCSS réelles d'Odoo — 2026-08-30

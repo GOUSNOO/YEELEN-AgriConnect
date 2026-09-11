@@ -6443,6 +6443,20 @@ function AIAssistantModule({ farmId, activated }) {
       return;
     }
 
+    // Ce test passe AVANT les mots-clés, et c'est tout son intérêt. « Pourquoi mon stock n'a pas
+    // bougé ? » contient « stock » : sans ce garde-fou, la recherche par mots-clés répondait
+    // « vous avez N sacs d'aliment » — une réponse fausse, donnée avec assurance, qui n'atteignait
+    // jamais le repli prévu pour les questions inconnues.
+    //
+    // Cet assistant répond sur les DONNÉES de l'exploitation, pas sur le fonctionnement du
+    // logiciel. Un mot interrogatif de ce type signale la seconde famille : on renvoie alors vers
+    // l'Aide au lieu de deviner. « Combien » est délibérément absent — c'est une question de
+    // données (« combien de sacs me reste-t-il ? »).
+    if (/pourquoi|comment|à quoi sert|a quoi sert|c'est quoi|que veut dire|je n'arrive pas|je narrive pas|impossible de|\bwhy\b|\bhow do\b|\bwhat does\b/.test(q)) {
+      setAnswer(t('assistant.answerFonctionnement'));
+      return;
+    }
+
     if (/b[ée]n[ée]fice|profit|gains?/.test(q)) {
       setAnswer(t('assistant.answerBenefice', { month: facts.monthLabel, benefit: fmtMoney(facts.benefit), revenues: fmtMoney(facts.revenues), expenses: fmtMoney(facts.expenses) }));
       return;

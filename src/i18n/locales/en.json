@@ -1775,6 +1775,216 @@
         "title": "My Preferences & security",
         "text": "Your account information, and enabling two-factor authentication (MFA) to secure your sign-in with a code on top of your password."
       }
+    },
+    "faq": {
+      "titre": "Frequently asked questions",
+      "intro": "Answers to the questions that come up most. Details on each module are further down.",
+      "groupes": [
+        {
+          "id": "demarrage",
+          "titre": "Getting started",
+          "questions": [
+            [
+              "I just signed up and everything says \"To activate\". Why?",
+              "The Crops, Poultry and Fish farming modules are paid and start disabled. Click a dimmed tile on the home screen: it activates and takes you there in one go. Cross-cutting features — contacts, quotes, invoices, stock, HR — open as soon as one of those three is active."
+            ],
+            [
+              "What happens when the 45-day trial ends?",
+              "The app becomes read-only for 30 days: you can still view all your data but no longer create or edit. After that, access is suspended until the subscription is activated. Either way, nothing is deleted."
+            ],
+            [
+              "I did not receive the sign-up confirmation code.",
+              "You can request a new one from the confirmation screen. If you log in again without confirming, the app takes you back to that screen automatically."
+            ],
+            [
+              "How do I change the currency or the language?",
+              "Currency and date format are set in My preferences, for the whole company. The interface language is per user and is chosen in the same place."
+            ]
+          ]
+        },
+        {
+          "id": "ventes",
+          "titre": "Quotes and sales",
+          "questions": [
+            [
+              "I created a quote but my stock did not change. Is that normal?",
+              "Yes. Stock is reserved when the quote is SIGNED, not when it is created: an unsigned quote commits no goods. After signing, the quantity becomes \"reserved\" — still physically yours, but no longer available to sell."
+            ],
+            [
+              "My invoice has a number starting with DEV-. Why?",
+              "That is the originating quote number, shown as \"Quote reference\". The invoice number itself starts with FAC and appears at the top of the document. Two documents, two numbers."
+            ],
+            [
+              "What is the \"By stage\" view?",
+              "The same content as the list, shown in columns by progress: Draft, Sent, Signed, Invoiced. You can drag a quote between columns when the transition is allowed."
+            ],
+            [
+              "Can I edit a quote that is already signed?",
+              "You can adjust line quantities, which updates the reserved stock. For a deeper change, set the quote back to draft: the stock reservation is then released."
+            ],
+            [
+              "My customer has no email address.",
+              "Email sending is unavailable, but the WhatsApp button still works as long as the contact has a phone number in international format."
+            ]
+          ]
+        },
+        {
+          "id": "whatsapp",
+          "titre": "Sending via WhatsApp",
+          "questions": [
+            [
+              "The WhatsApp button opens a share sheet instead of sending. Is that a bug?",
+              "No. WhatsApp accepts no attachment through a plain link: to actually send the PDF, the app uses your phone's share sheet. You tap WhatsApp, then pick the recipient."
+            ],
+            [
+              "On my computer it opens WhatsApp with a message but no PDF.",
+              "File sharing does not exist in most desktop browsers. The app falls back to a message containing a link to the document, which your customer opens to view and download it."
+            ],
+            [
+              "Why do I have to pick the contact myself?",
+              "The phone share sheet attaches the file but cannot target a number; a direct link targets the number but carries no file. Neither mechanism does both — we chose the attachment."
+            ]
+          ]
+        },
+        {
+          "id": "achats",
+          "titre": "Purchases",
+          "questions": [
+            [
+              "I recorded a purchase but nothing entered stock.",
+              "A purchase order follows two independent tracks: its commercial state (Draft, Sent, Ordered) and its receipt state. Stock enters — and the expense is recorded — only when you mark the order as received."
+            ],
+            [
+              "What does \"Partial receipt\" do?",
+              "It flags that goods arrive in several deliveries. Note that the app does not record how much was already received, line by line. A partial order is therefore excluded from forecasted stock, and their count is shown separately."
+            ],
+            [
+              "Can I undo a receipt?",
+              "Yes, and both the stock and the financial entry are reversed. Conversely, an order whose goods have arrived cannot be cancelled commercially until the receipt is undone."
+            ]
+          ]
+        },
+        {
+          "id": "stocks",
+          "titre": "Stock",
+          "questions": [
+            [
+              "My item shows a quantity but \"Stock by location\" does not list it.",
+              "An item created with an opening quantity has no location breakdown yet. Run an inventory count on it: the counted quantity is then recorded against the location, even if it is unchanged."
+            ],
+            [
+              "What is the difference between an inventory adjustment and scrap?",
+              "Scrap removes goods you lost, broke or threw away: they go to \"Losses\". An adjustment corrects a counting difference with no identified cause: it goes to \"Inventory adjustments\". Keeping them apart is what lets you know what you actually discarded."
+            ],
+            [
+              "Can I undo scrap or a count?",
+              "Neither. A wrong count is corrected by a new count. This is deliberate: a stock record you can undo proves nothing."
+            ],
+            [
+              "What is a second internal location for?",
+              "To tell where goods physically are — a silo, a room, a shed. A transfer moves them without changing the total you hold. The location marked \"default\" receives purchases and is the basis for counts."
+            ],
+            [
+              "What does \"forecasted stock\" mean?",
+              "What you will hold once pending orders arrive: available plus incoming. Partially received orders are excluded, since what remains to be delivered is not recorded."
+            ],
+            [
+              "Why is a quantity \"reserved\"?",
+              "It is promised by a signed quote but not yet delivered. It is still on your premises — which is why it counts towards theoretical stock during a count — but no longer available for another sale."
+            ]
+          ]
+        },
+        {
+          "id": "comptabilite",
+          "titre": "Invoices and accounting",
+          "questions": [
+            [
+              "How do I correct an invoice that is already posted?",
+              "You do not edit a posted invoice: you issue a credit note. Two methods — \"refund\" creates a draft you adjust, \"cancel\" settles the original invoice immediately."
+            ],
+            [
+              "What are the general ledger and the trial balance?",
+              "The trial balance gives, per account, the opening, the movements of the period and the closing balance; the ledger lists the entries line by line. Only posted documents appear — a draft is not an accounting entry."
+            ],
+            [
+              "My balance sheet shows no equity.",
+              "The default chart of accounts has none, and the app posts no closing entry. The balance sheet therefore computes two lines on the liabilities side — current year earnings and retained earnings — which keep assets equal to liabilities."
+            ],
+            [
+              "Deductible VAT looks too low.",
+              "It only counts vendor bills entered in Finance → Invoices. Purchases from the Purchases module create no accounting entry, so they are not included. A banner says so on the report."
+            ],
+            [
+              "What does \"securing\" a journal do?",
+              "Posted documents become tamper-proof: hash-chained, impossible to delete or set back to draft. It is irreversible — enable it only if your regulations require it."
+            ]
+          ]
+        },
+        {
+          "id": "cultures",
+          "titre": "Crops and plots",
+          "questions": [
+            [
+              "Where do plot humidity and temperature come from?",
+              "They are simulated values, not real sensors: the app is not connected to any field hardware. They illustrate monitoring, they are not a basis for irrigation decisions."
+            ],
+            [
+              "Is the weather shown that of my plot?",
+              "It comes from a real weather service. By default it is the farm location; if you set coordinates on a plot, its own location takes precedence."
+            ],
+            [
+              "What is the \"intervention plan\"?",
+              "A schedule of agronomic milestones computed for the plot's crop from its sowing date. Milestones are saved as activities; regenerating adds new ones without removing the old."
+            ],
+            [
+              "What does \"pre-harvest interval\" mean in the register?",
+              "The date before which the treated plot must not be harvested, computed at entry from the product's interval. A banner flags affected plots, and a filter helps find them."
+            ]
+          ]
+        },
+        {
+          "id": "rh",
+          "titre": "Employees",
+          "questions": [
+            [
+              "What is the difference between an employee and a user?",
+              "An employee is a personnel record. You can additionally create a login for them: they then receive credentials and access the app according to their role."
+            ],
+            [
+              "Can an employee approve their own leave?",
+              "No. They file the request from My HR space; only an administrator or a director approves it, and that approval is what reduces the balance."
+            ],
+            [
+              "What happens if I delete an employee who has a login?",
+              "Their access is deactivated at the same time and the action is recorded in the audit log."
+            ]
+          ]
+        },
+        {
+          "id": "general",
+          "titre": "General",
+          "questions": [
+            [
+              "The assistant does not answer my questions about the software.",
+              "That is expected: it answers about your data — profit, stock, plots to water, best customer, upcoming expenses. For how the app works, this page is the place."
+            ],
+            [
+              "What happens if I lose connectivity?",
+              "Changes made offline are queued and replayed when the network returns. Some operations are deliberately excluded — inventory counts, scrap, WhatsApp sharing — because replaying them later against stock that has moved would do more harm than the failure."
+            ],
+            [
+              "How do I enable two-factor authentication?",
+              "In My preferences, Security section. Two methods: an authenticator app, or a code emailed at each login."
+            ],
+            [
+              "My question is not here.",
+              "Leave it in Feedback. Recurring questions will be added to this page."
+            ]
+          ]
+        }
+      ],
+      "rechercher": "Search the questions…",
+      "aucun": "No question matches. Leave yours in Feedback."
     }
   },
   "observations": {
@@ -1821,7 +2031,8 @@
     "answerBestClient": "{{name}} is the customer who spent the most, with {{total}}.",
     "answerNoClient": "No customer has any purchase history recorded yet.",
     "answerForecast": "Based on this month's expenses, I forecast about {{amount}} in expenses for next month.",
-    "answerFallback": "I can answer questions about your profit, feed stock, plots to water, top customer, or upcoming expenses."
+    "answerFallback": "I can answer questions about your profit, feed stock, plots to water, top customer, or upcoming expenses.",
+    "answerFonctionnement": "This question is about how the app works, not about your data, so I cannot answer it. The Help page has a FAQ covering those cases. What I can answer: your profit, feed stock, plots needing water, your best customer and upcoming expenses."
   },
   "forecast": {
     "loading": "Preparing forecasts…",
