@@ -5,6 +5,70 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Parcelles — contour réel tracé sur imagerie satellite — 2026-09-12
+
+Issu de la comparaison demandée avec les ERP agricoles matures : le contour de parcelle était le
+seul manque **structurel** de la liste. Les autres s'ajoutent ; celui-là conditionne tout ce qui
+vient après — NDVI juste, surface réelle, travail par zone, cartes de préconisation plus tard.
+
+**Ce qui existait vraiment** (vérifié, pas supposé) : l'onglet « Carte » affichait des pastilles
+positionnées par `pos_x`/`pos_y`, deux nombres tirés par `Math.round(10 + Math.random() * 80)` à
+la création de la parcelle. Une carte qui ne représentait rien. Et `agroPolygon.js` fabriquait un
+carré approximatif autour de latitude/longitude pour interroger le satellite.
+
+**Stockage : `parcelles.contour` en `jsonb`, pas PostGIS.** `pg_available_extensions` sur l'image
+`postgres:18-alpine` ne renvoie aucun `postgis*` ; y passer imposerait de changer d'image, donc de
+revoir la sauvegarde, le test de restauration hebdomadaire et la CI — pour un besoin qui se limite
+à stocker un polygone, calculer une surface et un centroïde. Aucune requête spatiale n'est faite.
+
+**`server/src/utils/geoParcelle.js`** : validation, surface (excès sphérique) et centroïde d'aire.
+La formule est **exacte** pour un rectangle latitude/longitude, ce qui donne un test à réponse
+connue plutôt qu'une tolérance choisie au doigt mouillé — vérifié à 0,000000 % d'écart contre
+`R²·Δλ·(sinφ₂−sinφ₁)`, et 1,0000 ha pour un carré de 100 m de côté. La valeur absolue rend le sens
+de parcours sans effet. L'auto-intersection n'est **pas** détectée : c'est un algorithme à part,
+signalé en commentaire plutôt que sous-entendu couvert.
+
+**Règle métier** : un contour tracé prime sur la superficie tapée au clavier, et renseigne
+latitude/longitude depuis son centroïde — sauf si la requête fournit explicitement des
+coordonnées, auquel cas la saisie explicite garde la main. Un contour redessiné invalide le
+polygone Agromonitoring au même titre qu'un déplacement, et `creerPolygone` envoie désormais le
+**vrai** contour ; le carré ne subsiste que pour les parcelles jamais dessinées.
+
+**Carte** : Leaflet 1.9.4, chargé en `lazy()` — 155 Ko qui ne partent que si l'on ouvre l'onglet,
+le bundle initial n'a pris que 1,4 Ko. Fond Esri World Imagery : Esri accorde explicitement le
+droit de *tracer des entités pour créer des données vectorielles*, ce qui est exactement l'usage ;
+attribution posée bien qu'elle ne soit que recommandée. **Ces tuiles raster sont annoncées
+dépréciées et peuvent être coupées sans préavis** — d'où `VITE_TILES_SATELLITE_URL`, câblée
+jusqu'aux arguments de build Docker : changer de fournisseur reste une ligne de configuration.
+Bascule OpenStreetMap pour se repérer quand l'imagerie est nuageuse ou ancienne.
+
+**Deux pièges, tous deux évités par vérification et non par relecture :**
+- La migration lancée depuis l'hôte a échoué sur un tout autre message (`banque_principale_id`) —
+  `server/.env` pointe sur le Postgres Windows natif (5432), pas celui de Docker (5433). Puis
+  `docker exec … migrate.js` a signalé un succès **sans créer la colonne** : le conteneur exécute
+  le code de l'image, et il n'y a pas de bind-mount. Il faut reconstruire le backend AVANT de
+  migrer. Constaté en relisant `\d parcelles`, pas en croyant la sortie de la commande.
+- `MapPin` et `notify` étaient utilisés sans exister — `notify` n'a jamais été exporté par
+  `ui.jsx`. Le premier aurait cassé le rendu, le second l'enregistrement hors-ligne. Trouvés par
+  un balayage systématique de chaque symbole du composant neuf, pas à la lecture.
+
+**Ce qui devient caduc** : `pos_x`/`pos_y` ne sont plus lus nulle part (colonnes laissées en base,
+plus rien ne les alimente).
+
+**Hors périmètre, dit explicitement** : import/export shapefile et KML, zones intra-parcellaires,
+cartes de préconisation à dose variable.
+
+7 tests d'intégration (surface imposée, coordonnées explicites prioritaires, redessin recalculant
+et invalidant le satellite, modification sans contour ne touchant pas au tracé, effacement
+préservant la superficie, 5 géométries invalides → 400, isolation entre entreprises).
+**446/446 tests d'intégration, zéro régression** (439 avant). `npm test` (142/142) et build verts.
+Vérifié en navigateur réel sur une entreprise jetable, nettoyée ensuite : tracé de 4 points sur
+l'imagerie, surface annoncée **901,88 ha**, recoupée en base contre la formule analytique
+appliquée aux coordonnées stockées — **901,88 ha et centroïde identique au chiffre près**. Testé
+aussi à 375 px (carte à 302 px de haut, aucun débordement). Images Docker reconstruites.
+
+---
+
 ### Navigation — une seule couleur pour « sélectionné » — 2026-09-12
 
 L'utilisateur : « j'ai constaté deux à trois couleurs différentes sur un menu qui est

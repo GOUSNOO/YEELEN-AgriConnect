@@ -640,6 +640,10 @@ CREATE TABLE IF NOT EXISTS mouvements_historique (
 
 -- Étend la table parcelles existante (nom, superficie, localisation)
 -- avec les colonnes nécessaires au suivi capteurs / irrigation.
+-- Contour réel du champ (GeoJSON Polygon), tracé sur imagerie satellite. En jsonb et non en
+-- géométrie PostGIS : l'image postgres:18-alpine n'a pas l'extension, et aucune requête
+-- spatiale n'est faite — seulement du stockage, une surface et un centroïde (utils/geoParcelle.js).
+ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS contour       JSONB;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS culture       TEXT;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS humidite      NUMERIC(5, 2) NOT NULL DEFAULT 50;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS temperature   NUMERIC(5, 2) NOT NULL DEFAULT 25;

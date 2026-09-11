@@ -100,19 +100,20 @@ router.get('/ndvi', authRequired, async (req, res) => {
   try {
     const parcelle = await pool.query(
       `SELECT nom, latitude::float8 AS latitude, longitude::float8 AS longitude,
-              superficie::float8 AS superficie, agro_polygon_id AS "agroPolygonId"
+              superficie::float8 AS superficie, agro_polygon_id AS "agroPolygonId",
+              contour
        FROM parcelles WHERE id = $1 AND entreprise_id = $2`,
       [parcelleId, req.user.entrepriseId]
     );
     if (parcelle.rows.length === 0) return res.status(404).json({ error: 'Parcelle introuvable.' });
-    const { nom, latitude, longitude, superficie, agroPolygonId } = parcelle.rows[0];
+    const { nom, latitude, longitude, superficie, agroPolygonId, contour } = parcelle.rows[0];
     if (latitude == null || longitude == null) {
       return res.status(404).json({ error: 'Aucune localisation configurée pour cette parcelle (voir Cultures & irrigation).' });
     }
 
     let polyid = agroPolygonId;
     if (!polyid) {
-      polyid = await creerPolygone({ nom, latitude, longitude, superficieHa: superficie, appid });
+      polyid = await creerPolygone({ nom, latitude, longitude, superficieHa: superficie, appid, contour });
       await pool.query('UPDATE parcelles SET agro_polygon_id = $1 WHERE id = $2', [polyid, parcelleId]);
     }
 

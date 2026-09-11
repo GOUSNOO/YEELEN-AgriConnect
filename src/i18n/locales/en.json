@@ -341,7 +341,21 @@
     },
     "aucuneParcelle": "No plot recorded",
     "aucuneParcelleAide": "Add your first plot using the form above.",
-    "aucuneParcelleCarte": "The map will show your plots as soon as you add one."
+    "aucuneParcelleCarte": "The map will show your plots as soon as you add one.",
+    "contour": {
+      "fond_satellite": "Satellite",
+      "fond_plan": "Map",
+      "aide": "Click the map to place the field corners, drag a point to adjust it. {{n}} point(s) placed.",
+      "annulerPoint": "Last point",
+      "effacer": "Clear all",
+      "enregistrer": "Save boundary",
+      "dessiner": "Draw boundary",
+      "modifier": "Edit boundary",
+      "aucunContour": "No boundary drawn — the area is the one you entered.",
+      "surfaceMesuree": "Area measured from the boundary: {{ha}} ha",
+      "enregistre": "Boundary saved — computed area: {{ha}} ha.",
+      "horsLigne": "Boundary saved offline. The area will be computed once you reconnect."
+    }
   },
   "stocks": {
     "loading": "Loading stock…",

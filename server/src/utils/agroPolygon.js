@@ -30,13 +30,18 @@ export function construirePolygoneCarre(latitude, longitude, superficieHa) {
 // Crée le polygone côté Agromonitoring et renvoie son polyid — n'écrit PAS en base,
 // l'appelant (routes/precisionAgricole.js) est responsable de mettre à jour
 // parcelles.agro_polygon_id une fois la création confirmée.
-export async function creerPolygone({ nom, latitude, longitude, superficieHa, appid }) {
+export async function creerPolygone({ nom, latitude, longitude, superficieHa, appid, contour }) {
   if (!superficieHa || superficieHa < SUPERFICIE_MIN_HA || superficieHa > SUPERFICIE_MAX_HA) {
     throw new SuperficieHorsBornesError(
       `La superficie doit être renseignée et comprise entre ${SUPERFICIE_MIN_HA} et ${SUPERFICIE_MAX_HA} ha pour l'imagerie satellite.`
     );
   }
-  const coordinates = [construirePolygoneCarre(latitude, longitude, superficieHa)];
+  // Le contour tracé prime : c'est la parcelle réelle. Le carré approximatif ne subsiste que
+  // pour les parcelles jamais dessinées, où il reste préférable à pas d'imagerie du tout.
+  const anneau = contour?.coordinates?.[0];
+  const coordinates = anneau?.length
+    ? [anneau]
+    : [construirePolygoneCarre(latitude, longitude, superficieHa)];
   const response = await fetch(`${POLYGONS_URL}?appid=${appid}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

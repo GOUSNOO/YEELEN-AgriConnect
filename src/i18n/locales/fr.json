@@ -341,7 +341,21 @@
     },
     "aucuneParcelle": "Aucune parcelle enregistrée",
     "aucuneParcelleAide": "Ajoutez votre première parcelle avec le formulaire ci-dessus.",
-    "aucuneParcelleCarte": "La carte affichera vos parcelles dès que vous en aurez ajouté une."
+    "aucuneParcelleCarte": "La carte affichera vos parcelles dès que vous en aurez ajouté une.",
+    "contour": {
+      "fond_satellite": "Satellite",
+      "fond_plan": "Plan",
+      "aide": "Cliquez sur la carte pour poser les coins du champ, faites glisser un point pour l'ajuster. {{n}} point(s) posé(s).",
+      "annulerPoint": "Dernier point",
+      "effacer": "Tout effacer",
+      "enregistrer": "Enregistrer le contour",
+      "dessiner": "Dessiner le contour",
+      "modifier": "Modifier le contour",
+      "aucunContour": "Aucun contour tracé — la superficie est celle que vous avez saisie.",
+      "surfaceMesuree": "Surface mesurée sur le contour : {{ha}} ha",
+      "enregistre": "Contour enregistré — surface calculée : {{ha}} ha.",
+      "horsLigne": "Contour enregistré hors ligne. La surface sera calculée à la reconnexion."
+    }
   },
   "stocks": {
     "loading": "Chargement des stocks…",

@@ -4,6 +4,7 @@ import { pool } from '../db.js';
 import { syncFinanceEntry, removeFinanceEntry, updateFinanceEntry } from '../utils/financeSync.js';
 import { logMouvementHistorique, getMouvementHistorique, getAllMouvementHistorique } from '../utils/mouvementHistorique.js';
 import { supprimerPolygone } from '../utils/agroPolygon.js';
+import { analyserContour, ContourInvalideError } from '../utils/geoParcelle.js';
 
 const router = express.Router();
 
@@ -17,7 +18,8 @@ const PARCELLE_COLUMNS = `
   pos_x::float8 AS x, pos_y::float8 AS y,
   superficie, localisation, created_at AS "createdAt",
   to_char(date_semis, 'YYYY-MM-DD') AS "dateSemis",
-  ville, latitude::float8 AS latitude, longitude::float8 AS longitude
+  ville, latitude::float8 AS latitude, longitude::float8 AS longitude,
+  contour
 `;
 
 const HISTORIQUE_COLUMNS = `
@@ -50,27 +52,36 @@ router.get('/parcelles', authRequired, async (req, res) => {
 });
 
 router.post('/parcelles', authRequired, async (req, res) => {
-  const { nom, culture, humidite = 50, temperature = 25, mode = 'auto', vanneOuverte = false, seuil = 35, x = 50, y = 50, superficie, localisation, dateSemis, ville, latitude, longitude } = req.body;
+  const { nom, culture, humidite = 50, temperature = 25, mode = 'auto', vanneOuverte = false, seuil = 35, x = 50, y = 50, superficie, localisation, dateSemis, ville, latitude, longitude, contour } = req.body;
   if (!nom) {
     return res.status(400).json({ error: 'Le nom de la parcelle est requis.' });
   }
   try {
+    // Un contour tracé est plus fiable qu'une superficie tapée au clavier : il impose la surface
+    // et, à défaut de coordonnées explicites, le point de référence (météo, sol, satellite).
+    const geo = analyserContour(contour);
+    const superficieFinale = geo.contour ? geo.superficieHa : (superficie || null);
+    const latFinale = latitude ?? (geo.centre ? geo.centre.latitude : null);
+    const lonFinale = longitude ?? (geo.centre ? geo.centre.longitude : null);
     const result = await pool.query(
-      `INSERT INTO parcelles (entreprise_id, user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation, date_semis, ville, latitude, longitude)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      `INSERT INTO parcelles (entreprise_id, user_id, nom, culture, humidite, temperature, mode, vanne_ouverte, seuil, pos_x, pos_y, superficie, localisation, date_semis, ville, latitude, longitude, contour)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING ${PARCELLE_COLUMNS}`,
-      [req.user.entrepriseId, req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie || null, localisation || null, dateSemis || null, ville || null, latitude ?? null, longitude ?? null]
+      [req.user.entrepriseId, req.user.sub, nom, culture || null, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficieFinale, localisation || null, dateSemis || null, ville || null, latFinale, lonFinale, geo.contour ? JSON.stringify(geo.contour) : null]
     );
     return res.status(201).json({ parcelle: result.rows[0] });
   } catch (err) {
+    if (err instanceof ContourInvalideError) return res.status(400).json({ error: err.message });
     console.error('[POST /parcelles]', err);
     return res.status(500).json({ error: 'Erreur lors de la création de la parcelle.' });
   }
 });
 
 router.put('/parcelles/:id', authRequired, async (req, res) => {
-  const { nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie, dateSemis, ville, latitude, longitude } = req.body;
+  const { nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie, dateSemis, ville, latitude, longitude, contour } = req.body;
+  const contourFourni = contour !== undefined;
   try {
+    const geo = analyserContour(contour);
     // Avant écriture : la localisation/superficie actuelle sert à savoir si le polygone
     // Agromonitoring (agro_polygon_id, voir routes/precisionAgricole.js) doit être invalidé —
     // il ne représente plus la bonne zone dès que l'un des trois change.
@@ -81,7 +92,10 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
     if (avant.rows.length === 0) {
       return res.status(404).json({ error: 'Parcelle introuvable.' });
     }
+    // Un contour redessiné change la zone observée par le satellite autant qu'un déplacement
+    // de coordonnées : il invalide le polygone Agromonitoring de la même façon.
     const localisationChangee =
+      contourFourni ||
       (latitude !== undefined && Number(latitude) !== avant.rows[0].latitude) ||
       (longitude !== undefined && Number(longitude) !== avant.rows[0].longitude) ||
       (superficie !== undefined && Number(superficie) !== avant.rows[0].superficie);
@@ -105,13 +119,22 @@ router.put('/parcelles/:id', authRequired, async (req, res) => {
          ville = COALESCE($12, ville),
          latitude = COALESCE($13, latitude),
          longitude = COALESCE($14, longitude),
-         agro_polygon_id = CASE WHEN $15 THEN NULL ELSE agro_polygon_id END
+         agro_polygon_id = CASE WHEN $15 THEN NULL ELSE agro_polygon_id END,
+         contour = CASE WHEN $18 THEN $19::jsonb ELSE contour END
        WHERE id = $16 AND entreprise_id = $17
        RETURNING ${PARCELLE_COLUMNS}`,
-      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y, superficie, dateSemis, ville, latitude, longitude, localisationChangee, req.params.id, req.user.entrepriseId]
+      // $10/$13/$14 : un contour fourni impose la superficie et, sauf saisie explicite, le centre.
+      [nom, culture, humidite, temperature, mode, vanneOuverte, seuil, x, y,
+        geo.contour ? geo.superficieHa : superficie,
+        dateSemis, ville,
+        latitude ?? (geo.centre ? geo.centre.latitude : undefined),
+        longitude ?? (geo.centre ? geo.centre.longitude : undefined),
+        localisationChangee, req.params.id, req.user.entrepriseId,
+        contourFourni, geo.contour ? JSON.stringify(geo.contour) : null]
     );
     return res.json({ parcelle: result.rows[0] });
   } catch (err) {
+    if (err instanceof ContourInvalideError) return res.status(400).json({ error: err.message });
     console.error('[PUT /parcelles]', err);
     return res.status(500).json({ error: 'Erreur lors de la mise à jour de la parcelle.' });
   }

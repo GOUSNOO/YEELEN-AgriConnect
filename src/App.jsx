@@ -12,7 +12,8 @@ import {
   ClipboardList, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Home, GripVertical,
   Search, FileText, Download, Users, Briefcase, Landmark, Bell,
   CalendarDays, Settings, Settings2, MessageSquare, HelpCircle, Wrench, History,
-  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3, MessageCircle, Video
+  Camera, Building2, User as UserIcon, Phone as PhoneIcon, Fish, Cloud, Menu, X, BarChart3, MessageCircle, Video,
+  MapPin
 } from 'lucide-react';
 import {
   clearToken,
@@ -66,6 +67,7 @@ const ObservationListView = lazy(() => import('./components/ObservationListView'
 const RegistreIntrantsView = lazy(() => import('./components/RegistreIntrantsView').then((m) => ({ default: m.RegistreIntrantsView })));
 const FeedbackModule = lazy(() => import('./components/FeedbackModule').then((m) => ({ default: m.FeedbackModule })));
 const HelpModule = lazy(() => import('./components/HelpModule').then((m) => ({ default: m.HelpModule })));
+const CarteParcelles = lazy(() => import('./components/CarteParcelles'));
 const AideFlottante = lazy(() => import('./components/AideFlottante'));
 const EquipementsModule = lazy(() => import('./components/EquipementsModule').then((m) => ({ default: m.EquipementsModule })));
 import { GlobalSearch } from './components/GlobalSearch';
@@ -107,10 +109,15 @@ const NAV_CATEGORIES = [
 ];
 
 
-function ParcelMapTab({ parcelles }) {
+// L'onglet Carte. Il affichait des pastilles positionnées par pos_x/pos_y — deux nombres tirés
+// au hasard à la création de la parcelle (Math.random), donc une carte qui ne représentait rien.
+// Elle montre désormais les contours réels, tracés sur imagerie satellite ; pos_x/pos_y ne sont
+// plus lus nulle part (les colonnes restent en base, rien ne les alimente plus).
+function ParcelMapTab({ parcelles, onParcelleMaj }) {
   const etroitCarte = useAffichageEtroit();
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState(parcelles[0]?.id ?? null);
+  const [contourEdition, setContourEdition] = useState(null);
   const selected = parcelles.find(p => p.id === selectedId) || parcelles[0] || null;
 
   const statusOf = (p) => {
@@ -119,43 +126,47 @@ function ParcelMapTab({ parcelles }) {
     return { label: t('cultures.map.statusNormal'), tone: 'green' };
   };
 
+  const enregistrerContour = async (contour) => {
+    const id = contourEdition;
+    try {
+      const reponse = await updateParcelle(id, { contour });
+      // safeRequest renvoie null quand l'écriture est mise en file hors-ligne : la surface est
+      // calculée par le serveur, on ne peut donc que garder le tracé et le dire.
+      if (!reponse) {
+        onParcelleMaj({ id, contour });
+        notifySuccess(t('cultures.contour.horsLigne'));
+      } else {
+        onParcelleMaj(reponse.parcelle);
+        notifySuccess(t('cultures.contour.enregistre', { ha: reponse.parcelle.superficie }));
+      }
+      setContourEdition(null);
+    } catch (err) {
+      console.error('[enregistrerContour]', err);
+      notifyError(err);
+    }
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: etroitCarte ? '1fr' : '1.4fr 1fr', gap: SPACE.lg, alignItems: 'start' }}>
       <Card style={{ padding: SPACE.md }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('cultures.map.title')}</div>
-        <div style={{ position: 'relative', width: '100%', paddingTop: '62%', borderRadius: RADIUS.card, background: COLORS.greenSoft, border: `1px solid ${COLORS.border}`, overflow: 'hidden' }}>
-          {parcelles.length === 0 && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: SPACE.lg, color: COLORS.inkSoft, fontSize: TEXT.base }}>
-              {t('cultures.aucuneParcelleCarte')}
-            </div>
-          )}
-          {parcelles.map(p => {
-            const status = statusOf(p);
-            const dotColor = status.tone === 'red' ? COLORS.red : status.tone === 'blue' ? COLORS.blue : COLORS.green;
-            const isSelected = selected && selected.id === p.id;
-            return (
-              <button
-                key={p.id}
-                onClick={() => setSelectedId(p.id)}
-                title={p.nom}
-                style={{
-                  position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)',
-                  width: isSelected ? 34 : 26, height: isSelected ? 34 : 26, borderRadius: '50%',
-                  background: dotColor, border: `3px solid ${isSelected ? COLORS.ink : '#fff'}`,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: TEXT.xs, fontWeight: 700, transition: 'all 0.15s ease'
-                }}
-              >
-                {p.nom.replace('Parcelle ', '')}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: SPACE.md, marginTop: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> {t('cultures.map.statusNormal')}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> {t('cultures.map.statusToWater')}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> {t('cultures.map.statusHighTemp')}</span>
-        </div>
+        {parcelles.length === 0 ? (
+          <div style={{ padding: SPACE.xl, textAlign: 'center', color: COLORS.inkSoft, fontSize: TEXT.base }}>
+            {t('cultures.aucuneParcelleCarte')}
+          </div>
+        ) : (
+          <Suspense fallback={<div style={{ padding: SPACE.xl, textAlign: 'center', color: COLORS.inkSoft }}><Loader2 size={18} className="spin" /></div>}>
+            <CarteParcelles
+              parcelles={parcelles}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              parcelleEnEdition={contourEdition}
+              onEnregistrer={enregistrerContour}
+              onAnnuler={() => setContourEdition(null)}
+              hauteur={etroitCarte ? 300 : 440}
+            />
+          </Suspense>
+        )}
       </Card>
 
       {selected && (
@@ -167,9 +178,28 @@ function ParcelMapTab({ parcelles }) {
             </div>
             <Badge tone={statusOf(selected).tone}>{statusOf(selected).label}</Badge>
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: SPACE.sm, marginBottom: SPACE.md }}>
+            <span style={{ fontSize: TEXT.sm, color: COLORS.inkSoft }}>
+              {selected.contour
+                ? t('cultures.contour.surfaceMesuree', { ha: selected.superficie })
+                : t('cultures.contour.aucunContour')}
+            </span>
+            <Button small variant={selected.contour ? 'ghost' : 'default'}
+              onClick={() => setContourEdition(contourEdition === selected.id ? null : selected.id)}>
+              <MapPin size={14} /> {selected.contour ? t('cultures.contour.modifier') : t('cultures.contour.dessiner')}
+            </Button>
+          </div>
+
           <div style={{ display: 'flex', gap: SPACE.xl, justifyContent: 'center', padding: '6px 0' }}>
             <GaugeDial value={selected.humidite} label={t('cultures.soilHumidity')} unit="%" colorMain={COLORS.blue} colorTrack={COLORS.blueSoft} icon={<Droplet size={15} color={COLORS.blue} />} />
             <GaugeDial value={selected.temperature} max={45} label={t('cultures.temperature')} unit="°" colorMain={COLORS.ochre} colorTrack={COLORS.ochreSoft} icon={<Thermometer size={15} color={COLORS.ochre} />} />
+          </div>
+
+          <div style={{ display: 'flex', gap: SPACE.md, marginTop: SPACE.sm, fontSize: TEXT.sm, color: COLORS.inkSoft, flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.green, display: 'inline-block' }} /> {t('cultures.map.statusNormal')}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.blue, display: 'inline-block' }} /> {t('cultures.map.statusToWater')}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: SPACE.xs }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: COLORS.red, display: 'inline-block' }} /> {t('cultures.map.statusHighTemp')}</span>
           </div>
         </Card>
       )}
@@ -5016,6 +5046,12 @@ function CulturesModule({ farmId, highlightProduitId }) {
     y: Number(p.y),
   }), []);
 
+  // Fusion plutôt que remplacement : hors-ligne on ne reçoit que { id, contour }, et écraser
+  // la parcelle entière ferait disparaître humidité, température et le reste de l'écran.
+  const majParcelleLocale = useCallback((maj) => {
+    setParcelles(prev => prev.map(p => (p.id === maj.id ? normalizeParcelle({ ...p, ...maj }) : p)));
+  }, [normalizeParcelle]);
+
   useEffect(() => {
     if (chargementRef.current) return;
     chargementRef.current = true;
@@ -5343,7 +5379,7 @@ function CulturesModule({ farmId, highlightProduitId }) {
       </div>
       )}
 
-      {tab === 'carte' && <ParcelMapTab parcelles={parcelles} />}
+      {tab === 'carte' && <ParcelMapTab parcelles={parcelles} onParcelleMaj={majParcelleLocale} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Cultures" highlightId={highlightProduitId} />}
       {tab === 'ventes' && <VentesWithDevis farmId={farmId} moduleType="Cultures" />}
       {tab === 'achats' && <AchatsAvecSousNav farmId={farmId} storageKey="achats-cultures" moduleType="Cultures" />}
