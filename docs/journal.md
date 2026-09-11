@@ -5,6 +5,54 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Navigation — une seule couleur pour « sélectionné » — 2026-09-12
+
+L'utilisateur : « j'ai constaté deux à trois couleurs différentes sur un menu qui est
+sélectionné ? ». Vérifié dans le code : il y avait **trois façons** de dessiner le même état,
+dans trois systèmes de couleurs.
+
+| Où | Sélection dessinée par | Couleurs possibles |
+| --- | --- | --- |
+| Barre du haut (`navBtnStyle`) | voile blanc `rgba(255,255,255,.18)` | 1, neutre |
+| Item de menu déroulant | `${cat.color}22` + texte `cat.color` | **5** selon la catégorie |
+| Onglet de module (`ModuleTabButton`) | pastille pleine en `accentColor` | **3** : vert Cultures, ocre Poulailler, bleu Pisciculture |
+| Panneau mobile (`itemStyle`) | `COLORS.greenSoft` + texte `COLORS.green` | 1, vert |
+
+La contradiction la plus visible : Pisciculture appartient à la catégorie *Opérations*, donc
+surlignée en **vert** dans le menu déroulant, puis sa barre d'onglets passait au **bleu**.
+Poulailler : vert dans le menu, **ocre** dans ses onglets. En un seul geste — ouvrir le menu,
+cliquer — la couleur censée dire « vous êtes ici » changeait deux fois.
+
+Correction : une seule couleur de sélection dans toute la navigation, le vert de marque.
+`accentColor` disparaît de `ModuleTabButton`/`ModuleTabBar` et de ses trois points d'appel ; le
+menu déroulant adopte `greenSoft`/`green` — c'est-à-dire exactement ce que le panneau mobile
+faisait déjà, ce qui referme au passage un écart bureau/mobile jamais remarqué.
+
+**Ce qui est délibérément conservé** : les pastilles de couleur par catégorie sur l'accueil et
+dans le panneau mobile (vert/bleu/ocre/rouge/violet, vérifiées intactes). La couleur y dit
+« quelle famille » — son rôle légitime. Le défaut venait de lui avoir fait dire **aussi**
+« où je suis » : une couleur, deux significations.
+
+**Piège évité de justesse** : retirer la prop `accentColor` laissait une référence morte à la
+ligne 4760, le bouton « Plus » du repli d'onglets — un `ReferenceError` sur un chemin que ni le
+build ni les tests n'exercent (il n'apparaît qu'en dessous d'une certaine largeur). Trouvé
+parce que le script de remplacement listait les occurrences restantes au lieu de se déclarer
+terminé ; corrigé, puis vérifié en conditions réelles à 375 px avec un onglet actif caché dans
+le repli — le bouton ressort bien en vert.
+
+Hors périmètre, volontairement : les jauges Ambiance/Bassins (bleu/vert/ocre par grandeur
+mesurée), les cartes Ventes/Achats/Solde (vert/rouge/bleu par nature du montant) et
+`OptionCard` sur l'écran des modules. Ce sont des couleurs sémantiques ou décoratives, pas des
+états de sélection.
+
+Vérifié en navigateur réel sur une entreprise jetable, nettoyée ensuite, **couleurs relevées
+dans le DOM et non à l'œil** : onglet actif à `rgb(63,107,59)` dans les trois modules, item de
+menu actif à `rgb(231,239,223)`/`rgb(63,107,59)` dans Opérations comme dans Analyse (qui était
+bleue), cinq pastilles de catégorie toujours distinctes, bouton « Plus » vert à 375 px.
+`npm test` (142/142) et `npx vite build` verts ; image Docker frontend reconstruite.
+
+---
+
 ### Aide — bulle flottante et FAQ contextuelle — 2026-09-11
 
 L'utilisateur, juste après la livraison de la FAQ : « c'est mieux que ça soit une icône flottante

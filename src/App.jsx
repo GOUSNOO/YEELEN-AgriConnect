@@ -4684,13 +4684,13 @@ function PiscicultureMonitoringTab({ farmId }) {
 
 // Bouton d'un onglet de ModuleTabBar — extrait pour être rendu deux fois
 // (couche de mesure invisible + rendu visible réel) sans dupliquer le JSX.
-function ModuleTabButton({ tab, active, onClick, accentColor }) {
+function ModuleTabButton({ tab, active, onClick }) {
   const Icon = tab.icon;
   return (
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
       padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
-      background: active ? accentColor : 'transparent', color: active ? '#fff' : COLORS.inkSoft,
+      background: active ? COLORS.green : 'transparent', color: active ? '#fff' : COLORS.inkSoft,
     }}>
       <Icon size={14} /> {tab.label}
     </button>
@@ -4704,7 +4704,7 @@ function ModuleTabButton({ tab, active, onClick, accentColor }) {
 // project_erp_ux_alignment.md). Mesure la largeur réelle des onglets via une
 // couche invisible avant de décider combien en afficher — même principe que
 // l'implémentation de référence plutôt qu'un seuil de largeur codé en dur.
-function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
+function ModuleTabBar({ tabs, activeTab, onSelect }) {
   const containerRef = useRef(null);
   const measureRef = useRef(null);
   const [visibleCount, setVisibleCount] = useState(tabs.length);
@@ -4747,17 +4747,17 @@ function ModuleTabBar({ tabs, activeTab, onSelect, accentColor }) {
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'flex', gap: SPACE.sm, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: SPACE.sm }}>
       <div ref={measureRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', display: 'flex', gap: SPACE.sm, top: -9999, left: -9999 }}>
-        {tabs.map(t => <ModuleTabButton key={t.id} tab={t} active={false} onClick={() => {}} accentColor={accentColor} />)}
+        {tabs.map(t => <ModuleTabButton key={t.id} tab={t} active={false} onClick={() => {}} />)}
       </div>
       {visibleTabs.map(t => (
-        <ModuleTabButton key={t.id} tab={t} active={activeTab === t.id} onClick={() => onSelect(t.id)} accentColor={accentColor} />
+        <ModuleTabButton key={t.id} tab={t} active={activeTab === t.id} onClick={() => onSelect(t.id)} />
       ))}
       {overflowTabs.length > 0 && (
         <div style={{ position: 'relative' }}>
           <button onClick={() => setMoreOpen(o => !o)} style={{
             display: 'flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.base, fontWeight: 600, whiteSpace: 'nowrap',
             padding: '8px 13px', borderRadius: RADIUS.pill, border: 'none', cursor: 'pointer',
-            background: activeHiddenInOverflow ? accentColor : 'transparent',
+            background: activeHiddenInOverflow ? COLORS.green : 'transparent',
             color: activeHiddenInOverflow ? '#fff' : COLORS.inkSoft,
           }}>
             Plus <ChevronRight size={14} style={{ transform: moreOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} />
@@ -5188,7 +5188,6 @@ function CulturesModule({ farmId, highlightProduitId }) {
         ]}
         activeTab={tab}
         onSelect={setTab}
-        accentColor={COLORS.green}
       />
 
       {tab === 'parcelles' && (
@@ -5379,7 +5378,7 @@ function PoulaillerModule({ farmId, highlightProduitId }) {
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
-      <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} accentColor={COLORS.ochre} />
+      <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} />
       {tab === 'environnement' && <EnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PoultryMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Poulailler" highlightId={highlightProduitId} />}
@@ -5420,7 +5419,7 @@ function PiscicultureModule({ farmId, highlightProduitId }) {
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
-      <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} accentColor={COLORS.blue} />
+      <ModuleTabBar tabs={tabs} activeTab={tab} onSelect={setTab} />
       {tab === 'environnement' && <BassinsEnvironnementTab farmId={farmId} />}
       {tab === 'suivi' && <PiscicultureMonitoringTab farmId={farmId} />}
       {tab === 'stocks' && <StocksTab farmId={farmId} moduleType="Pisciculture" highlightId={highlightProduitId} />}
@@ -8825,8 +8824,8 @@ function TopNavbar({
                         style={{
                           display: 'flex', alignItems: 'center', gap: SPACE.sm, width: '100%', textAlign: 'left',
                           padding: '3px 20px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: TEXT.base,
-                          background: active ? `${cat.color}22` : 'transparent',
-                          color: active ? cat.color : COLORS.ink, fontWeight: active ? 700 : 500,
+                          background: active ? COLORS.greenSoft : 'transparent',
+                          color: active ? COLORS.green : COLORS.ink, fontWeight: active ? 700 : 500,
                         }}
                       >
                         <Icon size={14} /> {it.label}
