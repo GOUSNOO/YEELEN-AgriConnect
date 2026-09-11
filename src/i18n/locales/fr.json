@@ -2130,7 +2130,10 @@
     "effectifPers": "{{count}} pers.",
     "payeShort": "payé",
     "nonPayeShort": "non payé",
-    "justificatifShort": "justificatif"
+    "justificatifShort": "justificatif",
+    "rechercher": "Rechercher un salarié…",
+    "filtreAvecCompte": "Avec accès",
+    "filtreSansPoste": "Sans poste"
   },
   "nav": {
     "accueil": "Accueil",

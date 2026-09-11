@@ -5090,3 +5090,38 @@ Entreprise jetable purgée, image frontend reconstruite.
 **Limite connue et signalée** : le tableau des lots *à l'intérieur* du dépli reste dense sur
 téléphone (six colonnes dans 329 px). Il possède son propre défilement et ne casse pas la mise en
 page, mais il n'a pas été converti — il n'utilise pas `TableauListe` et porte un champ éditable.
+
+### 2026-09-11 — Contacts et RH : les écrans liste-détail
+
+Troisième volet de l'harmonisation. Ces deux écrans ne sont pas des tableaux, et c'est ce qui
+les distingue des précédents : il ne fallait pas leur imposer `TableauListe`, mais leur donner ce
+qui manquait.
+
+**Contacts — deux défauts distincts.** Le premier : aucun outil au-delà d'un champ de recherche
+maison. Le hook partagé apporte filtres, tri, regroupement et pagination, et la barre d'outils
+remplace le champ ; **le rendu en cartes avec panneau de détail est conservé**, c'est la bonne
+forme pour un écran liste-détail.
+
+Le second n'avait rien à voir avec les listes : **trois grilles figées à deux colonnes**. En
+375 px, cela donnait deux colonnes de 160 px où ni la liste, ni le détail, ni le formulaire
+n'étaient lisibles — et l'avatar de 130 px écrasait les champs voisins. Toutes s'empilent
+désormais sous le seuil. Mesuré après correction : **zéro champ hors écran, zéro débordement**.
+
+**Un import manquant, attrapé de justesse.** `useAffichageEtroit` n'était pas importé dans
+`App.jsx`. Le build ne dit rien d'un identifiant non déclaré — l'erreur n'arrive qu'à
+l'exécution, et fait tomber tout l'arbre React. C'est **exactement** le défaut qui avait donné un
+écran blanc sur l'onglet Ventes avant-hier. Vu en relisant les imports après coup, puis confirmé
+en ouvrant réellement l'écran.
+
+**RH — une hypothèse fausse, corrigée par la mesure.** J'avais annoncé qu'il souffrait du même
+défaut de grille que les Contacts. Faux : ses grilles utilisent déjà `repeat(auto-fit, minmax(…))`
+et sont responsives par construction. Ce qui lui manquait, c'était la recherche, le tri et la
+pagination. Le filtre par département reste **côté serveur** (il pilote `getSalaries`), et les
+deux modes d'affichage — liste et trombinoscope — sont conservés, tous deux branchés sur les
+lignes filtrées. Les libellés de regroupement pointaient vers `rh.departement` et `rh.poste`, deux
+clés **inexistantes** : corrigées en `rh.fieldDepartement` / `rh.fieldPoste` avant vérification.
+
+**Vérification** — 142/142 frontend, build et `oxlint` verts. En navigateur : filtre « sans
+téléphone » exercé sur les contacts (isole le seul contact concerné), tri alphabétique des
+salariés vérifié, les deux modes d'affichage RH exercés, et les deux écrans contrôlés en 375 px
+comme en largeur bureau. Entreprise jetable purgée, image frontend reconstruite.

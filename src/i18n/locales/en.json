@@ -2130,7 +2130,10 @@
     "effectifPers": "{{count}} people",
     "payeShort": "paid",
     "nonPayeShort": "unpaid",
-    "justificatifShort": "proof"
+    "justificatifShort": "proof",
+    "rechercher": "Search an employee…",
+    "filtreAvecCompte": "With login",
+    "filtreSansPoste": "No position"
   },
   "nav": {
     "accueil": "Home",

@@ -7050,6 +7050,27 @@ function EmployeesModule({ farmId, role }) {
   const [postes, setPostes] = useState([]);
   const [departements, setDepartements] = useState([]);
   const [filterDept, setFilterDept] = useState('');
+
+  // Les outils partagés par-dessus le filtre par département, qui reste CÔTÉ SERVEUR (il
+  // pilote getSalaries). Les deux modes d'affichage — trombinoscope et liste — sont conservés :
+  // leurs grilles sont déjà responsives, il ne leur manquait que la recherche et le tri.
+  const outilsRh = useListeOutils(employees, useMemo(() => ({
+    rechercheChamps: (e) => [e.prenom, e.nom, e.posteNom, e.poste, e.departementNom, e.telephone, e.email],
+    filtres: [
+      { id: 'avecCompte', labelKey: 'rh.filtreAvecCompte', test: (e) => Boolean(e.userId) },
+      { id: 'sansPoste', labelKey: 'rh.filtreSansPoste', test: (e) => !e.posteNom && !e.poste },
+    ],
+    groupes: [
+      { id: 'departement', labelKey: 'rh.fieldDepartement', valeur: (e) => e.departementNom || '—' },
+      { id: 'poste', labelKey: 'rh.fieldPoste', valeur: (e) => e.posteNom || e.poste || '—' },
+    ],
+    colonnes: {
+      nom: (e) => `${e.nom || ''} ${e.prenom || ''}`.trim(),
+      poste: (e) => e.posteNom || e.poste,
+      departement: (e) => e.departementNom,
+    },
+    triParDefaut: { colonne: 'nom', sens: 'asc' },
+  }), []));
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid' (trombinoscope)
   const [showMoreAdd, setShowMoreAdd] = useState(false);
   const canManageRh = role === 'admin';
@@ -7330,15 +7351,19 @@ function EmployeesModule({ farmId, role }) {
           <div style={{ background: COLORS.redSoft, color: COLORS.red, borderRadius: RADIUS.card, padding: '9px 12px', fontSize: TEXT.base, marginBottom: SPACE.md }}>{error}</div>
         )}
 
+        <BarreOutilsListe etat={outilsRh} placeholderRecherche={t('rh.rechercher')} />
+
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm, fontSize: TEXT.base, color: COLORS.inkSoft }}>
             <Loader2 size={15} className="spin" /> {t('common.loading')}
           </div>
-        ) : employees.length === 0 ? (
-          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>{filterDept ? t('rh.noEmployeeInDept') : t('rh.noEmployee')}</div>
+        ) : outilsRh.nbFiltrees === 0 ? (
+          <div style={{ fontSize: TEXT.base, color: COLORS.inkSoft }}>
+            {outilsRh.actif ? t('listes.aucunResultat') : (filterDept ? t('rh.noEmployeeInDept') : t('rh.noEmployee'))}
+          </div>
         ) : viewMode === 'grid' ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: SPACE.md }}>
-            {employees.map(emp => (
+            {outilsRh.lignesAffichees.map(emp => (
               <div key={emp.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.card, padding: SPACE.md, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: SPACE.sm, textAlign: 'center' }}>
                 {emp.photo
                   ? <img src={emp.photo} alt="" style={{ width: 64, height: 64, borderRadius: RADIUS.card, objectFit: 'cover' }} />
@@ -7355,7 +7380,7 @@ function EmployeesModule({ farmId, role }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.sm }}>
-            {employees.map(emp => (
+            {outilsRh.lignesAffichees.map(emp => (
               <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: RADIUS.card, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ display: 'flex', gap: SPACE.sm, alignItems: 'center' }}>
                   {emp.photo
@@ -7392,6 +7417,8 @@ function EmployeesModule({ farmId, role }) {
             ))}
           </div>
         )}
+
+        <PiedListe etat={outilsRh} />
       </Card>
 
       <RhReferentiels canManage={canManageRh} onChanged={() => { loadRefs(); loadEmployees(); }} />
