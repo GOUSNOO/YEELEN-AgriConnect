@@ -884,7 +884,7 @@
     "create": "Créer le devis",
     "update": "Mettre à jour",
     "vueListe": "Liste",
-    "vueKanban": "Kanban",
+    "vueKanban": "Par étape",
     "emptyList": "Aucun devis pour l'instant.",
     "emptyAFacturer": "Aucun devis à facturer pour l'instant.",
     "errRequired": "Un client et toutes les lignes de produits (complètes) sont requis.",

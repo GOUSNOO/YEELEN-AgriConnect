@@ -884,7 +884,7 @@
     "create": "Create quote",
     "update": "Update",
     "vueListe": "List",
-    "vueKanban": "Kanban",
+    "vueKanban": "By stage",
     "emptyList": "No quotes yet.",
     "emptyAFacturer": "No quotes to invoice yet.",
     "errRequired": "A customer and all (complete) product lines are required.",
