@@ -914,6 +914,7 @@
     "envoyerWhatsapp": "Send via WhatsApp",
     "envoyerFactureWhatsapp": "Send invoice via WhatsApp",
     "whatsappOuvert": "WhatsApp is opening with the message ready — just press send.",
+    "whatsappPartage": "PDF shared: pick WhatsApp, then the contact.",
     "whatsappErreur": "Could not prepare the WhatsApp message.",
     "whatsappNumero": {
       "absent": "This client has no phone number on file.",

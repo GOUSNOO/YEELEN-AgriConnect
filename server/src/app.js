@@ -67,7 +67,13 @@ const app = express();
 // cors() sans restriction : en développement le frontend (port 8090) et le backend
 // (port 4000) sont sur des origines différentes ; en production les deux passent par
 // le même domaine via Caddy, donc CORS n'est plus vraiment sollicité mais reste ouvert.
-app.use(cors());
+//
+// exposedHeaders : par défaut, le JavaScript d'une page ne peut lire QUE les en-têtes simples
+// d'une réponse cross-origin — Content-Disposition reste invisible même quand le serveur
+// l'envoie. Sans cette ligne, le PDF partagé par WhatsApp arrivait chez le client sous le nom
+// « document.pdf » au lieu de « FAC-2026-0001.pdf » : le serveur donnait le bon nom, le
+// navigateur le cachait, et rien ne le signalait.
+app.use(cors({ exposedHeaders: ['Content-Disposition'] }));
 // Limite relevée à 2mb : la photo de contact est envoyée en base64 dans le corps JSON.
 app.use(express.json({ limit: "2mb" }));
 

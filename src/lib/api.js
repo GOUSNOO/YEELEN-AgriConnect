@@ -1347,6 +1347,21 @@ export async function downloadDevisPdf(id, numero) {
   URL.revokeObjectURL(url);
 }
 
+// Le PDF sous forme de File, pour le partage natif (voir lib/whatsapp.js:partagerFichier).
+// Le nom vient du Content-Disposition posé par le serveur : une seule source de vérité, et
+// c'est lui qui sait que FAC/2026/0001 doit devenir FAC-2026-0001.pdf.
+export async function getDevisPdfFile(id) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/devis/${id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Impossible de générer le PDF.');
+  const blob = await response.blob();
+  const dispo = response.headers.get('content-disposition') || '';
+  const trouve = /filename="?([^";]+)"?/i.exec(dispo);
+  const nom = trouve ? trouve[1] : 'document.pdf';
+  return new File([blob], nom, { type: 'application/pdf' });
+}
 // URL directe (pas de fetch+blob : aucune authentification requise, un <a href> suffit)
 export function devisPublicPdfUrl(token) {
   return `${API_BASE_URL}/devis/public/${token}/pdf`;

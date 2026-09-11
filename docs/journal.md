@@ -4962,3 +4962,49 @@ avec `filename="FAC-2026-0001.pdf"`, tandis qu'un devis non facturé de la même
 `DEV-2026-0001`. Message WhatsApp conforme. Écran Ventes rouvert — la liste des commandes garde
 les numéros de devis, ce qui est sa nature. Entreprise jetable purgée, images Docker
 reconstruites.
+
+### 2026-09-11 — Le PDF part vraiment en pièce jointe WhatsApp
+
+L'utilisateur voulait le PDF **joint** au message, pas un lien. La limite annoncée jusqu'ici
+(« WhatsApp n'accepte aucune pièce jointe ») était vraie du seul mécanisme utilisé — le lien
+click-to-chat `wa.me`, qui ne transporte que du texte — mais pas de la plateforme.
+
+**Le partage natif (Web Share API niveau 2) joint réellement le fichier.**
+`navigator.share({ files: [...] })` ouvre la feuille de partage du système ; l'utilisateur touche
+WhatsApp et le PDF part en pièce jointe. Aucun compte Meta, aucun numéro dédié, aucun coût — la
+Cloud API restait l'autre voie, avec vérification d'entreprise et facturation par conversation,
+et elle a été écartée à nouveau.
+
+**Le compromis, énoncé à l'utilisateur avant de coder** : aucun des deux mécanismes ne fait les
+deux. `wa.me` cible le numéro du client mais sans fichier ; le partage natif joint le fichier mais
+laisse choisir le contact dans WhatsApp. Un geste de plus contre une vraie pièce jointe.
+
+Le bouton tente donc le partage d'abord et retombe sur le lien quand il n'est pas disponible
+(ordinateur, navigateur sans support fichiers). `partagerFichier` distingue **trois** issues et
+non deux : `partage`, `annule` et `indisponible` — parce qu'un utilisateur qui ferme la feuille de
+partage vient précisément de renoncer, et enchaîner sur le lien ferait exactement le contraire de
+ce qu'il demande. Le cas `NotAllowedError` (activation du geste expirée pendant la génération du
+PDF, Safari est strict) retombe sur le lien.
+
+#### Le défaut CORS, trouvé en vérifiant
+
+Premier essai en navigateur : le fichier partagé s'appelait **`document.pdf`**. Le serveur
+envoyait pourtant le bon `Content-Disposition: filename="FAC-2026-0001.pdf"` — mais le JavaScript
+d'une page ne peut lire que les en-têtes **simples** d'une réponse cross-origin, et
+`Content-Disposition` n'en fait pas partie. `cors()` sans `exposedHeaders` le masquait donc, sans
+la moindre erreur : le client aurait reçu sa facture sous le nom « document.pdf ». Corrigé à la
+source (`app.use(cors({ exposedHeaders: ['Content-Disposition'] }))`) plutôt qu'en reconstruisant
+le nom côté client — le serveur reste seul à savoir que `FAC/2026/0001` devient
+`FAC-2026-0001.pdf`.
+
+**Vérification** — 6 tests frontend ajoutés sur `peutPartagerFichier`/`partagerFichier` (chemin
+non exerçable sur un poste de bureau : `navigator` est simulé, sinon rien ne couvrirait ce code
+avant le téléphone de l'utilisateur), **136/136** frontend, **439/439** intégration, build et
+`oxlint` verts. En navigateur, les deux chemins exercés sur une entreprise jetable : avec partage
+simulé, un fichier `FAC-2026-0001.pdf` de 1875 octets — le vrai PDF — part avec le bon texte et
+aucun lien n'est ouvert ; sans support du partage, le lien `wa.me` prend le relais vers le bon
+numéro. Entreprise purgée, images Docker reconstruites.
+
+**Ce qui reste non vérifiable ici** : l'ouverture réelle de la feuille de partage et l'arrivée du
+PDF dans WhatsApp, qui demandent un vrai téléphone. Le chemin de code est exercé, le rendu final
+ne l'est pas.

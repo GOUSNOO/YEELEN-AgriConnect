@@ -914,6 +914,7 @@
     "envoyerWhatsapp": "Envoyer par WhatsApp",
     "envoyerFactureWhatsapp": "Envoyer la facture par WhatsApp",
     "whatsappOuvert": "WhatsApp s'ouvre avec le message prêt — il reste à appuyer sur envoyer.",
+    "whatsappPartage": "PDF partagé : choisissez WhatsApp puis le contact.",
     "whatsappErreur": "Impossible de préparer le message WhatsApp.",
     "whatsappNumero": {
       "absent": "Ce client n'a pas de numéro de téléphone renseigné.",

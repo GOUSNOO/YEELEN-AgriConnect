@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setLanguage, hasExplicitLanguage, SUPPORTED_LANGS } from './i18n';
 import { useLocale, fmtDate, fmtMoneyWith as previewMoney, fmtDateWith as previewDate, DEVISES, LOCALES, PAYS, FUSEAUX, getLocaleConfig, jourEntreprise } from './lib/locale.jsx';
-import { normaliserNumeroWhatsapp, lienWhatsapp } from './lib/whatsapp.js';
+import { normaliserNumeroWhatsapp, lienWhatsapp, partagerFichier } from './lib/whatsapp.js';
 import {
   Sprout, Droplet, Thermometer, Egg, ShoppingCart, Truck, Wallet, LogOut,
   Plus, Trash2, ToggleLeft, ToggleRight, Package, TrendingUp,
@@ -43,6 +43,7 @@ import {
   getProduitTemplates,
   getDevisListe, getDevisDetail, getDevisJournal, createDevis, updateDevis, deleteDevis, envoyerDevis, facturerDevis, getVentesLedger,
   preparerLienWhatsapp,
+  getDevisPdfFile,
   getPaymentTerms, createPaymentTerm, deletePaymentTerm,
   getTaxes,
   getActivites, createActivite, updateActivite, deleteActivite,
@@ -1051,14 +1052,45 @@ function DevisModule({ clientsListe, filtreStatut }) {
     }
   };
 
-  // Envoi par WhatsApp : le serveur ne fait que préparer le lien public et le message ; on
-  // ouvre ensuite WhatsApp côté client (lien click-to-chat), c'est l'utilisateur qui envoie.
-  // Le numéro doit être au format international — on ne devine pas l indicatif, un mauvais
-  // numéro ouvrirait une conversation avec un inconnu.
+  // Envoi par WhatsApp. Deux chemins, et un seul permet de joindre le PDF :
+  //
+  //   1. Le partage natif du système (Web Share API) joint le fichier pour de vrai, mais laisse
+  //      l'utilisateur choisir le contact dans WhatsApp. Disponible sur mobile, c'est-à-dire là
+  //      où on envoie une facture par WhatsApp.
+  //   2. Le lien click-to-chat cible le numéro du client mais ne transporte QUE du texte.
+  //
+  // Aucun des deux ne fait les deux — c'est une limite de WhatsApp, pas du code. On tente donc le
+  // partage d'abord (la pièce jointe est ce qui est demandé) et on retombe sur le lien s'il n'est
+  // pas disponible. Le serveur, lui, ne fait que préparer le lien public et le message.
   const handleEnvoyerWhatsapp = async (id) => {
     setActionBusy(true);
     try {
       const { telephone, message } = await preparerLienWhatsapp(id);
+
+      // Le PDF est préparé avant de départager : un échec de génération doit se voir, pas passer
+      // silencieusement au repli comme si de rien n'était.
+      let fichier = null;
+      try {
+        fichier = await getDevisPdfFile(id);
+      } catch (err) {
+        console.error('[DevisModule whatsapp pdf]', err);
+      }
+
+      if (fichier) {
+        const resultat = await partagerFichier(fichier, message);
+        // Annulé = l'utilisateur a fermé la feuille de partage : enchaîner sur le lien serait
+        // exactement le contraire de ce qu'il vient de demander.
+        if (resultat === 'annule') return;
+        if (resultat === 'partage') {
+          notifySuccess(t('devis.whatsappPartage'));
+          await load();
+          if (detailId === id) await openDetail(id);
+          return;
+        }
+      }
+
+      // Repli : le numéro doit être au format international — on ne devine pas l'indicatif, un
+      // mauvais numéro ouvrirait une conversation avec un inconnu.
       const num = normaliserNumeroWhatsapp(telephone);
       if (!num.ok) {
         notifyError(new Error(t(`devis.whatsappNumero.${num.raison}`)), t('devis.whatsappErreur'));
