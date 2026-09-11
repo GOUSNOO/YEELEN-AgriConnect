@@ -65,6 +65,15 @@ export async function chargerCatalogue(code) {
   return enCours[code];
 }
 
+// L'attribut lang du document suit la langue de l'interface. Il était figé à « en » dans
+// index.html alors que l'application est francophone par défaut : un lecteur d'écran lisait
+// donc le français avec une phonétique anglaise, et les moteurs indexaient la mauvaise langue.
+const appliquerLangueDocument = (code) => {
+  if (typeof document !== 'undefined') document.documentElement.lang = (code || 'fr').split('-')[0];
+};
+appliquerLangueDocument(i18n.language);
+i18n.on('languageChanged', appliquerLangueDocument);
+
 // La langue détectée au démarrage peut ne pas être le français : on la charge aussitôt.
 chargerCatalogue(i18n.language);
 

@@ -1348,7 +1348,8 @@
       "expense_depreciation": "Dotations aux amortissements",
       "expense_direct_cost": "Coût des ventes",
       "off_balance": "Hors bilan"
-    }
+    },
+    "rechercherCompte": "Rechercher un compte…"
   },
   "finances": {
     "loading": "Chargement des finances…",

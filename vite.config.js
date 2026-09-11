@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { COLORS } from './src/lib/theme.js'
 
 export default defineConfig({
   plugins: [
@@ -12,8 +13,14 @@ export default defineConfig({
         name: 'YEELEN AgriConnect',
         short_name: 'AgriConnect',
         description: 'Suivi des cultures, irrigation et gestion agricole',
-        theme_color: '#38A169', // Mise à jour avec le nouveau vert principal
-        background_color: '#F7FAFC', // Mise à jour avec le fond général
+        // Lues depuis theme.js plutôt que recopiées : ces deux valeurs étaient restées sur
+        // l'ancienne palette (#38A169 sur #F7FAFC) longtemps après le passage au terreux, si
+        // bien que l'écran de démarrage et la barre système d'une application installée ne
+        // ressemblaient plus à l'application. Le fichier n'a aucune dépendance, donc la config
+        // de build peut le lire — et la divergence ne peut plus se reproduire en silence.
+        theme_color: COLORS.green,
+        background_color: COLORS.bg,
+        lang: 'fr',
         display: 'standalone',
         start_url: '/',
         icons: [

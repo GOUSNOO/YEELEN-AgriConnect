@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { createPaymentTerm, deletePaymentTerm } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { useListeOutils, TableauListe } from './ListeOutils.jsx';
 import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Référentiel compact des conditions de paiement (account.payment.term-like), rendu dans
@@ -44,6 +45,26 @@ export default function PaymentTermsPanel({ terms, onChange, ouvertParDefaut }) 
     }
   };
 
+  const outilsTermes = useListeOutils(terms || [], useMemo(() => ({
+    rechercheChamps: (x) => [x.name],
+    filtres: [],
+    groupes: [],
+    colonnes: { nom: (x) => x.name },
+    triParDefaut: { colonne: 'nom', sens: 'asc' },
+  }), []));
+
+  const colonnesTermes = useMemo(() => [
+    { id: 'nom', labelKey: 'paymentTerms.name', principale: true, rendu: (x) => <strong>{x.name}</strong> },
+    { id: 'repartition', labelKey: 'paymentTerms.repartition',
+      rendu: (x) => <span style={{ color: COLORS.inkSoft }}>{resume(x)}</span> },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (x) => (
+        <button onClick={() => supprimer(x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex', marginLeft: 'auto' }}>
+          <Trash2 size={14} />
+        </button>
+      ) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t]);
   const supprimer = async (id) => {
     if (!window.confirm(t('paymentTerms.deleteConfirm'))) return;
     try {
@@ -76,24 +97,9 @@ export default function PaymentTermsPanel({ terms, onChange, ouvertParDefaut }) 
             <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
           </form>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
-              <thead><tr style={{ color: COLORS.inkSoft }}>
-                <th style={{ width: '38%' }}>{t('paymentTerms.name')}</th>
-                <th style={{ width: '56%' }}>{t('paymentTerms.repartition')}</th>
-                <th style={{ width: '6%' }} />
-              </tr></thead>
-              <tbody>
-                {(terms || []).map((term) => (
-                  <tr key={term.id}>
-                    <td><strong>{term.name}</strong></td>
-                    <td style={{ color: COLORS.inkSoft }}>{resume(term)}</td>
-                    <td><button onClick={() => supprimer(term.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* Même traitement que les taxes : quelques lignes, donc le rendu en cartes sans
+              barre d'outils ni pagination. */}
+          <TableauListe etat={outilsTermes} colonnes={colonnesTermes} cle={(x) => x.id} />
         </div>
       )}
     </Card>

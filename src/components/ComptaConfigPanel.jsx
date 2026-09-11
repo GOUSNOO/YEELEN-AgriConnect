@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import {
@@ -6,6 +6,7 @@ import {
   getAccounts, createAccount, deleteAccount,
 } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { useListeOutils, BarreOutilsListe, TableauListe, PiedListe } from './ListeOutils.jsx';
 import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Référentiel compact « Comptabilité — Configuration » : journaux (account.journal-like) +
@@ -61,6 +62,54 @@ export default function ComptaConfigPanel({ ouvertParDefaut }) {
     finally { setBusy(false); }
   };
 
+  const outilsJournaux = useListeOutils(journals, useMemo(() => ({
+    rechercheChamps: (j) => [j.code, j.name],
+    filtres: [],
+    groupes: [],
+    colonnes: { code: (j) => j.code },
+    triParDefaut: { colonne: 'code', sens: 'asc' },
+  }), []));
+
+  const outilsComptes = useListeOutils(accounts, useMemo(() => ({
+    rechercheChamps: (a) => [a.code, a.name],
+    filtres: [
+      { id: 'lettrables', labelKey: 'comptaConfig.reconcile', test: (a) => a.reconcile },
+    ],
+    groupes: [
+      { id: 'type', labelKey: 'comptaConfig.accountType', valeur: (a) => a.accountType },
+    ],
+    colonnes: { code: (a) => a.code, nom: (a) => a.name },
+    triParDefaut: { colonne: 'code', sens: 'asc' },
+  }), []));
+
+  const colonnesJournaux = useMemo(() => [
+    { id: 'code', labelKey: 'comptaConfig.code', triable: true, principale: true, rendu: (j) => <strong>{j.code}</strong> },
+    { id: 'nom', labelKey: 'comptaConfig.name', rendu: (j) => j.name },
+    { id: 'type', labelKey: 'comptaConfig.type', rendu: (j) => <span style={{ color: INK_SOFT }}>{t(`comptaConfig.journalType.${j.type}`)}</span> },
+    { id: 'securise', labelKey: 'comptaConfig.secured',
+      rendu: (j) => (
+        <button
+          onClick={() => activerHash(j)}
+          title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
+          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? COLORS.green : COLORS.inkFaint, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.sm }}
+        >
+          <Lock size={13} /> {j.restrictModeHashTable ? t('comptaConfig.hashActive') : t('comptaConfig.hashInactive')}
+        </button>
+      ) },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (j) => <button onClick={() => supprJournal(j.id)} style={{ ...btnSuppr, marginLeft: 'auto' }}><Trash2 size={14} /></button> },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t]);
+
+  const colonnesComptes = useMemo(() => [
+    { id: 'code', labelKey: 'comptaConfig.code', triable: true, principale: true, rendu: (a) => <strong>{a.code}</strong> },
+    { id: 'nom', labelKey: 'comptaConfig.name', triable: true, rendu: (a) => a.name },
+    { id: 'type', labelKey: 'comptaConfig.accountType', rendu: (a) => <span style={{ color: INK_SOFT }}>{t(`comptaConfig.accType.${a.accountType}`)}</span> },
+    { id: 'lettrable', labelKey: 'comptaConfig.reconcile', rendu: (a) => (a.reconcile ? '✓' : '') },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (a) => <button onClick={() => supprCompte(a.id)} style={{ ...btnSuppr, marginLeft: 'auto' }}><Trash2 size={14} /></button> },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t]);
   const supprJournal = async (id) => {
     if (!window.confirm(t('comptaConfig.journalDeleteConfirm'))) return;
     try { await deleteJournal(id); notifySuccess(t('comptaConfig.journalDeleted')); recharger(); }
@@ -100,36 +149,8 @@ export default function ComptaConfigPanel({ ouvertParDefaut }) {
               </Select>
               <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
             </form>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead><tr style={{ color: INK_SOFT }}>
-                  <th style={{ width: '10%' }}>{t('comptaConfig.code')}</th>
-                  <th style={{ width: '40%' }}>{t('comptaConfig.name')}</th>
-                  <th style={{ width: '20%' }}>{t('comptaConfig.type')}</th>
-                  <th style={{ width: '18%' }}>{t('comptaConfig.secured')}</th>
-                  <th style={{ width: '12%' }} />
-                </tr></thead>
-                <tbody>
-                  {journals.map((j) => (
-                    <tr key={j.id}>
-                      <td><strong>{j.code}</strong></td>
-                      <td>{j.name}</td>
-                      <td style={{ color: INK_SOFT }}>{t(`comptaConfig.journalType.${j.type}`)}</td>
-                      <td>
-                        <button
-                          onClick={() => activerHash(j)}
-                          title={j.restrictModeHashTable ? t('comptaConfig.hashOn') : t('comptaConfig.hashEnable')}
-                          style={{ background: 'none', border: 'none', cursor: j.restrictModeHashTable ? 'default' : 'pointer', color: j.restrictModeHashTable ? COLORS.green : COLORS.inkFaint, display: 'flex', alignItems: 'center', gap: SPACE.xs, fontSize: TEXT.sm }}
-                        >
-                          <Lock size={13} /> {j.restrictModeHashTable ? t('comptaConfig.hashActive') : t('comptaConfig.hashInactive')}
-                        </button>
-                      </td>
-                      <td><button onClick={() => supprJournal(j.id)} style={btnSuppr}><Trash2 size={14} /></button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Cinq journaux par défaut, liste quasi fixe : rendu carte, sans barre d'outils. */}
+            <TableauListe etat={outilsJournaux} colonnes={colonnesJournaux} cle={(j) => j.id} />
           </div>
 
           <div>
@@ -142,28 +163,10 @@ export default function ComptaConfigPanel({ ouvertParDefaut }) {
               </Select>
               <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
             </form>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead><tr style={{ color: INK_SOFT }}>
-                  <th style={{ width: '12%' }}>{t('comptaConfig.code')}</th>
-                  <th style={{ width: '40%' }}>{t('comptaConfig.name')}</th>
-                  <th style={{ width: '30%' }}>{t('comptaConfig.accountType')}</th>
-                  <th style={{ width: '12%' }}>{t('comptaConfig.reconcile')}</th>
-                  <th style={{ width: '6%' }} />
-                </tr></thead>
-                <tbody>
-                  {accounts.map((a) => (
-                    <tr key={a.id}>
-                      <td><strong>{a.code}</strong></td>
-                      <td>{a.name}</td>
-                      <td style={{ color: INK_SOFT }}>{t(`comptaConfig.accType.${a.accountType}`)}</td>
-                      <td>{a.reconcile ? '✓' : ''}</td>
-                      <td><button onClick={() => supprCompte(a.id)} style={btnSuppr}><Trash2 size={14} /></button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Un plan de comptes grossit vraiment, lui : recherche et pied de liste justifiés. */}
+            <BarreOutilsListe etat={outilsComptes} placeholderRecherche={t('comptaConfig.rechercherCompte')} />
+            <TableauListe etat={outilsComptes} colonnes={colonnesComptes} cle={(a) => a.id} />
+            <PiedListe etat={outilsComptes} />
           </div>
         </div>
       )}

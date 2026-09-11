@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { createTax, deleteTax } from '../lib/api.js';
 import { Card, Button, Field, Select, notifyError, notifySuccess } from './ui.jsx';
+import { useListeOutils, TableauListe } from './ListeOutils.jsx';
 import { COLORS, TEXT, SPACE } from '../lib/theme.js';
 
 // Référentiel compact des taxes réutilisables (account.tax-like), rendu dans DevisModule.
@@ -36,6 +37,29 @@ export default function TaxesPanel({ taxes, onChange, ouvertParDefaut }) {
     }
   };
 
+  const outilsTaxes = useListeOutils(taxes || [], useMemo(() => ({
+    rechercheChamps: (x) => [x.name],
+    filtres: [],
+    groupes: [],
+    colonnes: { nom: (x) => x.name },
+    triParDefaut: { colonne: 'nom', sens: 'asc' },
+  }), []));
+
+  const colonnesTaxes = useMemo(() => [
+    { id: 'nom', labelKey: 'taxes.name', principale: true, rendu: (x) => <strong>{x.name}</strong> },
+    { id: 'type', labelKey: 'taxes.amountType',
+      rendu: (x) => <span style={{ color: COLORS.inkSoft }}>{x.amountType === 'fixed' ? t('taxes.amountTypeFixed') : t('taxes.amountTypePercent')}</span> },
+    { id: 'montant', labelKey: 'taxes.amount', alignement: 'right',
+      rendu: (x) => (x.amountType === 'fixed' ? x.amount : `${x.amount} %`) },
+    { id: 'incluse', labelKey: 'taxes.included', rendu: (x) => (x.priceInclude ? '✓' : '') },
+    { id: 'actions', labelKey: 'common.actions', alignement: 'right', masqueeSurCarte: true,
+      rendu: (x) => (
+        <button onClick={() => supprimer(x.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex', marginLeft: 'auto' }}>
+          <Trash2 size={14} />
+        </button>
+      ) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t]);
   const supprimer = async (id) => {
     if (!window.confirm(t('taxes.deleteConfirm'))) return;
     try {
@@ -69,28 +93,10 @@ export default function TaxesPanel({ taxes, onChange, ouvertParDefaut }) {
             <Button type="submit" variant="outline" disabled={busy}><Plus size={14} /> {t('common.add')}</Button>
           </form>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
-              <thead><tr style={{ color: COLORS.inkSoft }}>
-                <th style={{ width: '42%' }}>{t('taxes.name')}</th>
-                <th style={{ width: '20%' }}>{t('taxes.amountType')}</th>
-                <th style={{ width: '18%', textAlign: 'right' }}>{t('taxes.amount')}</th>
-                <th style={{ width: '14%' }}>{t('taxes.included')}</th>
-                <th style={{ width: '6%' }} />
-              </tr></thead>
-              <tbody>
-                {(taxes || []).map((tax) => (
-                  <tr key={tax.id}>
-                    <td><strong>{tax.name}</strong></td>
-                    <td style={{ color: COLORS.inkSoft }}>{tax.amountType === 'fixed' ? t('taxes.amountTypeFixed') : t('taxes.amountTypePercent')}</td>
-                    <td style={{ textAlign: 'right' }}>{tax.amountType === 'fixed' ? tax.amount : `${tax.amount} %`}</td>
-                    <td>{tax.priceInclude ? '✓' : ''}</td>
-                    <td><button onClick={() => supprimer(tax.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.red, display: 'flex' }}><Trash2 size={14} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* TableauListe sans barre d'outils ni pied : ce référentiel compte quelques lignes,
+              une recherche et une pagination y seraient du bruit. Ce qui lui manquait, c'est le
+              rendu en cartes — cinq colonnes ne tiennent pas dans 329 px. */}
+          <TableauListe etat={outilsTaxes} colonnes={colonnesTaxes} cle={(tax) => tax.id} />
         </div>
       )}
     </Card>

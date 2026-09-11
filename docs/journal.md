@@ -5125,3 +5125,48 @@ clés **inexistantes** : corrigées en `rh.fieldDepartement` / `rh.fieldPoste` a
 téléphone » exercé sur les contacts (isole le seul contact concerné), tri alphabétique des
 salariés vérifié, les deux modes d'affichage RH exercés, et les deux écrans contrôlés en 375 px
 comme en largeur bureau. Entreprise jetable purgée, image frontend reconstruite.
+
+### 2026-09-11 — Référentiels comptables et manifeste PWA : fin de l'étape 1
+
+#### Le manifeste portait encore l'ancienne palette
+
+`theme_color: '#38A169'` sur `background_color: '#F7FAFC'` — l'émeraude et le gris-bleu abandonnés
+le 2026-09-09. L'écran de démarrage et la barre système d'une application installée ne
+ressemblaient donc plus à l'application. Les **icônes**, elles, étaient déjà terreuses : seules
+les couleurs déclarées étaient périmées.
+
+Plutôt que de recopier les bonnes valeurs — ce qui divergerait à nouveau — `vite.config.js`
+**importe `theme.js`**. Le fichier n'a aucune dépendance, la config de build peut donc le lire, et
+la divergence ne peut plus se reproduire en silence.
+
+**Deux défauts de langue trouvés en passant.** Le manifeste déclarait `lang: "en"` sous une
+description française, et `index.html` portait `<html lang="en">` : un lecteur d'écran lisait le
+français avec une phonétique anglaise. Corrigé à la source plutôt qu'en figeant `fr` —
+`i18n` pose désormais `document.documentElement.lang` au démarrage et à chaque changement de
+langue, donc l'attribut suit réellement l'interface.
+
+#### Les référentiels : un arbitrage, pas une recette
+
+Taxes, conditions de paiement et journaux comptent quelques lignes. Leur imposer recherche,
+filtres et pagination aurait été disproportionné : le pied de liste afficherait « 1-3 sur 3 », du
+bruit pur. Ce qui leur manquait vraiment, c'est le **rendu en cartes** — cinq colonnes ne tiennent
+pas dans 329 px. Ils reçoivent donc `TableauListe` seul, sans barre d'outils ni pied.
+
+Le **plan de comptes** est le seul à mériter le traitement complet : un vrai plan comptable
+grossit, celui-ci peut dépasser la page. Recherche, filtre « lettrable », regroupement par type et
+pied de liste.
+
+**Vérification** — 142/142 frontend, build et `oxlint` verts (zéro avertissement sur les trois
+fichiers). En navigateur : les quatre référentiels rendus correctement en largeur bureau, et en
+375 px **plus aucun tableau sur l'écran** — tout est en cartes, sans débordement. Le manifeste
+généré porte bien `#3F6B3B` / `#FBFAF4` et `lang: fr`, `dist/index.html` aussi. Entreprise jetable
+purgée, image frontend reconstruite.
+
+**Fausse alerte notée pour mémoire** : j'ai cru le plan de comptes disparu parce qu'une capture
+s'arrêtait avant lui. Le DOM disait le contraire — mesurer avant de conclure vaut aussi pour les
+captures d'écran.
+
+**Étape 1 terminée.** Onze écrans harmonisés : Devis, Achats, Stock par emplacement, Factures,
+Équipements, Registre des intrants, Articles, Contacts, RH, plus les quatre référentiels
+comptables. Reste, pour aller vers l'application mobile : le tableau des lots imbriqué dans un
+dépli (dense sur téléphone), et le choix d'une technologie d'empaquetage.
