@@ -1,5 +1,6 @@
-import { renderHook, act } from '@testing-library/react';
-import { useListeOutils, PAR_PAGE } from './ListeOutils.jsx';
+import React from 'react';
+import { renderHook, act, render } from '@testing-library/react';
+import { useListeOutils, PAR_PAGE, TableauListe, useAffichageEtroit } from './ListeOutils.jsx';
 
 // Le hook porte toute la logique partagée par les listes de devis et d'achats : c'est du calcul
 // pur derrière de l'état React, donc testable sans monter un écran entier.
@@ -137,5 +138,92 @@ describe('useListeOutils', () => {
     expect(result.current.total).toBe(0);
     expect(result.current.lignesAffichees).toEqual([]);
     expect(result.current.nbPages).toBe(1);
+  });
+});
+
+// ─── Rendu carte sur écran étroit (2026-09-11) ───
+//
+// Mesuré avant ce changement : la liste des devis réclamait 802 px dans une fenêtre de 329, et
+// une ligne faisait 88 px de haut. Le tableau n'est pas réparable à cette largeur — c'est la
+// forme qui ne convient pas. En dessous du seuil, chaque ligne devient une carte.
+//
+// Deux choses se testent ici et nulle part ailleurs : le garde-fou matchMedia (jsdom ne le
+// fournit pas — sans lui, TOUTE la suite tomberait, pas seulement ces tests) et le fait que les
+// écrans appelants n'aient rien à déclarer de plus pour en profiter.
+
+// Simule matchMedia, absent de jsdom. `correspond` décide si la requête « écran étroit » matche.
+function poserMatchMedia(correspond) {
+  window.matchMedia = jest.fn().mockImplementation((query) => ({
+    matches: correspond,
+    media: query,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  }));
+}
+
+describe('useAffichageEtroit', () => {
+  afterEach(() => { delete window.matchMedia; });
+
+  test('faux quand matchMedia est absent : le garde-fou qui protège toute la suite de tests', () => {
+    delete window.matchMedia;
+    const { result } = renderHook(() => useAffichageEtroit());
+    expect(result.current).toBe(false);
+  });
+
+  test('suit la requête média dans les deux sens', () => {
+    poserMatchMedia(true);
+    expect(renderHook(() => useAffichageEtroit()).result.current).toBe(true);
+    poserMatchMedia(false);
+    expect(renderHook(() => useAffichageEtroit()).result.current).toBe(false);
+  });
+});
+
+describe('TableauListe — bascule tableau / cartes', () => {
+  const LIGNES = [
+    { id: 1, numero: 'DEV-0001', client: 'Coopérative', total: 45000, statut: 'Brouillon' },
+    { id: 2, numero: 'DEV-0002', client: 'Ferme Sud', total: 30000, statut: 'Signé' },
+  ];
+  const COLONNES = [
+    { id: 'numero', labelKey: 'Numéro', principale: true, rendu: (d) => d.numero },
+    { id: 'client', labelKey: 'Client', rendu: (d) => d.client },
+    { id: 'total', labelKey: 'Total', somme: (d) => d.total, rendu: (d) => `${d.total} F` },
+    { id: 'actions', labelKey: 'Actions', masqueeSurCarte: true, rendu: () => 'boutons' },
+  ];
+
+  function Liste() {
+    const etat = useListeOutils(LIGNES, { rechercheChamps: (d) => [d.numero], filtres: [], groupes: [], colonnes: {} });
+    return <TableauListe etat={etat} colonnes={COLONNES} cle={(d) => d.id} />;
+  }
+
+  afterEach(() => { delete window.matchMedia; });
+
+  test('écran large : un vrai tableau, avec son pied de totaux', () => {
+    poserMatchMedia(false);
+    const { container } = render(<Liste />);
+    expect(container.querySelector('table')).not.toBeNull();
+    // Le total porte sur l'ensemble filtré, pas sur la page affichée.
+    expect(container.querySelector('tfoot').textContent).toContain('75000');
+  });
+
+  test('écran étroit : plus de tableau, et les mêmes données lisibles', () => {
+    poserMatchMedia(true);
+    const { container, getByText } = render(<Liste />);
+    expect(container.querySelector('table')).toBeNull();
+    expect(getByText('DEV-0001')).toBeTruthy();
+    expect(getByText('Coopérative')).toBeTruthy();
+    // La colonne qui porte une somme devient le montant mis en avant.
+    expect(getByText('45000 F')).toBeTruthy();
+  });
+
+  test('écran étroit : le total reste affiché — une liste sans total ne se somme pas de tête', () => {
+    poserMatchMedia(true);
+    const { container } = render(<Liste />);
+    expect(container.textContent).toContain('75000');
+  });
+
+  test('masqueeSurCarte écarte ce qui n’a pas de sens hors tableau', () => {
+    poserMatchMedia(true);
+    const { queryByText } = render(<Liste />);
+    expect(queryByText('boutons')).toBeNull();
   });
 });

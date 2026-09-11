@@ -313,10 +313,96 @@ export function PiedListe({ etat }) {
 // Forme d'une colonne :
 //   { id, labelKey, rendu(ligne), triable?, optionnelle?, masqueeParDefaut?,
 //     somme?(ligne) -> nombre, formatSomme?(total) -> texte, alignement?, style? }
+// Sous ce seuil, un tableau ne se lit plus : mesuré sur la liste des devis en 375 px, il
+// réclamait 802 px dans une fenêtre de 329, et une seule ligne occupait 88 px de haut. Aucune
+// technologie mobile ne corrige cela — c'est la forme « tableau » qui ne convient pas, pas son
+// enveloppe. En dessous, chaque ligne devient une carte.
+const SEUIL_CARTES = 700;
+
+// matchMedia plutôt qu'un écouteur de redimensionnement : le navigateur ne prévient que lorsque
+// le seuil est franchi, au lieu d'un rendu à chaque pixel. Le garde-fou `typeof` n'est pas
+// décoratif — jsdom ne fournit pas matchMedia, et sans lui toute la suite de tests tomberait.
+export function useAffichageEtroit(seuil = SEUIL_CARTES) {
+  const supporte = typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+  const [etroit, setEtroit] = useState(() => (supporte ? window.matchMedia(`(max-width: ${seuil}px)`).matches : false));
+
+  useEffect(() => {
+    if (!supporte) return undefined;
+    const mq = window.matchMedia(`(max-width: ${seuil}px)`);
+    const surChangement = (e) => setEtroit(e.matches);
+    setEtroit(mq.matches);
+    mq.addEventListener('change', surChangement);
+    return () => mq.removeEventListener('change', surChangement);
+  }, [seuil, supporte]);
+
+  return etroit;
+}
+
+// Une ligne rendue en carte. La colonne marquée `principale` (à défaut la première) fait le
+// titre ; celle qui porte une `somme` — un montant, une quantité — passe à droite du titre,
+// parce que c'est ce qu'on cherche du regard dans une liste. Le reste s'empile en paires
+// libellé/valeur, `masqueeSurCarte` permettant d'écarter ce qui n'a pas de sens hors tableau.
+function CarteLigne({
+  ligne, colonnes, cle: k, t, onLigneClic, attenuee, selectionActive, selectionnee, basculerSelection,
+}) {
+  const titre = colonnes.find(c => c.principale) || colonnes[0];
+  const montant = colonnes.find(c => c.somme && c.id !== titre?.id);
+  const details = colonnes.filter(c => c.id !== titre?.id && c.id !== montant?.id && !c.masqueeSurCarte);
+
+  return (
+    <div
+      onClick={onLigneClic ? () => onLigneClic(ligne) : undefined}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: SPACE.xs,
+        padding: `${SPACE.md}px ${SPACE.lg}px`,
+        borderBottom: `1px solid ${COLORS.border}`,
+        cursor: onLigneClic ? 'pointer' : 'default',
+        opacity: attenuee ? 0.45 : 1,
+        background: selectionnee ? COLORS.greenSoft : undefined,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.sm }}>
+        {selectionActive && (
+          <input
+            type="checkbox"
+            checked={selectionnee}
+            onChange={() => basculerSelection(k)}
+            onClick={e => e.stopPropagation()}
+            aria-label={t('listes.selectionnerLigne')}
+            style={{ cursor: 'pointer' }}
+          />
+        )}
+        <span style={{ fontWeight: 600, fontSize: TEXT.md, color: COLORS.ink, minWidth: 0, flex: 1 }}>
+          {titre ? titre.rendu(ligne) : null}
+        </span>
+        {montant && (
+          <span style={{ fontWeight: 700, fontSize: TEXT.base, whiteSpace: 'nowrap' }}>{montant.rendu(ligne)}</span>
+        )}
+      </div>
+      {details.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: `${SPACE.xs}px ${SPACE.md}px` }}>
+          {details.map(c => {
+            const valeur = c.rendu(ligne);
+            // Une valeur vide n'a pas à occuper une ligne sur un écran de téléphone.
+            if (valeur === null || valeur === undefined || valeur === '' || valeur === '—') return null;
+            return (
+              <span key={c.id} style={{ display: 'inline-flex', alignItems: 'baseline', gap: SPACE.xs, fontSize: TEXT.sm }}>
+                <span style={{ color: COLORS.inkFaint }}>{t(c.labelKey)}</span>
+                <span style={{ color: COLORS.inkSoft }}>{valeur}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TableauListe({
   etat, colonnes, cle, onLigneClic, ligneAttenuee, selectionActive, actionsGroupees, vide,
 }) {
   const { t } = useTranslation();
+  const etroit = useAffichageEtroit();
   useEffect(() => { etat.initialiserColonnes(colonnes); }, [etat, colonnes]);
   const visibles = colonnes.filter(c => !etat.colonnesMasquees.includes(c.id));
   const nbColonnes = visibles.length + (selectionActive ? 1 : 0);
@@ -377,6 +463,67 @@ export function TableauListe({
         </div>
       )}
 
+      {etroit ? (
+        // Mêmes données, mêmes colonnes déclarées, mêmes totaux : seule la forme change. Les
+        // écrans appelants n'ont rien à faire — c'est ce qui permet d'harmoniser d'un coup au
+        // lieu de reprendre chaque liste à la main.
+        <div>
+          {etat.groupes
+            ? etat.groupes.map(groupe => (
+              <React.Fragment key={groupe.cle}>
+                <button
+                  type="button"
+                  onClick={() => etat.basculerGroupe(groupe.cle)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: SPACE.sm, width: '100%', textAlign: 'left',
+                    background: COLORS.surfaceAlt, border: 'none', cursor: 'pointer',
+                    padding: `${SPACE.sm}px ${SPACE.lg}px`, fontSize: TEXT.base, fontWeight: 600, color: COLORS.ink,
+                  }}
+                >
+                  {groupe.replie ? '▸' : '▾'} {groupe.libelle}
+                  <span style={{ marginLeft: 'auto', fontWeight: 400, color: COLORS.inkSoft }}>{groupe.membres.length}</span>
+                </button>
+                {!groupe.replie && groupe.membres.map(ligne => (
+                  <CarteLigne
+                    key={cle(ligne)} ligne={ligne} colonnes={visibles} cle={cle(ligne)} t={t}
+                    onLigneClic={onLigneClic}
+                    attenuee={Boolean(ligneAttenuee && ligneAttenuee(ligne))}
+                    selectionActive={selectionActive}
+                    selectionnee={etat.selection.includes(cle(ligne))}
+                    basculerSelection={etat.basculerSelection}
+                  />
+                ))}
+              </React.Fragment>
+            ))
+            : etat.lignesAffichees.map(ligne => (
+              <CarteLigne
+                key={cle(ligne)} ligne={ligne} colonnes={visibles} cle={cle(ligne)} t={t}
+                onLigneClic={onLigneClic}
+                attenuee={Boolean(ligneAttenuee && ligneAttenuee(ligne))}
+                selectionActive={selectionActive}
+                selectionnee={etat.selection.includes(cle(ligne))}
+                basculerSelection={etat.basculerSelection}
+              />
+            ))}
+
+          {sommes.length > 0 && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: SPACE.xs,
+              padding: `${SPACE.md}px ${SPACE.lg}px`, borderTop: `2px solid ${COLORS.border}`, fontWeight: 700,
+            }}>
+              {sommes.map(c => {
+                const total = etat.filtrees.reduce((acc, ligne) => acc + (Number(c.somme(ligne)) || 0), 0);
+                return (
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE.md, fontSize: TEXT.base }}>
+                    <span>{t(c.labelKey)}</span>
+                    <span>{c.formatSomme ? c.formatSomme(total) : total}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
       <div style={{ overflowX: 'auto' }}>
         <table className="data-table">
           <thead>
@@ -431,6 +578,7 @@ export function TableauListe({
           )}
         </table>
       </div>
+      )}
     </>
   );
 }
