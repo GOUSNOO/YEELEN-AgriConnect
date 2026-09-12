@@ -5,6 +5,68 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Rôles par entreprise — étape 2 : le mode observation — 2026-09-13
+
+Le garde des permissions est en place et **ne refuse rien**. Il calcule ce qu'il refuserait et
+le journalise. C'est le filet avant la bascule : une carte incomplète bloquerait de vrais
+utilisateurs sur de vraies opérations, et on ne le découvrirait qu'en production.
+
+**`server/src/permissions/rolesParDefaut.js`** — les six rôles actuels traduits en couples
+ressource × action. Ce fichier a deux vies : référence du mode observation maintenant, graine
+semée en base à l'étape 3 — après quoi chaque entreprise sera libre de tout renommer et
+redéfinir. Choix assumé : ces définitions expriment **l'intention que l'interface laisse
+entendre**, pas le comportement actuel du serveur. Les deux diffèrent, puisque 21 fichiers de
+routes n'ont aucune garde ; reproduire cette permissivité accidentelle viderait le chantier de
+son sens. L'écart est exactement ce que l'observation doit révéler.
+
+**`server/src/middleware/permissionGuard.js`** — monté dans `app.js` juste après `moduleGuard`.
+
+Deux difficultés techniques, résolues :
+
+- **Un middleware global ignore le motif de route apparié.** `req.route` n'existe que dans le
+  handler de la route, pas au niveau de l'application : impossible de savoir que
+  `/api/devis/42/facturer` correspond à `/api/devis/:id/facturer`. On reconstruit donc
+  l'appariement depuis l'inventaire (`creerAppariementChemin`). Conséquence directe :
+  `inventaireRoutes` **conserve l'ordre d'enregistrement**, car c'est lui qui porte la priorité
+  entre motifs — `/api/devis/ledger` est déclaré avant `/api/devis/:id`, et trier la liste ferait
+  prendre « ledger » pour un identifiant. Un test couvre ce cas précis.
+- **Le garde doit être monté avant les routes, mais les inventorier suppose qu'elles le soient
+  déjà.** L'appariement est donc construit à la première requête, pas à la création.
+
+Journalisation dans `audit_log` (action `permission_observee`), pas dans une table neuve : le
+journal existe, se lit déjà par `GET /api/auth/audit-log`, et l'étape est transitoire. Une
+mémoire anti-inondation évite qu'un écran en boucle sur une route refusée n'écrive des milliers
+de lignes identiques — une seule par (entreprise, rôle, ressource, action) et par process.
+
+**Vérifié en conditions réelles**, image backend reconstruite, sur un ouvrier créé pour
+l'occasion : `POST /api/contacts` → **201**, `GET /api/salaries` → **200**. Rien n'est bloqué, et
+les deux écarts apparaissent au journal (`contacts/creer`, `salaries/lire`). C'est le constat de
+l'audit rendu tangible : l'interface cache ces deux écrans à un ouvrier, l'API les lui ouvre.
+
+Pour lire les observations accumulées :
+
+```sql
+SELECT details->>'role' AS role, details->>'ressource' AS ressource,
+       details->>'action' AS action, count(*) AS n
+  FROM audit_log WHERE action = 'permission_observee'
+ GROUP BY 1,2,3 ORDER BY n DESC;
+```
+
+15 nouveaux tests. Le premier est le plus important — **le garde ne bloque rien** : une
+régression là casserait l'application en silence pour tous les rôles non-admin. Les autres
+couvrent l'appariement d'URL (dont la priorité littéral/paramètre), la journalisation des seuls
+écarts, et les six rôles par défaut, y compris qu'un rôle inconnu n'obtient **rien** — la colonne
+`role` est du texte libre, une valeur inattendue ne doit pas ouvrir l'application.
+
+**469/469 tests d'intégration** (454 avant), zéro régression — le point qui comptait, le garde
+traversant désormais chaque requête de chaque test.
+
+Étape 3 non commencée : tables `roles`/`role_permissions`, amorçage, bascule en refus par défaut
+et retrait des 63 `requireRole`. À faire seulement après lecture du journal d'observation sur de
+vraies données.
+
+---
+
 ### Rôles par entreprise — étape 1 : la carte des permissions — 2026-09-13
 
 Décision de l'utilisateur : **l'application ne doit plus imposer les noms de rôles.** Elle fixe

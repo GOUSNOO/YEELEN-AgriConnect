@@ -38,5 +38,26 @@ export function inventorierRoutes(app) {
   };
 
   parcourir(pile, '');
-  return routes.sort((a, b) => (a.chemin === b.chemin ? a.methode.localeCompare(b.methode) : a.chemin.localeCompare(b.chemin)));
+  // L'ORDRE D'ENREGISTREMENT EST CONSERVÉ, délibérément : c'est lui qui porte la priorité entre
+  // motifs. `/api/devis/ledger` est déclaré avant `/api/devis/:id` (la convention rappelée dans
+  // CLAUDE.md), et c'est ce qui permet de retrouver le bon motif pour une URL concrète. Trier
+  // cette liste casserait l'appariement de permissionGuard.
+  return routes;
+}
+
+// Un middleware monté au niveau de l'application ne sait pas quel motif Express a fait
+// correspondre : `req.route` n'existe que dans le handler de la route. On reconstruit donc
+// l'appariement, une fois au démarrage, en parcourant les motifs dans leur ordre d'origine.
+export function creerAppariementChemin(app) {
+  const motifs = inventorierRoutes(app).map((r) => ({
+    ...r,
+    // Un segment `:param` accepte tout sauf une barre oblique — même règle qu'Express.
+    regexp: new RegExp(`^${r.chemin.replace(/:[^/]+/g, '[^/]+')}/?$`),
+  }));
+
+  return (methode, url) => {
+    const chemin = url.split('?')[0];
+    const trouve = motifs.find((m) => m.methode === methode && m.regexp.test(chemin));
+    return trouve ? trouve.chemin : null;
+  };
 }

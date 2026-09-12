@@ -59,6 +59,7 @@ import billingRoutes from "./routes/billing.js";
 import { verifierTokenSiPresent } from "./middleware/auth.js";
 import { subscriptionGuard } from "./middleware/subscriptionGuard.js";
 import { moduleGuard } from "./middleware/moduleGuard.js";
+import { creerPermissionGuard } from "./middleware/permissionGuard.js";
 
 dotenv.config();
 
@@ -89,6 +90,11 @@ app.use(subscriptionGuard);
 // transverses incluses / hors périmètre). Toujours après subscriptionGuard : une entreprise
 // dont l'abonnement global est expiré est déjà bloquée avant d'arriver ici.
 app.use(moduleGuard);
+
+// Permissions par ressource et action — ÉTAPE 2 : MODE OBSERVATION, ne refuse rien encore.
+// Journalise ce qu'il refuserait (audit_log, action « permission_observee ») pour qu'on corrige
+// la carte sur de vraies données avant de basculer en refus par défaut à l'étape 3.
+app.use(creerPermissionGuard(app));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);
