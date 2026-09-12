@@ -643,6 +643,37 @@ CREATE TABLE IF NOT EXISTS mouvements_historique (
 -- Contour réel du champ (GeoJSON Polygon), tracé sur imagerie satellite. En jsonb et non en
 -- géométrie PostGIS : l'image postgres:18-alpine n'a pas l'extension, et aucune requête
 -- spatiale n'est faite — seulement du stockage, une surface et un centroïde (utils/geoParcelle.js).
+-- ═══════════════ Rôles définis par l'entreprise (étape 3) ═══════════════
+-- L'application fixe le vocabulaire (ressources × actions, voir src/permissions/catalogue.js) ;
+-- chaque entreprise crée ses rôles et les nomme comme elle veut. « code » garde la trace des six
+-- rôles amorcés (admin, ouvrier…) — il reste NULL pour un rôle créé de toutes pièces, et un rôle
+-- amorcé conserve son code même renommé, ce qui permet de retrouver la correspondance avec la
+-- colonne texte « entreprise_utilisateurs.role » pendant la transition.
+CREATE TABLE IF NOT EXISTS roles (
+  id             SERIAL PRIMARY KEY,
+  entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
+  code           TEXT,
+  nom            TEXT NOT NULL,
+  description    TEXT,
+  -- Rôle d'administration : il ne doit jamais être possible de supprimer le dernier, sans quoi
+  -- l'entreprise se verrouille dehors sans recours.
+  administration BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_entreprise_nom ON roles(entreprise_id, lower(nom));
+CREATE INDEX IF NOT EXISTS idx_roles_entreprise_id ON roles(entreprise_id);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id    INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  ressource  TEXT NOT NULL,
+  action     TEXT NOT NULL,
+  PRIMARY KEY (role_id, ressource, action)
+);
+
+-- La colonne texte « role » est CONSERVÉE pendant la transition : elle reste la source du JWT et
+-- le repli si role_id est vide. Elle disparaîtra à l'étape 3b, une fois la bascule vérifiée.
+ALTER TABLE entreprise_utilisateurs ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL;
+
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS contour       JSONB;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS culture       TEXT;
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS humidite      NUMERIC(5, 2) NOT NULL DEFAULT 50;
@@ -3341,6 +3372,54 @@ async function backfillStockQuants() {
 // platform-admin s'inscrit comme n'importe qui, is_platform_admin est basculé à la main après
 // coup). Relançable sans effet une fois fait : le WHERE trial_ends_at IS NULL ne retrouve plus
 // aucune ligne après le premier passage (chaque nouvelle inscription pose trial_ends_at).
+// Amorce les six rôles par défaut pour toute entreprise qui n'en a aucun, puis relie chaque
+// utilisateur à son rôle par correspondance avec la colonne texte. Idempotent : une entreprise
+// qui a déjà des rôles n'est pas touchée — y compris si elle les a tous supprimés sauf un, ou
+// renommés, ce qui est précisément le droit qu'on lui donne.
+async function seedRolesParDefaut() {
+  const { ROLES_PAR_DEFAUT } = await import('../permissions/rolesParDefaut.js');
+
+  const { rows: entreprises } = await client.query(
+    `SELECT e.id FROM entreprises e
+      WHERE NOT EXISTS (SELECT 1 FROM roles r WHERE r.entreprise_id = e.id)`
+  );
+
+  for (const { id: entrepriseId } of entreprises) {
+    for (const role of ROLES_PAR_DEFAUT) {
+      const { rows } = await client.query(
+        `INSERT INTO roles (entreprise_id, code, nom, description, administration)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [entrepriseId, role.code, role.nom, role.description, role.administration === true]
+      );
+      const roleId = rows[0].id;
+      for (const [ressource, actions] of Object.entries(role.permissions)) {
+        for (const action of actions) {
+          await client.query(
+            'INSERT INTO role_permissions (role_id, ressource, action) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [roleId, ressource, action]
+          );
+        }
+      }
+    }
+  }
+
+  // Rattachement : la colonne texte `role` porte le code d'origine.
+  const { rowCount: relies } = await client.query(
+    `UPDATE entreprise_utilisateurs eu
+        SET role_id = r.id
+       FROM roles r
+      WHERE r.entreprise_id = eu.entreprise_id
+        AND r.code = eu.role
+        AND eu.role_id IS NULL`
+  );
+
+  if (entreprises.length > 0 || relies > 0) {
+    console.log(`✅ Rôles : ${entreprises.length} entreprise(s) amorcée(s), ${relies} utilisateur(s) rattaché(s).`);
+  } else {
+    console.log('ℹ️  Rôles : rien à amorcer (déjà fait).');
+  }
+}
+
 async function seedAbonnementBackfill() {
   const { rowCount: grandpere } = await client.query(
     `UPDATE entreprises
@@ -3480,6 +3559,7 @@ async function migrate() {
     await seedEmplacementTypePourEntreprisesExistantes('inventaire');
     await backfillEmplacementInterneParDefaut();
     await backfillStockQuants();
+    await seedRolesParDefaut();
     await seedAbonnementBackfill();
     await seedModulesActifsBackfill();
     await migratePostesFromSalaries();

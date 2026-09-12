@@ -5,6 +5,60 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Rôles par entreprise — étape 3a : les rôles vivent en base — 2026-09-13
+
+Étape 3 **découpée en deux**. Le journal d'observation ne contenait que mes deux entrées de test
+de fumée : aucun usage réel accumulé, donc aucune matière pour décider de la bascule. Le socle
+est sans risque et ne dépend pas de ces données ; le refus par défaut en dépend entièrement.
+D'où 3a maintenant, 3b plus tard.
+
+**Schéma.** `roles` (entreprise_id, code, nom, description, administration) et `role_permissions`
+(role_id, ressource, action), plus `entreprise_utilisateurs.role_id`. `code` garde la trace des
+six rôles amorcés et **survit au renommage** — c'est ce qui permet de retrouver la correspondance
+avec la colonne texte pendant la transition. La colonne `role` est conservée : elle reste la
+source du JWT et le repli. Index unique sur `(entreprise_id, lower(nom))` : deux rôles de même
+nom dans une entreprise n'auraient aucun sens.
+
+**Amorçage.** `migrate.js:seedRolesParDefaut` pour les entreprises existantes, et le même
+amorçage dans `register` pour les nouvelles — le créateur est rattaché à Administrateur dans la
+foulée. Les deux points de création de compte salarié (`POST /salaries` et `PUT /salaries/:id`)
+posent aussi `role_id` par correspondance de code. Exécuté sur la base réelle : **10 entreprises
+amorcées, 16 utilisateurs rattachés**, puis « rien à amorcer » au second passage — idempotent
+vérifié, pas supposé.
+
+**`utils/rolesService.js`.** Le garde lit désormais la base. Le JWT porte le rôle sous forme de
+texte figé à la connexion : dès lors qu'une entreprise peut renommer ses rôles et en changer les
+permissions, ce texte n'est plus une source fiable. Même situation que les modules payants, même
+réponse — cache à TTL 60 s, invalidable explicitement. Repli sur `rolesParDefaut.js` quand
+`role_id` est absent ou que la lecture échoue ; **ce repli devra disparaître à la bascule**,
+continuer à accorder des permissions quand la base est muette serait le contraire du but.
+L'origine (`base` ou `defaut`) est journalisée, ce qui rend la transition observable.
+
+**Vérifié en conditions réelles**, backend reconstruit, avec le compte ouvrier de démonstration :
+`POST /api/contacts` → **201**, journalisé avec `origine: base` ; `POST /api/observations` →
+**201**, non journalisé puisque le rôle Ouvrier porte bien cette permission en base. La décision
+vient donc de la base, et rien n'est bloqué.
+
+**Le test qui porte le chantier** : « une entreprise peut redéfinir ses règles, et le garde
+suit ». On observe l'écart, on insère la permission manquante dans `role_permissions`, on vide le
+cache — et l'écart disparaît. C'est la preuve que la décision vient de la donnée et non d'un
+fichier, donc que l'entreprise a réellement la main. Un autre test vérifie qu'un rôle **renommé**
+(« Ouvrier » → « Chef de culture ») garde ses permissions : le nom appartient à l'entreprise, la
+règle reste attachée au rôle.
+
+**Piège rencontré pour la cinquième fois** : backticks dans des commentaires SQL de `migrate.js`,
+qui ferment le template literal portant la requête. Attrapé par `sqlBackticks.test.js`, qui a
+nommé les trois lignes. Remplacés par des guillemets français.
+
+8 nouveaux tests. **477/477 tests d'intégration** (469 avant), zéro régression.
+
+**Reste à faire — étape 3b, à ne lancer qu'après lecture du journal d'observation sur de vraies
+données** : bascule en refus par défaut, retrait du repli sur les rôles par défaut, retrait des
+63 `requireRole`, invalidation du cache depuis les routes qui modifient un rôle. Puis étape 4 :
+l'écran d'administration et la disparition de la liste de permissions du frontend.
+
+---
+
 ### Rôles par entreprise — étape 2 : le mode observation — 2026-09-13
 
 Le garde des permissions est en place et **ne refuse rien**. Il calcule ce qu'il refuserait et

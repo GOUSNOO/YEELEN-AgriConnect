@@ -149,6 +149,18 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
          VALUES ($1, $2, $3, 'Actif')`,
         [req.user.entrepriseId, userId, role]
       );
+      // Rattachement au rôle de l'entreprise portant ce code. Le repli sur les rôles par défaut
+      // existe encore (rolesService.js) mais disparaîtra à la bascule en refus : mieux vaut que
+      // le rattachement soit fait dès la création du compte.
+      await client.query(
+        `UPDATE entreprise_utilisateurs SET role_id = r.id
+           FROM roles r
+          WHERE r.entreprise_id = entreprise_utilisateurs.entreprise_id
+            AND r.code = entreprise_utilisateurs.role
+            AND entreprise_utilisateurs.entreprise_id = $1
+            AND entreprise_utilisateurs.user_id = $2`,
+        [req.user.entrepriseId, userId]
+      );
     }
 
     const salarieResult = await client.query(
@@ -256,6 +268,19 @@ router.put('/:id', authRequired, requireRole('admin'), async (req, res) => {
         `INSERT INTO entreprise_utilisateurs (entreprise_id, user_id, role, statut) VALUES ($1,$2,$3,'Actif')`,
         [req.user.entrepriseId, userId, role]
       );
+      // Rattachement au rôle de l'entreprise portant ce code. Le repli sur les rôles par défaut
+      // existe encore (rolesService.js) mais disparaîtra à la bascule en refus : mieux vaut que
+      // le rattachement soit fait dès la création du compte.
+      await client.query(
+        `UPDATE entreprise_utilisateurs SET role_id = r.id
+           FROM roles r
+          WHERE r.entreprise_id = entreprise_utilisateurs.entreprise_id
+            AND r.code = entreprise_utilisateurs.role
+            AND entreprise_utilisateurs.entreprise_id = $1
+            AND entreprise_utilisateurs.user_id = $2`,
+        [req.user.entrepriseId, userId]
+      );
+
       await client.query('UPDATE salaries SET user_id = $1 WHERE id = $2', [userId, req.params.id]);
       await logAuditEvent({
         entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,

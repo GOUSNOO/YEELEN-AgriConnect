@@ -8,7 +8,7 @@
 // référence est `rolesParDefaut.js`.
 import { creerAppariementChemin } from '../permissions/inventaireRoutes.js';
 import { resoudrePermission } from '../permissions/catalogue.js';
-import { autorise } from '../permissions/rolesParDefaut.js';
+import { permissionsUtilisateur, autoriseUtilisateur } from '../utils/rolesService.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 
 export const MODE = process.env.PERMISSIONS_MODE || 'observation';
@@ -24,7 +24,7 @@ export function creerPermissionGuard(app) {
   // inventorier. Au premier appel, `app.use(...)` a fini de tout enregistrer.
   let apparier = null;
 
-  return function permissionGuard(req, res, next) {
+  return async function permissionGuard(req, res, next) {
     if (!apparier) apparier = creerAppariementChemin(app);
     if (!req.path.startsWith('/api/')) return next();
     if (!req.user?.entrepriseId) return next(); // non authentifié : authRequired s'en charge
@@ -44,14 +44,18 @@ export function creerPermissionGuard(app) {
 
     if (!permission) return next(); // hors périmètre, assumé
 
-    const role = req.user.role;
-    if (autorise(role, permission.ressource, permission.action)) return next();
+    // Les permissions viennent désormais de la BASE : une entreprise qui redéfinit ses rôles doit
+    // être suivie, et le rôle porté par le JWT n'est qu'un texte figé à la connexion. Repli sur
+    // les rôles par défaut tant que le rattachement n'est pas fait (voir rolesService.js).
+    const resolution = await permissionsUtilisateur(req.user.entrepriseId, req.user.sub, req.user.role);
+    if (autoriseUtilisateur(resolution, permission.ressource, permission.action)) return next();
 
     journaliser(req, {
       raison: 'permission_absente',
       ressource: permission.ressource,
       action: permission.action,
-      role,
+      role: req.user.role,
+      origine: resolution.origine,
     });
     // MODE OBSERVATION : on laisse passer. C'est tout l'objet de cette étape.
     return next();

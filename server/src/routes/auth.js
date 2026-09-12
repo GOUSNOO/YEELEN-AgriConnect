@@ -19,6 +19,7 @@ import { sendMfaCodeEmail, sendInscriptionCodeEmail } from '../services/mailer.j
 import { COMPTES_DEFAUT, JOURNAUX_DEFAUT } from '../utils/comptaDefauts.js';
 import { UNITES_MESURE_DEFAUT } from '../utils/unitesMesureDefaut.js';
 import { EMPLACEMENTS_STOCK_DEFAUT } from '../utils/emplacementsStockDefaut.js';
+import { ROLES_PAR_DEFAUT } from '../permissions/rolesParDefaut.js';
 
 const router = express.Router();
 
@@ -243,6 +244,32 @@ router.post('/register', async (req, res) => {
          ON CONFLICT (entreprise_id, nom) DO NOTHING`,
         [entreprise.id, e.nom, e.type, e.type === 'interne']
       );
+    }
+
+    // Rôles par défaut (mêmes définitions que migrate.js:seedRolesParDefaut, via
+    // permissions/rolesParDefaut.js). L'entreprise pourra ensuite les renommer, les modifier ou
+    // les supprimer : l'application fournit un point de départ, pas une contrainte.
+    for (const role of ROLES_PAR_DEFAUT) {
+      const { rows: [cree] } = await client.query(
+        `INSERT INTO roles (entreprise_id, code, nom, description, administration)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [entreprise.id, role.code, role.nom, role.description, role.administration === true]
+      );
+      for (const [ressource, actions] of Object.entries(role.permissions)) {
+        for (const action of actions) {
+          await client.query(
+            'INSERT INTO role_permissions (role_id, ressource, action) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [cree.id, ressource, action]
+          );
+        }
+      }
+      // Le créateur de l'entreprise est administrateur : on le rattache tout de suite.
+      if (role.code === 'admin') {
+        await client.query(
+          'UPDATE entreprise_utilisateurs SET role_id = $1 WHERE entreprise_id = $2 AND user_id = $3',
+          [cree.id, entreprise.id, user.id]
+        );
+      }
     }
 
     await client.query('COMMIT');
