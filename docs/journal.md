@@ -5,6 +5,71 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Rôles par entreprise — étape 1 : la carte des permissions — 2026-09-13
+
+Décision de l'utilisateur : **l'application ne doit plus imposer les noms de rôles.** Elle fixe
+le vocabulaire — ressources et actions — et chaque entreprise crée ses propres rôles, les nomme
+comme elle veut et décide qui voit quoi. Les six rôles actuels deviennent un modèle de départ,
+renommable et supprimable.
+
+**Le constat qui a déclenché le découpage.** Audit préalable des restrictions existantes :
+`requireRole` est posé à 63 endroits (33 `admin`, 25 `admin+directeur`, 5 avec `gestionnaire`),
+mais **21 fichiers de routes qui écrivent n'en ont aucun** — `achats.js` (10 écritures, dont la
+réception qui écrit stock ET finances), `produits.js` (9, dont prix, rebut et transferts),
+`cultures`/`poulailler`/`pisciculture` (18), `listesPrix.js`, `contacts.js`. Asymétries réelles :
+un ouvrier ne voit ni Clients ni Fournisseurs à l'écran mais peut les créer et les supprimer par
+l'API ; un comptable ne voit pas Cultures mais peut ajuster un inventaire.
+
+Ce n'est pas une négligence, c'est le **taux d'échec normal** du gardiennage route par route :
+chaque route ajoutée est une occasion d'oublier. Comparaison faite dans le clone de l'ERP de
+référence : Odoo n'a pas ce problème parce que `check_access` est appelé depuis `create`,
+`write`, `unlink` et `read` de l'ORM (`odoo/orm/models.py`), pas depuis les contrôleurs — la
+porte est SOUS l'endpoint, et « j'ai oublié de garder cette route » n'existe pas comme catégorie
+de bug. Il distingue par ailleurs deux niveaux que YEELEN confond : `ir.model.access` (modèle ×
+groupe × 4 droits) et `ir.rule` (filtrage par ligne via domaine). YEELEN a déjà une record rule
+unique, recopiée à la main partout : `WHERE entreprise_id = $1`.
+
+**Livré à cette étape — rien n'est encore bloqué.**
+- `server/src/permissions/inventaireRoutes.js` : énumère les routes **réellement montées** en
+  lisant la pile Express. C'est la pièce qui rend la carte vérifiable ; une liste tenue à la main
+  ne garde rien, puisqu'elle ignore ce qu'on a ajouté depuis.
+- `server/src/permissions/catalogue.js` : le vocabulaire (**43 ressources** en 6 sections,
+  **8 actions**) et la carte route → (ressource, action). Sur 300 routes montées, **268 sont
+  soumises aux rôles** et 32 hors périmètre — chacune avec sa raison écrite, sans quoi cette
+  liste deviendrait le tapis sous lequel on glisse ce qu'on n'a pas su classer.
+- `server/src/test/integration/permissionsCatalogue.test.js` : 8 tests. Le principal échoue si
+  une route montée n'est couverte ni par la carte ni par le hors-périmètre.
+
+**Décisions de découpage.** Le grain ne suit pas les fichiers de routes : `salaries.js` porte six
+sujets qu'une entreprise voudra distinguer (confier les congés sans ouvrir les salaires), et
+`factures.js` mêle les pièces et les états comptables. Les **42 POST qui agissent au lieu de
+créer** (`facturer`, `recevoir`, `annuler-reception`, `remettre-brouillon`…) sont étiquetés un
+par un : une traduction mécanique `POST → créer` les aurait tous classés à tort. Quatre actions
+sensibles sont exposées à part — `valider`, `facturer`, `receptionner`, `encaisser` — parce
+qu'elles déplacent argent ou stock et qu'une entreprise doit pouvoir dire « il modifie un devis
+mais ne le facture pas » ; les 30 autres actions sont repliées sur `modifier`, sinon la matrice
+devient illisible.
+
+**Le test a été prouvé, pas supposé.** Une route piège ajoutée à `app.js` le fait échouer en la
+nommant (`POST /api/route-oubliee — route non couverte`). Premier essai : quatre tests échouaient
+pour cette seule cause, avec des messages trompeurs (« chaque ressource est atteignable »).
+Corrigé — les tests voisins résolvent en mode tolérant, le test dédié signale seul. Vérifié :
+une cause racine, un échec.
+
+**Contrainte rencontrée** : ce test ne peut pas vivre dans la suite unitaire. Importer `app.js`
+sous babel-jest échoue sur `otplib` → `@scure/base` (déjà documenté dans CLAUDE.md). Il vit donc
+dans la suite d'intégration, seule à exécuter la vraie application en ESM natif, bien qu'il
+n'interroge aucune base.
+
+**À revoir à l'étape 3, noté dans le fichier** : `GET /api/recherche` est provisoirement hors
+périmètre alors qu'elle interroge plusieurs ressources d'un coup — elle renverrait des résultats
+qu'un rôle restreint ne devrait pas voir. Son filtrage reste à faire.
+
+**454/454 tests d'intégration** (446 avant, +8), zéro régression. Étapes suivantes convenues et
+non commencées : mode observation, tables et bascule en refus par défaut, écran d'administration.
+
+---
+
 ### Parcelles — contour réel tracé sur imagerie satellite — 2026-09-12
 
 Issu de la comparaison demandée avec les ERP agricoles matures : le contour de parcelle était le
