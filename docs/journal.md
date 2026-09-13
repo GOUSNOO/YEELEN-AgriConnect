@@ -5,6 +5,50 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Rôles par entreprise — retrait du niveau d'accès imposé — 2026-09-13
+
+Sur demande de l'utilisateur : « enlève l'ancien sélecteur de rôle ». Il y en avait **deux** — la
+création d'un salarié, et le rattachement d'un compte à un salarié existant — chacun proposant les
+six rôles en dur. Les deux sont partis. Le formulaire ne demande plus qu'un rôle : celui que
+l'entreprise a défini, avec « Aucun rôle — aucune restriction » par défaut.
+
+**Conséquence, dite franchement.** Ce sélecteur alimentait la colonne texte que lisent le jeton,
+les 63 `requireRole` et les onglets du frontend. Sans lui, il faut y écrire quelque chose, et la
+seule valeur cohérente avec « tout ouvert par défaut » est celle qui ne bloque rien
+(`ROLE_TEXTE_NEUTRE`). Autrement dit : **la couche historique ne restreint plus personne sur les
+comptes créés désormais.** Elle n'est plus que du code en attente de retrait. La finir — ôter les
+63 gardes et passer les restrictions en refus réel — est la suite logique.
+
+**Correction d'un conseil donné le matin même.** J'avais recommandé d'attendre plusieurs jours
+d'observation avant la bascule, au motif qu'une carte incomplète enfermerait des utilisateurs
+dehors. C'était vrai du modèle rejeté (n'autoriser que ce qui est accordé) ; dans le modèle
+retenu, une route absente de la carte est **autorisée**. Le risque qui justifiait d'attendre
+n'existe plus.
+
+**Trois bugs de ma main, dans le même changement** — tous du même genre : retirer une variable
+sans suivre ses usages.
+1. `role` encore référencé dans la validation de `POST /salaries` → `ReferenceError` à chaque
+   création de compte. Toute la suite d'intégration est passée de 150 s à **1093 s** (chaque
+   appel partait en 500 avant d'échouer), 50 tests rouges.
+2. Deux autres références oubliées : le journal d'audit, et tout le chemin de rattachement.
+3. `roleIdValide` déclaré **dans** le premier bloc `if (createAccount)` mais lu dans le second,
+   après le commit — hors de portée, donc 500 de nouveau.
+
+**Et deux diagnostics faux avant de trouver.** J'ai d'abord attribué les échecs aux tests de rôle,
+puis au helper, sans jamais lire la sortie complète — que j'avais tronquée avec un `tail`. La
+cause réelle (un 500 sur `POST /salaries`) était visible dès la première ligne d'un seul fichier
+de test. Vérifier avant de déduire, y compris quand la déduction paraît évidente.
+
+**Pont assumé dans `helpers.js`** : le helper de test pose désormais le rôle texte directement en
+base après création, pour que les dizaines de tests de la couche historique continuent de
+l'exercer jusqu'à son retrait. Le commentaire le dit et signale que ce contournement doit
+disparaître avec elle.
+
+**481/481 tests d'intégration**, `npm test` (142/142), build vert, vérifié à l'écran : le
+formulaire ne montre plus qu'un seul sélecteur de rôle.
+
+---
+
 ### Rôles par entreprise — le panneau rejoint les Ressources humaines — 2026-09-13
 
 Retour de l'utilisateur sur la démonstration : « tu l'as mis dans Mes préférences, il serait

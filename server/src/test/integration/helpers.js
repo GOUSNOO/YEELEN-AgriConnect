@@ -106,6 +106,20 @@ export async function createEmployeeLogin(adminToken, role = 'ouvrier', extra = 
     throw new Error(`création employé a échoué (${res.status}): ${JSON.stringify(res.body)}`);
   }
   const salarieId = res.body.salarie?.id;
+
+  // L'APPLICATION N'ATTRIBUE PLUS DE NIVEAU D'ACCÈS : tout est ouvert par défaut, seules les
+  // restrictions posées par l'entreprise ferment quelque chose. La colonne texte `role` est donc
+  // écrite neutre par POST /salaries. Mais la couche historique — les 63 `requireRole` — la lit
+  // encore, et des dizaines de tests vérifient qu'elle bloque bien. On pose donc le rôle
+  // directement en base ici, pour continuer à exercer cette couche jusqu'à son retrait.
+  // Ce contournement disparaîtra AVEC elle ; sa présence signale précisément ce qui reste à faire.
+  await pool.query(
+    `UPDATE entreprise_utilisateurs eu SET role = $1
+       FROM users u WHERE u.id = eu.user_id AND LOWER(u.email) = LOWER($2)`,
+    [role, compteEmail]
+  );
+  await pool.query('UPDATE users SET role = $1 WHERE LOWER(email) = LOWER($2)', [role, compteEmail]);
+
   const login = await request(app).post('/api/auth/login').send({ email: compteEmail, password });
   if (login.status !== 200 || !login.body.token) {
     throw new Error(`login employé a échoué (${login.status}): ${JSON.stringify(login.body)}`);

@@ -10,6 +10,14 @@ import { calculerJoursOuvres, listerJoursOuvres } from '../utils/congesJours.js'
 
 const router = express.Router();
 
+// L'application n'attribue plus de « niveau d'accès » : tout est ouvert par défaut, et seules les
+// restrictions posées par l'entreprise ferment quelque chose (voir permissions/catalogue.js et
+// utils/rolesService.js). La colonne texte `role` reste alimentée le temps que la couche
+// historique — le jeton, les 63 `requireRole`, les onglets du frontend — soit retirée à la
+// bascule ; on y met donc la valeur qui ne bloque rien, faute de quoi un nouveau compte serait
+// plus restreint que ne le demande son entreprise.
+const ROLE_TEXTE_NEUTRE = 'admin';
+
 const SALARIE_COLUMNS = `
   s.id, s.nom, s.prenom, s.poste, s.poste_id AS "posteId", s.departement_id AS "departementId",
   s.manager_id AS "managerId",
@@ -117,20 +125,21 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
     email, telephone, adresse,
     photo, dateNaissance, contactUrgenceNom, contactUrgenceTel, numPieceIdentite,
     coutHoraire, heuresHebdo, joursTravailles,
-    createAccount, compteEmail, password, role,
+    createAccount, compteEmail, password,
   } = req.body;
 
   if (!nom || !prenom) {
     return res.status(400).json({ error: 'Nom et prénom requis.' });
   }
-  if (createAccount && (!compteEmail || !password || !role)) {
-    return res.status(400).json({ error: 'Email de connexion, mot de passe et rôle requis pour créer un compte.' });
+  if (createAccount && (!compteEmail || !password)) {
+    return res.status(400).json({ error: 'Email de connexion et mot de passe requis pour créer un compte.' });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     let userId = null;
+    let roleIdValide = null;
 
     if (createAccount) {
       const existing = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [compteEmail]);
@@ -141,13 +150,12 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
       const passwordHash = await bcrypt.hash(password, 10);
       const userResult = await client.query(
         `INSERT INTO users (email, role, password) VALUES ($1, $2, $3) RETURNING id`,
-        [compteEmail.toLowerCase(), role, passwordHash]
+        [compteEmail.toLowerCase(), ROLE_TEXTE_NEUTRE, passwordHash]
       );
       userId = userResult.rows[0].id;
       // roleId est le rôle DÉFINI PAR L'ENTREPRISE (restrictions). Sans lui, la personne n'a
       // aucune restriction, ce qui est le défaut du produit. Validé contre l'entreprise pour
       // qu'on ne puisse pas rattacher quelqu'un au rôle d'une autre.
-      let roleIdValide = null;
       if (req.body.roleId) {
         const { rows: verif } = await client.query(
           'SELECT id FROM roles WHERE id = $1 AND entreprise_id = $2',
@@ -158,7 +166,7 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
       await client.query(
         `INSERT INTO entreprise_utilisateurs (entreprise_id, user_id, role, role_id, statut)
          VALUES ($1, $2, $3, $4, 'Actif')`,
-        [req.user.entrepriseId, userId, role, roleIdValide]
+        [req.user.entrepriseId, userId, ROLE_TEXTE_NEUTRE, roleIdValide]
       );
     }
 
@@ -198,7 +206,7 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
       await logAuditEvent({
         entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,
         action: 'account_created', req,
-        details: { targetUserId: userId, targetEmail: compteEmail, role },
+        details: { targetUserId: userId, targetEmail: compteEmail, roleId: roleIdValide },
       });
       try { await sendWelcomeEmail(compteEmail, password, prenom); }
       catch (mailErr) { console.error('[POST /salaries] email non envoyé', mailErr); }
@@ -226,7 +234,7 @@ router.put('/:id', authRequired, requireRole('admin'), async (req, res) => {
     dateEmbauche, salaire, presence, email, telephone, adresse,
     photo, dateNaissance, contactUrgenceNom, contactUrgenceTel, numPieceIdentite,
     dateDepart, motifDepart, coutHoraire, heuresHebdo, joursTravailles, statut,
-    linkAccount, compteEmail, password, role,
+    linkAccount, compteEmail, password,
   } = req.body;
 
   const client = await pool.connect();
@@ -248,7 +256,7 @@ router.put('/:id', authRequired, requireRole('admin'), async (req, res) => {
     // Lier un compte de connexion à un salarié qui n'en a pas encore.
     let userId = before.user_id;
     if (linkAccount && !userId) {
-      if (!compteEmail || !password || !role) {
+      if (!compteEmail || !password) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Email, mot de passe et rôle requis pour créer le compte.' });
       }
@@ -260,18 +268,18 @@ router.put('/:id', authRequired, requireRole('admin'), async (req, res) => {
       const passwordHash = await bcrypt.hash(password, 10);
       const ur = await client.query(
         `INSERT INTO users (email, role, password) VALUES ($1,$2,$3) RETURNING id`,
-        [compteEmail.toLowerCase(), role, passwordHash]
+        [compteEmail.toLowerCase(), ROLE_TEXTE_NEUTRE, passwordHash]
       );
       userId = ur.rows[0].id;
       await client.query(
         `INSERT INTO entreprise_utilisateurs (entreprise_id, user_id, role, statut) VALUES ($1,$2,$3,'Actif')`,
-        [req.user.entrepriseId, userId, role]
+        [req.user.entrepriseId, userId, ROLE_TEXTE_NEUTRE]
       );
 
       await client.query('UPDATE salaries SET user_id = $1 WHERE id = $2', [userId, req.params.id]);
       await logAuditEvent({
         entrepriseId: req.user.entrepriseId, userId: req.user.sub, email: req.user.email,
-        action: 'account_created', req, details: { targetUserId: userId, targetEmail: compteEmail, role, via: 'PUT /salaries/:id' },
+        action: 'account_created', req, details: { targetUserId: userId, targetEmail: compteEmail, via: 'PUT /salaries/:id' },
       });
       try { await sendWelcomeEmail(compteEmail, password, prenom || before.prenom); }
       catch (mailErr) { console.error('[PUT /salaries] email non envoyé', mailErr); }

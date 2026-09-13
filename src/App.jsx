@@ -7140,7 +7140,7 @@ function EmployeesModule({ farmId, role }) {
     dateEmbauche: '', salaire: '', email: '', telephone: '', adresse: '',
     photo: '', dateNaissance: '', contactUrgenceNom: '', contactUrgenceTel: '', numPieceIdentite: '',
     coutHoraire: '', heuresHebdo: '', joursTravailles: '',
-    createAccount: false, compteEmail: '', role: 'ouvrier', roleId: '', password: '',
+    createAccount: false, compteEmail: '', roleId: '', password: '',
   };
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -7152,7 +7152,7 @@ function EmployeesModule({ farmId, role }) {
     photo: '', dateNaissance: '', contactUrgenceNom: '', contactUrgenceTel: '', numPieceIdentite: '',
     coutHoraire: '', heuresHebdo: '', joursTravailles: '',
     dateDepart: '', motifDepart: '', statut: 'Actif',
-    linkAccount: false, compteEmail: '', role: 'ouvrier', password: '',
+    linkAccount: false, compteEmail: '', password: '',
   };
   const [editingEmp, setEditingEmp] = useState(null);
   const [editForm, setEditForm] = useState(emptyEditForm);
@@ -7206,7 +7206,7 @@ function EmployeesModule({ farmId, role }) {
   const addEmployee = async (e) => {
     e.preventDefault();
     if (!form.nom || !form.prenom) return;
-    if (form.createAccount && (!form.compteEmail || !form.password || !form.role)) {
+    if (form.createAccount && (!form.compteEmail || !form.password)) {
       setFormError(t('rh.errAccountFields'));
       return;
     }
@@ -7218,7 +7218,8 @@ function EmployeesModule({ farmId, role }) {
         createAccount: form.createAccount,
         compteEmail: form.createAccount ? form.compteEmail : undefined,
         password: form.createAccount ? form.password : undefined,
-        role: form.createAccount ? form.role : undefined,
+        // Plus de « niveau d'accès » imposé : seul compte le rôle défini par l'entreprise,
+        // et son absence signifie « aucune restriction ».
         roleId: form.createAccount && form.roleId ? Number(form.roleId) : undefined,
       });
       setForm(emptyForm);
@@ -7257,7 +7258,7 @@ function EmployeesModule({ farmId, role }) {
       joursTravailles: emp.joursTravailles || '',
       dateDepart: emp.dateDepart ? String(emp.dateDepart).slice(0, 10) : '',
       motifDepart: emp.motifDepart || '', statut: emp.statut || 'Actif',
-      linkAccount: false, compteEmail: '', role: 'ouvrier', password: '',
+      linkAccount: false, compteEmail: '', password: '',
     });
   };
 
@@ -7285,7 +7286,7 @@ function EmployeesModule({ farmId, role }) {
         linkAccount: editForm.linkAccount || undefined,
         compteEmail: editForm.linkAccount ? editForm.compteEmail : undefined,
         password: editForm.linkAccount ? editForm.password : undefined,
-        role: editForm.linkAccount ? editForm.role : undefined,
+        // Plus de niveau d'accès imposé : voir le commentaire du formulaire de création.
       });
       cancelEditEmployee();
       await loadEmployees();
@@ -7386,14 +7387,6 @@ function EmployeesModule({ farmId, role }) {
           {form.createAccount && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end', padding: SPACE.md, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
               <Field label={t('rh.loginEmail')} type="email" placeholder="email@exemple.com" value={form.compteEmail} onChange={e => setForm({ ...form, compteEmail: e.target.value })} required={form.createAccount} />
-              <Select label={t('rh.roleField')} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-                <option value="admin">{t('role.admin')}</option>
-                <option value="directeur">{t('role.directeur')}</option>
-                <option value="gestionnaire">{t('role.gestionnaire')}</option>
-                <option value="comptable">{t('role.comptable')}</option>
-                <option value="assistant_direction">{t('role.assistant_direction')}</option>
-                <option value="ouvrier">{t('role.ouvrier')}</option>
-              </Select>
               {/* Le rôle défini par l'entreprise : il ne donne rien, il retire. Sans rôle, la
                   personne n'a aucune restriction — c'est le défaut du produit. */}
               <Select label="Rôle (restrictions)" value={form.roleId}
@@ -7543,14 +7536,6 @@ function EmployeesModule({ farmId, role }) {
                   {editForm.linkAccount && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: SPACE.sm, alignItems: 'end', padding: SPACE.md, borderRadius: RADIUS.card, background: COLORS.surfaceSoft || COLORS.surfaceAlt }}>
                       <Field label={t('rh.loginEmail')} type="email" value={editForm.compteEmail} onChange={e => setEditForm({ ...editForm, compteEmail: e.target.value })} required />
-                      <Select label={t('rh.roleField')} value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
-                        <option value="admin">{t('role.admin')}</option>
-                        <option value="directeur">{t('role.directeur')}</option>
-                        <option value="gestionnaire">{t('role.gestionnaire')}</option>
-                        <option value="comptable">{t('role.comptable')}</option>
-                        <option value="assistant_direction">{t('role.assistant_direction')}</option>
-                        <option value="ouvrier">{t('role.ouvrier')}</option>
-                      </Select>
                       <Field label={t('rh.tempPassword')} type="text" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} required />
                     </div>
                   )}
