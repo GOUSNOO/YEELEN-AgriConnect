@@ -79,6 +79,10 @@ export const RESSOURCES = {
   referentiels_produits: { section: 'configuration', libelle: 'Catégories, unités, attributs' },
   referentiels_comptables: { section: 'configuration', libelle: 'Journaux, comptes, taxes, conditions' },
   journal_audit: { section: 'configuration', libelle: "Journal d'audit" },
+  // La gestion des rôles n'est pas soumise aux rôles : elle appartient au propriétaire du compte
+  // (routes/roles.js). Elle figure au catalogue pour que la carte reste complète, et se retrouve
+  // donc en lecture seule côté restrictions — retirer « lire » à un rôle masque l'écran.
+  roles: { section: 'configuration', libelle: 'Rôles et restrictions' },
 };
 
 // Préfixe de montage → ressource par défaut. L'action se déduit alors de la méthode HTTP.
@@ -122,6 +126,7 @@ const MONTAGES = {
   '/api/accounts': 'referentiels_comptables',
   '/api/payment-terms': 'referentiels_comptables',
   '/api/factures': 'factures',
+  '/api/roles': 'roles',
 };
 
 const PAR_METHODE = { GET: 'lire', POST: 'creer', PUT: 'modifier', PATCH: 'modifier', DELETE: 'supprimer' };
@@ -233,6 +238,10 @@ const EXCEPTIONS = {
   'GET /api/entreprise/modules': ['modules_actifs', 'lire'],
   'PUT /api/entreprise/modules': ['modules_actifs', 'modifier'],
   'GET /api/auth/audit-log': ['journal_audit', 'lire'],
+  'GET /api/roles/catalogue': ['roles', 'lire'],
+  'GET /api/roles/utilisateurs': ['roles', 'lire'],
+  'PUT /api/roles/:id/restrictions': ['roles', 'modifier'],
+  'PUT /api/roles/utilisateurs/:userId': ['roles', 'modifier'],
 
   // ── Trésorerie ──
   'GET /api/business/finances': ['finances', 'lire'],

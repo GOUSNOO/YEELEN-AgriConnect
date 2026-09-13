@@ -68,6 +68,7 @@ const RegistreIntrantsView = lazy(() => import('./components/RegistreIntrantsVie
 const FeedbackModule = lazy(() => import('./components/FeedbackModule').then((m) => ({ default: m.FeedbackModule })));
 const HelpModule = lazy(() => import('./components/HelpModule').then((m) => ({ default: m.HelpModule })));
 const CarteParcelles = lazy(() => import('./components/CarteParcelles'));
+const RolesPanel = lazy(() => import('./components/RolesPanel'));
 const AideFlottante = lazy(() => import('./components/AideFlottante'));
 const EquipementsModule = lazy(() => import('./components/EquipementsModule').then((m) => ({ default: m.EquipementsModule })));
 import { GlobalSearch } from './components/GlobalSearch';
@@ -9826,6 +9827,7 @@ function ProfilModule({ role }) {
   };
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: SPACE.lg, alignItems: 'start' }}>
 
       <Card>
@@ -10035,6 +10037,11 @@ function ProfilModule({ role }) {
           </div>
         )}
       </Card>
+    </div>
+
+      <Suspense fallback={null}>
+        <RolesPanel />
+      </Suspense>
     </div>
   );
 }

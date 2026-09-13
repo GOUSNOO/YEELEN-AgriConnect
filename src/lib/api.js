@@ -1468,3 +1468,40 @@ export async function getAllFeedback() {
 export async function updateFeedbackStatus(id, statut) {
   return request(`/feedback/${id}`, { method: 'PATCH', body: JSON.stringify({ statut }) });
 }
+// ─────────────────────────────────────────────────────────────────────
+// Rôles et restrictions définis par l'entreprise
+// ─────────────────────────────────────────────────────────────────────
+// Aucune de ces écritures ne passe par la file hors-ligne : modifier une règle d'accès en étant
+// déconnecté, puis la rejouer plus tard sur un état qui a changé, ferait plus de dégâts que
+// l'échec immédiat — même raisonnement que pour l'inventaire et le rebut.
+export async function getRoles() {
+  return request('/roles');
+}
+
+export async function getCatalogueRoles() {
+  return request('/roles/catalogue');
+}
+
+export async function getUtilisateursRoles() {
+  return request('/roles/utilisateurs');
+}
+
+export async function creerRole(payload) {
+  return request('/roles', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function majRole(id, payload) {
+  return request(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export async function supprimerRole(id) {
+  return request(`/roles/${id}`, { method: 'DELETE' });
+}
+
+export async function enregistrerRestrictions(id, restrictions) {
+  return request(`/roles/${id}/restrictions`, { method: 'PUT', body: JSON.stringify({ restrictions }) });
+}
+
+export async function affecterRole(userId, roleId) {
+  return request(`/roles/utilisateurs/${userId}`, { method: 'PUT', body: JSON.stringify({ roleId }) });
+}

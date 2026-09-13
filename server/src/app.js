@@ -60,6 +60,7 @@ import { verifierTokenSiPresent } from "./middleware/auth.js";
 import { subscriptionGuard } from "./middleware/subscriptionGuard.js";
 import { moduleGuard } from "./middleware/moduleGuard.js";
 import { creerPermissionGuard } from "./middleware/permissionGuard.js";
+import rolesRoutes from "./routes/roles.js";
 
 dotenv.config();
 
@@ -97,6 +98,7 @@ app.use(moduleGuard);
 app.use(creerPermissionGuard(app));
 
 app.use("/api/auth", authRoutes);
+app.use("/api/roles", rolesRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/cultures", culturesRoutes);
 app.use("/api/poulailler", poulaillerRoutes);
