@@ -5,41 +5,41 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
-### Rôles par entreprise — l écran d administration — 2026-09-13
+### Rôles par entreprise — l'écran d'administration — 2026-09-13
 
-L utilisateur : « fait une démo je vais voir si c est bien ce que je veux ». Le mécanisme vivait
-en base et restait invisible : pour être jugé, il lui fallait un écran. C est le cœur de
-l étape 4, construit dans la foulée.
+L'utilisateur : « fait une démo je vais voir si c'est bien ce que je veux ». Le mécanisme vivait
+en base et restait invisible : pour être jugé, il lui fallait un écran. C'est le cœur de
+l'étape 4, construit dans la foulée.
 
-**** — catalogue du vocabulaire, liste des rôles avec leurs retraits
+**`server/src/routes/roles.js`** — catalogue du vocabulaire, liste des rôles avec leurs retraits
 et le nombre de personnes concernées, création, renommage, suppression, remplacement des
-restrictions, affectation. Une seule garde d accès, et elle ne vient pas d une politique :
-, parce que le compte qui a ouvert l entreprise administre la serrure.
-Deux règles fines : on refuse d attribuer un rôle au propriétaire (il n y serait pas soumis, et
-l afficher mentirait), et supprimer un rôle **libère** les personnes rattachées au lieu de les
-enfermer — , elles redeviennent non restreintes, c est le défaut du produit.
+restrictions, affectation. Une seule garde d'accès, et elle ne vient pas d'une politique :
+`proprietaireRequis`, parce que le compte qui a ouvert l'entreprise administre la serrure. Deux
+règles fines : on refuse d'attribuer un rôle au propriétaire (il n'y serait pas soumis, et
+l'afficher mentirait), et supprimer un rôle **libère** les personnes rattachées au lieu de les
+enfermer — `ON DELETE SET NULL`, elles redeviennent non restreintes, c'est le défaut du produit.
 
-**** — dans Mes préférences, en pleine largeur (la matrice
-ressources × actions n entre pas dans une colonne de 280 px). Le principe doit sauter aux yeux :
-tout est ouvert, **on coche ce qu on retire**. Les cases sont rouges, l en-tête dit « cochez ce
-que ce rôle ne doit PAS pouvoir faire », et une action sensible n est proposée que sur les
+**`src/components/RolesPanel.jsx`** — dans Mes préférences, en pleine largeur (la matrice
+ressources × actions n'entre pas dans une colonne de 280 px). Le principe doit sauter aux yeux :
+tout est ouvert, **on coche ce qu'on retire**. Les cases sont rouges, l'en-tête dit « cochez ce
+que ce rôle ne doit PAS pouvoir faire », et une action sensible n'est proposée que sur les
 ressources où elle existe — ailleurs un tiret, plutôt que de faire cocher du vide.
 
-**Le garde-fou de l étape 1 a servi tout de suite** : les six routes neuves ont fait échouer le
-test de couverture tant qu elles n étaient pas déclarées au catalogue. Exactement ce pour quoi
-il a été écrit.
+**Le garde-fou de l'étape 1 a servi tout de suite** : les six routes neuves ont fait échouer le
+test de couverture tant qu'elles n'étaient pas déclarées au catalogue. Exactement ce pour quoi il
+a été écrit.
 
 **Vérifié dans un vrai Chromium** (les deux outils navigateur de la session étant tombés,
 Playwright a pris le relais) : panneau affiché, rôle « Comptabilité seule » créé, huit retraits
 cochés et enregistrés, affectation changée. Recoupé en base — les neuf lignes de
- correspondent aux cases cochées.
+`role_restrictions` correspondent aux cases cochées.
 
-10 tests d intégration sur les routes, dont la garde de propriété sur les quatre points
-d écriture. **481/481**, zéro régression.
+10 tests d'intégration sur les routes, dont la garde de propriété sur les quatre points
+d'écriture. **481/481**, zéro régression.
 
-**Dette assumée** : les libellés de  sont en français dans le composant, i18n
-volontairement différée tant que la forme de l écran n est pas validée — traduire quarante
-chaînes d un écran qui peut être refait serait du travail jeté. À faire avant mise en production.
+**Dette assumée** : les libellés de `RolesPanel.jsx` sont en français dans le composant, i18n
+volontairement différée tant que la forme de l'écran n'est pas validée — traduire quarante
+chaînes d'un écran qui peut être refait serait du travail jeté. À faire avant mise en production.
 
 ---
 
