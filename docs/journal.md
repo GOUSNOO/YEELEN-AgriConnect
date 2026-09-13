@@ -5,6 +5,69 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Rôles par entreprise — page blanche et restrictions — 2026-09-13
+
+Correction de cap demandée par l'utilisateur, le jour même : « il ne doit pas y avoir de
+restrictions écrites en dur dans l'application ; les sections doivent être toutes ouvertes par
+défaut, l'entreprise choisira sa politique ». Puis, en précision : **page blanche**, le compte
+qui ouvre l'entreprise en reste le **maître**, et il créera ensuite ses rôles selon la
+constitution de son entreprise.
+
+J'avais codé six rôles avec leurs restrictions **en dur** (`rolesParDefaut.js`) — c'était
+exactement ce qui est refusé : l'application décidait qu'un ouvrier ne voit pas les clients. Ce
+fichier est supprimé.
+
+**Le modèle s'inverse.** Un rôle n'est plus une liste de ce qui est *permis* mais de ce qui est
+*retiré* : `role_permissions` devient `role_restrictions`. Trois règles, et rien d'autre :
+
+1. Le **propriétaire** (`entreprises.proprietaire_user_id`, le compte créateur) garde tout,
+   définitivement. Aucune restriction ne lui est opposable — sans quoi une entreprise peut se
+   verrouiller dehors sans recours.
+2. Un utilisateur **sans rôle** n'a aucune restriction : tout est ouvert.
+3. Un **rôle** est ouvert lui aussi, et ne ferme que ce que l'entreprise lui retire.
+
+**Distinction qui a permis de tout concilier.** Je confondais deux axes :
+- la **complétude de la carte** — toute route doit être déclarée. Discipline de développeur,
+  tenue par le test d'intégration. Elle reste, et c'est elle qui garantit qu'aucune route
+  n'échappe au système ;
+- la **politique par défaut** — tout ouvert. Choix de l'entreprise, désormais le sien.
+
+On a donc « tout ouvert par défaut » sans perdre la garantie qu'aucune route ne passe à travers.
+
+**Ce qui survit du travail du matin** : le catalogue (43 ressources, 8 actions), la carte des 300
+routes, l'inventaire et son test, les tables, le cache. C'est du vocabulaire et de la mécanique,
+pas de la politique. **Ce qui disparaît** : les six politiques imposées, leur amorçage dans
+`migrate.js` et `register`, le rattachement automatique par code dans `salaries.js`, et les
+colonnes `roles.code` / `roles.administration` qui ne portaient que cette idée.
+
+**Nettoyage des données déjà semées.** La migration du matin avait créé 60 rôles et 11 080 lignes
+de permissions sur 10 entreprises. Vérifié avant suppression : tous créés en 21 secondes par
+cette migration, **aucun modifié** (aucun écran ne le permettait), donc les retirer restaure
+exactement l'état antérieur. `nettoyerRolesImposes` ne supprime qu'un rôle **sans aucune
+restriction** et portant l'un des six noms d'origine — une entreprise qui aurait entre-temps créé
+un rôle homonyme avec des restrictions n'est pas touchée.
+
+**Vérifié en conditions réelles**, backend reconstruit, avec le compte ouvrier de démonstration :
+- sans rôle → `POST /api/contacts` **201**, `GET /api/salaries` **200**, **zéro** ligne au
+  journal. Tout est ouvert et silencieux.
+- après création d'un rôle « Saisie terrain » retirant `contacts/creer` → la requête passe
+  toujours (**201**, mode observation) et est journalisée `restriction_entreprise` ; l'action non
+  retirée ne produit rien.
+
+Base après migration : **0 rôle, 0 restriction, 10 propriétaires rattachés**, table
+`role_permissions` supprimée. Second passage : « rien à rattacher », « rien à retirer ».
+
+**471/471 tests d'intégration**, zéro régression (477 avant : les deux fichiers de tests décrivant
+l'ancien modèle sont remplacés par un seul, plus resserré). Tests notables : une entreprise qui
+s'inscrit n'a **aucun** rôle ; un utilisateur sans rôle n'est pas restreint ; une restriction
+posée est suivie et seule l'action retirée est fermée ; **aucune restriction ne s'applique au
+propriétaire**, même en lui affectant un rôle piégé ; un rôle renommé garde ses restrictions.
+
+**Reste à faire** : la bascule en refus (quand le journal aura du vrai usage), et l'écran qui
+met ces options à disposition — créer un rôle, cocher ce qu'on retire, affecter les gens.
+
+---
+
 ### Rôles par entreprise — étape 3a : les rôles vivent en base — 2026-09-13
 
 Étape 3 **découpée en deux**. Le journal d'observation ne contenait que mes deux entrées de test

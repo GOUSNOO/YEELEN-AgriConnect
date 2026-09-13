@@ -1,14 +1,14 @@
-// Garde des permissions — ÉTAPE 2 : MODE OBSERVATION.
+// Garde des restrictions — MODE OBSERVATION.
 //
-// Il ne refuse rien. Il calcule ce qu'il refuserait et le journalise. C'est le filet avant la
-// bascule : une carte incomplète bloquerait de vrais utilisateurs sur de vraies opérations, et
-// on ne le découvrirait qu'en production. On laisse donc tourner, on lit le journal, on corrige.
+// Il ne refuse rien encore. Il calcule ce qu'il refuserait et le journalise. C'est le filet avant
+// la bascule : basculer sans avoir vu le journal bloquerait de vrais utilisateurs sur de vraies
+// opérations, et on ne le découvrirait qu'en production.
 //
-// Le passage en refus se fera à l'étape 3, quand les rôles vivront en base ; d'ici là la
-// référence est `rolesParDefaut.js`.
+// L'application n'apporte AUCUNE politique : tout est ouvert, et seule une restriction posée par
+// l'entreprise peut fermer quelque chose. Le propriétaire du compte n'en subit aucune.
 import { creerAppariementChemin } from '../permissions/inventaireRoutes.js';
 import { resoudrePermission } from '../permissions/catalogue.js';
-import { permissionsUtilisateur, autoriseUtilisateur } from '../utils/rolesService.js';
+import { restrictionsUtilisateur, autoriseUtilisateur } from '../utils/rolesService.js';
 import { logAuditEvent } from '../utils/auditLog.js';
 
 export const MODE = process.env.PERMISSIONS_MODE || 'observation';
@@ -44,18 +44,16 @@ export function creerPermissionGuard(app) {
 
     if (!permission) return next(); // hors périmètre, assumé
 
-    // Les permissions viennent désormais de la BASE : une entreprise qui redéfinit ses rôles doit
-    // être suivie, et le rôle porté par le JWT n'est qu'un texte figé à la connexion. Repli sur
-    // les rôles par défaut tant que le rattachement n'est pas fait (voir rolesService.js).
-    const resolution = await permissionsUtilisateur(req.user.entrepriseId, req.user.sub, req.user.role);
+    // Tout est ouvert par défaut : on ne cherche pas une permission accordée, on cherche une
+    // restriction posée par l'entreprise. Le propriétaire n'en subit aucune (voir rolesService).
+    const resolution = await restrictionsUtilisateur(req.user.entrepriseId, req.user.sub);
     if (autoriseUtilisateur(resolution, permission.ressource, permission.action)) return next();
 
     journaliser(req, {
-      raison: 'permission_absente',
+      raison: 'restriction_entreprise',
       ressource: permission.ressource,
       action: permission.action,
-      role: req.user.role,
-      origine: resolution.origine,
+      roleId: resolution.roleId,
     });
     // MODE OBSERVATION : on laisse passer. C'est tout l'objet de cette étape.
     return next();
@@ -63,7 +61,7 @@ export function creerPermissionGuard(app) {
 }
 
 function journaliser(req, details) {
-  const cle = `${req.user.entrepriseId}|${req.user.role}|${details.ressource || '?'}|${details.action || '?'}|${details.raison}`;
+  const cle = `${req.user.entrepriseId}|${details.roleId || '-'}|${details.ressource || '?'}|${details.action || '?'}|${details.raison}`;
   if (dejaVus.has(cle)) return;
   dejaVus.add(cle);
 

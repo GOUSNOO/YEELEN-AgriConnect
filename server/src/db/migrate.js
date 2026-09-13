@@ -643,35 +643,41 @@ CREATE TABLE IF NOT EXISTS mouvements_historique (
 -- Contour réel du champ (GeoJSON Polygon), tracé sur imagerie satellite. En jsonb et non en
 -- géométrie PostGIS : l'image postgres:18-alpine n'a pas l'extension, et aucune requête
 -- spatiale n'est faite — seulement du stockage, une surface et un centroïde (utils/geoParcelle.js).
--- ═══════════════ Rôles définis par l'entreprise (étape 3) ═══════════════
--- L'application fixe le vocabulaire (ressources × actions, voir src/permissions/catalogue.js) ;
--- chaque entreprise crée ses rôles et les nomme comme elle veut. « code » garde la trace des six
--- rôles amorcés (admin, ouvrier…) — il reste NULL pour un rôle créé de toutes pièces, et un rôle
--- amorcé conserve son code même renommé, ce qui permet de retrouver la correspondance avec la
--- colonne texte « entreprise_utilisateurs.role » pendant la transition.
+-- ═══════════════ Rôles définis par l'entreprise ═══════════════
+-- L'application ne définit AUCUNE politique. Elle fournit le vocabulaire (ressources × actions,
+-- voir src/permissions/catalogue.js) et le mécanisme ; l'entreprise part d'une page blanche.
+--
+-- Trois règles, et rien d'autre :
+--   1. Le compte qui a ouvert l'entreprise en est le MAÎTRE. Il garde tout, définitivement :
+--      aucune restriction ne peut lui être opposée, sinon une entreprise se verrouille dehors.
+--   2. Un utilisateur sans rôle n'a AUCUNE restriction — tout est ouvert par défaut.
+--   3. Un rôle est ouvert lui aussi ; il ne restreint que ce que l'entreprise lui retire.
+--      D'où « role_restrictions » (ce qui est interdit) et non « role_permissions ».
+ALTER TABLE entreprises ADD COLUMN IF NOT EXISTS proprietaire_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
 CREATE TABLE IF NOT EXISTS roles (
   id             SERIAL PRIMARY KEY,
   entreprise_id  INTEGER NOT NULL REFERENCES entreprises(id) ON DELETE CASCADE,
-  code           TEXT,
   nom            TEXT NOT NULL,
   description    TEXT,
-  -- Rôle d'administration : il ne doit jamais être possible de supprimer le dernier, sans quoi
-  -- l'entreprise se verrouille dehors sans recours.
-  administration BOOLEAN NOT NULL DEFAULT FALSE,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_entreprise_nom ON roles(entreprise_id, lower(nom));
 CREATE INDEX IF NOT EXISTS idx_roles_entreprise_id ON roles(entreprise_id);
 
-CREATE TABLE IF NOT EXISTS role_permissions (
+-- Colonnes d'une première version qui amorçait six rôles imposés : retirées, l'application ne
+-- doit fournir aucune politique. Voir le journal du 2026-09-13.
+ALTER TABLE roles DROP COLUMN IF EXISTS code;
+ALTER TABLE roles DROP COLUMN IF EXISTS administration;
+
+CREATE TABLE IF NOT EXISTS role_restrictions (
   role_id    INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
   ressource  TEXT NOT NULL,
   action     TEXT NOT NULL,
   PRIMARY KEY (role_id, ressource, action)
 );
+DROP TABLE IF EXISTS role_permissions;
 
--- La colonne texte « role » est CONSERVÉE pendant la transition : elle reste la source du JWT et
--- le repli si role_id est vide. Elle disparaîtra à l'étape 3b, une fois la bascule vérifiée.
 ALTER TABLE entreprise_utilisateurs ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL;
 
 ALTER TABLE parcelles ADD COLUMN IF NOT EXISTS contour       JSONB;
@@ -3372,51 +3378,39 @@ async function backfillStockQuants() {
 // platform-admin s'inscrit comme n'importe qui, is_platform_admin est basculé à la main après
 // coup). Relançable sans effet une fois fait : le WHERE trial_ends_at IS NULL ne retrouve plus
 // aucune ligne après le premier passage (chaque nouvelle inscription pose trial_ends_at).
-// Amorce les six rôles par défaut pour toute entreprise qui n'en a aucun, puis relie chaque
-// utilisateur à son rôle par correspondance avec la colonne texte. Idempotent : une entreprise
-// qui a déjà des rôles n'est pas touchée — y compris si elle les a tous supprimés sauf un, ou
-// renommés, ce qui est précisément le droit qu'on lui donne.
-async function seedRolesParDefaut() {
-  const { ROLES_PAR_DEFAUT } = await import('../permissions/rolesParDefaut.js');
-
-  const { rows: entreprises } = await client.query(
-    `SELECT e.id FROM entreprises e
-      WHERE NOT EXISTS (SELECT 1 FROM roles r WHERE r.entreprise_id = e.id)`
+// Désigne le propriétaire de chaque entreprise : le compte qui l'a ouverte, c'est-à-dire le plus
+// ancien utilisateur rattaché. Il restera le maître — aucune restriction ne lui est opposable.
+async function backfillProprietaireEntreprise() {
+  const { rowCount } = await client.query(
+    `UPDATE entreprises e
+        SET proprietaire_user_id = premier.user_id
+       FROM (
+         SELECT DISTINCT ON (entreprise_id) entreprise_id, user_id
+           FROM entreprise_utilisateurs ORDER BY entreprise_id, id ASC
+       ) premier
+      WHERE premier.entreprise_id = e.id AND e.proprietaire_user_id IS NULL`
   );
-
-  for (const { id: entrepriseId } of entreprises) {
-    for (const role of ROLES_PAR_DEFAUT) {
-      const { rows } = await client.query(
-        `INSERT INTO roles (entreprise_id, code, nom, description, administration)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [entrepriseId, role.code, role.nom, role.description, role.administration === true]
-      );
-      const roleId = rows[0].id;
-      for (const [ressource, actions] of Object.entries(role.permissions)) {
-        for (const action of actions) {
-          await client.query(
-            'INSERT INTO role_permissions (role_id, ressource, action) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-            [roleId, ressource, action]
-          );
-        }
-      }
-    }
-  }
-
-  // Rattachement : la colonne texte `role` porte le code d'origine.
-  const { rowCount: relies } = await client.query(
-    `UPDATE entreprise_utilisateurs eu
-        SET role_id = r.id
-       FROM roles r
-      WHERE r.entreprise_id = eu.entreprise_id
-        AND r.code = eu.role
-        AND eu.role_id IS NULL`
-  );
-
-  if (entreprises.length > 0 || relies > 0) {
-    console.log(`✅ Rôles : ${entreprises.length} entreprise(s) amorcée(s), ${relies} utilisateur(s) rattaché(s).`);
+  if (rowCount > 0) {
+    console.log(`✅ Propriétaires : ${rowCount} entreprise(s) rattachée(s) à leur compte créateur.`);
   } else {
-    console.log('ℹ️  Rôles : rien à amorcer (déjà fait).');
+    console.log('ℹ️  Propriétaires : rien à rattacher (déjà fait).');
+  }
+}
+
+// Nettoyage unique : une première version amorçait six rôles imposés (Administrateur, Ouvrier…)
+// avec leurs permissions. L'application ne doit imposer aucune politique — chaque entreprise part
+// d'une page blanche. Ces rôles n'ont jamais servi (le garde est en observation, aucun écran ne
+// permettait de les modifier), donc les retirer restaure l'état antérieur sans rien perdre.
+async function nettoyerRolesImposes() {
+  const { rowCount } = await client.query(
+    `DELETE FROM roles r
+      WHERE NOT EXISTS (SELECT 1 FROM role_restrictions rr WHERE rr.role_id = r.id)
+        AND r.nom IN ('Administrateur','Directeur','Gestionnaire','Comptable','Assistant(e) de direction','Ouvrier')`
+  );
+  if (rowCount > 0) {
+    console.log(`✅ Rôles imposés : ${rowCount} rôle(s) amorcé(s) d'office retiré(s) — page blanche.`);
+  } else {
+    console.log('ℹ️  Rôles imposés : rien à retirer.');
   }
 }
 
@@ -3559,7 +3553,8 @@ async function migrate() {
     await seedEmplacementTypePourEntreprisesExistantes('inventaire');
     await backfillEmplacementInterneParDefaut();
     await backfillStockQuants();
-    await seedRolesParDefaut();
+    await backfillProprietaireEntreprise();
+    await nettoyerRolesImposes();
     await seedAbonnementBackfill();
     await seedModulesActifsBackfill();
     await migratePostesFromSalaries();
