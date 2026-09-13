@@ -20,6 +20,7 @@ import {
   getFinances, getMe, getToken, login, register, confirmerInscription, renvoyerCodeInscription, setToken,
   getContacts, createContact, updateContact, deleteContact,
   getContactTags, createContactTag, deleteContactTag,
+  getRoles,
   getParcelles, createParcelle, updateParcelle, deleteParcelle,
   getParcellesHistorique, createParcelleHistorique, generatePlanning,
   getCulturesMouvements,
@@ -7139,7 +7140,7 @@ function EmployeesModule({ farmId, role }) {
     dateEmbauche: '', salaire: '', email: '', telephone: '', adresse: '',
     photo: '', dateNaissance: '', contactUrgenceNom: '', contactUrgenceTel: '', numPieceIdentite: '',
     coutHoraire: '', heuresHebdo: '', joursTravailles: '',
-    createAccount: false, compteEmail: '', role: 'ouvrier', password: '',
+    createAccount: false, compteEmail: '', role: 'ouvrier', roleId: '', password: '',
   };
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -7195,6 +7196,13 @@ function EmployeesModule({ farmId, role }) {
     joursTravailles: f.joursTravailles || null,
   });
 
+  // Les rôles de l'entreprise, pour le sélecteur du formulaire. Chargés ici plutôt que passés
+  // en prop : le panneau et le formulaire en ont besoin au même endroit, et la liste est courte.
+  const [rolesEntreprise, setRolesEntreprise] = useState([]);
+  useEffect(() => {
+    getRoles().then(({ roles }) => setRolesEntreprise(roles)).catch(() => setRolesEntreprise([]));
+  }, []);
+
   const addEmployee = async (e) => {
     e.preventDefault();
     if (!form.nom || !form.prenom) return;
@@ -7211,6 +7219,7 @@ function EmployeesModule({ farmId, role }) {
         compteEmail: form.createAccount ? form.compteEmail : undefined,
         password: form.createAccount ? form.password : undefined,
         role: form.createAccount ? form.role : undefined,
+        roleId: form.createAccount && form.roleId ? Number(form.roleId) : undefined,
       });
       setForm(emptyForm);
       setShowMoreAdd(false);
@@ -7346,6 +7355,9 @@ function EmployeesModule({ farmId, role }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.lg }}>
+      <Suspense fallback={null}>
+        <RolesPanel />
+      </Suspense>
       <Card>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: TEXT.md, marginBottom: SPACE.sm }}>{t('rh.addEmployeeTitle')}</div>
 
@@ -7381,6 +7393,17 @@ function EmployeesModule({ farmId, role }) {
                 <option value="comptable">{t('role.comptable')}</option>
                 <option value="assistant_direction">{t('role.assistant_direction')}</option>
                 <option value="ouvrier">{t('role.ouvrier')}</option>
+              </Select>
+              {/* Le rôle défini par l'entreprise : il ne donne rien, il retire. Sans rôle, la
+                  personne n'a aucune restriction — c'est le défaut du produit. */}
+              <Select label="Rôle (restrictions)" value={form.roleId}
+                onChange={e => setForm({ ...form, roleId: e.target.value })}>
+                <option value="">Aucun rôle — aucune restriction</option>
+                {rolesEntreprise.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.nom}{r.restrictions?.length ? ' (' + r.restrictions.length + ' retrait' + (r.restrictions.length > 1 ? 's' : '') + ')' : ' — tout ouvert'}
+                  </option>
+                ))}
               </Select>
               <Field label={t('rh.tempPassword')} type="text" placeholder={t('rh.tempPassword')} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required={form.createAccount} />
             </div>
@@ -10038,10 +10061,6 @@ function ProfilModule({ role }) {
         )}
       </Card>
     </div>
-
-      <Suspense fallback={null}>
-        <RolesPanel />
-      </Suspense>
     </div>
   );
 }

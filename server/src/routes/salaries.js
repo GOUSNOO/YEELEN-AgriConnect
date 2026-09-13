@@ -144,10 +144,21 @@ router.post('/', authRequired, requireRole('admin'), async (req, res) => {
         [compteEmail.toLowerCase(), role, passwordHash]
       );
       userId = userResult.rows[0].id;
+      // roleId est le rôle DÉFINI PAR L'ENTREPRISE (restrictions). Sans lui, la personne n'a
+      // aucune restriction, ce qui est le défaut du produit. Validé contre l'entreprise pour
+      // qu'on ne puisse pas rattacher quelqu'un au rôle d'une autre.
+      let roleIdValide = null;
+      if (req.body.roleId) {
+        const { rows: verif } = await client.query(
+          'SELECT id FROM roles WHERE id = $1 AND entreprise_id = $2',
+          [req.body.roleId, req.user.entrepriseId]
+        );
+        roleIdValide = verif[0]?.id || null;
+      }
       await client.query(
-        `INSERT INTO entreprise_utilisateurs (entreprise_id, user_id, role, statut)
-         VALUES ($1, $2, $3, 'Actif')`,
-        [req.user.entrepriseId, userId, role]
+        `INSERT INTO entreprise_utilisateurs (entreprise_id, user_id, role, role_id, statut)
+         VALUES ($1, $2, $3, $4, 'Actif')`,
+        [req.user.entrepriseId, userId, role, roleIdValide]
       );
     }
 

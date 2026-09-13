@@ -5,6 +5,40 @@ Extrait de `CLAUDE.md` le 2026-08-28 pour alléger le contexte chargé à chaque
 
 ---
 
+### Rôles par entreprise — le panneau rejoint les Ressources humaines — 2026-09-13
+
+Retour de l'utilisateur sur la démonstration : « tu l'as mis dans Mes préférences, il serait
+mieux que l'option soit présentée lors de la configuration de l'entreprise, et dans les
+ressources humaines lors de la création d'un nouveau salarié ».
+
+Le panneau quitte Mes préférences pour la tête de l'écran Employés. Un seul déplacement suffit
+pour les deux emplacements demandés : l'écran d'accueil des salariés, pendant la configuration
+de l'entreprise, rend déjà `EmployeesModule` — le panneau y apparaît donc automatiquement.
+
+**Ce que ce retour a mis au jour.** Le formulaire de création de salarié imposait toujours les
+six rôles en dur (`Administrateur`, `Directeur`, `Gestionnaire`…), c'est-à-dire exactement ce qui
+avait été refusé, mais à un endroit que je n'avais pas suivi. Un sélecteur « Rôle (restrictions) »
+le rejoint, alimenté par les rôles **de l'entreprise**, avec « Aucun rôle — aucune restriction »
+en choix par défaut. `POST /api/salaries` accepte désormais `roleId`, validé contre l'entreprise
+pour qu'on ne puisse rattacher personne au rôle d'une autre.
+
+**Deux sélecteurs côte à côte, et c'est laid — mais volontaire.** L'ancien (« Rôle : Ouvrier »)
+alimente encore la couche historique : la colonne texte du JWT, les 63 `requireRole` et les
+onglets de navigation du frontend. Le supprimer maintenant ouvrirait d'un coup les 33 routes
+réservées à l'administrateur. Il disparaîtra à la bascule, en même temps que cette couche.
+
+**Trois faux pas de tournage, tous dus au shell**, notés parce qu'ils se répètent : un gabarit de
+chaîne imbriqué dans une commande `node -e` s'est fait manger trois fois par bash (une fois
+laissant `page.goto()` sans argument). Passer par l'outil d'édition de fichier plutôt que par la
+ligne de commande règle le problème. Et l'insertion heuristique du panneau avait atterri sur un
+`return` intérieur d'`EmployeesModule` — repéré par un échec de build, corrigé en visant le
+conteneur de premier niveau, qui se trouvait déjà être une colonne.
+
+Vérifié dans un vrai Chromium sur les deux écrans. **481/481 tests d'intégration**, `npm test`
+(142/142) et build verts.
+
+---
+
 ### Rôles par entreprise — l'écran d'administration — 2026-09-13
 
 L'utilisateur : « fait une démo je vais voir si c'est bien ce que je veux ». Le mécanisme vivait
